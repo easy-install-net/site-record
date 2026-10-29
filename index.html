@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>地盤物資與工程筆記管理系統</title>
+    
+    <!-- 引入手寫筆記風字型 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- 引入 Firebase v8 (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <style>
+        :root { 
+            --primary: #1e3a8a; 
+            --bg: #f5f4ef; 
+            --card-bg: #fffdfa;
+            --text: #292524; 
+            --text-sub: #78716c;
+            --border: #e7e5e4;
+            --btn-none: #78716c;
+            --btn-tobuy: #ea580c;
+            --btn-tosend: #0284c7;
+            --btn-onsite: #15803d;
+        }
+        body { 
+            font-family: "Zen Maru Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0; 
+            padding: 0; 
+            background: var(--bg); 
+            color: var(--text); 
+            padding-bottom: 85px; 
+            -webkit-tap-highlight-color: transparent;
+            background-image: radial-gradient(#e5e5e0 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .header { 
+            background: #fffdfa; 
+            padding: 10px 12px; 
+            position: sticky; 
+            top: 0; 
+            z-index: 100; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+            display: flex; 
+            gap: 6px; 
+            align-items: center; 
+            border-bottom: 2px dashed #d6d3d1;
+        }
+        select, input, button, textarea { 
+            font-family: inherit;
+            font-size: 13px; 
+            padding: 6px 8px; 
+            border-radius: 8px; 
+            border: 1.5px solid #d6d3d1; 
+            outline: none;
+            background: #fff;
+        }
+        select { flex: 1; font-weight: 700; color: var(--primary); }
+        .btn-header { background: #1e3a8a; color: white; border: none; font-weight: 600; cursor: pointer; white-space: nowrap; padding: 6px 10px; border-radius: 8px; box-shadow: 1px 2px 0px rgba(0,0,0,0.15); }
+        .btn-del-unit { background: #fee2e2; color: #b91c1c; border: 1.5px solid #f87171; font-size: 12px; padding: 6px 8px; border-radius: 8px; cursor: pointer; white-space: nowrap; font-weight: 700; }
+        .container { padding: 12px; max-width: 620px; margin: 0 auto; }
+        
+        /* 底部導覽列 (手寫便籤質感) */
+        .tab-bar { 
+            position: fixed; 
+            bottom: 0; 
+            left: 0;
+            width: 100%; 
+            background: #fffdfa; 
+            display: flex; 
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.06); 
+            z-index: 100; 
+            border-top: 2px solid #e7e5e4;
+        }
+        .tab { 
+            flex: 1; 
+            text-align: center; 
+            padding: 12px 0; 
+            font-weight: 700; 
+            color: var(--text-sub); 
+            cursor: pointer; 
+            font-size: 13px; 
+        }
+        .tab.active { 
+            color: var(--primary); 
+            border-top: 3px solid var(--primary); 
+            background: #fbfbf9;
+        }
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+
+        /* 分類大標 (A. B. C. 編號風格) */
+        .category-title { 
+            background: #e7e5e4; 
+            padding: 6px 12px; 
+            margin: 14px 0 6px 0; 
+            border-radius: 8px; 
+            font-size: 13px; 
+            font-weight: 700; 
+            color: #1c1917; 
+            position: sticky; 
+            top: 50px; 
+            z-index: 90; 
+            border-left: 4px solid var(--primary);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+
+        /* 項目卡片 */
+        .item-card { 
+            background: var(--card-bg); 
+            padding: 8px 10px; 
+            border-radius: 8px; 
+            margin-bottom: 6px; 
+            border: 1.5px solid #e7e5e4;
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            gap: 6px; 
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.02);
+        }
+        .item-info { flex: 1; min-width: 0; }
+        .item-header-row { display: flex; align-items: baseline; gap: 5px; }
+        .item-code { font-family: 'Caveat', cursive, sans-serif; font-size: 16px; font-weight: 700; color: #0284c7; }
+        .item-title { font-weight: 700; font-size: 13px; color: #1c1917; }
+        .item-desc { font-size: 11px; color: var(--text-sub); line-height: 1.25; margin-top: 1px; }
+
+        /* 四態狀態按鈕：不需 / 待買 / 待送現場 / 送現場 */
+        .status-group { display: flex; gap: 3px; flex-shrink: 0; }
+        .status-btn { 
+            padding: 4px 5px; 
+            font-size: 11px; 
+            font-weight: 600;
+            border: 1.5px solid #d6d3d1; 
+            background: #fafaf9; 
+            color: #78716c; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            white-space: nowrap;
+        }
+        .status-btn.s-0.active { background: #e7e5e4; color: #44403c; border-color: #a8a29e; font-weight: 700; }
+        .status-btn.s-1.active { background: #ffedd5; color: #c2410c; border-color: #fb923c; font-weight: 700; }
+        .status-btn.s-2.active { background: #e0f2fe; color: #0369a1; border-color: #38bdf8; font-weight: 700; }
+        .status-btn.s-3.active { background: #dcfce7; color: #15803d; border-color: #4ade80; font-weight: 700; }
+
+        /* 追加自訂物資便籤 */
+        .custom-add { 
+            background: #fefce8; 
+            border: 1.5px dashed #ca8a04; 
+            padding: 8px 10px; 
+            border-radius: 8px; 
+            margin-bottom: 8px; 
+        }
+        .custom-add-row { display: flex; gap: 6px; }
+
+        /* 日誌卡片 */
+        .diary-card { 
+            background: var(--card-bg); 
+            padding: 12px; 
+            border-radius: 10px; 
+            border: 1.5px solid #d6d3d1; 
+            margin-bottom: 12px; 
+            box-shadow: 1px 2px 4px rgba(0,0,0,0.03);
+        }
+        .diary-form-group { margin-bottom: 8px; }
+        .diary-form-group label { display: block; font-size: 12px; font-weight: 700; color: #57534e; margin-bottom: 3px; }
+        .diary-form-group input, .diary-form-group select { width: 100%; box-sizing: border-box; }
+        .btn-submit { background: #15803d; color: white; border: none; width: 100%; font-weight: 700; padding: 10px; cursor: pointer; border-radius: 8px; font-size: 14px; box-shadow: 1px 2px 0px rgba(0,0,0,0.15); }
+        
+        .diary-item { 
+            background: var(--card-bg); 
+            padding: 10px; 
+            border-radius: 8px; 
+            border: 1.5px solid #e7e5e4; 
+            border-left: 5px solid #0284c7; 
+            margin-bottom: 8px; 
+        }
+        .diary-item.expense { border-left-color: #ea580c; }
+        .diary-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .tag-cat { 
+            font-size: 11px; 
+            padding: 2px 6px; 
+            background: #f5f5f4; 
+            color: #44403c; 
+            border-radius: 6px; 
+            font-weight: 700; 
+            border: 1px solid #d6d3d1;
+        }
+        .diary-date { font-family: 'Caveat', cursive, sans-serif; font-size: 15px; color: var(--text-sub); font-weight: 700; }
+        .diary-body { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+        .diary-desc { font-size: 13px; line-height: 1.4; color: var(--text); flex: 1; }
+        .diary-amount { font-family: 'Caveat', cursive, sans-serif; font-weight: 700; color: #b91c1c; font-size: 18px; white-space: nowrap; }
+        
+        .diary-actions { display: flex; gap: 8px; margin-top: 6px; justify-content: flex-end; }
+        .btn-action { background: none; border: none; font-size: 12px; cursor: pointer; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
+        .btn-edit { color: #0369a1; background: #e0f2fe; }
+        .btn-delete { color: #b91c1c; background: #fee2e2; }
+
+        .diary-photo { margin-top: 8px; max-width: 120px; max-height: 120px; border-radius: 6px; border: 1.5px solid #cbd5e1; object-fit: cover; cursor: pointer; }
+        .preview-box { display: none; margin-top: 6px; }
+        .preview-box img { max-width: 80px; max-height: 80px; border-radius: 6px; border: 1.5px solid #ccc; }
+
+        /* 報告 */
+        .report-card { background: var(--card-bg); padding: 12px; border-radius: 10px; border: 1.5px solid #d6d3d1; margin-bottom: 12px; }
+        .report-h3 { font-size: 14px; margin: 0 0 8px 0; padding-bottom: 6px; border-bottom: 1.5px dashed #e7e5e4; color: var(--primary); }
+        .report-list { list-style: none; padding: 0; margin: 0; }
+        .report-list li { padding: 8px 0; border-bottom: 1px dotted #e7e5e4; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+        .report-list-item-header { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .badge-status { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+        .total-expense { text-align: right; font-family: 'Caveat', cursive, sans-serif; font-size: 22px; font-weight: 700; color: #b91c1c; margin-top: 10px; }
+        
+        #syncStatus { font-size: 11px; text-align: center; color: #15803d; margin-bottom: 6px; font-weight: 700; }
+
+        /* 編輯彈窗 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 200;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+        .modal-card {
+            background: #fffdfa;
+            border-radius: 10px;
+            padding: 15px;
+            width: 100%;
+            max-width: 450px;
+            border: 2px solid #a8a29e;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+        .modal-btns { display: flex; gap: 8px; margin-top: 12px; }
+        .modal-btns button { flex: 1; padding: 8px; font-weight: 700; cursor: pointer; border-radius: 8px; border: none; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <select id="unitSelector" onchange="changeUnit()"></select>
+    <button class="btn-header" onclick="addUnit()">+ 新地盤</button>
+    <button class="btn-del-unit" onclick="deleteCurrentUnit()">❌ 刪除此盤</button>
+</div>
+
+<!-- Tab 1: 物資清單 -->
+<div id="tab-checklist" class="container content-section active">
+    <div id="syncStatus">🔄 雲端連線中...</div>
+    
+    <div class="custom-add">
+        <div style="font-size: 12px; font-weight: 700; color: #854d0e; margin-bottom: 4px;">➕ 臨時追加現場物資</div>
+        <div class="custom-add-row">
+            <input type="text" id="customItemName" placeholder="輸入物資名稱..." style="flex:1;">
+            <button onclick="addCustomItem()" class="btn-header">加入</button>
+        </div>
+    </div>
+    
+    <div id="checklistContainer"></div>
+</div>
+
+<!-- Tab 2: 現場日誌 -->
+<div id="tab-diary" class="container content-section">
+    <div class="diary-card">
+        <div style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">新增日誌 / 開支</div>
+        <div class="diary-form-group">
+            <label>工種 / 項目分類</label>
+            <select id="diaryCategory">
+                <option value="清拆">清拆</option>
+                <option value="水電">水電</option>
+                <option value="泥水">泥水</option>
+                <option value="木工">木工</option>
+                <option value="油漆">油漆</option>
+                <option value="安裝">安裝</option>
+                <option value="員工">員工</option>
+                <option value="地盤雜項" selected>地盤雜項</option>
+                <option value="驗收">驗收</option>
+                <option value="意外問題">意外問題</option>
+            </select>
+        </div>
+        <div class="diary-form-group">
+            <label>日期</label>
+            <input type="date" id="diaryDate">
+        </div>
+        <div class="diary-form-group">
+            <label>記錄內容 (客戶要求 / 現場進度 / 購買明細)</label>
+            <input type="text" id="diaryDesc" placeholder="例如：水喉改暗喉、買飯盒、窗鉸換新">
+        </div>
+        <div class="diary-form-group">
+            <label>金額 $ (純日誌請留空，支出不需打負號)</label>
+            <input type="number" id="diaryAmount" placeholder="無費用則留空">
+        </div>
+        <div class="diary-form-group">
+            <label>📷 上載現場相片 / 單據 (選填)</label>
+            <input type="file" id="diaryPhotoInput" accept="image/*" onchange="handleImagePreview(event)">
+            <div id="previewBox" class="preview-box">
+                <img id="imagePreview" src="" alt="預覽">
+            </div>
+        </div>
+        <button onclick="addDiary()" class="btn-submit">儲存記錄至雲端</button>
+    </div>
+    
+    <div id="diaryContainer"></div>
+</div>
+
+<!-- Tab 3: 單位報告 -->
+<div id="tab-report" class="container content-section">
+    <div class="report-card">
+        <h3 class="report-h3">🚚 待買 / 待送 / 送現場 物資匯總</h3>
+        <ul class="report-list" id="reportMaterials"></ul>
+    </div>
+    <div class="report-card">
+        <h3 class="report-h3">📝 現場日誌與開支總結 (支出無負號)</h3>
+        <ul class="report-list" id="reportDiary"></ul>
+        <div class="total-expense" id="reportTotal">總開支：$0.0</div>
+    </div>
+</div>
+
+<!-- 編輯彈窗 Modal -->
+<div id="editModal" class="modal-overlay">
+    <div class="modal-card">
+        <h3 style="margin: 0 0 10px 0; font-size: 15px; color: var(--primary);">✏️ 更改日誌 / 開支記錄</h3>
+        <input type="hidden" id="editIndex">
+        <div class="diary-form-group">
+            <label>分類</label>
+            <select id="editCategory">
+                <option value="清拆">清拆</option>
+                <option value="水電">水電</option>
+                <option value="泥水">泥水</option>
+                <option value="木工">木工</option>
+                <option value="油漆">油漆</option>
+                <option value="安裝">安裝</option>
+                <option value="員工">員工</option>
+                <option value="地盤雜項">地盤雜項</option>
+                <option value="驗收">驗收</option>
+                <option value="意外問題">意外問題</option>
+            </select>
+        </div>
+        <div class="diary-form-group">
+            <label>日期</label>
+            <input type="date" id="editDate">
+        </div>
+        <div class="diary-form-group">
+            <label>記錄內容</label>
+            <input type="text" id="editDesc">
+        </div>
+        <div class="diary-form-group">
+            <label>金額 $ (直接填寫數字)</label>
+            <input type="number" id="editAmount" placeholder="無費用請留空">
+        </div>
+        <div class="modal-btns">
+            <button onclick="closeEditModal()" style="background:#e7e5e4; color:#44403c;">取消</button>
+            <button onclick="saveEditDiary()" style="background:#15803d; color:white;">儲存更改</button>
+        </div>
+    </div>
+</div>
+
+<div class="tab-bar">
+    <div class="tab active" onclick="switchTab('checklist', this)">📋 物資清單</div>
+    <div class="tab" onclick="switchTab('diary', this)">📝 現場日誌</div>
+    <div class="tab" onclick="switchTab('report', this)">📊 單位報告</div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCSRfZdAVh8ADPNtayW5lyDtmE0xDsJXNg",
+        authDomain: "gen-lang-client-0208380044.firebaseapp.com",
+        databaseURL: "https://gen-lang-client-0208380044-default-rtdb.firebaseio.com",
+        projectId: "gen-lang-client-0208380044",
+        storageBucket: "gen-lang-client-0208380044.firebasestorage.app",
+        messagingSenderId: "17077391191",
+        appId: "1:17077391191:web:f167a311052c56bd3d7812"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    const dbRef = database.ref('siteManagerDB');
+
+    let db = {};
+    let currentUnit = localStorage.getItem('siteManagerCurrent') || '';
+    let isInitialized = false;
+    let base64ImageString = "";
+
+    // 依需求以 A、B、C... 分類，項目依序編號 01, 02, 03
+    const defaultMasterList = [
+        // A. 前期保護工程 (18項)
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A01', name: '中空板 (瓦通膠板)', desc: '鋪設地台防刮傷、耐壓抗衝擊' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A02', name: '高密度纖維夾板 (4分/6分)', desc: '走廊及重料通道防車仔重壓破磚' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A03', name: '珍珠棉 (EPE) 護角條', desc: '包大門門框、房門及通道陽角防碰撞' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A04', name: '大皺紋膠紙 (白色/黃色)', desc: '固定保護板、黏貼踢腳線，撕除不留痕' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A05', name: '布基膠布 (強力防水膠布)', desc: '保護板接駁口強力封口固定' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A06', name: '防塵遮蔽膜 (自帶膠帶定位膠膜)', desc: '噴漆/打磨時包封訂造傢俬、冷氣機及鋁窗' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A07', name: '座廁保護套 / 工業保鮮紙', desc: '整座包封新座廁，嚴防工人使用或污水倒灌' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A08', name: '鋁窗手柄/窗較保護套', desc: '防止泥水油漆污染開合機構' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A09', name: '防盜大門厚身保護門套', desc: '保護新大門免受推車撞擊' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A10', name: '去水喉專用保護塞 (PVC塞)', desc: '封死渠口與地漏，防止碎石英泥阻塞水管' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A11', name: '電掣底盒保護蓋板 / 假蓋', desc: '批灰油漆前密封入牆底盒防電線污染' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A12', name: '升降機防護毯 / 護板', desc: '大廈公共電梯內部合規防護' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A13', name: '厚身三色防水帆布', desc: '露台或室外暫存物料遮風擋雨' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A14', name: '外露冷熱水喉防撞泡綿管', desc: '包覆水喉防施工敲擊破損' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A15', name: '浴缸專用防撞防刮保護墊', desc: '進場保護新裝浴缸檯面' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A16', name: '石材防護防滲膜', desc: '鋪設天然雲石防吸色防污' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A17', name: '氣泡膜 (泡泡紙)', desc: '包覆五金龍頭、鏡櫃易碎組件' },
+        { catLetter: 'A', catName: 'A. 前期保護工程', code: 'A18', name: '伸縮包裝膜 (拉伸膜)', desc: '打包各類零碎建材' },
+
+        // B. 現場防塵與衛生清潔 (16項)
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B01', name: '特大加厚黑膠袋 (泥頭垃圾袋)', desc: '每日清理泥頭、廢料與飯盒零過夜' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B02', name: '即棄厚底鞋套', desc: '後期巡查防安全鞋泥印踩花新木地板' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B03', name: '椰棕硬毛掃把及金屬垃圾鏟', desc: '清掃粗碎石、木條碎屑必備' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B04', name: '膠絲軟毛掃把', desc: '後期清掃細微浮灰' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B05', name: '吸水地拖及壓水桶', desc: '泥水完工及交場前清洗地台' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B06', name: '超細纖維吸水抹布 (厚裝)', desc: '擦拭櫃身木皮、玻璃窗與電掣面' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B07', name: '鋁合金雙面玻璃刮水器', desc: '清洗大面積鋁窗、浴室玻璃屏風' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B08', name: '工業洗潔精 / 水性去油劑', desc: '清除櫃門油漬手印及乳膠漆滴痕' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B09', name: '金屬除膠清潔鏟刀 (金屬刮刀)', desc: '剷除硬化英泥漬、玻璃貼紙' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B10', name: '瓷磚填縫劑專用酸性清洗劑', desc: '清洗磚面黑印與白華' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B11', name: '科技魔術海綿', desc: '乾擦去除門板、電掣位微細刮痕' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B12', name: '除膠劑 (噴霧裝)', desc: '溶解保護膜殘膠及標籤膠水' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B13', name: '綠水 (全效殺菌地板清潔劑)', desc: '交場清潔消毒地台' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B14', name: '工業不銹鋼油膏 (白礦油)', desc: '水龍頭及不銹鋼水槽除水垢拋光' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B15', name: '噴水壺 (手壓噴霧器)', desc: '打磨前噴水抑塵、打膠噴水潤滑' },
+        { catLetter: 'B', catName: 'B. 現場清潔防塵', code: 'B16', name: '大號洗車海綿', desc: '洗磚及抹拭牆身灰塵' },
+
+        // C. 基礎文具與量度工具 (16項)
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C01', name: '重型金屬殼 𠝹刀 (美工刀)', desc: '割保護板、修整填縫邊、開料拆箱' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C02', name: '梯形後備 𠝹刀片盒裝', desc: '刀片鈍化即時替換，確保切口整齊' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C03', name: '多功能不銹鋼大鉸剪', desc: '剪裁膠紙、帆布、尼龍紮帶' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C04', name: '5米 / 7.5米 耐摔鋼捲尺', desc: '現場尺寸校對、傢俬開料放線' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C05', name: '手持雷射測距儀', desc: '快速覆核天花高度與長牆距' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C06', name: '強磁水平尺 (450mm/600mm)', desc: '校對電掣底盒、門框泥水平整度' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C07', name: '粗頭雙色油性麥克筆 (黑/紅)', desc: '牆身開槽標註、暗喉標記與開孔定位' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C08', name: '木工專用粗芯扁鉛筆', desc: '木工開料畫線、石膏板定位' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C09', name: '瑕疵標示彩色貼紙 (箭頭貼)', desc: '驗樓標記空鼓、補油漆點位' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C10', name: '工程圖紙硬夾板 (A3/A4)', desc: '夾穩施工平面圖免受現場弄污' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C11', name: '自動墨斗及專用墨水', desc: '彈線定位地台木間隔與泥水基底' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C12', name: '萬向直角規 / 角尺', desc: '檢查泥水陰陽角是否呈垂直 90 度' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C13', name: '空鼓小鋼鎚 (伸縮響鎚)', desc: '敲擊地磚與牆身檢測內部是否空心' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C14', name: '文件訂書機及起釘器', desc: '釘穩各批次送貨單據與圖紙' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C15', name: '白色打底粉筆', desc: '水泥地面大面積放線規劃' },
+        { catLetter: 'C', catName: 'C. 基礎文具與量度', code: 'C16', name: '封箱透明大膠紙', desc: '打包廢料、固定零碎部件' },
+
+        // D. 五金手工具與梯類 (18項)
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D01', name: '四步 / 五步加厚鋁合金摺梯', desc: '高空作業、天花木工及批灰油漆必備' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D02', name: '羊角鐵鎚 (鋼柄防震款)', desc: '敲擊、拔除夾板殘留鐵釘' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D03', name: '無痕橡膠鎚 (白膠鎚)', desc: '輕敲瓷磚微調平整、傢俬組裝' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D04', name: '十字及一字絕緣螺絲批組', desc: '五金合頁微調、更換電掣面板' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D05', name: '活動士巴拿 (活口扳手 8"/10")', desc: '拆裝曲尺掣、角閥及冷熱水管螺絲' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D06', name: '多功能水泵鉗 (索喉鉗)', desc: '夾持圓形去水管接頭與大口徑喉件' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D07', name: '重型大力老虎鉗 (鋼絲鉗)', desc: '剪斷硬鐵線、拔除膨脹管' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D08', name: '長咀夾鉗 (尖咀鉗)', desc: '電箱整理、深入狹小空隙夾取配件' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D09', name: '公制/英制 球頭六角匙套裝', desc: '衛浴五金、龍頭及門鎖緊固拆裝' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D10', name: '金屬手動旋轉膠槍', desc: '推擠玻璃膠、免釘膠及收口膠' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D11', name: '手用金屬鋼鋸架連鋸條', desc: '手動鋸切鋁收邊條、PVC 線喉' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D12', name: '半圓及平頭鋼銼', desc: '修磨金屬切口毛刺、打磨防割傷' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D13', name: '快剪水喉剪 (PPR/PVC剪刀)', desc: '快速筆直裁切膠喉不變形' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D14', name: '手動拉釘槍 (抽芯鉚釘槍)', desc: '鋁窗框加固、固定金屬薄板' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D15', name: '重型起釘扁鐵撬棒 (八角棍)', desc: '拆除舊木腳線、撬起石膏板' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D16', name: '專業玻璃吸盤 (單爪/雙爪)', desc: '安全搬運大片鏡面及玻璃隔屏' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D17', name: '開口快速棘輪扳手套組', desc: '快速旋緊櫥櫃底螺母' },
+        { catLetter: 'D', catName: 'D. 五金手工具與梯類', code: 'D18', name: '專用勾刀', desc: '專門劃割亞加力膠板與美耐板' },
+
+        // E. 電動工具與裝修設備 (18項)
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E01', name: '鋰電充電式手提電鑽 / 起子機', desc: '櫃體組裝、緊固鉸鏈螺絲' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E02', name: '三用充電油壓鑽 (SDS-Plus)', desc: '打石矢牆孔、安裝拉爆螺絲' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E03', name: '手提砂輪機 (角磨機)', desc: '切割磁磚、打磨金屬骨料' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E04', name: '手提木工圓鋸機 (介機)', desc: '木工板材高精度開料裁切' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E05', name: '乾濕兩用工業吸塵機', desc: '強力清除地台水泥粉塵與殘留積水' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E06', name: '工業強力座地風扇 (牛角扇)', desc: '強力排風驅散油漆甲醛、加速水泥乾固' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E07', name: '紅外線 12 線綠光平水儀', desc: '空間 3D 平水投射、磁磚泥水定位' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E08', name: '調溫熱風槍', desc: '烘乾局部潮濕、快速撕膠、水管熱縮' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E09', name: '大功率 LED 工地投光燈 (附三腳架)', desc: '全屋昏暗環境廣角施工照明' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E10', name: '重型加長電線拖板 (過載保護)', desc: '長距離為各類高功率大機供電' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E11', name: '充電式多功能切割機 (萬用寶)', desc: '貼地切門套木線、狹角暗槽開孔' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E12', name: '便攜小型高壓清洗機 (洗車水槍)', desc: '泥水前沖洗牆壁浮塵、清洗窗框泥漬' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E13', name: '熱熔膠槍 (附熱熔膠條)', desc: '臨時固定電線走位、飾面點膠' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E14', name: '電動砂紙機 (平板震動磨砂機)', desc: '批灰後天花與牆身大面積細磨' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E15', name: '開孔石矢鑽咀套裝 (6/8/10mm)', desc: '入牆打膠塞孔必備' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E16', name: '磁性 PH2 十字批頭組 (批咀)', desc: '緊固自攻螺絲高頻耗材' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E17', name: '瓷磚專用金剛石打孔開孔器', desc: '在硬質地磚上為喉管開圓孔' },
+        { catLetter: 'E', catName: 'E. 電動與裝修工具', code: 'E18', name: '充電式打膠機 (電動膠槍)', desc: '大面積勻速打玻璃膠，手腕零疲勞' },
+
+        // F. 各工種耗材與輔料 (20項)
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F01', name: '中性防霉玻璃膠 (白色/透明)', desc: '廚衛洗手盆、座廁、鋁窗防水收口' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F02', name: '萬能免釘膠 (液體釘)', desc: '免打釘黏合木飾條、鏡面與踢腳線' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F03', name: '聚氨酯膨脹填縫劑 (發泡膠)', desc: '門框邊縫、穿牆管洞填充隔音保溫' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F04', name: '水喉生膠帶 (止洩帶)', desc: '螺紋接頭緊密纏繞，防冷熱水漏水' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F05', name: 'PVC 喉水 (專用膠水)', desc: '接駁去水喉及排水配件溶接' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F06', name: '彩色膠塞套裝 (紅/綠/魚嘜塞)', desc: '螺絲入石矢牆專用緊固膠套' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F07', name: '鍍鋅木螺絲 / 自攻螺絲盒裝', desc: '木工拼裝、石膏板天花上架' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F08', name: '電工絕緣膠布 (黑/紅/黃/藍)', desc: '電線裸線接駁封口包紮' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F09', name: '快接按壓端子 (WAGO掣/彈簧端子)', desc: '替代傳統電線絞接，安全防火' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F10', name: '乾磨砂紙組 (120#/240#/320#)', desc: '批灰平整打磨、木器上漆前打磨' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F11', name: '快乾補牆灰膏 (即開即用)', desc: '小孔補灰、交場前局部修補' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F12', name: '矽膠刮刀修邊套組 (刮膠片)', desc: '刮平玻璃膠縫隙，收邊順滑無毛邊' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F13', name: 'WD-40 防銹潤滑除濕劑', desc: '滑軌保養、螺絲防銹、消除門鉸異音' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F14', name: '不銹鋼 L 型角碼 (傢俬固定角碼)', desc: '吊櫃防傾倒、層板受力加固' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F15', name: '不銹鋼拉爆螺絲 (膨脹螺栓 1/4" / 5/16")', desc: '安裝電熱水爐、重型掛電視架' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F16', name: '自鎖式尼龍索帶 (黑/白 150-300mm)', desc: '梳理明線電線管、捆綁水管走線' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F17', name: '白膠漿 (木工白乳膠)', desc: '木工榫接、貼木皮收邊加強' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F18', name: '磁磚十字定位架 (卡子 1.5mm/2mm)', desc: '控制鋪磚填縫均勻等寬' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F19', name: '接縫防裂纖維網帶 (補縫網)', desc: '石膏板天花及夾板接縫防裂處理' },
+        { catLetter: 'F', catName: 'F. 各工種輔料耗材', code: 'F20', name: '原子灰 (補泥灰/金屬灰)', desc: '木器、金屬表面深坑刮平' },
+
+        // G. 安全與勞工防護物資 (16項)
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G01', name: '工程安全帽 (附透氣孔及合格證)', desc: '現場巡查巡察必備，防高空墜物' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G02', name: '鋼頭防刺穿防砸安全鞋', desc: '工地踏足必備，防踩踩穿鐵釘' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G03', name: 'KN95 / N95 加厚工業防塵口罩', desc: '清拆打拆、批灰磨牆時阻隔粉塵' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G04', name: '雙濾毒罐防毒面具 (防有機蒸氣)', desc: '噴漆、油力架或使用強膠時保護呼吸道' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G05', name: '防飛濺防霧全罩護目鏡', desc: '操作角磨機、電鑽時防止碎屑入眼' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G06', name: '耐磨 PU 浸膠防滑勞工手套', desc: '搬運水泥砂石、夾板粗重物資保護雙手' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G07', name: '即棄丁腈橡膠手套', desc: '打膠、調和油漆時保持手部潔淨' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G08', name: '慢回彈防噪音工業耳塞', desc: '開鑿敲石屎、電鋸開料時保護聽力' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G09', name: '現場專用急救箱 (含消毒水、止血貼、繃帶)', desc: '割傷砸傷即時清潔包紮' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G10', name: '應急洗眼液及燙傷膏', desc: '異物入眼或接觸化學溶劑即時沖洗' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G11', name: '乾粉滅火筒 (2KG/4KG)', desc: '符合消防規範，預防火災事故' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G12', name: '高光反光螢光背心', desc: '公共大堂通道搬運時提升夜間辨識' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G13', name: '全身式高空防墜雙背安全帶', desc: '搭棚架、窗外安裝冷氣機時合規保命' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G14', name: '防滑橡膠鞋底貼片', desc: '雨天或地盤積水路面防跣' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G15', name: '護膝軟墊', desc: '地台鋪磚、擦地時保護膝蓋關節' },
+        { catLetter: 'G', catName: 'G. 安全勞保物資', code: 'G16', name: '危險告示牌 (小心地滑/施工中)', desc: '公眾走廊或門外豎立提醒防意外' }
+    ];
+
+    window.onload = () => {
+        document.getElementById('diaryDate').valueAsDate = new Date();
+    };
+
+    function handleImagePreview(e) {
+        const file = e.target.files[0];
+        if (!file) {
+            base64ImageString = "";
+            document.getElementById('previewBox').style.display = 'none';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 800;
+                const scaleSize = MAX_WIDTH / img.width;
+                const targetWidth = (img.width > MAX_WIDTH) ? MAX_WIDTH : img.width;
+                const targetHeight = (img.width > MAX_WIDTH) ? (img.height * scaleSize) : img.height;
+
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+                base64ImageString = canvas.toDataURL('image/jpeg', 0.65);
+
+                document.getElementById('imagePreview').src = base64ImageString;
+                document.getElementById('previewBox').style.display = 'block';
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    dbRef.on('value', (snapshot) => {
+        db = snapshot.val() || {};
+        
+        if (Object.keys(db).length === 0 && !isInitialized) {
+            isInitialized = true;
+            let firstUnit = prompt('請輸入第一個地盤名稱 (例如：錦柏苑)：');
+            createNewUnit(firstUnit && firstUnit.trim() ? firstUnit.trim() : '示範單位');
+            return;
+        }
+
+        // 確保每個地盤皆自動套用 ABC 編號規範
+        let needsSave = false;
+        Object.keys(db).forEach(unitName => {
+            if (!db[unitName].checklist || db[unitName].checklist.length < 50 || !db[unitName].checklist[0].code) {
+                db[unitName].checklist = defaultMasterList.map(item => ({ ...item, status: 0 }));
+                needsSave = true;
+            }
+        });
+        if (needsSave) dbRef.set(db);
+
+        isInitialized = true;
+        document.getElementById('syncStatus').innerText = '✅ 雲端已同步 (多人連線)';
+        setTimeout(() => document.getElementById('syncStatus').style.display = 'none', 2500);
+
+        if (!db[currentUnit] && Object.keys(db).length > 0) {
+            currentUnit = Object.keys(db)[0];
+            localStorage.setItem('siteManagerCurrent', currentUnit);
+        }
+
+        updateUnitSelector();
+        if (currentUnit) renderApp();
+    });
+
+    function saveDB() {
+        dbRef.set(db); 
+        localStorage.setItem('siteManagerCurrent', currentUnit);
+    }
+
+    function deleteCurrentUnit() {
+        if (!currentUnit) return;
+        if (confirm(`確定徹底刪除【${currentUnit}】整個地盤嗎？`)) {
+            delete db[currentUnit];
+            let remainingUnits = Object.keys(db);
+            currentUnit = remainingUnits.length > 0 ? remainingUnits[0] : '';
+            saveDB();
+            if (!currentUnit) {
+                let name = prompt('所有地盤已刪除，請輸入一個新地盤名稱：');
+                createNewUnit(name && name.trim() ? name.trim() : '新地盤');
+            }
+        }
+    }
+
+    function createNewUnit(name) {
+        if(db[name]) return alert('地盤名稱已存在！');
+        db[name] = { 
+            checklist: defaultMasterList.map(item => ({ ...item, status: 0 })), 
+            diary: [] 
+        };
+        currentUnit = name;
+        saveDB();
+    }
+
+    function addUnit() {
+        let name = prompt('請輸入新地盤名稱：');
+        if(name && name.trim()) createNewUnit(name.trim());
+    }
+
+    function changeUnit() {
+        currentUnit = document.getElementById('unitSelector').value;
+        saveDB();
+        renderApp();
+    }
+
+    function updateUnitSelector() {
+        let sel = document.getElementById('unitSelector');
+        sel.innerHTML = '';
+        Object.keys(db).forEach(unit => {
+            sel.innerHTML += `<option value="${unit}" ${unit === currentUnit ? 'selected' : ''}>${unit}</option>`;
+        });
+    }
+
+    // 渲染物資清單 (含編號與四態狀態)
+    function renderChecklist() {
+        if(!db[currentUnit]) return;
+        let container = document.getElementById('checklistContainer');
+        container.innerHTML = '';
+        let list = db[currentUnit].checklist || [];
+        
+        let currentCat = '';
+        list.forEach((item, index) => {
+            let catHeader = item.catName || item.cat;
+            if(catHeader !== currentCat) {
+                container.innerHTML += `<div class="category-title">${catHeader}</div>`;
+                currentCat = catHeader;
+            }
+
+            let codeDisplay = item.code ? `<span class="item-code">${item.code}</span>` : '';
+
+            container.innerHTML += `
+                <div class="item-card">
+                    <div class="item-info">
+                        <div class="item-header-row">
+                            ${codeDisplay}
+                            <div class="item-title">${item.name}</div>
+                        </div>
+                        <div class="item-desc">${item.desc}</div>
+                    </div>
+                    <div class="status-group">
+                        <button class="status-btn s-0 ${item.status === 0 ? 'active' : ''}" onclick="updateStatus(${index}, 0)">不需</button>
+                        <button class="status-btn s-1 ${item.status === 1 ? 'active' : ''}" onclick="updateStatus(${index}, 1)">待買</button>
+                        <button class="status-btn s-2 ${item.status === 2 ? 'active' : ''}" onclick="updateStatus(${index}, 2)">待送現場</button>
+                        <button class="status-btn s-3 ${item.status === 3 ? 'active' : ''}" onclick="updateStatus(${index}, 3)">送現場</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function updateStatus(index, status) {
+        db[currentUnit].checklist[index].status = status;
+        saveDB();
+    }
+
+    function addCustomItem() {
+        let input = document.getElementById('customItemName');
+        if(!input.value.trim()) return;
+        if(!db[currentUnit].checklist) db[currentUnit].checklist = [];
+        
+        // 自訂物資以 Z 編號
+        let customCount = db[currentUnit].checklist.filter(i => i.catLetter === 'Z').length + 1;
+        let code = 'Z' + (customCount < 10 ? '0' + customCount : customCount);
+
+        db[currentUnit].checklist.unshift({ 
+            catLetter: 'Z',
+            catName: 'Z. 臨時自訂追加', 
+            code: code,
+            name: input.value.trim(), 
+            desc: '現場臨時輸入', 
+            status: 1 // 自訂預設為「待買」
+        });
+        input.value = '';
+        saveDB();
+    }
+
+    function addDiary() {
+        let cat = document.getElementById('diaryCategory').value;
+        let date = document.getElementById('diaryDate').value;
+        let desc = document.getElementById('diaryDesc').value;
+        let amount = document.getElementById('diaryAmount').value;
+        if(!desc.trim()) return alert('請填寫記錄內容！');
+
+        if(!db[currentUnit].diary) db[currentUnit].diary = [];
+        db[currentUnit].diary.unshift({
+            cat: cat,
+            date: date,
+            desc: desc,
+            amount: amount ? Math.abs(parseFloat(amount)) : null, // 確保無負號
+            image: base64ImageString || null
+        });
+
+        document.getElementById('diaryDesc').value = '';
+        document.getElementById('diaryAmount').value = '';
+        document.getElementById('diaryPhotoInput').value = '';
+        document.getElementById('previewBox').style.display = 'none';
+        base64ImageString = "";
+        saveDB();
+    }
+
+    function deleteDiary(index) {
+        if(confirm('確定要刪除這條記錄嗎？')) {
+            db[currentUnit].diary.splice(index, 1);
+            saveDB();
+            renderDiary();
+            renderReport();
+        }
+    }
+
+    function openEditModal(index) {
+        let item = db[currentUnit].diary[index];
+        if(!item) return;
+        document.getElementById('editIndex').value = index;
+        document.getElementById('editCategory').value = item.cat || '地盤雜項';
+        document.getElementById('editDate').value = item.date;
+        document.getElementById('editDesc').value = item.desc;
+        document.getElementById('editAmount').value = item.amount !== null && item.amount !== undefined ? Math.abs(item.amount) : '';
+        document.getElementById('editModal').style.display = 'flex';
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').style.display = 'none';
+    }
+
+    function saveEditDiary() {
+        let index = document.getElementById('editIndex').value;
+        let cat = document.getElementById('editCategory').value;
+        let date = document.getElementById('editDate').value;
+        let desc = document.getElementById('editDesc').value;
+        let amount = document.getElementById('editAmount').value;
+
+        if(!desc.trim()) return alert('記錄內容不能為空！');
+
+        db[currentUnit].diary[index].cat = cat;
+        db[currentUnit].diary[index].date = date;
+        db[currentUnit].diary[index].desc = desc;
+        db[currentUnit].diary[index].amount = amount !== '' ? Math.abs(parseFloat(amount)) : null;
+
+        saveDB();
+        closeEditModal();
+        renderDiary();
+        renderReport();
+    }
+
+    function renderDiary() {
+        if(!db[currentUnit]) return;
+        let container = document.getElementById('diaryContainer');
+        container.innerHTML = '';
+        let diaries = db[currentUnit].diary || [];
+        diaries.forEach((d, index) => {
+            let isExp = d.amount > 0;
+            let catTag = d.cat || '地盤雜項';
+            let imgHTML = d.image ? `<img src="${d.image}" class="diary-photo" onclick="window.open(this.src)">` : '';
+            
+            // 支出不顯示負號
+            let amountDisplay = isExp ? `$${d.amount}` : '';
+
+            container.innerHTML += `
+                <div class="diary-item ${isExp ? 'expense' : ''}">
+                    <div class="diary-header">
+                        <span class="tag-cat">${catTag}</span>
+                        <span class="diary-date">📅 ${d.date}</span>
+                    </div>
+                    <div class="diary-body">
+                        <div class="diary-desc">${d.desc}</div>
+                        ${isExp ? `<div class="diary-amount">${amountDisplay}</div>` : ''}
+                    </div>
+                    ${imgHTML}
+                    <div class="diary-actions">
+                        <button class="btn-action btn-edit" onclick="openEditModal(${index})">✏️ 編輯</button>
+                        <button class="btn-action btn-delete" onclick="deleteDiary(${index})">🗑️ 刪除</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function renderReport() {
+        if(!db[currentUnit]) return;
+        let list = db[currentUnit].checklist || [];
+        
+        // 篩選出非「不需」的物資
+        let activeMaterials = list.filter(item => item.status > 0);
+        
+        let matHTML = '';
+        if (activeMaterials.length === 0) {
+            matHTML = '<li style="color:#a8a29e; text-align:center;">暫無待買或現場物資</li>';
+        } else {
+            activeMaterials.forEach(item => {
+                let badge = '';
+                if(item.status === 1) badge = '<span class="badge-status" style="background:#ffedd5; color:#c2410c;">待買</span>';
+                if(item.status === 2) badge = '<span class="badge-status" style="background:#e0f2fe; color:#0369a1;">待送現場</span>';
+                if(item.status === 3) badge = '<span class="badge-status" style="background:#dcfce7; color:#15803d;">送現場</span>';
+                
+                let codeText = item.code ? `[${item.code}] ` : '';
+                matHTML += `
+                    <li>
+                        <div class="report-list-item-header">
+                            <span><b>${codeText}</b>${item.name}</span>
+                            ${badge}
+                        </div>
+                    </li>
+                `;
+            });
+        }
+        document.getElementById('reportMaterials').innerHTML = matHTML;
+
+        // 日誌與總開支 (無負號)
+        let totalExp = 0;
+        let dHTML = '';
+        let diaries = db[currentUnit].diary || [];
+        diaries.forEach((d, index) => {
+            if(d.amount > 0) totalExp += d.amount;
+            let catTag = d.cat ? `[${d.cat}] ` : '';
+            let imgHTML = d.image ? `<div style="margin-top:4px;"><img src="${d.image}" style="max-height:80px; border-radius:6px; border:1px solid #e7e5e4;"></div>` : '';
+            let amountDisplay = d.amount ? `$${d.amount}` : '';
+            dHTML += `
+                <li>
+                    <div class="report-list-item-header">
+                        <span>${d.date} - ${catTag}${d.desc}</span> 
+                        <span style="font-family:'Caveat', cursive, sans-serif; font-size:17px; font-weight:700; color:#b91c1c;">${amountDisplay}</span>
+                    </div>
+                    ${imgHTML}
+                    <div class="diary-actions" style="margin-top: 4px;">
+                        <button class="btn-action btn-edit" onclick="openEditModal(${index})">✏️ 更改</button>
+                        <button class="btn-action btn-delete" onclick="deleteDiary(${index})">🗑️ 刪除</button>
+                    </div>
+                </li>`;
+        });
+        document.getElementById('reportDiary').innerHTML = dHTML || '<li style="color:#a8a29e; text-align:center;">暫無記錄</li>';
+        document.getElementById('reportTotal').innerText = `總開支：$${totalExp.toFixed(1)}`;
+    }
+
+    function renderApp() {
+        renderChecklist();
+        renderDiary();
+        renderReport();
+    }
+
+    function switchTab(tabId, el) {
+        document.querySelectorAll('.content-section').forEach(sec => sec.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('tab-' + tabId).classList.add('active');
+        el.classList.add('active');
+        if(tabId === 'report') renderReport();
+    }
+</script>
+</body>
+</html>
