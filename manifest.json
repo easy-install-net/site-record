@@ -1,0 +1,15 @@
+{
+  "name": "AI 專屬指揮中心",
+  "short_name": "AI 秘書",
+  "start_url": "./ai-center.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4A90E2",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/8649/8649605.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
