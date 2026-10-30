@@ -211,7 +211,7 @@
 
         #imageEnlargeModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center; cursor: zoom-out; }
         #imageEnlargeModal img { max-width: 95vw; max-height: 95vh; border: 2px solid #fff; object-fit: contain; }
-        .modal-close-btn { position: absolute; top: 15px; right: 15px; color: white; font-size: 30px; font-weight: bold; cursor: pointer; z-index: 10000; }
+        .modal-close-btn { position: absolute; top: 15px; right: 15px; color: white; font-size: 35px; font-weight: bold; cursor: pointer; z-index: 10000; }
 
         /* 報告列表 */
         .report-section { border: 2px solid #000; margin-bottom: 10px; background: #fff;}
@@ -227,17 +227,17 @@
         
         #syncStatus { font-size: 11px; text-align: center; color: var(--text-sub); margin-bottom: 6px; font-weight: 700; }
 
-        /* 📅 計劃日程表專屬樣式 */
-        .schedule-table-wrap { overflow-x: auto; background: white; border: 2px solid var(--border); margin-bottom: 10px; }
-        .schedule-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 650px; color: #000; } 
-        .schedule-table th { background: #fff; color: #000; padding: 6px 2px; text-align: left; border-bottom: 2px solid #000; border-right: 1px solid var(--border); white-space: nowrap; font-weight: 700; font-size: 13px;}
+        /* 📅 計劃日程表專屬樣式 (收窄頭3直排) */
+        .schedule-table-wrap { overflow-x: auto; background: white; border: 2px solid var(--border); margin-bottom: 10px; box-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
+        .schedule-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 620px; color: #000; } 
+        .schedule-table th { background: #fff; color: #000; padding: 4px 2px; text-align: left; border-bottom: 2px solid #000; border-right: 1px solid var(--border); white-space: nowrap; font-weight: 700; font-size: 13px;}
         .schedule-table td { padding: 0; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); vertical-align: top; color: #000; position: relative;}
         
         .schedule-status-done, .schedule-status-pending { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 45px; box-sizing: border-box; cursor: pointer; font-weight: 700; font-size: 13px;}
         .schedule-status-done { background: #000; color: #fff; }
         .schedule-status-pending { background: transparent; color: var(--text-sub); font-weight: 400; }
         
-        .editable-remark { width: 100%; height: 100%; min-height: 45px; border: none; outline: none; resize: vertical; padding: 6px; padding-bottom: 18px; font-family: inherit; font-size: 13px; background: transparent; box-sizing: border-box; margin-top: 2px; } 
+        .editable-remark { width: 100%; height: 100%; min-height: 45px; border: none; outline: none; resize: vertical; padding: 4px; padding-bottom: 16px; font-family: inherit; font-size: 13px; background: transparent; box-sizing: border-box; } 
         
         .date-overlay-wrapper { position: relative; width: 100%; height: 100%; min-height: 45px; }
         .date-overlay-text { position: absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-size:12px; font-weight:700; pointer-events:none; }
@@ -287,7 +287,7 @@
     <div class="cat-filter-wrap" id="catFilterWrap"></div>
 
     <div class="custom-add">
-        <div class="newspaper-title" style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">+ 臨時追加物資</div>
+        <div class="newspaper-title" style="font-size: 12px; font-weight: 700; margin-bottom: 4px;">+ 臨時追加物資</div>
         <div class="custom-add-row">
             <input type="text" id="customItemName" placeholder="輸入物資名稱..." style="flex:1;">
             <button onclick="addCustomItem()" class="btn-header">加入</button>
@@ -429,74 +429,73 @@
         <div class="diary-form-group">
             <label>可多選 10+ 張相片上載</label>
             <input type="file" id="albumPhotoInput" accept="image/*" multiple onchange="handleAlbumUpload(event)">
-            <div id="albumUploadStatus" style="font-size: 11px; margin-top: 6px; font-weight:700; color:var(--color-tosend);"></div>
+            <div id="albumUploadStatus" style="font-size: 10px; margin-top: 4px; font-weight:700; color:var(--color-tosend);"></div>
         </div>
     </div>
     <div id="albumGallery" class="album-grid"></div>
 </div>
 
 <!-- Tab 6: 單位報告 -->
-<div id="tab-report" class="container content-section">
-    <div id="reportContainer">
-        <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;" class="internal-section">
-            <button class="btn-action" style="background:#fff; color:#000; border-color:#000; padding:8px; font-size:13px;" onclick="toggleClientView()">切換客戶模式</button>
-            <button class="btn-action" style="background:#000; color:#fff; border-color:#fff; padding:8px; font-size:13px;" onclick="exportPDF()">PDF 匯出</button>
+<div id="tab-report" class="container content-section" id="reportContainer">
+    
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;" class="internal-section">
+        <button class="btn-action" style="background:#fff; color:#000; border-color:#000; padding:8px; font-size:13px;" onclick="toggleClientView()">切換客戶模式</button>
+        <button class="btn-action" style="background:#000; color:#fff; border-color:#fff; padding:8px; font-size:13px;" onclick="exportPDF()">PDF 匯出</button>
+    </div>
+
+    <div class="message-board internal-section">
+        <div style="font-weight:700; font-size:13px; margin-bottom:6px; color:#a16207;">💬 團隊留言板</div>
+        <div class="message-input-row">
+            <input type="text" id="msgInput" placeholder="輸入留言..." style="flex:1; padding:4px 6px;">
+            <button onclick="addMessage()" style="background:#ca8a04; color:#fff; border:1px solid #a16207; font-weight:700; padding:4px 10px; cursor:pointer;">留言</button>
         </div>
+        <ul class="message-list" id="messageList"></ul>
+    </div>
 
-        <div class="message-board internal-section">
-            <div style="font-weight:700; font-size:13px; margin-bottom:6px; color:#a16207;">💬 團隊留言板</div>
-            <div class="message-input-row">
-                <input type="text" id="msgInput" placeholder="輸入留言..." style="flex:1; padding:4px 6px;">
-                <button onclick="addMessage()" style="background:#ca8a04; color:#fff; border:1px solid #a16207; font-weight:700; padding:4px 10px; cursor:pointer;">留言</button>
-            </div>
-            <ul class="message-list" id="messageList"></ul>
+    <div class="report-section">
+        <div class="report-section-header">📄 對外進度 (現場狀態)</div>
+        <div class="report-section-body">
+            
+            <h3 class="report-h3">
+                <span>✅ 已完成日程</span>
+                <button class="btn-action internal-section" onclick="exportReport('doneSched', '已完成日程')">📋 匯出</button>
+            </h3>
+            <ul class="report-list" id="reportListDoneSched" style="margin-bottom: 12px;"></ul>
+
+            <h3 class="report-h3" style="color: var(--color-onsite); border-color: var(--color-onsite);">
+                <span>📍 現場已有物資</span>
+                <div>
+                    <button class="btn-action internal-section" style="color:inherit; border-color:inherit;" onclick="exportReport('onsite', '現場已有物資')">📋 匯出</button>
+                </div>
+            </h3>
+            <ul class="report-list" id="reportListOnSite"></ul>
+            
         </div>
+    </div>
 
-        <div class="report-section">
-            <div class="report-section-header">📄 對外進度 (現場狀態)</div>
-            <div class="report-section-body">
-                
-                <h3 class="report-h3">
-                    <span>✅ 已完成日程</span>
-                    <button class="btn-action internal-section" onclick="exportReport('doneSched', '已完成日程')">📋 匯出</button>
-                </h3>
-                <ul class="report-list" id="reportListDoneSched" style="margin-bottom: 12px;"></ul>
+    <div class="report-section internal-section" style="background: #f9fafb;">
+        <div class="report-section-header" style="background: #374151;">🔒 內部團隊 (採購/開支)</div>
+        <div class="report-section-body">
+            
+            <h3 class="report-h3" style="color: var(--color-tobuy); border-color: var(--color-tobuy);">
+                <span>🛒 待買物資清單</span>
+                <button class="btn-action" style="color:inherit; border-color:inherit;" onclick="exportReport('tobuy', '待買物資清單')">📋 匯出</button>
+            </h3>
+            <ul class="report-list" id="reportListToBuy" style="margin-bottom: 12px;"></ul>
 
-                <h3 class="report-h3" style="color: var(--color-onsite); border-color: var(--color-onsite);">
-                    <span>📍 現場已有物資</span>
-                    <div>
-                        <button class="btn-action internal-section" style="color:inherit; border-color:inherit;" onclick="exportReport('onsite', '現場已有物資')">📋 匯出</button>
-                    </div>
-                </h3>
-                <ul class="report-list" id="reportListOnSite"></ul>
-                
-            </div>
-        </div>
+            <h3 class="report-h3" style="color: var(--color-tosend); border-color: var(--color-tosend);">
+                <span>🚚 待送現場清單</span>
+                <button class="btn-action" style="color:inherit; border-color:inherit;" onclick="exportReport('tosend', '待送現場清單')">📋 匯出</button>
+            </h3>
+            <ul class="report-list" id="reportListToSend" style="margin-bottom: 12px;"></ul>
 
-        <div class="report-section internal-section" style="background: #f9fafb;">
-            <div class="report-section-header" style="background: #374151;">🔒 內部團隊 (採購/開支)</div>
-            <div class="report-section-body">
-                
-                <h3 class="report-h3" style="color: var(--color-tobuy); border-color: var(--color-tobuy);">
-                    <span>🛒 待買物資</span>
-                    <button class="btn-action" style="color:inherit; border-color:inherit;" onclick="exportReport('tobuy', '待買物資清單')">📋 匯出</button>
-                </h3>
-                <ul class="report-list" id="reportListToBuy" style="margin-bottom: 12px;"></ul>
+            <h3 class="report-h3">
+                <span>📝 現場日誌與開支</span>
+                <button class="btn-action" onclick="exportReport('diary', '開支與日誌')">📋 匯出</button>
+            </h3>
+            <ul class="report-list" id="reportDiary"></ul>
+            <div class="total-expense" id="reportTotal">TOTAL: $0</div>
 
-                <h3 class="report-h3" style="color: var(--color-tosend); border-color: var(--color-tosend);">
-                    <span>🚚 待送現場</span>
-                    <button class="btn-action" style="color:inherit; border-color:inherit;" onclick="exportReport('tosend', '待送現場清單')">📋 匯出</button>
-                </h3>
-                <ul class="report-list" id="reportListToSend" style="margin-bottom: 12px;"></ul>
-
-                <h3 class="report-h3">
-                    <span>📝 開支明細</span>
-                    <button class="btn-action" onclick="exportReport('diary', '開支與日誌')">📋 匯出</button>
-                </h3>
-                <ul class="report-list" id="reportDiary"></ul>
-                <div class="total-expense" id="reportTotal">TOTAL: $0</div>
-
-            </div>
         </div>
     </div>
 </div>
@@ -582,7 +581,6 @@
     let currentFilterCat = 'ALL'; 
     let isClientView = false;
 
-    // 精簡版物資列表
     const defaultMasterList = [
         { catLetter: 'A', catName: '前期保護', code: 'A01', name: '中空板 (瓦通膠板)', desc: '鋪設地台防刮傷', status: 0 },
         { catLetter: 'A', catName: '前期保護', code: 'A02', name: '高密度纖維夾板', desc: '走廊及重料通道防壓', status: 0 },
@@ -739,7 +737,7 @@
         if (!files || files.length === 0) return;
         
         let status = document.getElementById('albumUploadStatus');
-        status.innerText = `處理中...`;
+        status.innerText = `正在處理 ${files.length} 張相片，請稍候...`;
 
         if(!db[currentUnit].album) db[currentUnit].album = [];
 
@@ -754,7 +752,7 @@
         
         saveDB();
         renderAlbum();
-        status.innerText = '✅ 成功';
+        status.innerText = '✅ 上載完成';
         setTimeout(() => status.innerText = '', 2000);
         e.target.value = '';
     }
@@ -764,7 +762,7 @@
         if (!files || files.length === 0) return;
         
         let status = document.getElementById('drawingsUploadStatus');
-        status.innerText = `處理中...`;
+        status.innerText = `正在處理 ${files.length} 份檔案...`;
 
         if(!db[currentUnit].drawings) db[currentUnit].drawings = [];
 
@@ -794,7 +792,7 @@
         
         saveDB();
         renderDrawings();
-        status.innerText = '✅ 成功';
+        status.innerText = '✅ 上載完成';
         setTimeout(() => status.innerText = '', 2000);
         e.target.value = '';
     }
@@ -844,6 +842,8 @@
         if (needsSave) dbRef.set(db);
 
         isInitialized = true;
+        document.getElementById('syncStatus').innerText = 'SYNCED.';
+        setTimeout(() => document.getElementById('syncStatus').style.display = 'none', 2500);
 
         if (!db[currentUnit] && Object.keys(db).length > 0) {
             currentUnit = Object.keys(db)[0];
@@ -928,7 +928,9 @@
         
         let filterHTML = `<button class="cat-filter-btn ${currentFilterCat === 'ALL' ? 'active' : ''}" onclick="filterCat('ALL')">全部</button>`;
         uniqueCats.forEach(cat => {
-            if(cat) filterHTML += `<button class="cat-filter-btn ${currentFilterCat === cat ? 'active' : ''}" onclick="filterCat('${cat}')">${cat}</button>`;
+            if(cat) {
+                filterHTML += `<button class="cat-filter-btn ${currentFilterCat === cat ? 'active' : ''}" onclick="filterCat('${cat}')">${cat}</button>`;
+            }
         });
         filterContainer.innerHTML = filterHTML;
 
@@ -948,6 +950,7 @@
                 <div class="item-card">
                     <div class="item-info">
                         <div class="item-header-row">
+                            <span class="item-code" style="font-size:10px;">${item.code || ''}</span>
                             <div class="item-title">${item.name}</div>
                         </div>
                         <div class="item-desc">${item.desc || ''}</div>
@@ -1046,6 +1049,15 @@
                 </tr>
             `;
         });
+    }
+    
+    function cycleRemarkColor(index) {
+        const colors = ['black', 'red', 'orange', 'purple'];
+        let current = db[currentUnit].schedule[index].color || 'black';
+        let nextIdx = (colors.indexOf(current) + 1) % colors.length;
+        db[currentUnit].schedule[index].color = colors[nextIdx];
+        saveDB();
+        renderSchedule();
     }
 
     function clearSchedule() {
@@ -1415,7 +1427,7 @@
                     <div class="report-list-item-header">
                         <span style="flex:1;">
                             <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--text-sub);">${d.date} [${d.cat || ''}]</div>
-                            <div style="margin-top:1px;">${d.desc}</div>
+                            <div style="margin-top:2px;">${d.desc}</div>
                         </span> 
                         <span style="text-align:right;">
                             ${payerBadge}
