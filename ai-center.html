@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 專屬指揮中心</title>
+    
+    <!-- 這是綁定手機 APP 的身分證 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { font-size: 24px; color: #4A90E2; text-align: center; }
+        textarea { width: 100%; height: 150px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; margin-bottom: 15px; resize: none; }
+        .btn { display: block; width: 100%; padding: 15px; text-align: center; background-color: #4A90E2; color: white; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; margin-bottom: 15px; font-weight: bold; }
+        .btn:hover { background-color: #357ABD; }
+        .btn-green { background-color: #2ECC71; }
+        .btn-green:hover { background-color: #27AE60; }
+        .links { display: flex; gap: 10px; margin-top: 20px; }
+        .links a { flex: 1; text-align: center; padding: 12px 5px; background: #f0f0f0; color: #333; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 我的 AI 專屬指揮中心</h1>
+        <p style="text-align: center; color: #666; font-size: 14px;">在這裡倒垃圾，剩下的交給系統</p>
+
+        <!-- 輸入區 -->
+        <textarea id="userInput" placeholder="寫下或用語音輸入你的待辦、花費、點子、或別人的要求..."></textarea>
+
+        <!-- 操作按鈕 -->
+        <button class="btn" onclick="generatePrompt()">🪄 1. 打包成指令 (自動複製)</button>
+        <a href="https://gemini.google.com/" target="_blank" class="btn btn-green" style="text-decoration: none; box-sizing: border-box;">🤖 2. 打開 AI 貼上</a>
+
+        <!-- 底部快速連結 -->
+        <div class="links">
+            <a href="https://docs.google.com/spreadsheets/d/1FIGvKLNDxsuD0ea-37icGfyINNkrXzGDziY7VbQ-Acc/edit" target="_blank">📊 理財記帳本</a>
+            <a href="https://docs.google.com/spreadsheets/d/1FU-_cU6SUcbt4Z28P3LnNDUC-pOaAyiLB9rtrNYQRlo/edit" target="_blank">💡 生意點子庫</a>
+            <a href="https://calendar.google.com/calendar/r" target="_blank">📅 Google 行事曆</a>
+        </div>
+    </div>
+
+    <script>
+        const inputField = document.getElementById('userInput');
+
+        // 記憶功能：打字到一半關掉也不會不見
+        window.onload = function() {
+            if(localStorage.getItem('myMindRecord')) {
+                inputField.value = localStorage.getItem('myMindRecord');
+            }
+        }
+        inputField.addEventListener('input', function() {
+            localStorage.setItem('myMindRecord', inputField.value);
+        });
+
+        // 打包指令功能
+        function generatePrompt() {
+            const text = inputField.value;
+            if(!text) {
+                alert('請先輸入一點內容喔！');
+                return;
+            }
+            
+            const prompt = `【請啟動我的專屬教練團】\n以下是我現在遇到的狀況／要求／花費／點子：\n「${text}」\n\n請自動切換以下 5 個角色中最適合的來幫我處理：\n1. 冷酷秘書（評估風險，給拒絕/談判草稿）\n2. 行動教練（給我下一步物理動作）\n3. 記帳管家（輸出：日期,支出,類別,項目,金額）\n4. 生意智囊（點出盲點與第一步）\n5. 流程架構師（找出卡關痛點與優化方案）`;
+
+            // 複製到剪貼簿
+            navigator.clipboard.writeText(prompt).then(() => {
+                alert('✅ 專屬指令已經幫你打包並複製好了！\n\n現在請點擊綠色的「打開 AI 貼上」按鈕，直接貼給我吧！');
+                inputField.value = ''; 
+                localStorage.removeItem('myMindRecord'); // 傳送完就清空記憶
+            });
+        }
+    </script>
+</body>
+</html>
