@@ -5,12 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>工程記錄系統</title>
     
-    <!-- 引入報紙風明體與窄身字體 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&family=Noto+Serif+HK:wght@600;700;900&family=Noto+Sans+HK:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
-    <!-- 引入 Firebase v8 (Compat) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
@@ -27,28 +26,24 @@
             --color-onsite: #15803d;
             --color-red: #dc2626;
             --color-orange: #ea580c;
+            --color-purple: #9333ea;
         }
         body { 
             font-family: 'Oswald', 'Noto Sans HK', sans-serif;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
             margin: 0; 
             padding: 0; 
             background: var(--bg); 
             color: var(--text); 
-            padding-bottom: 80px; 
+            padding-bottom: 60px; 
             -webkit-tap-highlight-color: transparent;
         }
         
-        h1, h2, h3, .newspaper-title {
-            font-family: 'Noto Serif HK', serif;
-            text-transform: uppercase;
-        }
+        h1, h2, h3, .newspaper-title { font-family: 'Noto Serif HK', serif; text-transform: uppercase; }
 
-        /* 頂部導覽 (修復下拉無字BUG) */
         .header { 
             background: var(--card-bg); 
-            color: var(--text);
-            padding: 8px 10px; 
+            padding: 6px 8px; 
             position: sticky; 
             top: 0; 
             z-index: 100; 
@@ -61,20 +56,21 @@
             flex: 1; 
             font-weight: 700; 
             border: 2px solid var(--border);
-            font-size: 14px;
+            font-size: 16px; 
             color: #000; 
             background: #fff;
-            padding: 4px 6px;
-            height: 32px;
+            padding: 2px 6px;
+            height: 38px; 
             outline: none;
+            appearance: auto; 
+            -webkit-appearance: menulist;
         }
-        .btn-header { background: #000; color: #fff; font-weight: 500; cursor: pointer; border: 2px solid #000; padding: 4px 10px; font-size: 13px; height: 32px; }
+        .btn-header { background: #000; color: #fff; font-weight: 700; cursor: pointer; border: 2px solid #000; padding: 0 10px; font-size: 14px; height: 38px; } 
         .btn-header:active { background: #333; }
-        .btn-del-unit { background: transparent; color: #000; cursor: pointer; border: 1px solid #000; text-decoration: line-through; padding: 4px 8px; font-size: 12px; height: 32px;}
+        .btn-del-unit { background: transparent; color: #000; cursor: pointer; border: 1px solid #000; padding: 0 8px; font-size: 13px; height: 38px; font-weight:700;} 
         
-        .container { padding: 8px; max-width: 800px; margin: 0 auto; }
+        .container { padding: 4px; max-width: 800px; margin: 0 auto; }
         
-        /* 底部導覽列 */
         .tab-bar { 
             position: fixed; 
             bottom: 0; 
@@ -92,7 +88,7 @@
             font-weight: 700; 
             color: var(--text-sub); 
             cursor: pointer; 
-            font-size: 12px; 
+            font-size: 13px; 
             border-right: 1px solid var(--border);
         }
         .tab:last-child { border-right: none; }
@@ -100,62 +96,57 @@
         .content-section { display: none; }
         .content-section.active { display: block; }
 
-        /* 通用輸入框 */
         input, select, textarea { 
             font-family: 'Oswald', 'Noto Sans HK', sans-serif;
-            font-size: 13px; 
-            padding: 6px 8px; 
+            font-size: 15px; 
+            padding: 6px; 
             border-radius: 0; 
             border: 1px solid var(--border); 
             background: #fff;
             color: var(--text);
             outline: none;
         }
-        input:focus, select:focus, textarea:focus { box-shadow: 2px 2px 0px var(--border); }
+        input:focus, select:focus, textarea:focus { box-shadow: 1px 1px 0px var(--border); }
 
-        /* 物資分類過濾按鈕 (解決不夠闊問題) */
-        .cat-filter-scroll {
+        .cat-filter-wrap {
             display: flex;
-            overflow-x: auto;
-            gap: 6px;
-            padding: 8px 0;
+            flex-wrap: wrap; 
+            gap: 4px;
+            padding: 6px 0;
             margin-bottom: 6px;
             position: sticky;
-            top: 50px;
+            top: 53px;
             background: var(--bg);
             z-index: 90;
             border-bottom: 2px solid var(--border);
         }
-        .cat-filter-scroll::-webkit-scrollbar { display: none; }
         .cat-filter-btn {
-            flex-shrink: 0; /* 防止按鈕被擠壓變形 */
+            flex-grow: 1; 
             background: #fff;
-            border: 2px solid var(--border);
+            border: 1px solid var(--border);
             padding: 4px 10px;
             font-weight: 700;
-            font-size: 12px;
+            font-size: 14px; 
             cursor: pointer;
-            box-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+            text-align: center;
         }
         .cat-filter-btn.active { background: #000; color: #fff; }
 
-        /* 項目卡片 (縮小 Padding) */
         .item-card { 
             background: var(--card-bg); 
-            padding: 8px; 
+            padding: 8px 6px; 
             margin-bottom: 4px; 
             border-bottom: 1px solid #ccc; 
             display: flex; 
             justify-content: space-between; 
             align-items: center; 
-            gap: 6px; 
+            gap: 4px; 
         }
         .item-info { flex: 1; min-width: 0; }
-        .item-header-row { display: flex; align-items: baseline; gap: 6px; }
-        .item-title { font-weight: 700; font-size: 13px; }
-        .item-desc { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
+        .item-header-row { display: flex; align-items: baseline; gap: 4px; }
+        .item-title { font-weight: 700; font-size: 14px; } 
+        .item-desc { font-size: 12px; color: var(--text-sub); margin-top: 1px; line-height:1.2; } 
 
-        /* 四態狀態按鈕 */
         .status-group { display: flex; gap: 0; flex-shrink: 0; border: 1px solid var(--border); }
         .status-btn { 
             padding: 4px 6px; 
@@ -173,153 +164,130 @@
         .status-btn.s-2.active { background: var(--color-tosend); color: white; }
         .status-btn.s-3.active { background: var(--color-onsite); color: white; }
 
-        /* 追加自訂物資 */
-        .custom-add { 
-            background: var(--card-bg); 
-            border: 2px solid var(--border); 
-            padding: 8px; 
-            margin-bottom: 10px; 
-            box-shadow: 2px 2px 0px rgba(0,0,0,0.1);
-        }
-        .custom-add-row { display: flex; gap: 6px; margin-top: 6px; }
+        .custom-add { background: var(--card-bg); border: 2px solid var(--border); padding: 8px; margin-bottom: 6px; }
+        .custom-add-row { display: flex; gap: 4px; margin-top: 4px; }
 
-        /* 表單區域 (減少 Padding) */
-        .diary-card { 
-            background: var(--card-bg); 
-            padding: 10px; 
-            border: 2px solid var(--border); 
-            margin-bottom: 10px; 
-            box-shadow: 2px 2px 0px rgba(0,0,0,0.1);
-        }
+        .diary-card { background: var(--card-bg); padding: 10px; border: 2px solid var(--border); margin-bottom: 8px; box-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
         .diary-card-title {
             font-family: 'Noto Serif HK', serif;
-            font-size: 15px; 
+            font-size: 16px; 
             font-weight: 900; 
             border-bottom: 2px solid #000; 
             padding-bottom: 4px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         .diary-form-group { margin-bottom: 8px; }
-        .diary-form-group label { display: block; font-size: 11px; font-weight: 700; color: var(--text-sub); margin-bottom: 2px; }
-        .diary-form-group input, .diary-form-group select, .diary-form-group textarea { width: 100%; box-sizing: border-box; padding: 6px;}
+        .diary-form-group label { display: block; font-size: 12px; font-weight: 700; color: var(--text-sub); margin-bottom: 2px; } 
         
-        .btn-submit { 
-            background: #000; 
-            color: white; 
-            border: 2px solid #000; 
-            width: 100%; 
-            font-weight: 700; 
-            padding: 8px; 
-            cursor: pointer; 
-            font-size: 13px; 
-            text-transform: uppercase; 
-        }
-
-        .color-btns-wrapper { display: flex; gap: 4px; margin-top: 4px; }
-        .btn-color { flex: 1; padding: 4px; font-size: 11px; font-weight: 700; background: white; border: 1px solid #000; cursor: pointer; text-align: center; }
-        .btn-color[data-color="black"].active { background: #000; color: #fff; }
-        .btn-color[data-color="orange"] { border-color: var(--color-orange); color: var(--color-orange); }
-        .btn-color[data-color="orange"].active { background: var(--color-orange); color: #fff; }
-        .btn-color[data-color="red"] { border-color: var(--color-red); color: var(--color-red); }
-        .btn-color[data-color="red"].active { background: var(--color-red); color: #fff; }
+        .btn-submit { background: #000; color: white; border: 1px solid #000; width: 100%; font-weight: 700; padding: 8px; cursor: pointer; font-size: 14px; text-transform: uppercase; } 
         
-        .quick-btn-group { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 6px; }
-        .btn-quick { background: #fff; border: 1px solid var(--border); padding: 4px; font-size: 11px; cursor: pointer; color: var(--text); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .quick-btn-group { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; margin-bottom: 4px; }
+        .btn-quick { background: #fff; border: 1px solid var(--border); padding: 4px 2px; font-size: 11px; cursor: pointer; color: var(--text); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight:700;} 
         .btn-quick.active { background: #000; color: white; }
 
-        /* 日誌列表 */
-        .diary-item { background: var(--card-bg); padding: 8px; border: 2px solid var(--border); border-left: 5px solid #000; margin-bottom: 6px; box-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
+        .diary-item { background: var(--card-bg); padding: 8px; border: 1px solid var(--border); border-left: 4px solid #000; margin-bottom: 6px; }
         .diary-item.expense { border-left-color: var(--color-red); }
-        .diary-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
-        .tag-cat { font-size: 11px; font-weight: 700; background:#000; color:#fff; padding:0 4px; }
-        .diary-date { font-size: 12px; font-weight: 700; color: var(--text-sub); }
-        .diary-body { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-        .diary-desc { font-size: 13px; line-height: 1.4; color: var(--text); flex: 1; }
-        .diary-amount { font-size: 16px; font-weight: 700; }
-        .diary-actions { display: flex; gap: 6px; margin-top: 6px; justify-content: flex-end; }
-        .btn-action { background: none; border: 1px solid var(--border); font-size: 11px; cursor: pointer; padding: 2px 6px; font-weight: 700;}
+        .diary-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; border-bottom: 1px solid #eee; padding-bottom: 2px; }
+        .tag-cat { font-size: 11px; font-weight: 700; background:#000; color:#fff; padding:2px 4px; } 
+        .diary-date { font-size: 13px; font-weight: 700; color: var(--text-sub); } 
+        .diary-body { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+        .diary-desc { font-size: 14px; line-height: 1.4; color: var(--text); flex: 1; } 
+        .diary-amount { font-size: 16px; font-weight: 700; text-align:right;} 
+        .diary-actions { display: flex; gap: 4px; margin-top: 6px; justify-content: flex-end; }
+        .btn-action { background: #fff; border: 1px solid var(--border); font-size: 11px; cursor: pointer; padding: 4px 8px; font-weight: 700;} 
         
         .preview-box { display: none; margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
         .preview-box img { max-width: 50px; max-height: 50px; border: 1px solid var(--border); object-fit: cover; cursor: zoom-in; }
 
-        /* 相簿格線 */
         .album-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-        .album-item { position: relative; background: #fff; border: 2px solid #000; box-shadow: 2px 2px 0px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .album-item { position: relative; background: #fff; border: 1px solid #000; display: flex; flex-direction: column; }
         .album-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; cursor: zoom-in; border-bottom: 1px solid #000; }
-        .album-item-date { font-size: 10px; font-weight: 700; text-align: center; background: #000; color: #fff; padding: 2px 0; letter-spacing: 1px; }
-        .album-remark { width: 100%; height: 40px; border: none; resize: none; font-size: 11px; padding: 4px; box-sizing: border-box; background: transparent; border-top: 1px solid #000; }
+        .album-item-date { font-size: 11px; font-weight: 700; text-align: center; background: #000; color: #fff; padding: 2px 0; } 
+        .album-remark { width: 100%; height: 40px; border: none; resize: none; font-size: 12px; padding: 4px; box-sizing: border-box; background: transparent; border-top: 1px solid #000; margin-top: 4px;} 
         .btn-del-photo { position: absolute; top: 4px; right: 4px; background: rgba(255,255,255,0.9); border: 1px solid #000; color: red; width: 20px; height: 20px; font-size: 12px; font-weight: bold; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; z-index: 10; }
 
-        /* 全螢幕圖片放大 POPUP Modal */
         #imageEnlargeModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center; cursor: zoom-out; }
         #imageEnlargeModal img { max-width: 95vw; max-height: 95vh; border: 2px solid #fff; object-fit: contain; }
-        .modal-close-btn { position: absolute; top: 20px; right: 20px; color: white; font-size: 35px; font-weight: bold; cursor: pointer; z-index: 10000; }
+        .modal-close-btn { position: absolute; top: 15px; right: 15px; color: white; font-size: 35px; font-weight: bold; cursor: pointer; z-index: 10000; }
 
         /* 報告列表 */
-        .report-section { border: 2px solid #000; margin-bottom: 12px; box-shadow: 2px 2px 0px rgba(0,0,0,0.15); background: #fff;}
-        .report-section-header { font-family: 'Noto Serif HK', serif; background: #000; color: #fff; padding: 8px; font-size: 14px; font-weight: 900; }
+        .report-section { border: 2px solid #000; margin-bottom: 10px; background: #fff;}
+        .report-section-header { font-family: 'Noto Serif HK', serif; background: #000; color: #fff; padding: 8px; font-size: 15px; font-weight: 900; display: flex; justify-content: space-between; align-items: center;} 
         .report-section-body { padding: 8px; }
 
-        .report-h3 { font-family: 'Noto Serif HK', serif; font-size: 14px; font-weight: 900; margin: 0 0 8px 0; padding-bottom: 4px; border-bottom: 2px solid var(--text); display: flex; justify-content: space-between; align-items: center; }
-        .report-count-badge { font-family: 'Oswald', sans-serif; font-size: 12px; padding: 0 6px; border: 1px solid var(--text); background: white;}
-        .report-list { list-style: none; padding: 0; margin: 0; }
-        .report-list li { padding: 6px 0; border-bottom: 1px solid #e5e7eb; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
-        .report-list-item-header { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; gap: 8px; }
-        .total-expense { text-align: right; font-size: 20px; font-weight: 700; border-top: 2px solid #000; margin-top: 10px; padding-top: 6px; }
+        .report-h3 { font-family: 'Noto Serif HK', serif; font-size: 14px; font-weight: 900; margin: 0 0 6px 0; padding-bottom: 4px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; } 
         
-        #syncStatus { font-size: 10px; text-align: center; color: var(--text-sub); margin-bottom: 8px; font-weight: 700; }
+        .report-list { list-style: none; padding: 0; margin: 0; }
+        .report-list li { padding: 6px 0; border-bottom: 1px solid #e5e7eb; font-size: 13px; display: flex; flex-direction: column; gap: 4px; } 
+        .report-list-item-header { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; gap: 6px; }
+        .total-expense { text-align: right; font-size: 18px; font-weight: 700; border-top: 2px solid #000; margin-top: 8px; padding-top: 6px; } 
+        
+        #syncStatus { font-size: 11px; text-align: center; color: var(--text-sub); margin-bottom: 6px; font-weight: 700; }
 
         /* 📅 計劃日程表專屬樣式 */
-        .schedule-table-wrap { overflow-x: auto; background: white; border: 2px solid var(--border); margin-bottom: 15px; box-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
-        .schedule-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 650px; color: #000; }
-        .schedule-table th { background: #fff; color: #000; padding: 6px 4px; text-align: left; border-bottom: 2px solid #000; border-right: 1px solid var(--border); white-space: nowrap; font-weight: 700; }
-        .schedule-table td { padding: 0; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); vertical-align: top; color: #000; }
+        .schedule-table-wrap { overflow-x: auto; background: white; border: 2px solid var(--border); margin-bottom: 10px; box-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
+        .schedule-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 620px; color: #000; } 
+        .schedule-table th { background: #fff; color: #000; padding: 4px 2px; text-align: left; border-bottom: 2px solid #000; border-right: 1px solid var(--border); white-space: nowrap; font-weight: 700; font-size: 13px;}
+        .schedule-table td { padding: 0; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); vertical-align: top; color: #000; position: relative;}
         
-        .schedule-status-done, .schedule-status-pending { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 40px; box-sizing: border-box; cursor: pointer; font-weight: 700; }
+        .schedule-status-done, .schedule-status-pending { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 45px; box-sizing: border-box; cursor: pointer; font-weight: 700; font-size: 13px;}
         .schedule-status-done { background: #000; color: #fff; }
         .schedule-status-pending { background: transparent; color: var(--text-sub); font-weight: 400; }
         
-        .editable-remark { width: 100%; height: 100%; min-height: 40px; border: none; outline: none; resize: vertical; padding: 6px; font-family: inherit; font-size: 12px; background: transparent; box-sizing: border-box; }
-        .editable-remark:focus { background: #f9fafb; box-shadow: inset 0 0 0 1px #000; }
+        .editable-remark { width: 100%; height: 100%; min-height: 45px; border: none; outline: none; resize: vertical; padding: 4px; padding-bottom: 16px; font-family: inherit; font-size: 13px; background: transparent; box-sizing: border-box; margin-top: 2px; } 
         
-        .date-overlay-wrapper { position: relative; width: 100%; height: 100%; min-height: 40px; }
-        .date-overlay-text { position: absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-size:13px; font-weight:700; pointer-events:none; }
+        .date-overlay-wrapper { position: relative; width: 100%; height: 100%; min-height: 45px; }
+        .date-overlay-text { position: absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-size:12px; font-weight:700; pointer-events:none; }
         input[type="date"].hidden-date-input { position: absolute; top:0; left:0; width:100%; height:100%; opacity: 0; cursor: pointer; box-sizing:border-box;}
 
-        /* 編輯彈窗 */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 200; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box; }
-        .modal-card { background: #fff; padding: 15px; width: 100%; max-width: 350px; border: 3px solid #000; box-shadow: 4px 4px 0px rgba(0,0,0,0.5); }
+        .btn-cycle-color {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            font-size: 9px;
+            padding: 1px 4px;
+            background: #eee;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            border-radius: 2px;
+        }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 200; justify-content: center; align-items: center; padding: 10px; box-sizing: border-box; }
+        .modal-card { background: #fff; padding: 15px; width: 100%; max-width: 380px; border: 2px solid #000; }
         .modal-btns { display: flex; gap: 8px; margin-top: 10px; }
-        .modal-btns button { flex: 1; padding: 6px; font-weight: 700; cursor: pointer; border: 1px solid #000; background: white;}
+        .modal-btns button { flex: 1; padding: 8px; font-weight: 700; cursor: pointer; border: 1px solid #000; background: white; font-size: 14px;}
         .modal-btns button.primary { background: #000; color: white; }
 
-        /* 留言板樣式 */
         .message-board { background: #fefce8; border: 1px solid #ca8a04; padding: 8px; margin-bottom: 12px; }
         .message-input-row { display: flex; gap: 6px; margin-bottom: 6px; }
         .message-list { list-style: none; padding: 0; margin: 0; max-height: 150px; overflow-y: auto; }
-        .message-item { font-size: 12px; padding: 4px 0; border-bottom: 1px dashed #d1d5db; display: flex; justify-content: space-between; gap: 8px; }
-        .message-time { font-size: 10px; color: #6b7280; white-space: nowrap; }
+        .message-item { font-size: 13px; padding: 4px 0; border-bottom: 1px dashed #d1d5db; display: flex; justify-content: space-between; gap: 6px; } 
+        .message-time { font-size: 11px; color: #6b7280; white-space: nowrap; } 
+
+        .client-view .internal-section { display: none !important; }
+        .client-view .btn-action { display: none !important; }
+        .client-view .header button { display: none !important; }
+        .client-view .header select { pointer-events: none; border-color: transparent; }
     </style>
 </head>
 <body>
 
-<div class="header">
+<div class="header" id="mainHeader">
     <select id="unitSelector" onchange="changeUnit()"></select>
     <button class="btn-header" onclick="addUnit()">+ 新增</button>
-    <button class="btn-del-unit" onclick="deleteCurrentUnit()">刪除地盤</button>
+    <button class="btn-del-unit" onclick="deleteCurrentUnit()">刪除</button>
 </div>
 
 <!-- Tab 1: 物資清單 -->
 <div id="tab-checklist" class="container content-section active">
     
-    <!-- 分類過濾按鈕 -->
-    <div class="cat-filter-scroll" id="catFilterScroll"></div>
+    <div class="cat-filter-wrap" id="catFilterWrap"></div>
 
     <div class="custom-add">
-        <div class="newspaper-title" style="font-size: 13px; font-weight: 700; margin-bottom: 6px;">+ 臨時追加物資</div>
+        <div class="newspaper-title" style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">+ 臨時追加物資</div>
         <div class="custom-add-row">
             <input type="text" id="customItemName" placeholder="輸入物資名稱..." style="flex:1;">
             <button onclick="addCustomItem()" class="btn-header">加入</button>
@@ -334,7 +302,7 @@
     <div class="diary-card">
         <div class="diary-card-title">
             <span>+ 追加日程</span>
-            <button onclick="clearSchedule()" style="background:transparent; border:1px solid #dc2626; color:#dc2626; padding:2px 6px; font-size:11px; cursor:pointer;">🗑️ 清空日程</button>
+            <button onclick="clearSchedule()" style="background:transparent; border:1px solid #dc2626; color:#dc2626; padding:2px 8px; font-size:12px; cursor:pointer;">🗑️ 清空日程</button>
         </div>
         
         <div class="diary-form-group">
@@ -369,17 +337,6 @@
             <label>內容 (選填)</label>
             <input type="text" id="schedContent" placeholder="工序細節">
         </div>
-        
-        <div class="diary-form-group">
-            <label>提醒 (選填)</label>
-            <input type="text" id="schedRemark" placeholder="注意事項">
-            <div class="color-btns-wrapper">
-                <input type="hidden" id="schedColor" value="black">
-                <button type="button" class="btn-color active" data-color="black" onclick="selectRemarkColor(this, 'black')">黑</button>
-                <button type="button" class="btn-color" data-color="orange" onclick="selectRemarkColor(this, 'orange')">橙</button>
-                <button type="button" class="btn-color" data-color="red" onclick="selectRemarkColor(this, 'red')">紅</button>
-            </div>
-        </div>
 
         <button onclick="addScheduleItem()" class="btn-submit" style="margin-top: 4px;">加入日程</button>
     </div>
@@ -388,12 +345,12 @@
         <table class="schedule-table">
             <thead>
                 <tr>
-                    <th style="width: 6%; text-align:center;">完?</th>
-                    <th style="width: 13%;">日期 (改)</th>
-                    <th style="width: 16%;">項目 (改)</th>
-                    <th style="width: 28%;">內容 (改)</th>
-                    <th style="width: 28%;">提醒 (改)</th>
-                    <th style="width: 9%; text-align:center; border-right:none;">刪除</th>
+                    <th style="width: 4%; text-align:center; padding: 4px 1px;">完</th>
+                    <th style="width: 8%; text-align:center; padding: 4px 1px;">日期(改)</th>
+                    <th style="width: 12%; padding: 4px 2px;">項目(改)</th>
+                    <th style="width: 35%; padding: 4px 2px;">內容 (改)</th>
+                    <th style="width: 35%; padding: 4px 2px;">提醒 (改)</th>
+                    <th style="width: 6%; text-align:center; border-right:none;">刪</th>
                 </tr>
             </thead>
             <tbody id="scheduleTableBody"></tbody>
@@ -430,7 +387,7 @@
             <input type="text" id="diaryDesc" placeholder="記錄細節...">
         </div>
         
-        <div style="display:flex; gap:6px;">
+        <div style="display:flex; gap:4px;">
             <div class="diary-form-group" style="flex:1;">
                 <label>金額 $ (純日誌留空)</label>
                 <input type="number" id="diaryAmount" placeholder="0">
@@ -442,7 +399,7 @@
         </div>
 
         <div class="diary-form-group">
-            <label>上載單據/相片 (最多 5 張)</label>
+            <label>上載相片 (最多 5 張)</label>
             <input type="file" id="diaryPhotoInput" accept="image/*" multiple onchange="handleDiaryImages(event)">
             <div id="previewBox" class="preview-box"></div>
         </div>
@@ -452,7 +409,20 @@
     <div id="diaryContainer"></div>
 </div>
 
-<!-- Tab 4: 📷 現場相簿 -->
+<!-- Tab 4: 📐 圖紙/文檔 -->
+<div id="tab-drawings" class="container content-section">
+    <div class="diary-card">
+        <div class="diary-card-title">📐 圖紙 / 文檔</div>
+        <div class="diary-form-group">
+            <label>上載生產圖、報價單 (支援圖片及 PDF)</label>
+            <input type="file" id="drawingsInput" accept="image/*,application/pdf" multiple onchange="handleDrawingsUpload(event)">
+            <div id="drawingsUploadStatus" style="font-size: 11px; margin-top: 6px; font-weight:700; color:var(--color-tosend);"></div>
+        </div>
+    </div>
+    <div id="drawingsGallery" class="album-grid"></div>
+</div>
+
+<!-- Tab 5: 📷 現場相簿 -->
 <div id="tab-album" class="container content-section">
     <div class="diary-card">
         <div class="diary-card-title">📷 現場相簿</div>
@@ -465,73 +435,83 @@
     <div id="albumGallery" class="album-grid"></div>
 </div>
 
-<!-- Tab 5: 單位報告 -->
-<div id="tab-report" class="container content-section">
+<!-- Tab 6: 單位報告 -->
+<div id="tab-report" class="container content-section" id="reportContainer">
     
-    <!-- 1. 對外報告 (客觀進度) -->
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;" class="internal-section">
+        <button class="btn-action" style="background:#fff; color:#000; border-color:#000; padding:8px; font-size:13px;" onclick="toggleClientView()">切換客戶模式</button>
+        <button class="btn-action" style="background:#000; color:#fff; border-color:#fff; padding:8px; font-size:13px;" onclick="exportPDF()">PDF 匯出</button>
+    </div>
+
+    <div class="message-board internal-section">
+        <div style="font-weight:700; font-size:13px; margin-bottom:6px; color:#a16207;">💬 團隊留言板</div>
+        <div class="message-input-row">
+            <input type="text" id="msgInput" placeholder="輸入留言..." style="flex:1; padding:4px 6px;">
+            <button onclick="addMessage()" style="background:#ca8a04; color:#fff; border:1px solid #a16207; font-weight:700; padding:4px 10px; cursor:pointer;">留言</button>
+        </div>
+        <ul class="message-list" id="messageList"></ul>
+    </div>
+
     <div class="report-section">
-        <div class="report-section-header">📄 對外進度報告 (現場狀態)</div>
+        <div class="report-section-header">📄 對外進度 (現場狀態)</div>
         <div class="report-section-body">
             
-            <h3 class="report-h3" style="border-bottom:1px solid #ccc; font-size:14px; margin-top:0;">
+            <h3 class="report-h3">
                 <span>✅ 已完成日程</span>
+                <button class="btn-action internal-section" onclick="exportReport('doneSched', '已完成日程')">📋 匯出</button>
             </h3>
-            <ul class="report-list" id="reportListDoneSched" style="margin-bottom: 15px;"></ul>
+            <ul class="report-list" id="reportListDoneSched" style="margin-bottom: 12px;"></ul>
 
-            <h3 class="report-h3" style="color: var(--color-onsite); border-color: var(--color-onsite); font-size:14px;">
+            <h3 class="report-h3" style="color: var(--color-onsite); border-color: var(--color-onsite);">
                 <span>📍 現場已有物資</span>
-                <span id="countOnSite" class="report-count-badge" style="border-color: var(--color-onsite); color: var(--color-onsite);">0</span>
+                <div>
+                    <span id="countOnSite" class="report-count-badge" style="border-color: var(--color-onsite); color: var(--color-onsite);">0</span>
+                    <button class="btn-action internal-section" style="color:inherit; border-color:inherit;" onclick="exportReport('onsite', '現場已有物資')">📋 匯出</button>
+                </div>
             </h3>
             <ul class="report-list" id="reportListOnSite"></ul>
             
         </div>
     </div>
 
-    <!-- 2. 內部跟進 (採購與開支) -->
-    <div class="report-section" style="background: #f9fafb;">
-        <div class="report-section-header" style="background: #374151;">🔒 內部團隊跟進 (採購/開支/留言)</div>
+    <div class="report-section internal-section" style="background: #f9fafb;">
+        <div class="report-section-header" style="background: #374151;">🔒 內部團隊 (採購/開支)</div>
         <div class="report-section-body">
             
-            <!-- 團隊留言板 -->
-            <div class="message-board">
-                <div style="font-weight:700; font-size:13px; margin-bottom:4px; color:#a16207;">💬 團隊留言板 (如：物資已用完)</div>
-                <div class="message-input-row">
-                    <input type="text" id="msgInput" placeholder="輸入留言..." style="flex:1; padding:4px 6px;">
-                    <button onclick="addMessage()" style="background:#ca8a04; color:#fff; border:1px solid #a16207; font-weight:700; padding:4px 10px; cursor:pointer;">留言</button>
-                </div>
-                <ul class="message-list" id="messageList"></ul>
-            </div>
-
-            <h3 class="report-h3" style="color: var(--color-tobuy); border-color: var(--color-tobuy); font-size:14px; margin-top:10px;">
+            <h3 class="report-h3" style="color: var(--color-tobuy); border-color: var(--color-tobuy);">
                 <span>🛒 待買物資清單</span>
-                <span id="countToBuy" class="report-count-badge" style="border-color: var(--color-tobuy); color: var(--color-tobuy);">0</span>
+                <div>
+                    <span id="countToBuy" class="report-count-badge" style="border-color: var(--color-tobuy); color: var(--color-tobuy);">0</span>
+                    <button class="btn-action" style="color:inherit; border-color:inherit;" onclick="exportReport('tobuy', '待買物資清單')">📋 匯出</button>
+                </div>
             </h3>
-            <ul class="report-list" id="reportListToBuy" style="margin-bottom: 15px;"></ul>
+            <ul class="report-list" id="reportListToBuy" style="margin-bottom: 12px;"></ul>
 
-            <h3 class="report-h3" style="color: var(--color-tosend); border-color: var(--color-tosend); font-size:14px;">
+            <h3 class="report-h3" style="color: var(--color-tosend); border-color: var(--color-tosend);">
                 <span>🚚 待送現場清單</span>
-                <span id="countToSend" class="report-count-badge" style="border-color: var(--color-tosend); color: var(--color-tosend);">0</span>
+                <div>
+                    <span id="countToSend" class="report-count-badge" style="border-color: var(--color-tosend); color: var(--color-tosend);">0</span>
+                    <button class="btn-action" style="color:inherit; border-color:inherit;" onclick="exportReport('tosend', '待送現場清單')">📋 匯出</button>
+                </div>
             </h3>
-            <ul class="report-list" id="reportListToSend" style="margin-bottom: 15px;"></ul>
+            <ul class="report-list" id="reportListToSend" style="margin-bottom: 12px;"></ul>
 
-            <h3 class="report-h3" style="font-size:14px;">
-                <span>📝 日誌與開支明細</span>
+            <h3 class="report-h3">
+                <span>📝 現場日誌與開支</span>
+                <button class="btn-action" onclick="exportReport('diary', '開支與日誌')">📋 匯出</button>
             </h3>
             <ul class="report-list" id="reportDiary"></ul>
             <div class="total-expense" id="reportTotal">TOTAL: $0</div>
 
         </div>
     </div>
-
 </div>
 
-<!-- POPUP 圖片全螢幕放大 Modal -->
 <div id="imageEnlargeModal" onclick="this.style.display='none'">
     <span class="modal-close-btn">&times;</span>
     <img id="enlargedImage" src="">
 </div>
 
-<!-- 編輯彈窗 Modal -->
 <div id="editModal" class="modal-overlay">
     <div class="modal-card">
         <div class="diary-card-title">更改紀錄</div>
@@ -560,13 +540,13 @@
             <label>內容</label>
             <input type="text" id="editDesc">
         </div>
-        <div style="display:flex; gap:6px;">
+        <div style="display:flex; gap:4px;">
             <div class="diary-form-group" style="flex:1;">
                 <label>金額 $</label>
                 <input type="number" id="editAmount" placeholder="0">
             </div>
             <div class="diary-form-group" style="flex:1;">
-                <label>付款人</label>
+                <label>付款人員</label>
                 <input type="text" id="editPayer" placeholder="如: 呀強">
             </div>
         </div>
@@ -577,10 +557,11 @@
     </div>
 </div>
 
-<div class="tab-bar">
+<div class="tab-bar" id="mainTabBar">
     <div class="tab active" onclick="switchTab('checklist', this)">物資</div>
     <div class="tab" onclick="switchTab('schedule', this)">日程</div>
     <div class="tab" onclick="switchTab('diary', this)">日誌</div>
+    <div class="tab" onclick="switchTab('drawings', this)">圖/文</div>
     <div class="tab" onclick="switchTab('album', this)">相簿</div>
     <div class="tab" onclick="switchTab('report', this)">報告</div>
 </div>
@@ -605,6 +586,69 @@
     let isInitialized = false;
     let diaryImagesTemp = []; 
     let currentFilterCat = 'ALL'; 
+    let isClientView = false;
+
+    // 【最強防護】保證資料同步時清洗所有爛陣列及防死機
+    function ensureArray(data) {
+        if (!data) return [];
+        let arr = [];
+        if (Array.isArray(data)) {
+            arr = data;
+        } else if (typeof data === 'object') {
+            arr = Object.values(data);
+        }
+        // 只保留真正嘅 Object，自動過濾以前意外存入嘅 null 或單獨文字
+        return arr.filter(item => item !== null && typeof item === 'object');
+    }
+
+    // 安全讀取分類名 (相容舊資料)
+    function getSafeCatName(item) {
+        if (item && typeof item.catName === 'string' && item.catName.trim() !== '') {
+            return item.catName.replace(/^[A-Z]\.\s*/, '');
+        }
+        return '未分類';
+    }
+
+    const defaultMasterList = [
+        { catLetter: 'A', catName: '前期保護', code: 'A01', name: '中空板 (瓦通膠板)', desc: '鋪設地台防刮傷', status: 0 },
+        { catLetter: 'A', catName: '前期保護', code: 'A02', name: '高密度纖維夾板', desc: '走廊及重料通道防壓', status: 0 },
+        { catLetter: 'A', catName: '前期保護', code: 'A03', name: '珍珠棉護角', desc: '包大門門框防碰撞', status: 0 },
+        { catLetter: 'A', catName: '前期保護', code: 'A04', name: '大皺紋膠紙', desc: '固定保護板', status: 0 },
+        { catLetter: 'A', catName: '前期保護', code: 'A05', name: '防塵遮蔽膜', desc: '包封傢俬及冷氣機', status: 0 },
+        { catLetter: 'A', catName: '前期保護', code: 'A06', name: '座廁保護套', desc: '封死座廁防污染', status: 0 },
+        { catLetter: 'A', catName: '前期保護', code: 'A07', name: '去水喉保護塞', desc: '封死渠口防英泥阻塞', status: 0 },
+        { catLetter: 'B', catName: '清潔防塵', code: 'B01', name: '黑膠袋', desc: '每日清理泥頭垃圾', status: 0 },
+        { catLetter: 'B', catName: '清潔防塵', code: 'B02', name: '即棄鞋套', desc: '防鞋印踩花新木地板', status: 0 },
+        { catLetter: 'B', catName: '清潔防塵', code: 'B03', name: '掃把及垃圾鏟', desc: '清掃粗碎石', status: 0 },
+        { catLetter: 'B', catName: '清潔防塵', code: 'B04', name: '地拖及壓水桶', desc: '泥水完工清洗地台', status: 0 },
+        { catLetter: 'B', catName: '清潔防塵', code: 'B05', name: '金屬除膠鏟刀', desc: '剷除硬化英泥漬', status: 0 },
+        { catLetter: 'B', catName: '清潔防塵', code: 'B06', name: '綠水', desc: '交場清潔消毒', status: 0 },
+        { catLetter: 'C', catName: '文具量度', code: 'C01', name: '重型𠝹刀', desc: '割保護板、拆箱', status: 0 },
+        { catLetter: 'C', catName: '文具量度', code: 'C02', name: '鋼尺', desc: '現場尺寸校對', status: 0 },
+        { catLetter: 'C', catName: '文具量度', code: 'C03', name: '雷射測距儀', desc: '快速覆核天花高度', status: 0 },
+        { catLetter: 'C', catName: '文具量度', code: 'C04', name: '強磁水平尺', desc: '校對電掣底盒', status: 0 },
+        { catLetter: 'C', catName: '文具量度', code: 'C05', name: '油性筆(黑/紅)', desc: '牆身開槽標註', status: 0 },
+        { catLetter: 'D', catName: '五金工具', code: 'D01', name: '鋁合金摺梯', desc: '高空作業必備', status: 0 },
+        { catLetter: 'D', catName: '五金工具', code: 'D02', name: '羊角鐵鎚', desc: '敲擊、拔除鐵釘', status: 0 },
+        { catLetter: 'D', catName: '五金工具', code: 'D03', name: '絕緣螺絲批組', desc: '五金合頁微調', status: 0 },
+        { catLetter: 'D', catName: '五金工具', code: 'D04', name: '活動士巴拿', desc: '拆裝水管螺絲', status: 0 },
+        { catLetter: 'D', catName: '五金工具', code: 'D05', name: '手動旋轉膠槍', desc: '打玻璃膠及免釘膠', status: 0 },
+        { catLetter: 'E', catName: '電動工具', code: 'E01', name: '充電手提電鑽', desc: '櫃體組裝', status: 0 },
+        { catLetter: 'E', catName: '電動工具', code: 'E02', name: '充電油壓鑽', desc: '打石矢牆孔', status: 0 },
+        { catLetter: 'E', catName: '電動工具', code: 'E03', name: '工業吸塵機', desc: '清除地台水泥粉塵', status: 0 },
+        { catLetter: 'E', catName: '電動工具', code: 'E04', name: '工業座地風扇', desc: '驅散油漆甲醛', status: 0 },
+        { catLetter: 'E', catName: '電動工具', code: 'E05', name: '平水儀', desc: '空間3D平水投射', status: 0 },
+        { catLetter: 'F', catName: '輔料耗材', code: 'F01', name: '防霉玻璃膠', desc: '廚衛防水收口', status: 0 },
+        { catLetter: 'F', catName: '輔料耗材', code: 'F02', name: '萬能免釘膠', desc: '黏合木飾條', status: 0 },
+        { catLetter: 'F', catName: '輔料耗材', code: 'F03', name: '彩色膠塞套裝', desc: '入石矢牆專用緊固', status: 0 },
+        { catLetter: 'F', catName: '輔料耗材', code: 'F04', name: '電工絕緣膠布', desc: '電線接駁封口包紮', status: 0 },
+        { catLetter: 'F', catName: '輔料耗材', code: 'F05', name: '乾磨砂紙組', desc: '批灰平整打磨', status: 0 },
+        { catLetter: 'G', catName: '安全勞保', code: 'G01', name: '工程安全帽', desc: '現場巡查防護', status: 0 },
+        { catLetter: 'G', catName: '安全勞保', code: 'G02', name: '防刺穿安全鞋', desc: '地盤踏足必備', status: 0 },
+        { catLetter: 'G', catName: '安全勞保', code: 'G03', name: 'N95 級口罩', desc: '打拆阻隔粉塵', status: 0 },
+        { catLetter: 'G', catName: '安全勞保', code: 'G04', name: '現場急救箱', desc: '割傷即時處理', status: 0 },
+        { catLetter: 'G', catName: '安全勞保', code: 'G05', name: '乾粉滅火筒', desc: '預防火災事故', status: 0 }
+    ];
 
     function enlargeImage(src) {
         document.getElementById('enlargedImage').src = src;
@@ -612,17 +656,11 @@
     }
 
     function formatShortDate(dateStr) {
-        if (!dateStr) return '選擇...';
+        if (!dateStr) return '選擇';
         const d = new Date(dateStr);
         if (isNaN(d)) return dateStr;
         const days = ['日', '一', '二', '三', '四', '五', '六'];
         return `${d.getMonth()+1}/${d.getDate()} ${days[d.getDay()]}`;
-    }
-
-    function selectRemarkColor(btn, color) {
-        document.getElementById('schedColor').value = color;
-        document.querySelectorAll('.color-btns-wrapper .btn-color').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
     }
 
     function setProject(val, btn) {
@@ -634,6 +672,78 @@
     window.onload = () => {
         document.getElementById('diaryDate').valueAsDate = new Date();
     };
+
+    function toggleClientView() {
+        isClientView = !isClientView;
+        if(isClientView) {
+            document.body.classList.add('client-view');
+            document.getElementById('mainTabBar').style.display = 'none';
+            document.body.style.paddingBottom = '20px';
+            alert('已進入【客戶預覽模式】\n內部資料已隱藏。重新整理頁面即可退出。');
+        }
+    }
+
+    function exportPDF() {
+        const element = document.getElementById('reportContainer');
+        const opt = {
+            margin:       10,
+            filename:     `${currentUnit}_進度報告.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2 },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        html2pdf().set(opt).from(element).save();
+    }
+
+    function exportReport(type, title) {
+        if(!db[currentUnit]) return;
+        let text = `【${currentUnit}】${title}\n======================\n`;
+        
+        let list = db[currentUnit].checklist || [];
+        let schedules = db[currentUnit].schedule || [];
+        let diaries = db[currentUnit].diary || [];
+
+        if (type === 'tobuy') {
+            let toBuy = list.filter(i => i.status === 1);
+            toBuy.forEach((i, idx) => text += `${idx+1}. ${i.name} ${i.desc ? '('+i.desc+')' : ''}\n`);
+            if(toBuy.length===0) text += "無資料\n";
+        } else if (type === 'tosend') {
+            let toSend = list.filter(i => i.status === 2);
+            toSend.forEach((i, idx) => text += `${idx+1}. ${i.name} ${i.desc ? '('+i.desc+')' : ''}\n`);
+            if(toSend.length===0) text += "無資料\n";
+        } else if (type === 'onsite') {
+            let onSite = list.filter(i => i.status === 3);
+            onSite.forEach((i, idx) => text += `${idx+1}. ${i.name}\n`);
+            if(onSite.length===0) text += "無資料\n";
+        } else if (type === 'doneSched') {
+            let doneSched = schedules.filter(i => i.done === true);
+            doneSched.forEach((i, idx) => text += `${formatShortDate(i.date)} - ${i.project}: ${i.content}\n`);
+            if(doneSched.length===0) text += "無資料\n";
+        } else if (type === 'diary') {
+            let total = 0;
+            diaries.forEach((d) => {
+                let amt = parseFloat(d.amount); // 確保是數字
+                let amountStr = (!isNaN(amt) && amt > 0) ? ` $${amt}` : '';
+                let payerStr = d.payer ? ` (付: ${d.payer})` : '';
+                text += `${d.date} [${d.cat}] ${d.desc}${amountStr}${payerStr}\n`;
+                if(!isNaN(amt) && amt > 0) total += amt;
+            });
+            text += `\n總開支: $${total}\n`;
+        }
+
+        let textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            alert(`已成功複製「${title}」內容，可直接貼上至 WhatsApp！`);
+        } catch (err) {
+            alert('複製失敗，請手動複製。');
+        }
+        document.body.removeChild(textArea);
+    }
 
     async function handleDiaryImages(e) {
         const files = e.target.files;
@@ -676,6 +786,46 @@
         e.target.value = '';
     }
 
+    async function handleDrawingsUpload(e) {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        
+        let status = document.getElementById('drawingsUploadStatus');
+        status.innerText = `正在處理 ${files.length} 份檔案...`;
+
+        if(!db[currentUnit].drawings) db[currentUnit].drawings = [];
+
+        for(let i = 0; i < files.length; i++){
+            let file = files[i];
+            let isPdf = file.type === 'application/pdf';
+            let fileData = "";
+
+            if(isPdf) {
+                fileData = await new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result);
+                    reader.readAsDataURL(file);
+                });
+            } else {
+                fileData = await compressImage(file, 1200, 0.7);
+            }
+
+            db[currentUnit].drawings.unshift({
+                date: new Date().toLocaleDateString('zh-HK'),
+                image: fileData,
+                isPdf: isPdf,
+                name: file.name,
+                remark: ''
+            });
+        }
+        
+        saveDB();
+        renderDrawings();
+        status.innerText = '✅ 上載完成';
+        setTimeout(() => status.innerText = '', 2000);
+        e.target.value = '';
+    }
+
     function compressImage(file, maxWidth, quality) {
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -699,37 +849,54 @@
         });
     }
 
+    // 核心數據連線及同步 (加入 Try-Catch 防止舊數據導致死機)
     dbRef.on('value', (snapshot) => {
-        db = snapshot.val() || {};
-        
-        if (Object.keys(db).length === 0 && !isInitialized) {
+        try {
+            let rawDb = snapshot.val() || {};
+            db = {};
+            
+            if (Object.keys(rawDb).length === 0 && !isInitialized) {
+                isInitialized = true;
+                let firstUnit = prompt('請輸入第一個地盤名稱：');
+                createNewUnit(firstUnit && firstUnit.trim() ? firstUnit.trim() : 'Project-01');
+                return;
+            }
+
+            Object.keys(rawDb).forEach(unit => {
+                let uData = rawDb[unit];
+                if (typeof uData !== 'object' || uData === null) uData = {};
+                
+                // 強制清洗所有陣列，防範舊數據損壞
+                db[unit] = {
+                    _init: uData._init || Date.now(),
+                    checklist: ensureArray(uData.checklist),
+                    schedule: ensureArray(uData.schedule),
+                    diary: ensureArray(uData.diary),
+                    drawings: ensureArray(uData.drawings),
+                    album: ensureArray(uData.album),
+                    messages: ensureArray(uData.messages)
+                };
+            });
+
             isInitialized = true;
-            let firstUnit = prompt('請輸入第一個地盤名稱：');
-            createNewUnit(firstUnit && firstUnit.trim() ? firstUnit.trim() : 'Project-01');
-            return;
+            const syncEl = document.getElementById('syncStatus');
+            if(syncEl) {
+                syncEl.innerText = 'SYNCED.';
+                setTimeout(() => syncEl.style.display = 'none', 2500);
+            }
+
+            if (!db[currentUnit] && Object.keys(db).length > 0) {
+                currentUnit = Object.keys(db)[0];
+                localStorage.setItem('siteManagerCurrent', currentUnit);
+            }
+
+            updateUnitSelector();
+            if (currentUnit) renderApp();
+            
+        } catch (e) {
+            console.error("資料解析錯誤: ", e);
+            alert("系統自動修復舊有數據格式中，請重新整理頁面。");
         }
-
-        let needsSave = false;
-        Object.keys(db).forEach(unitName => {
-            if (!db[unitName].checklist) { db[unitName].checklist = []; needsSave = true; }
-            if (!db[unitName].schedule) { db[unitName].schedule = []; needsSave = true; }
-            if (!db[unitName].album) { db[unitName].album = []; needsSave = true; }
-            if (!db[unitName].diary) { db[unitName].diary = []; needsSave = true; }
-            if (!db[unitName].messages) { db[unitName].messages = []; needsSave = true; }
-        });
-        if (needsSave) dbRef.set(db);
-
-        isInitialized = true;
-        document.getElementById('syncStatus').innerText = 'SYNCED.';
-        setTimeout(() => document.getElementById('syncStatus').style.display = 'none', 2500);
-
-        if (!db[currentUnit] && Object.keys(db).length > 0) {
-            currentUnit = Object.keys(db)[0];
-            localStorage.setItem('siteManagerCurrent', currentUnit);
-        }
-
-        updateUnitSelector();
-        if (currentUnit) renderApp();
     });
 
     function saveDB() {
@@ -757,10 +924,11 @@
         if(db[name]) return alert('名稱已存在');
         db[name] = { 
             _init: Date.now(), 
-            checklist: [], 
+            checklist: defaultMasterList.map(item => ({ ...item })), 
             diary: [],
             schedule: [],
             album: [],
+            drawings: [],
             messages: []
         };
         currentUnit = name;
@@ -800,14 +968,13 @@
         
         let list = db[currentUnit].checklist || [];
         
-        let filterContainer = document.getElementById('catFilterScroll');
-        let uniqueCats = [...new Set(list.map(item => item.catName))];
+        let filterContainer = document.getElementById('catFilterWrap');
+        let uniqueCats = [...new Set(list.map(item => getSafeCatName(item)))];
         
         let filterHTML = `<button class="cat-filter-btn ${currentFilterCat === 'ALL' ? 'active' : ''}" onclick="filterCat('ALL')">全部</button>`;
         uniqueCats.forEach(cat => {
             if(cat) {
-                let cleanName = cat.replace(/^[A-Z]\.\s*/, ''); 
-                filterHTML += `<button class="cat-filter-btn ${currentFilterCat === cat ? 'active' : ''}" onclick="filterCat('${cat}')">${cleanName}</button>`;
+                filterHTML += `<button class="cat-filter-btn ${currentFilterCat === cat ? 'active' : ''}" onclick="filterCat('${cat}')">${cat}</button>`;
             }
         });
         filterContainer.innerHTML = filterHTML;
@@ -815,10 +982,10 @@
         let container = document.getElementById('checklistContainer');
         container.innerHTML = '';
         
-        let displayList = currentFilterCat === 'ALL' ? list : list.filter(i => i.catName === currentFilterCat);
+        let displayList = currentFilterCat === 'ALL' ? list : list.filter(i => getSafeCatName(i) === currentFilterCat);
 
         if(displayList.length === 0) {
-            container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-sub);">無相關物資</div>';
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-sub);">無資料</div>';
             return;
         }
 
@@ -828,15 +995,15 @@
                 <div class="item-card">
                     <div class="item-info">
                         <div class="item-header-row">
-                            <span class="item-code">${item.code || '-'}</span>
-                            <div class="item-title">${item.name}</div>
+                            <span class="item-code" style="font-size:11px;">${item.code || ''}</span>
+                            <div class="item-title">${item.name || '未命名'}</div>
                         </div>
                         <div class="item-desc">${item.desc || ''}</div>
                     </div>
                     <div class="status-group">
                         <button class="status-btn s-0 ${item.status === 0 ? 'active' : ''}" onclick="updateStatus(${realIndex}, 0)">不需</button>
                         <button class="status-btn s-1 ${item.status === 1 ? 'active' : ''}" onclick="updateStatus(${realIndex}, 1)">待買</button>
-                        <button class="status-btn s-2 ${item.status === 2 ? 'active' : ''}" onclick="updateStatus(${realIndex}, 2)">待送現場</button>
+                        <button class="status-btn s-2 ${item.status === 2 ? 'active' : ''}" onclick="updateStatus(${realIndex}, 2)">待送</button>
                         <button class="status-btn s-3 ${item.status === 3 ? 'active' : ''}" onclick="updateStatus(${realIndex}, 3)">現場有</button>
                     </div>
                 </div>
@@ -860,7 +1027,7 @@
 
         db[currentUnit].checklist.unshift({ 
             catLetter: 'M',
-            catName: 'Z. 自訂追加物資', 
+            catName: '自訂追加', 
             code: code,
             name: input.value.trim(), 
             desc: '', 
@@ -869,8 +1036,8 @@
         input.value = '';
         saveDB();
         
-        if(currentFilterCat !== 'ALL' && currentFilterCat !== 'Z. 自訂追加物資') {
-            currentFilterCat = 'Z. 自訂追加物資';
+        if(currentFilterCat !== 'ALL' && currentFilterCat !== '自訂追加') {
+            currentFilterCat = '自訂追加';
         }
         
         renderChecklist();
@@ -899,6 +1066,7 @@
             let colorHex = '#000000';
             if (item.color === 'red') colorHex = 'var(--color-red)';
             if (item.color === 'orange') colorHex = 'var(--color-orange)';
+            if (item.color === 'purple') colorHex = 'var(--color-purple)';
             let fw = (colorHex !== '#000000') ? '700' : '400';
 
             tbody.innerHTML += `
@@ -914,10 +1082,11 @@
                         <textarea class="editable-remark" style="font-weight:700;" onchange="updateScheduleProject(${index}, this.value)" placeholder="項目...">${item.project || ''}</textarea>
                     </td>
                     <td style="padding: 0;">
-                        <textarea class="editable-remark" onchange="updateScheduleContent(${index}, this.value)" placeholder="輸入內容...">${item.content || ''}</textarea>
+                        <textarea class="editable-remark" onchange="updateScheduleContent(${index}, this.value)" placeholder="內容...">${item.content || ''}</textarea>
                     </td>
-                    <td style="padding: 0;">
-                        <textarea class="editable-remark" style="color: ${colorHex}; font-weight: ${fw};" onchange="updateScheduleRemark(${index}, this.value)" placeholder="輸入備註...">${item.remark || ''}</textarea>
+                    <td style="padding: 0; position: relative;">
+                        <textarea class="editable-remark" style="color: ${colorHex}; font-weight: ${fw}; padding-bottom: 20px;" onchange="updateScheduleRemark(${index}, this.value)" placeholder="備註...">${item.remark || ''}</textarea>
+                        <button onclick="cycleRemarkColor(${index})" class="btn-cycle-color">🎨 轉色</button>
                     </td>
                     <td style="text-align:center; padding: 4px; border-right:none; vertical-align:middle;">
                         <button onclick="deleteScheduleItem(${index})" style="background:none; border:none; color:red; cursor:pointer; font-size:14px;">✕</button>
@@ -925,6 +1094,15 @@
                 </tr>
             `;
         });
+    }
+    
+    function cycleRemarkColor(index) {
+        const colors = ['black', 'red', 'orange', 'purple'];
+        let current = db[currentUnit].schedule[index].color || 'black';
+        let nextIdx = (colors.indexOf(current) + 1) % colors.length;
+        db[currentUnit].schedule[index].color = colors[nextIdx];
+        saveDB();
+        renderSchedule();
     }
 
     function clearSchedule() {
@@ -969,8 +1147,7 @@
         let date = document.getElementById('schedDate').value;
         let project = document.getElementById('schedProject').value.trim();
         let content = document.getElementById('schedContent').value.trim();
-        let remark = document.getElementById('schedRemark').value.trim();
-        let color = document.getElementById('schedColor').value;
+        let color = 'black';
 
         if(!project) return alert('必須選擇或輸入項目！');
 
@@ -980,17 +1157,15 @@
             done: false,
             project: project,
             content: content,
-            remark: remark,
+            remark: '',
             color: color
         });
 
         document.getElementById('schedDate').value = '';
         document.getElementById('schedProject').value = '';
         document.getElementById('schedContent').value = '';
-        document.getElementById('schedRemark').value = '';
         
         document.querySelectorAll('#schedProjectBtns .btn-quick').forEach(b => b.classList.remove('active'));
-        selectRemarkColor(document.querySelector('.btn-color[data-color="black"]'), 'black');
 
         saveDB();
         renderSchedule();
@@ -1097,7 +1272,7 @@
             let imgHTML = '';
             let imgs = d.images || (d.image ? [d.image] : []);
             if(imgs.length > 0) {
-                imgHTML = '<div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap;">';
+                imgHTML = '<div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">';
                 imgs.forEach(src => {
                     imgHTML += `<img src="${src}" onclick="enlargeImage('${src}')" style="width:60px; height:60px; object-fit:cover; border:1px solid #000; cursor:zoom-in;">`;
                 });
@@ -1127,7 +1302,53 @@
         });
     }
 
-    // --- 4. 現場相簿 ---
+    // --- 4. 圖紙 (新分頁) ---
+    function renderDrawings() {
+        if(!db[currentUnit]) return;
+        let container = document.getElementById('drawingsGallery');
+        container.innerHTML = '';
+        let photos = db[currentUnit].drawings || [];
+        
+        photos.forEach((p, index) => {
+            let isPdf = p.isPdf || (p.image && p.image.startsWith('data:application/pdf'));
+            let contentHTML = '';
+
+            if(isPdf) {
+                contentHTML = `
+                    <a href="${p.image}" download="${p.name || 'document.pdf'}" style="aspect-ratio: 1; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#f9fafb; border-bottom:1px solid #000; text-decoration:none; color:#000;">
+                        <span style="font-size:36px;">📄</span>
+                        <span style="font-size:10px; margin-top:8px; font-weight:700;">📥 點擊下載 PDF</span>
+                    </a>
+                `;
+            } else {
+                contentHTML = `<img src="${p.image}" onclick="enlargeImage('${p.image}')">`;
+            }
+
+            container.innerHTML += `
+                <div class="album-item">
+                    <button class="btn-del-photo" onclick="deleteDrawingsPhoto(${index})">✕</button>
+                    ${contentHTML}
+                    <div class="album-item-date">${p.date}</div>
+                    <textarea class="album-remark" placeholder="圖紙備註..." onchange="updateDrawingsRemark(${index}, this.value)">${p.remark || ''}</textarea>
+                </div>
+            `;
+        });
+    }
+
+    function updateDrawingsRemark(index, val) {
+        db[currentUnit].drawings[index].remark = val;
+        saveDB();
+    }
+
+    function deleteDrawingsPhoto(index) {
+        if(confirm('刪除此圖紙？')) {
+            db[currentUnit].drawings.splice(index, 1);
+            saveDB();
+            renderDrawings();
+        }
+    }
+
+    // --- 5. 現場相簿 ---
     function renderAlbum() {
         if(!db[currentUnit]) return;
         let container = document.getElementById('albumGallery');
@@ -1140,7 +1361,7 @@
                     <button class="btn-del-photo" onclick="deleteAlbumPhoto(${index})">✕</button>
                     <img src="${p.image}" onclick="enlargeImage('${p.image}')">
                     <div class="album-item-date">${p.date}</div>
-                    <textarea class="album-remark" placeholder="輸入備註..." onchange="updateAlbumRemark(${index}, this.value)">${p.remark || ''}</textarea>
+                    <textarea class="album-remark" placeholder="備註..." onchange="updateAlbumRemark(${index}, this.value)">${p.remark || ''}</textarea>
                 </div>
             `;
         });
@@ -1152,14 +1373,14 @@
     }
 
     function deleteAlbumPhoto(index) {
-        if(confirm('確定刪除此相片？')) {
+        if(confirm('刪除此相片？')) {
             db[currentUnit].album.splice(index, 1);
             saveDB();
             renderAlbum();
         }
     }
 
-    // --- 5. 留言板 ---
+    // --- 6. 留言板 ---
     function addMessage() {
         let text = document.getElementById('msgInput').value.trim();
         if(!text) return;
@@ -1182,76 +1403,73 @@
         }
     }
 
-    // --- 6. 單位報告 (內外獨立) ---
+    // --- 7. 單位報告 ---
     function renderReport() {
         if(!db[currentUnit]) return;
         let list = db[currentUnit].checklist || [];
         let schedules = db[currentUnit].schedule || [];
         let messages = db[currentUnit].messages || [];
         
-        let toBuyList = list.filter(item => item.status === 1);
-        let toSendList = list.filter(item => item.status === 2);
-        let onSiteList = list.filter(item => item.status === 3);
+        let listWithIndex = list.map((item, index) => ({...item, realIndex: index}));
+        let toBuyList = listWithIndex.filter(item => item.status === 1);
+        let toSendList = listWithIndex.filter(item => item.status === 2);
+        let onSiteList = listWithIndex.filter(item => item.status === 3);
         let doneSchedList = schedules.filter(item => item.done === true);
 
-        // 留言板
         document.getElementById('messageList').innerHTML = messages.length ? messages.map((m, idx) => `
             <li class="message-item">
                 <span>${m.text}</span>
                 <span class="message-time">${m.time} <span style="color:red; cursor:pointer; margin-left:4px;" onclick="deleteMessage(${idx})">✕</span></span>
             </li>
-        `).join('') : '<li style="font-size:11px; color:#9ca3af;">暫無留言</li>';
+        `).join('') : '<li style="font-size:11px; color:#9ca3af;">無留言</li>';
 
-        // 現場已有物資
-        document.getElementById('countOnSite').innerText = onSiteList.length;
         document.getElementById('reportListOnSite').innerHTML = onSiteList.length ? onSiteList.map(item => `
             <li>
                 <div class="report-list-item-header">
-                    <span><b style="font-family:'Oswald',sans-serif; margin-right:6px; color:var(--text-sub);">${item.code || ''}</b>${item.name}</span>
+                    <span style="flex:1;"><b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name || '未命名'}</span>
+                    <button class="internal-section" onclick="updateStatus(${item.realIndex}, 1)" style="font-size:11px; padding:2px 6px; background:#fff; color:#c2410c; border:1px solid #c2410c; cursor:pointer; font-weight:700;">轉待買</button>
                 </div>
             </li>
         `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
 
-        // 已完成日程
         document.getElementById('reportListDoneSched').innerHTML = doneSchedList.length ? doneSchedList.map(item => `
             <li>
                 <div class="report-list-item-header">
                     <span style="flex:1;">
-                        <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--text-sub);">${formatShortDate(item.date)} [${item.project}]</div>
+                        <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--text-sub);">${formatShortDate(item.date)} [${item.project || ''}]</div>
                         <div style="margin-top:2px;">${item.content || '無內容'}</div>
                     </span> 
                 </div>
             </li>
-        `).join('') : '<li style="color:var(--text-sub); text-align:center;">無完成項目</li>';
+        `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
 
-        // 待買/待送
-        document.getElementById('countToBuy').innerText = toBuyList.length;
         document.getElementById('reportListToBuy').innerHTML = toBuyList.length ? toBuyList.map(item => `
             <li>
                 <div class="report-list-item-header">
-                    <span><b style="font-family:'Oswald',sans-serif; margin-right:6px; color:var(--text-sub);">${item.code || ''}</b>${item.name}</span>
+                    <span style="flex:1;"><b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name || '未命名'}</span>
+                    <button class="internal-section" onclick="updateStatus(${item.realIndex}, 2)" style="font-size:11px; padding:2px 6px; background:#000; color:#fff; border:1px solid #000; cursor:pointer; font-weight:700;">已買</button>
                 </div>
             </li>
         `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
 
-        document.getElementById('countToSend').innerText = toSendList.length;
         document.getElementById('reportListToSend').innerHTML = toSendList.length ? toSendList.map(item => `
             <li>
                 <div class="report-list-item-header">
-                    <span><b style="font-family:'Oswald',sans-serif; margin-right:6px; color:var(--text-sub);">${item.code || ''}</b>${item.name}</span>
+                    <span style="flex:1;"><b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name || '未命名'}</span>
+                    <button class="internal-section" onclick="updateStatus(${item.realIndex}, 1)" style="font-size:11px; padding:2px 6px; background:#fff; color:#c2410c; border:1px solid #c2410c; cursor:pointer; font-weight:700;">轉待買</button>
                 </div>
             </li>
         `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
 
-        // 開支
         let totalExp = 0;
         let dHTML = '';
         let diaries = db[currentUnit].diary || [];
-        diaries.forEach((d, index) => {
-            if(d.amount > 0) totalExp += d.amount;
-            let amountDisplay = d.amount ? `$${d.amount}` : '';
-            let payerBadge = d.payer ? `<span style="font-size:10px; background:#000; color:#fff; padding:2px 4px; margin-right:6px; font-weight:normal;">付款: ${d.payer}</span>` : '';
-            
+        diaries.forEach((d) => {
+            let amt = parseFloat(d.amount); // 修正 Firebase 讀取文字出錯
+            let amountDisplay = (!isNaN(amt) && amt > 0) ? `$${amt}` : '';
+            let payerBadge = d.payer ? `<span style="font-size:10px; background:#000; color:#fff; padding:1px 3px; margin-right:4px;">付: ${d.payer}</span>` : '';
+            if(!isNaN(amt) && amt > 0) totalExp += amt;
+
             dHTML += `
                 <li>
                     <div class="report-list-item-header">
@@ -1261,7 +1479,7 @@
                         </span> 
                         <span style="text-align:right;">
                             ${payerBadge}
-                            <span style="font-family:'Oswald',sans-serif; font-size:16px; font-weight:700; color:#000;">${amountDisplay}</span>
+                            <span style="font-family:'Oswald',sans-serif; font-size:15px; font-weight:700; color:#000;">${amountDisplay}</span>
                         </span>
                     </div>
                 </li>`;
@@ -1274,6 +1492,7 @@
         renderChecklist();
         renderSchedule();
         renderDiary();
+        renderDrawings();
         renderAlbum();
         renderReport();
     }
@@ -1286,6 +1505,7 @@
         if(tabId === 'checklist') renderChecklist();
         if(tabId === 'report') renderReport();
         if(tabId === 'schedule') renderSchedule();
+        if(tabId === 'drawings') renderDrawings();
         if(tabId === 'album') renderAlbum();
     }
 </script>
