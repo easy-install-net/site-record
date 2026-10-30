@@ -111,7 +111,7 @@
   <div class="status-msg" id="statusMsg"></div>
 </div>
 
-<script>
+<>
   const today = new Date();
   document.getElementById('year').value = today.getFullYear();
   document.getElementById('month').value = String(today.getMonth() + 1).padStart(2, '0');
@@ -149,7 +149,7 @@
   });
 
   // ⚠️ 請換回你 Google Apps Script 的真實 Web App 網址
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbz_vQ4fMhYnptqZ25fBfU9bWnCqC9_YOUR_GAS_ID/exec";
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbz_vQ4fMhYnptqZ25fBfU9bWnCqC9_YOUR_GAS_ID/exec)";
 
   async function submitData() {
     const y = document.getElementById('year').value.trim();
