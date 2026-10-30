@@ -2,400 +2,1452 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>傢俬安裝工程進度與計價系統</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>工程記錄系統</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&family=Noto+Serif+HK:wght@600;700;900&family=Noto+Sans+HK:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
     <style>
-        :root {
-            --primary: #3b4d42; /* 高級墨綠色 */
-            --accent: #bda077;  /* 香檳金/木紋色系 */
-            --bg: #f7f7f5;      /* 暖白背景 */
+        :root { 
+            --bg: #eae8e1; 
             --card-bg: #ffffff;
-            --text-main: #333333;
-            --text-muted: #888888;
+            --text: #000000; 
+            --text-sub: #4b4b4b;
+            --border: #000000; 
+            
+            --color-tobuy: #c2410c;
+            --color-tosend: #0369a1;
+            --color-onsite: #15803d;
+            --color-red: #dc2626;
+            --color-orange: #ea580c;
+            --color-purple: #9333ea;
         }
-
-        body {
-            font-family: "PingFang HK", "Microsoft JhengHei", sans-serif;
-            background-color: var(--bg);
-            color: var(--text-main);
-            margin: 0;
-            padding: 0;
-            line-height: 1.6;
+        body { 
+            font-family: 'Oswald', 'Noto Sans HK', sans-serif;
+            letter-spacing: 0.3px;
+            margin: 0; 
+            padding: 0; 
+            background: var(--bg); 
+            color: var(--text); 
+            padding-bottom: 60px; 
+            -webkit-tap-highlight-color: transparent;
         }
+        
+        h1, h2, h3, .newspaper-title { font-family: 'Noto Serif HK', serif; text-transform: uppercase; }
 
-        header {
-            background-color: var(--card-bg);
-            padding: 0 40px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        .header { 
+            background: var(--card-bg); 
+            padding: 6px 8px; 
+            position: sticky; 
+            top: 0; 
+            z-index: 100; 
+            display: flex; 
+            gap: 6px; 
+            align-items: center; 
+            border-bottom: 3px solid var(--border); 
+        }
+        .header select { 
+            flex: 1; 
+            font-weight: 700; 
+            border: 2px solid var(--border);
+            font-size: 16px; 
+            color: #000; 
+            background: #fff;
+            padding: 2px 6px;
+            height: 38px; 
+            outline: none;
+            appearance: auto; 
+            -webkit-appearance: menulist;
+        }
+        .btn-header { background: #000; color: #fff; font-weight: 700; cursor: pointer; border: 2px solid #000; padding: 0 10px; font-size: 14px; height: 38px; } 
+        .btn-header:active { background: #333; }
+        .btn-del-unit { background: transparent; color: #000; cursor: pointer; border: 1px solid #000; padding: 0 8px; font-size: 13px; height: 38px; font-weight:700;} 
+        
+        .container { padding: 4px; max-width: 800px; margin: 0 auto; }
+        
+        .tab-bar { 
+            position: fixed; 
+            bottom: 0; 
+            left: 0;
+            width: 100%; 
+            background: #ffffff; 
+            display: flex; 
+            z-index: 100; 
+            border-top: 3px solid var(--border);
+        }
+        .tab { 
+            flex: 1; 
+            text-align: center; 
+            padding: 10px 0; 
+            font-weight: 700; 
+            color: var(--text-sub); 
+            cursor: pointer; 
+            font-size: 13px; 
+            border-right: 1px solid var(--border);
+        }
+        .tab:last-child { border-right: none; }
+        .tab.active { color: #fff; background: #000; }
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+
+        input, select, textarea { 
+            font-family: 'Oswald', 'Noto Sans HK', sans-serif;
+            font-size: 15px; 
+            padding: 6px; 
+            border-radius: 0; 
+            border: 1px solid var(--border); 
+            background: #fff;
+            color: var(--text);
+            outline: none;
+        }
+        input:focus, select:focus, textarea:focus { box-shadow: 1px 1px 0px var(--border); }
+
+        .cat-filter-wrap {
+            display: flex;
+            flex-wrap: wrap; 
+            gap: 4px;
+            padding: 6px 0;
+            margin-bottom: 6px;
+            position: sticky;
+            top: 53px;
+            background: var(--bg);
+            z-index: 90;
+            border-bottom: 2px solid var(--border);
+        }
+        .cat-filter-btn {
+            flex-grow: 1; 
+            background: #fff;
+            border: 1px solid var(--border);
+            padding: 4px 10px;
+            font-weight: 700;
+            font-size: 14px; 
+            cursor: pointer;
+            text-align: center;
+        }
+        .cat-filter-btn.active { background: #000; color: #fff; }
+
+        .item-card { 
+            background: var(--card-bg); 
+            padding: 8px 6px; 
+            margin-bottom: 4px; 
+            border-bottom: 1px solid #ccc; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            gap: 4px; 
+        }
+        .item-info { flex: 1; min-width: 0; }
+        .item-header-row { display: flex; align-items: baseline; gap: 4px; }
+        .item-title { font-weight: 700; font-size: 14px; } 
+        .item-desc { font-size: 12px; color: var(--text-sub); margin-top: 1px; line-height:1.2; } 
+
+        .status-group { display: flex; gap: 0; flex-shrink: 0; border: 1px solid var(--border); }
+        .status-btn { 
+            padding: 4px 6px; 
+            font-size: 11px; 
+            font-weight: 700;
+            border: none;
+            border-right: 1px solid var(--border); 
+            background: white; 
+            color: var(--text-sub); 
+            cursor: pointer; 
+        }
+        .status-btn:last-child { border-right: none; }
+        .status-btn.s-0.active { background: #000; color: #fff; }
+        .status-btn.s-1.active { background: var(--color-tobuy); color: white; }
+        .status-btn.s-2.active { background: var(--color-tosend); color: white; }
+        .status-btn.s-3.active { background: var(--color-onsite); color: white; }
+
+        .custom-add { background: var(--card-bg); border: 2px solid var(--border); padding: 8px; margin-bottom: 6px; }
+        .custom-add-row { display: flex; gap: 4px; margin-top: 4px; }
+
+        .diary-card { background: var(--card-bg); padding: 10px; border: 2px solid var(--border); margin-bottom: 8px; box-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
+        .diary-card-title {
+            font-family: 'Noto Serif HK', serif;
+            font-size: 16px; 
+            font-weight: 900; 
+            border-bottom: 2px solid #000; 
+            padding-bottom: 4px;
+            margin-bottom: 8px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
         }
-
-        .logo-area {
-            padding: 20px 0;
-        }
-
-        .logo-title {
-            font-size: 22px;
-            font-weight: 600;
-            color: var(--primary);
-            letter-spacing: 1px;
-            margin: 0;
-        }
+        .diary-form-group { margin-bottom: 8px; }
+        .diary-form-group label { display: block; font-size: 12px; font-weight: 700; color: var(--text-sub); margin-bottom: 2px; } 
         
-        .logo-subtitle {
-            font-size: 12px;
-            color: var(--accent);
-            letter-spacing: 2px;
-        }
-
-        .tabs {
-            display: flex;
-            height: 100%;
-        }
-
-        .tab-btn {
-            padding: 25px 20px;
-            background: none;
-            border: none;
-            font-size: 16px;
-            font-weight: 500;
-            color: var(--text-muted);
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-        }
-
-        .tab-btn.active {
-            color: var(--primary);
-            border-bottom: 3px solid var(--primary);
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 40px auto;
-            padding: 0 20px;
-        }
-
-        .tab-content {
-            display: none;
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 40px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.03);
-            animation: fadeIn 0.4s ease;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        h2 {
-            margin-top: 0;
-            color: var(--primary);
-            font-weight: 500;
-            border-left: 4px solid var(--accent);
-            padding-left: 12px;
-            margin-bottom: 30px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th, td {
-            padding: 16px;
-            text-align: left;
-            border-bottom: 1px solid #f0f0f0;
-        }
-
-        th {
-            color: var(--text-muted);
-            font-weight: 500;
-            font-size: 14px;
-        }
-
-        input[type="text"], input[type="number"], select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            font-family: inherit;
-            box-sizing: border-box;
-            background-color: #fafafa;
-            transition: border 0.3s;
-        }
+        .btn-submit { background: #000; color: white; border: 1px solid #000; width: 100%; font-weight: 700; padding: 8px; cursor: pointer; font-size: 14px; text-transform: uppercase; } 
         
-        input:focus, select:focus {
-            outline: none;
-            border-color: var(--accent);
-            background-color: #fff;
-        }
+        .quick-btn-group { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; margin-bottom: 4px; }
+        .btn-quick { background: #fff; border: 1px solid var(--border); padding: 4px 2px; font-size: 11px; cursor: pointer; color: var(--text); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight:700;} 
+        .btn-quick.active { background: #000; color: white; }
 
-        .readonly-cell {
-            background-color: transparent !important;
-            border: none !important;
-            font-weight: 600;
-            color: var(--primary);
-            font-size: 16px;
-        }
+        .diary-item { background: var(--card-bg); padding: 8px; border: 1px solid var(--border); border-left: 4px solid #000; margin-bottom: 6px; }
+        .diary-item.expense { border-left-color: var(--color-red); }
+        .diary-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; border-bottom: 1px solid #eee; padding-bottom: 2px; }
+        .tag-cat { font-size: 11px; font-weight: 700; background:#000; color:#fff; padding:2px 4px; } 
+        .diary-date { font-size: 13px; font-weight: 700; color: var(--text-sub); } 
+        .diary-body { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+        .diary-desc { font-size: 14px; line-height: 1.4; color: var(--text); flex: 1; } 
+        .diary-amount { font-size: 16px; font-weight: 700; text-align:right;} 
+        .diary-actions { display: flex; gap: 4px; margin-top: 6px; justify-content: flex-end; }
+        .btn-action { background: #fff; border: 1px solid var(--border); font-size: 11px; cursor: pointer; padding: 4px 8px; font-weight: 700;} 
+        
+        .preview-box { display: none; margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
+        .preview-box img { max-width: 50px; max-height: 50px; border: 1px solid var(--border); object-fit: cover; cursor: zoom-in; }
 
-        .btn-add {
-            background-color: var(--bg);
-            color: var(--primary);
-            border: 1px dashed var(--primary);
-            padding: 12px 24px;
-            border-radius: 6px;
+        .album-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .album-item { position: relative; background: #fff; border: 1px solid #000; display: flex; flex-direction: column; }
+        .album-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; cursor: zoom-in; border-bottom: 1px solid #000; }
+        .album-item-date { font-size: 11px; font-weight: 700; text-align: center; background: #000; color: #fff; padding: 2px 0; } 
+        .album-remark { width: 100%; height: 40px; border: none; resize: none; font-size: 12px; padding: 4px; box-sizing: border-box; background: transparent; border-top: 1px solid #000; margin-top: 4px;} 
+        .btn-del-photo { position: absolute; top: 4px; right: 4px; background: rgba(255,255,255,0.9); border: 1px solid #000; color: red; width: 20px; height: 20px; font-size: 12px; font-weight: bold; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; z-index: 10; }
+
+        #imageEnlargeModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center; cursor: zoom-out; }
+        #imageEnlargeModal img { max-width: 95vw; max-height: 95vh; border: 2px solid #fff; object-fit: contain; }
+        .modal-close-btn { position: absolute; top: 15px; right: 15px; color: white; font-size: 30px; font-weight: bold; cursor: pointer; z-index: 10000; }
+
+        /* 報告列表 */
+        .report-section { border: 2px solid #000; margin-bottom: 10px; background: #fff;}
+        .report-section-header { font-family: 'Noto Serif HK', serif; background: #000; color: #fff; padding: 8px; font-size: 15px; font-weight: 900; display: flex; justify-content: space-between; align-items: center;} 
+        .report-section-body { padding: 8px; }
+
+        .report-h3 { font-family: 'Noto Serif HK', serif; font-size: 14px; font-weight: 900; margin: 0 0 6px 0; padding-bottom: 4px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; } 
+        
+        .report-list { list-style: none; padding: 0; margin: 0; }
+        .report-list li { padding: 6px 0; border-bottom: 1px solid #e5e7eb; font-size: 13px; display: flex; flex-direction: column; gap: 4px; } 
+        .report-list-item-header { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; gap: 6px; }
+        .total-expense { text-align: right; font-size: 18px; font-weight: 700; border-top: 2px solid #000; margin-top: 8px; padding-top: 6px; } 
+        
+        #syncStatus { font-size: 11px; text-align: center; color: var(--text-sub); margin-bottom: 6px; font-weight: 700; }
+
+        /* 📅 計劃日程表專屬樣式 */
+        .schedule-table-wrap { overflow-x: auto; background: white; border: 2px solid var(--border); margin-bottom: 10px; }
+        .schedule-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 650px; color: #000; } 
+        .schedule-table th { background: #fff; color: #000; padding: 6px 2px; text-align: left; border-bottom: 2px solid #000; border-right: 1px solid var(--border); white-space: nowrap; font-weight: 700; font-size: 13px;}
+        .schedule-table td { padding: 0; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); vertical-align: top; color: #000; position: relative;}
+        
+        .schedule-status-done, .schedule-status-pending { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; min-height: 45px; box-sizing: border-box; cursor: pointer; font-weight: 700; font-size: 13px;}
+        .schedule-status-done { background: #000; color: #fff; }
+        .schedule-status-pending { background: transparent; color: var(--text-sub); font-weight: 400; }
+        
+        .editable-remark { width: 100%; height: 100%; min-height: 45px; border: none; outline: none; resize: vertical; padding: 6px; padding-bottom: 18px; font-family: inherit; font-size: 13px; background: transparent; box-sizing: border-box; margin-top: 2px; } 
+        
+        .date-overlay-wrapper { position: relative; width: 100%; height: 100%; min-height: 45px; }
+        .date-overlay-text { position: absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-size:12px; font-weight:700; pointer-events:none; }
+        input[type="date"].hidden-date-input { position: absolute; top:0; left:0; width:100%; height:100%; opacity: 0; cursor: pointer; box-sizing:border-box;}
+
+        .btn-cycle-color {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            font-size: 9px;
+            padding: 1px 4px;
+            background: #eee;
+            border: 1px solid #ccc;
             cursor: pointer;
-            font-weight: 500;
-            margin-top: 20px;
-            transition: all 0.3s;
-            width: 100%;
+            border-radius: 2px;
         }
 
-        .btn-add:hover {
-            background-color: var(--primary);
-            color: white;
-        }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 200; justify-content: center; align-items: center; padding: 10px; box-sizing: border-box; }
+        .modal-card { background: #fff; padding: 15px; width: 100%; max-width: 380px; border: 2px solid #000; }
+        .modal-btns { display: flex; gap: 8px; margin-top: 10px; }
+        .modal-btns button { flex: 1; padding: 8px; font-weight: 700; cursor: pointer; border: 1px solid #000; background: white; font-size: 14px;}
+        .modal-btns button.primary { background: #000; color: white; }
 
-        .summary-box {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
-            text-align: right;
-        }
+        .message-board { background: #fefce8; border: 1px solid #ca8a04; padding: 8px; margin-bottom: 12px; }
+        .message-input-row { display: flex; gap: 6px; margin-bottom: 6px; }
+        .message-list { list-style: none; padding: 0; margin: 0; max-height: 150px; overflow-y: auto; }
+        .message-item { font-size: 13px; padding: 4px 0; border-bottom: 1px dashed #d1d5db; display: flex; justify-content: space-between; gap: 6px; } 
+        .message-time { font-size: 11px; color: #6b7280; white-space: nowrap; } 
 
-        .total-price {
-            font-size: 32px;
-            color: var(--primary);
-            font-weight: 600;
-        }
-
-        /* 標籤樣式 (文檔頁) */
-        .status-badge {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        .status-done { background: #eef7f0; color: #2e7d32; }
-        .status-pending { background: #fff8e1; color: #f57f17; }
+        .client-view .internal-section { display: none !important; }
+        .client-view .btn-action { display: none !important; }
+        .client-view .header button { display: none !important; }
+        .client-view .header select { pointer-events: none; border-color: transparent; }
     </style>
 </head>
 <body>
 
-    <header>
-        <div class="logo-area">
-            <h1 class="logo-title">INSTALLATION SYSTEM</h1>
-            <div class="logo-subtitle">傢俬工程進度與計價平台</div>
-        </div>
-        <div class="tabs">
-            <button class="tab-btn active" onclick="openTab('page1')">01 / 安裝費計價</button>
-            <button class="tab-btn" onclick="openTab('page2')">02 / 文檔與進度</button>
-            <button class="tab-btn" onclick="openTab('page3')">03 / 額外加單</button>
-        </div>
-    </header>
+<div class="header" id="mainHeader">
+    <select id="unitSelector" onchange="changeUnit()"></select>
+    <button class="btn-header" onclick="addUnit()">+ 新增</button>
+    <button class="btn-del-unit" onclick="deleteCurrentUnit()">刪除</button>
+</div>
 
-    <div class="container">
-        <!-- 第一頁：安裝費計價與總結 -->
-        <div id="page1" class="tab-content active">
-            <h2>安裝費總結與計價</h2>
-            <table id="calcTable">
-                <thead>
-                    <tr>
-                        <th width="20%">傢俬項目名稱</th>
-                        <th width="15%">類別</th>
-                        <th width="12%">長度/尺寸 (呎)</th>
-                        <th width="15%">標準安裝費 (每呎)</th>
-                        <th width="15%">附加費 (HKD)</th>
-                        <th width="18%">小計 (HKD)</th>
-                    </tr>
-                </thead>
-                <tbody id="calcBody">
-                    <tr>
-                        <td><input type="text" value="主臥大衣櫃" placeholder="例如: 客房衣櫃"></td>
-                        <td>
-                            <select onchange="updatePrice(this)">
-                                <option value="150" selected>衣櫃 ($150/呎)</option>
-                                <option value="120">餐檯 ($120/呎)</option>
-                                <option value="100">電視櫃 ($100/呎)</option>
-                                <option value="200">廚櫃 ($200/呎)</option>
-                            </select>
-                        </td>
-                        <td><input type="number" class="calc-input" value="8" min="0" oninput="calculate()"></td>
-                        <td><input type="number" class="calc-price readonly-cell" value="150" readonly></td>
-                        <td><input type="number" class="calc-input" value="0" min="0" oninput="calculate()"></td>
-                        <td><input type="text" class="row-total readonly-cell" value="$1,200" readonly></td>
-                    </tr>
-                </tbody>
-            </table>
-            <button class="btn-add" onclick="addRow()">+ 新增傢俬項目</button>
+<!-- Tab 1: 物資清單 -->
+<div id="tab-checklist" class="container content-section active">
+    
+    <div class="cat-filter-wrap" id="catFilterWrap"></div>
 
-            <div class="summary-box">
-                <span style="font-size: 18px; color: var(--text-muted); margin-right: 20px;">服務費總計</span>
-                <span class="total-price" id="grandTotal">$1,200</span>
+    <div class="custom-add">
+        <div class="newspaper-title" style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">+ 臨時追加物資</div>
+        <div class="custom-add-row">
+            <input type="text" id="customItemName" placeholder="輸入物資名稱..." style="flex:1;">
+            <button onclick="addCustomItem()" class="btn-header">加入</button>
+        </div>
+    </div>
+    
+    <div id="checklistContainer"></div>
+</div>
+
+<!-- Tab 2: 📅 計劃日程表 -->
+<div id="tab-schedule" class="container content-section">
+    <div class="diary-card">
+        <div class="diary-card-title">
+            <span>+ 追加日程</span>
+            <button onclick="clearSchedule()" style="background:transparent; border:1px solid #dc2626; color:#dc2626; padding:2px 8px; font-size:12px; cursor:pointer;">🗑️ 清空日程</button>
+        </div>
+        
+        <div class="diary-form-group">
+            <label>預測日期</label>
+            <input type="date" id="schedDate">
+        </div>
+        
+        <div class="diary-form-group">
+            <label>快速項目選擇 (點擊即入)</label>
+            <div class="quick-btn-group" id="schedProjectBtns">
+                <button type="button" class="btn-quick" onclick="setProject('01 設計測量', this)">01 設計測量</button>
+                <button type="button" class="btn-quick" onclick="setProject('02 簽約申報', this)">02 簽約申報</button>
+                <button type="button" class="btn-quick" onclick="setProject('03 現場清拆', this)">03 現場清拆</button>
+                <button type="button" class="btn-quick" onclick="setProject('04 放線定位', this)">04 放線定位</button>
+                <button type="button" class="btn-quick" onclick="setProject('05 水電佈線', this)">05 水電佈線</button>
+                <button type="button" class="btn-quick" onclick="setProject('06 水喉谷水', this)">06 水喉谷水</button>
+                <button type="button" class="btn-quick" onclick="setProject('07 防水塗層', this)">07 防水塗層</button>
+                <button type="button" class="btn-quick" onclick="setProject('08 閉水試水', this)">08 閉水試水</button>
+                <button type="button" class="btn-quick" onclick="setProject('09 泥水鋪磚', this)">09 泥水鋪磚</button>
+                <button type="button" class="btn-quick" onclick="setProject('10 木工打底', this)">10 木工打底</button>
+                <button type="button" class="btn-quick" onclick="setProject('11 傢俬覆尺', this)">11 傢俬覆尺</button>
+                <button type="button" class="btn-quick" onclick="setProject('12 油漆工程', this)">12 油漆工程</button>
+                <button type="button" class="btn-quick" onclick="setProject('13 傢俬組裝', this)">13 傢俬組裝</button>
+                <button type="button" class="btn-quick" onclick="setProject('14 五金燈飾', this)">14 五金燈飾</button>
+                <button type="button" class="btn-quick" onclick="setProject('15 潔具電器', this)">15 潔具電器</button>
+                <button type="button" class="btn-quick" onclick="setProject('16 完工驗收', this)">16 完工驗收</button>
+            </div>
+            <input type="hidden" id="schedProject" value="">
+        </div>
+
+        <div class="diary-form-group">
+            <label>內容 (選填)</label>
+            <input type="text" id="schedContent" placeholder="工序細節">
+        </div>
+
+        <button onclick="addScheduleItem()" class="btn-submit" style="margin-top: 4px;">加入日程</button>
+    </div>
+
+    <div class="schedule-table-wrap">
+        <table class="schedule-table">
+            <thead>
+                <tr>
+                    <th style="width: 4%; text-align:center; padding: 4px 1px;">完</th>
+                    <th style="width: 8%; text-align:center; padding: 4px 1px;">日期(改)</th>
+                    <th style="width: 12%; padding: 4px 2px;">項目(改)</th>
+                    <th style="width: 35%; padding: 4px 2px;">內容 (改)</th>
+                    <th style="width: 35%; padding: 4px 2px;">提醒 (改)</th>
+                    <th style="width: 6%; text-align:center; border-right:none;">刪</th>
+                </tr>
+            </thead>
+            <tbody id="scheduleTableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tab 3: 現場日誌 -->
+<div id="tab-diary" class="container content-section">
+    <div class="diary-card">
+        <div class="diary-card-title">新增日誌 / 開支</div>
+        <div class="diary-form-group">
+            <label>分類</label>
+            <select id="diaryCategory">
+                <option value="清拆">清拆</option>
+                <option value="水電">水電</option>
+                <option value="泥水">泥瓦</option>
+                <option value="木工">木工</option>
+                <option value="油漆">油漆</option>
+                <option value="安裝">安裝</option>
+                <option value="軟裝">軟裝</option>
+                <option value="員工">員工</option>
+                <option value="地盤雜項" selected>地盤雜項</option>
+                <option value="驗收">驗收</option>
+                <option value="意外問題">意外問題</option>
+            </select>
+        </div>
+        <div class="diary-form-group">
+            <label>日期</label>
+            <input type="date" id="diaryDate">
+        </div>
+        <div class="diary-form-group">
+            <label>記錄內容</label>
+            <input type="text" id="diaryDesc" placeholder="記錄細節...">
+        </div>
+        
+        <div style="display:flex; gap:4px;">
+            <div class="diary-form-group" style="flex:1;">
+                <label>金額 $ (純日誌留空)</label>
+                <input type="number" id="diaryAmount" placeholder="0">
+            </div>
+            <div class="diary-form-group" style="flex:1;">
+                <label>付款人 (選填)</label>
+                <input type="text" id="diaryPayer" placeholder="如: 呀強">
             </div>
         </div>
 
-        <!-- 第二頁：文檔與裝修進度 -->
-        <div id="page2" class="tab-content">
-            <h2>文檔與項目進度</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>日期</th>
-                        <th>階段 / 文檔名稱</th>
-                        <th>負責人</th>
-                        <th>狀態</th>
-                        <th>備註</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>2024-10-25</td>
-                        <td>初步傢俬平面圖確認</td>
-                        <td>設計部</td>
-                        <td><span class="status-badge status-done">已完成</span></td>
-                        <td>客戶已簽名確認</td>
-                    </tr>
-                    <tr>
-                        <td>2024-11-05</td>
-                        <td>現場度尺與覆核報告</td>
-                        <td>安裝隊 (陳師傅)</td>
-                        <td><span class="status-badge status-pending">待處理</span></td>
-                        <td>需與業主夾時間</td>
-                    </tr>
-                </tbody>
-            </table>
+        <div class="diary-form-group">
+            <label>上載相片 (最多 5 張)</label>
+            <input type="file" id="diaryPhotoInput" accept="image/*" multiple onchange="handleDiaryImages(event)">
+            <div id="previewBox" class="preview-box"></div>
+        </div>
+        <button onclick="addDiary()" class="btn-submit">儲存記錄</button>
+    </div>
+    
+    <div id="diaryContainer"></div>
+</div>
+
+<!-- Tab 4: 📐 圖紙/文檔 -->
+<div id="tab-drawings" class="container content-section">
+    <div class="diary-card">
+        <div class="diary-card-title">📐 圖紙 / 文檔</div>
+        <div class="diary-form-group">
+            <label>上載生產圖、報價單 (支援圖片及 PDF)</label>
+            <input type="file" id="drawingsInput" accept="image/*,application/pdf" multiple onchange="handleDrawingsUpload(event)">
+            <div id="drawingsUploadStatus" style="font-size: 11px; margin-top: 6px; font-weight:700; color:var(--color-tosend);"></div>
+        </div>
+    </div>
+    <div id="drawingsGallery" class="album-grid"></div>
+</div>
+
+<!-- Tab 5: 📷 現場相簿 -->
+<div id="tab-album" class="container content-section">
+    <div class="diary-card">
+        <div class="diary-card-title">📷 現場相簿</div>
+        <div class="diary-form-group">
+            <label>可多選 10+ 張相片上載</label>
+            <input type="file" id="albumPhotoInput" accept="image/*" multiple onchange="handleAlbumUpload(event)">
+            <div id="albumUploadStatus" style="font-size: 11px; margin-top: 6px; font-weight:700; color:var(--color-tosend);"></div>
+        </div>
+    </div>
+    <div id="albumGallery" class="album-grid"></div>
+</div>
+
+<!-- Tab 6: 單位報告 -->
+<div id="tab-report" class="container content-section">
+    <div id="reportContainer">
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;" class="internal-section">
+            <button class="btn-action" style="background:#fff; color:#000; border-color:#000; padding:8px; font-size:13px;" onclick="toggleClientView()">切換客戶模式</button>
+            <button class="btn-action" style="background:#000; color:#fff; border-color:#fff; padding:8px; font-size:13px;" onclick="exportPDF()">PDF 匯出</button>
         </div>
 
-        <!-- 第三頁：多買的開始單 -->
-        <div id="page3" class="tab-content">
-            <h2>多買的開始單 (額外加購)</h2>
-            <table id="extraTable">
-                <thead>
-                    <tr>
-                        <th>加單日期</th>
-                        <th>加購項目說明</th>
-                        <th>數量</th>
-                        <th>單價 (HKD)</th>
-                        <th>小計 (HKD)</th>
-                    </tr>
-                </thead>
-                <tbody id="extraBody">
-                    <tr>
-                        <td><input type="date"></td>
-                        <td><input type="text" value="緩衝門鉸升級"></td>
-                        <td><input type="number" class="extra-input" value="4" min="0" oninput="calculateExtra()"></td>
-                        <td><input type="number" class="extra-input" value="50" min="0" oninput="calculateExtra()"></td>
-                        <td><input type="text" class="extra-row-total readonly-cell" value="$200" readonly></td>
-                    </tr>
-                </tbody>
-            </table>
-            <button class="btn-add" onclick="addExtraRow()">+ 新增加單項目</button>
+        <div class="message-board internal-section">
+            <div style="font-weight:700; font-size:13px; margin-bottom:6px; color:#a16207;">💬 團隊留言板</div>
+            <div class="message-input-row">
+                <input type="text" id="msgInput" placeholder="輸入留言..." style="flex:1; padding:4px 6px;">
+                <button onclick="addMessage()" style="background:#ca8a04; color:#fff; border:1px solid #a16207; font-weight:700; padding:4px 10px; cursor:pointer;">留言</button>
+            </div>
+            <ul class="message-list" id="messageList"></ul>
+        </div>
 
-            <div class="summary-box">
-                <span style="font-size: 18px; color: var(--text-muted); margin-right: 20px;">加單總額</span>
-                <span class="total-price" id="extraGrandTotal">$200</span>
+        <div class="report-section">
+            <div class="report-section-header">📄 對外進度 (現場狀態)</div>
+            <div class="report-section-body">
+                
+                <h3 class="report-h3">
+                    <span>✅ 已完成日程</span>
+                    <button class="btn-action internal-section" onclick="exportReport('doneSched', '已完成日程')">📋 匯出</button>
+                </h3>
+                <ul class="report-list" id="reportListDoneSched" style="margin-bottom: 12px;"></ul>
+
+                <h3 class="report-h3" style="color: var(--color-onsite); border-color: var(--color-onsite);">
+                    <span>📍 現場已有物資</span>
+                    <div>
+                        <button class="btn-action internal-section" style="color:inherit; border-color:inherit;" onclick="exportReport('onsite', '現場已有物資')">📋 匯出</button>
+                    </div>
+                </h3>
+                <ul class="report-list" id="reportListOnSite"></ul>
+                
+            </div>
+        </div>
+
+        <div class="report-section internal-section" style="background: #f9fafb;">
+            <div class="report-section-header" style="background: #374151;">🔒 內部團隊 (採購/開支)</div>
+            <div class="report-section-body">
+                
+                <h3 class="report-h3" style="color: var(--color-tobuy); border-color: var(--color-tobuy);">
+                    <span>🛒 待買物資</span>
+                    <button class="btn-action" style="color:inherit; border-color:inherit;" onclick="exportReport('tobuy', '待買物資清單')">📋 匯出</button>
+                </h3>
+                <ul class="report-list" id="reportListToBuy" style="margin-bottom: 12px;"></ul>
+
+                <h3 class="report-h3" style="color: var(--color-tosend); border-color: var(--color-tosend);">
+                    <span>🚚 待送現場</span>
+                    <button class="btn-action" style="color:inherit; border-color:inherit;" onclick="exportReport('tosend', '待送現場清單')">📋 匯出</button>
+                </h3>
+                <ul class="report-list" id="reportListToSend" style="margin-bottom: 12px;"></ul>
+
+                <h3 class="report-h3">
+                    <span>📝 開支明細</span>
+                    <button class="btn-action" onclick="exportReport('diary', '開支與日誌')">📋 匯出</button>
+                </h3>
+                <ul class="report-list" id="reportDiary"></ul>
+                <div class="total-expense" id="reportTotal">TOTAL: $0</div>
+
             </div>
         </div>
     </div>
+</div>
 
-    <script>
-        // 切換分頁功能
-        function openTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
-            event.currentTarget.classList.add('active');
+<div id="imageEnlargeModal" onclick="this.style.display='none'">
+    <span class="modal-close-btn">&times;</span>
+    <img id="enlargedImage" src="">
+</div>
+
+<div id="editModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="diary-card-title">更改紀錄</div>
+        <input type="hidden" id="editIndex">
+        <div class="diary-form-group">
+            <label>分類</label>
+            <select id="editCategory">
+                <option value="清拆">清拆</option>
+                <option value="水電">水電</option>
+                <option value="泥水">泥瓦</option>
+                <option value="木工">木工</option>
+                <option value="油漆">油漆</option>
+                <option value="安裝">安裝</option>
+                <option value="軟裝">軟裝</option>
+                <option value="員工">員工</option>
+                <option value="地盤雜項">地盤雜項</option>
+                <option value="驗收">驗收</option>
+                <option value="意外問題">意外問題</option>
+            </select>
+        </div>
+        <div class="diary-form-group">
+            <label>日期</label>
+            <input type="date" id="editDate">
+        </div>
+        <div class="diary-form-group">
+            <label>內容</label>
+            <input type="text" id="editDesc">
+        </div>
+        <div style="display:flex; gap:4px;">
+            <div class="diary-form-group" style="flex:1;">
+                <label>金額 $</label>
+                <input type="number" id="editAmount" placeholder="0">
+            </div>
+            <div class="diary-form-group" style="flex:1;">
+                <label>付款人員</label>
+                <input type="text" id="editPayer" placeholder="如: 呀強">
+            </div>
+        </div>
+        <div class="modal-btns">
+            <button onclick="closeEditModal()">取消</button>
+            <button class="primary" onclick="saveEditDiary()">儲存</button>
+        </div>
+    </div>
+</div>
+
+<div class="tab-bar" id="mainTabBar">
+    <div class="tab active" onclick="switchTab('checklist', this)">物資</div>
+    <div class="tab" onclick="switchTab('schedule', this)">日程</div>
+    <div class="tab" onclick="switchTab('diary', this)">日誌</div>
+    <div class="tab" onclick="switchTab('drawings', this)">圖紙</div>
+    <div class="tab" onclick="switchTab('album', this)">相簿</div>
+    <div class="tab" onclick="switchTab('report', this)">報告</div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCSRfZdAVh8ADPNtayW5lyDtmE0xDsJXNg",
+        authDomain: "gen-lang-client-0208380044.firebaseapp.com",
+        databaseURL: "https://gen-lang-client-0208380044-default-rtdb.firebaseio.com",
+        projectId: "gen-lang-client-0208380044",
+        storageBucket: "gen-lang-client-0208380044.firebasestorage.app",
+        messagingSenderId: "17077391191",
+        appId: "1:17077391191:web:f167a311052c56bd3d7812"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    const dbRef = database.ref('siteManagerDB');
+
+    let db = {};
+    let currentUnit = localStorage.getItem('siteManagerCurrent') || '';
+    let isInitialized = false;
+    let diaryImagesTemp = []; 
+    let currentFilterCat = 'ALL'; 
+    let isClientView = false;
+
+    // 精簡版物資列表
+    const defaultMasterList = [
+        { catLetter: 'A', catName: '前期保護', code: 'A01', name: '中空板 (瓦通膠板)', desc: '鋪設地台防刮傷', status: 0 },
+        { catLetter: 'A', catName: '前期保護', code: 'A02', name: '高密度纖維夾板', desc: '走廊及重料通道防壓', status: 0 },
+        { catLetter: 'A', catName: '前期保護', code: 'A03', name: '珍珠棉護角', desc: '包大門門框防碰撞', status: 0 },
+        { catLetter: 'A', catName: '前期保護', code: 'A04', name: '大皺紋膠紙', desc: '固定保護板', status: 0 },
+        { catLetter: 'A', catName: '前期保護', code: 'A05', name: '防塵遮蔽膜', desc: '包封傢俬及冷氣機', status: 0 },
+        { catLetter: 'A', catName: '前期保護', code: 'A06', name: '座廁保護套', desc: '封死座廁防污染', status: 0 },
+        { catLetter: 'A', catName: '前期保護', code: 'A07', name: '去水喉保護塞', desc: '封死渠口防英泥阻塞', status: 0 },
+        { catLetter: 'B', catName: '清潔防塵', code: 'B01', name: '黑膠袋', desc: '每日清理泥頭垃圾', status: 0 },
+        { catLetter: 'B', catName: '清潔防塵', code: 'B02', name: '即棄鞋套', desc: '防鞋印踩花新木地板', status: 0 },
+        { catLetter: 'B', catName: '清潔防塵', code: 'B03', name: '掃把及垃圾鏟', desc: '清掃粗碎石', status: 0 },
+        { catLetter: 'B', catName: '清潔防塵', code: 'B04', name: '地拖及壓水桶', desc: '泥水完工清洗地台', status: 0 },
+        { catLetter: 'B', catName: '清潔防塵', code: 'B05', name: '金屬除膠鏟刀', desc: '剷除硬化英泥漬', status: 0 },
+        { catLetter: 'B', catName: '清潔防塵', code: 'B06', name: '綠水', desc: '交場清潔消毒', status: 0 },
+        { catLetter: 'C', catName: '文具量度', code: 'C01', name: '重型𠝹刀', desc: '割保護板、拆箱', status: 0 },
+        { catLetter: 'C', catName: '文具量度', code: 'C02', name: '鋼尺', desc: '現場尺寸校對', status: 0 },
+        { catLetter: 'C', catName: '文具量度', code: 'C03', name: '雷射測距儀', desc: '快速覆核天花高度', status: 0 },
+        { catLetter: 'C', catName: '文具量度', code: 'C04', name: '強磁水平尺', desc: '校對電掣底盒', status: 0 },
+        { catLetter: 'C', catName: '文具量度', code: 'C05', name: '油性筆(黑/紅)', desc: '牆身開槽標註', status: 0 },
+        { catLetter: 'D', catName: '五金工具', code: 'D01', name: '鋁合金摺梯', desc: '高空作業必備', status: 0 },
+        { catLetter: 'D', catName: '五金工具', code: 'D02', name: '羊角鐵鎚', desc: '敲擊、拔除鐵釘', status: 0 },
+        { catLetter: 'D', catName: '五金工具', code: 'D03', name: '絕緣螺絲批組', desc: '五金合頁微調', status: 0 },
+        { catLetter: 'D', catName: '五金工具', code: 'D04', name: '活動士巴拿', desc: '拆裝水管螺絲', status: 0 },
+        { catLetter: 'D', catName: '五金工具', code: 'D05', name: '手動旋轉膠槍', desc: '打玻璃膠及免釘膠', status: 0 },
+        { catLetter: 'E', catName: '電動工具', code: 'E01', name: '充電手提電鑽', desc: '櫃體組裝', status: 0 },
+        { catLetter: 'E', catName: '電動工具', code: 'E02', name: '充電油壓鑽', desc: '打石矢牆孔', status: 0 },
+        { catLetter: 'E', catName: '電動工具', code: 'E03', name: '工業吸塵機', desc: '清除地台水泥粉塵', status: 0 },
+        { catLetter: 'E', catName: '電動工具', code: 'E04', name: '工業座地風扇', desc: '驅散油漆甲醛', status: 0 },
+        { catLetter: 'E', catName: '電動工具', code: 'E05', name: '平水儀', desc: '空間3D平水投射', status: 0 },
+        { catLetter: 'F', catName: '輔料耗材', code: 'F01', name: '防霉玻璃膠', desc: '廚衛防水收口', status: 0 },
+        { catLetter: 'F', catName: '輔料耗材', code: 'F02', name: '萬能免釘膠', desc: '黏合木飾條', status: 0 },
+        { catLetter: 'F', catName: '輔料耗材', code: 'F03', name: '彩色膠塞套裝', desc: '入石矢牆專用緊固', status: 0 },
+        { catLetter: 'F', catName: '輔料耗材', code: 'F04', name: '電工絕緣膠布', desc: '電線接駁封口包紮', status: 0 },
+        { catLetter: 'F', catName: '輔料耗材', code: 'F05', name: '乾磨砂紙組', desc: '批灰平整打磨', status: 0 },
+        { catLetter: 'G', catName: '安全勞保', code: 'G01', name: '工程安全帽', desc: '現場巡查防護', status: 0 },
+        { catLetter: 'G', catName: '安全勞保', code: 'G02', name: '防刺穿安全鞋', desc: '地盤踏足必備', status: 0 },
+        { catLetter: 'G', catName: '安全勞保', code: 'G03', name: 'N95 級口罩', desc: '打拆阻隔粉塵', status: 0 },
+        { catLetter: 'G', catName: '安全勞保', code: 'G04', name: '現場急救箱', desc: '割傷即時處理', status: 0 },
+        { catLetter: 'G', catName: '安全勞保', code: 'G05', name: '乾粉滅火筒', desc: '預防火災事故', status: 0 }
+    ];
+
+    function enlargeImage(src) {
+        document.getElementById('enlargedImage').src = src;
+        document.getElementById('imageEnlargeModal').style.display = 'flex';
+    }
+
+    function formatShortDate(dateStr) {
+        if (!dateStr) return '選擇';
+        const d = new Date(dateStr);
+        if (isNaN(d)) return dateStr;
+        const days = ['日', '一', '二', '三', '四', '五', '六'];
+        return `${d.getMonth()+1}/${d.getDate()} ${days[d.getDay()]}`;
+    }
+
+    function setProject(val, btn) {
+        document.getElementById('schedProject').value = val;
+        document.querySelectorAll('#schedProjectBtns .btn-quick').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+
+    window.onload = () => {
+        document.getElementById('diaryDate').valueAsDate = new Date();
+    };
+
+    function toggleClientView() {
+        isClientView = !isClientView;
+        if(isClientView) {
+            document.body.classList.add('client-view');
+            document.getElementById('mainTabBar').style.display = 'none';
+            document.body.style.paddingBottom = '20px';
+            alert('已進入【客戶預覽模式】\n內部資料已隱藏。重新整理頁面即可退出。');
         }
+    }
 
-        // 當下拉選單改變時，更新標準單價
-        function updatePrice(selectElement) {
-            const row = selectElement.closest('tr');
-            const priceInput = row.querySelector('.calc-price');
-            priceInput.value = selectElement.value;
-            calculate();
-        }
+    function exportPDF() {
+        const element = document.getElementById('reportContainer');
+        const opt = {
+            margin:       10,
+            filename:     `${currentUnit}_進度報告.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2 },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        html2pdf().set(opt).from(element).save();
+    }
 
-        // 計算第一頁安裝費
-        function calculate() {
+    function exportReport(type, title) {
+        if(!db[currentUnit]) return;
+        let text = `【${currentUnit}】${title}\n======================\n`;
+        
+        let list = db[currentUnit].checklist || [];
+        let schedules = db[currentUnit].schedule || [];
+        let diaries = db[currentUnit].diary || [];
+
+        if (type === 'tobuy') {
+            let toBuy = list.filter(i => i.status === 1);
+            toBuy.forEach((i, idx) => text += `${idx+1}. ${i.name} ${i.desc ? '('+i.desc+')' : ''}\n`);
+            if(toBuy.length===0) text += "無資料\n";
+        } else if (type === 'tosend') {
+            let toSend = list.filter(i => i.status === 2);
+            toSend.forEach((i, idx) => text += `${idx+1}. ${i.name} ${i.desc ? '('+i.desc+')' : ''}\n`);
+            if(toSend.length===0) text += "無資料\n";
+        } else if (type === 'onsite') {
+            let onSite = list.filter(i => i.status === 3);
+            onSite.forEach((i, idx) => text += `${idx+1}. ${i.name}\n`);
+            if(onSite.length===0) text += "無資料\n";
+        } else if (type === 'doneSched') {
+            let doneSched = schedules.filter(i => i.done === true);
+            doneSched.forEach((i, idx) => text += `${formatShortDate(i.date)} - ${i.project}: ${i.content}\n`);
+            if(doneSched.length===0) text += "無資料\n";
+        } else if (type === 'diary') {
             let total = 0;
-            const rows = document.querySelectorAll('#calcBody tr');
-            rows.forEach(row => {
-                const inputs = row.querySelectorAll('.calc-input');
-                const price = parseFloat(row.querySelector('.calc-price').value) || 0;
-                const size = parseFloat(inputs[0].value) || 0;
-                const extra = parseFloat(inputs[1].value) || 0;
-                
-                const subtotal = (size * price) + extra;
-                row.querySelector('.row-total').value = '$' + subtotal.toLocaleString();
-                total += subtotal;
+            diaries.forEach((d) => {
+                let amountStr = d.amount ? ` $${d.amount}` : '';
+                let payerStr = d.payer ? ` (付: ${d.payer})` : '';
+                text += `${d.date} [${d.cat}] ${d.desc}${amountStr}${payerStr}\n`;
+                if(d.amount > 0) total += d.amount;
             });
-            document.getElementById('grandTotal').innerText = '$' + total.toLocaleString();
+            text += `\n總開支: $${total}\n`;
         }
 
-        // 第一頁新增項目列
-        function addRow() {
-            const tbody = document.getElementById('calcBody');
-            const newRow = document.createElement('tr');
-            newRow.innerHTML = `
-                <td><input type="text" placeholder="輸入傢俬名稱"></td>
-                <td>
-                    <select onchange="updatePrice(this)">
-                        <option value="150">衣櫃 ($150/呎)</option>
-                        <option value="120">餐檯 ($120/呎)</option>
-                        <option value="100">電視櫃 ($100/呎)</option>
-                        <option value="200">廚櫃 ($200/呎)</option>
-                    </select>
-                </td>
-                <td><input type="number" class="calc-input" value="0" min="0" oninput="calculate()"></td>
-                <td><input type="number" class="calc-price readonly-cell" value="150" readonly></td>
-                <td><input type="number" class="calc-input" value="0" min="0" oninput="calculate()"></td>
-                <td><input type="text" class="row-total readonly-cell" value="$0" readonly></td>
-            `;
-            tbody.appendChild(newRow);
+        let textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            alert(`已成功複製「${title}」內容，可直接貼上至 WhatsApp！`);
+        } catch (err) {
+            alert('複製失敗，請手動複製。');
         }
+        document.body.removeChild(textArea);
+    }
 
-        // 計算第三頁加單費
-        function calculateExtra() {
-            let total = 0;
-            const rows = document.querySelectorAll('#extraBody tr');
-            rows.forEach(row => {
-                const inputs = row.querySelectorAll('.extra-input');
-                const qty = parseFloat(inputs[0].value) || 0;
-                const price = parseFloat(inputs[1].value) || 0;
-                
-                const subtotal = qty * price;
-                row.querySelector('.extra-row-total').value = '$' + subtotal.toLocaleString();
-                total += subtotal;
+    async function handleDiaryImages(e) {
+        const files = e.target.files;
+        if (!files) return;
+        let previewBox = document.getElementById('previewBox');
+        previewBox.innerHTML = '';
+        diaryImagesTemp = [];
+        
+        let len = Math.min(files.length, 5); 
+        for(let i = 0; i < len; i++){
+            let b64 = await compressImage(files[i], 800, 0.65);
+            diaryImagesTemp.push(b64);
+            previewBox.innerHTML += `<img src="${b64}" onclick="enlargeImage('${b64}')">`;
+        }
+        if(len > 0) previewBox.style.display = 'flex';
+    }
+
+    async function handleAlbumUpload(e) {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        
+        let status = document.getElementById('albumUploadStatus');
+        status.innerText = `處理中...`;
+
+        if(!db[currentUnit].album) db[currentUnit].album = [];
+
+        for(let i = 0; i < files.length; i++){
+            let b64 = await compressImage(files[i], 600, 0.5);
+            db[currentUnit].album.unshift({
+                date: new Date().toLocaleDateString('zh-HK'),
+                image: b64,
+                remark: ''
             });
-            document.getElementById('extraGrandTotal').innerText = '$' + total.toLocaleString();
+        }
+        
+        saveDB();
+        renderAlbum();
+        status.innerText = '✅ 成功';
+        setTimeout(() => status.innerText = '', 2000);
+        e.target.value = '';
+    }
+
+    async function handleDrawingsUpload(e) {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        
+        let status = document.getElementById('drawingsUploadStatus');
+        status.innerText = `處理中...`;
+
+        if(!db[currentUnit].drawings) db[currentUnit].drawings = [];
+
+        for(let i = 0; i < files.length; i++){
+            let file = files[i];
+            let isPdf = file.type === 'application/pdf';
+            let fileData = "";
+
+            if(isPdf) {
+                fileData = await new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result);
+                    reader.readAsDataURL(file);
+                });
+            } else {
+                fileData = await compressImage(file, 1200, 0.7);
+            }
+
+            db[currentUnit].drawings.unshift({
+                date: new Date().toLocaleDateString('zh-HK'),
+                image: fileData,
+                isPdf: isPdf,
+                name: file.name,
+                remark: ''
+            });
+        }
+        
+        saveDB();
+        renderDrawings();
+        status.innerText = '✅ 成功';
+        setTimeout(() => status.innerText = '', 2000);
+        e.target.value = '';
+    }
+
+    function compressImage(file, maxWidth, quality) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const scaleSize = maxWidth / img.width;
+                    const targetWidth = img.width > maxWidth ? maxWidth : img.width;
+                    const targetHeight = img.width > maxWidth ? img.height * scaleSize : img.height;
+
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    dbRef.on('value', (snapshot) => {
+        db = snapshot.val() || {};
+        
+        if (Object.keys(db).length === 0 && !isInitialized) {
+            isInitialized = true;
+            let firstUnit = prompt('請輸入第一個地盤名稱：');
+            createNewUnit(firstUnit && firstUnit.trim() ? firstUnit.trim() : 'Project-01');
+            return;
         }
 
-        // 第三頁新增加單列
-        function addExtraRow() {
-            const tbody = document.getElementById('extraBody');
-            const newRow = document.createElement('tr');
-            newRow.innerHTML = `
-                <td><input type="date"></td>
-                <td><input type="text" placeholder="輸入加購項目"></td>
-                <td><input type="number" class="extra-input" value="1" min="0" oninput="calculateExtra()"></td>
-                <td><input type="number" class="extra-input" value="0" min="0" oninput="calculateExtra()"></td>
-                <td><input type="text" class="extra-row-total readonly-cell" value="$0" readonly></td>
-            `;
-            tbody.appendChild(newRow);
+        let needsSave = false;
+        Object.keys(db).forEach(unitName => {
+            if (!db[unitName].checklist) { db[unitName].checklist = defaultMasterList.map(item => ({ ...item })); needsSave = true; }
+            if (!db[unitName].schedule) { db[unitName].schedule = []; needsSave = true; }
+            if (!db[unitName].album) { db[unitName].album = []; needsSave = true; }
+            if (!db[unitName].drawings) { db[unitName].drawings = []; needsSave = true; }
+            if (!db[unitName].diary) { db[unitName].diary = []; needsSave = true; }
+            if (!db[unitName].messages) { db[unitName].messages = []; needsSave = true; }
+        });
+        if (needsSave) dbRef.set(db);
+
+        isInitialized = true;
+
+        if (!db[currentUnit] && Object.keys(db).length > 0) {
+            currentUnit = Object.keys(db)[0];
+            localStorage.setItem('siteManagerCurrent', currentUnit);
         }
-    </script>
+
+        updateUnitSelector();
+        if (currentUnit) renderApp();
+    });
+
+    function saveDB() {
+        dbRef.set(db); 
+        localStorage.setItem('siteManagerCurrent', currentUnit);
+    }
+
+    function deleteCurrentUnit() {
+        if (!currentUnit) return;
+        if (confirm(`確定刪除【${currentUnit}】？此操作無法復原。`)) {
+            delete db[currentUnit];
+            let remainingUnits = Object.keys(db);
+            currentUnit = remainingUnits.length > 0 ? remainingUnits[0] : '';
+            saveDB();
+            if (!currentUnit) {
+                createNewUnit('Project-01');
+            } else {
+                updateUnitSelector();
+                renderApp();
+            }
+        }
+    }
+
+    function createNewUnit(name) {
+        if(db[name]) return alert('名稱已存在');
+        db[name] = { 
+            _init: Date.now(), 
+            checklist: defaultMasterList.map(item => ({ ...item })), 
+            diary: [],
+            schedule: [],
+            album: [],
+            drawings: [],
+            messages: []
+        };
+        currentUnit = name;
+        saveDB();
+        updateUnitSelector();
+        renderApp();
+    }
+
+    function addUnit() {
+        let name = prompt('輸入新地盤名稱：');
+        if(name && name.trim()) createNewUnit(name.trim());
+    }
+
+    function changeUnit() {
+        currentUnit = document.getElementById('unitSelector').value;
+        currentFilterCat = 'ALL'; 
+        saveDB();
+        renderApp();
+    }
+
+    function updateUnitSelector() {
+        let sel = document.getElementById('unitSelector');
+        sel.innerHTML = '';
+        Object.keys(db).forEach(unit => {
+            sel.innerHTML += `<option value="${unit}" ${unit === currentUnit ? 'selected' : ''}>${unit}</option>`;
+        });
+    }
+
+    // --- 1. 物資清單 ---
+    function filterCat(catName) {
+        currentFilterCat = catName;
+        renderChecklist();
+    }
+
+    function renderChecklist() {
+        if(!db[currentUnit]) return;
+        
+        let list = db[currentUnit].checklist || [];
+        
+        let filterContainer = document.getElementById('catFilterWrap');
+        let uniqueCats = [...new Set(list.map(item => item.catName))];
+        
+        let filterHTML = `<button class="cat-filter-btn ${currentFilterCat === 'ALL' ? 'active' : ''}" onclick="filterCat('ALL')">全部</button>`;
+        uniqueCats.forEach(cat => {
+            if(cat) filterHTML += `<button class="cat-filter-btn ${currentFilterCat === cat ? 'active' : ''}" onclick="filterCat('${cat}')">${cat}</button>`;
+        });
+        filterContainer.innerHTML = filterHTML;
+
+        let container = document.getElementById('checklistContainer');
+        container.innerHTML = '';
+        
+        let displayList = currentFilterCat === 'ALL' ? list : list.filter(i => i.catName === currentFilterCat);
+
+        if(displayList.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-sub);">無資料</div>';
+            return;
+        }
+
+        displayList.forEach((item, index) => {
+            let realIndex = list.findIndex(orig => orig === item);
+            container.innerHTML += `
+                <div class="item-card">
+                    <div class="item-info">
+                        <div class="item-header-row">
+                            <div class="item-title">${item.name}</div>
+                        </div>
+                        <div class="item-desc">${item.desc || ''}</div>
+                    </div>
+                    <div class="status-group">
+                        <button class="status-btn s-0 ${item.status === 0 ? 'active' : ''}" onclick="updateStatus(${realIndex}, 0)">不需</button>
+                        <button class="status-btn s-1 ${item.status === 1 ? 'active' : ''}" onclick="updateStatus(${realIndex}, 1)">待買</button>
+                        <button class="status-btn s-2 ${item.status === 2 ? 'active' : ''}" onclick="updateStatus(${realIndex}, 2)">待送</button>
+                        <button class="status-btn s-3 ${item.status === 3 ? 'active' : ''}" onclick="updateStatus(${realIndex}, 3)">現場有</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function updateStatus(index, status) {
+        db[currentUnit].checklist[index].status = status;
+        saveDB();
+        renderChecklist();
+        renderReport();
+    }
+
+    function addCustomItem() {
+        let input = document.getElementById('customItemName');
+        if(!input.value.trim()) return;
+        if(!db[currentUnit].checklist) db[currentUnit].checklist = [];
+        
+        let code = 'M' + (db[currentUnit].checklist.length + 1).toString().padStart(2, '0');
+
+        db[currentUnit].checklist.unshift({ 
+            catLetter: 'M',
+            catName: '自訂追加', 
+            code: code,
+            name: input.value.trim(), 
+            desc: '', 
+            status: 1
+        });
+        input.value = '';
+        saveDB();
+        
+        if(currentFilterCat !== 'ALL' && currentFilterCat !== '自訂追加') {
+            currentFilterCat = '自訂追加';
+        }
+        
+        renderChecklist();
+        renderReport();
+    }
+
+    // --- 2. 📅 計劃日程表 ---
+    function renderSchedule() {
+        if(!db[currentUnit]) return;
+        let tbody = document.getElementById('scheduleTableBody');
+        tbody.innerHTML = '';
+        let list = db[currentUnit].schedule || [];
+
+        if(list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:15px; font-weight:700;">暫無日程</td></tr>';
+            return;
+        }
+
+        list.forEach((item, index) => {
+            let isDone = item.done;
+            let statusBtn = isDone ? 
+                `<div class="schedule-status-done" onclick="toggleScheduleDone(${index})">完</div>` : 
+                `<div class="schedule-status-pending" onclick="toggleScheduleDone(${index})">未完</div>`;
+
+            let displayDate = formatShortDate(item.date);
+            let colorHex = '#000000';
+            if (item.color === 'red') colorHex = 'var(--color-red)';
+            if (item.color === 'orange') colorHex = 'var(--color-orange)';
+            if (item.color === 'purple') colorHex = 'var(--color-purple)';
+            let fw = (colorHex !== '#000000') ? '700' : '400';
+
+            tbody.innerHTML += `
+                <tr>
+                    <td style="padding: 0; vertical-align: middle;">${statusBtn}</td>
+                    <td style="padding: 0; position: relative;">
+                        <div class="date-overlay-wrapper">
+                            <div class="date-overlay-text">${displayDate}</div>
+                            <input type="date" class="hidden-date-input" value="${item.date || ''}" onchange="updateScheduleDate(${index}, this.value)">
+                        </div>
+                    </td>
+                    <td style="padding: 0;">
+                        <textarea class="editable-remark" style="font-weight:700;" onchange="updateScheduleProject(${index}, this.value)" placeholder="項目...">${item.project || ''}</textarea>
+                    </td>
+                    <td style="padding: 0;">
+                        <textarea class="editable-remark" onchange="updateScheduleContent(${index}, this.value)" placeholder="內容...">${item.content || ''}</textarea>
+                    </td>
+                    <td style="padding: 0; position: relative;">
+                        <textarea class="editable-remark" style="color: ${colorHex}; font-weight: ${fw}; padding-bottom: 20px;" onchange="updateScheduleRemark(${index}, this.value)" placeholder="備註...">${item.remark || ''}</textarea>
+                        <button onclick="cycleRemarkColor(${index})" class="btn-cycle-color">🎨 轉色</button>
+                    </td>
+                    <td style="text-align:center; padding: 4px; border-right:none; vertical-align:middle;">
+                        <button onclick="deleteScheduleItem(${index})" style="background:none; border:none; color:red; cursor:pointer; font-size:14px;">✕</button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function clearSchedule() {
+        if(confirm('確定要清空此地盤的所有日程嗎？')) {
+            db[currentUnit].schedule = [];
+            saveDB();
+            renderSchedule();
+        }
+    }
+
+    function toggleScheduleDone(index) {
+        db[currentUnit].schedule[index].done = !db[currentUnit].schedule[index].done;
+        saveDB();
+        renderSchedule();
+        renderReport();
+    }
+
+    function updateScheduleDate(index, newValue) {
+        db[currentUnit].schedule[index].date = newValue;
+        saveDB();
+        renderSchedule();
+    }
+    
+    function updateScheduleProject(index, newValue) {
+        db[currentUnit].schedule[index].project = newValue;
+        saveDB();
+        renderReport();
+    }
+
+    function updateScheduleContent(index, newValue) {
+        db[currentUnit].schedule[index].content = newValue;
+        saveDB();
+        renderReport();
+    }
+
+    function updateScheduleRemark(index, newValue) {
+        db[currentUnit].schedule[index].remark = newValue;
+        saveDB();
+    }
+
+    function addScheduleItem() {
+        let date = document.getElementById('schedDate').value;
+        let project = document.getElementById('schedProject').value.trim();
+        let content = document.getElementById('schedContent').value.trim();
+        let color = 'black';
+
+        if(!project) return alert('必須選擇或輸入項目！');
+
+        if(!db[currentUnit].schedule) db[currentUnit].schedule = [];
+        db[currentUnit].schedule.push({
+            date: date,
+            done: false,
+            project: project,
+            content: content,
+            remark: '',
+            color: color
+        });
+
+        document.getElementById('schedDate').value = '';
+        document.getElementById('schedProject').value = '';
+        document.getElementById('schedContent').value = '';
+        
+        document.querySelectorAll('#schedProjectBtns .btn-quick').forEach(b => b.classList.remove('active'));
+
+        saveDB();
+        renderSchedule();
+    }
+
+    function deleteScheduleItem(index) {
+        if(confirm('刪除此日程?')) {
+            db[currentUnit].schedule.splice(index, 1);
+            saveDB();
+            renderSchedule();
+            renderReport();
+        }
+    }
+
+    // --- 3. 現場日誌 ---
+    function addDiary() {
+        let cat = document.getElementById('diaryCategory').value;
+        let date = document.getElementById('diaryDate').value;
+        let desc = document.getElementById('diaryDesc').value;
+        let amount = document.getElementById('diaryAmount').value;
+        let payer = document.getElementById('diaryPayer').value.trim();
+        
+        if(!desc.trim()) return alert('輸入記錄');
+
+        if(!db[currentUnit].diary) db[currentUnit].diary = [];
+        db[currentUnit].diary.unshift({
+            cat: cat,
+            date: date,
+            desc: desc,
+            amount: amount ? Math.abs(parseFloat(amount)) : null,
+            payer: payer || null,
+            images: diaryImagesTemp.length > 0 ? [...diaryImagesTemp] : null
+        });
+
+        document.getElementById('diaryDesc').value = '';
+        document.getElementById('diaryAmount').value = '';
+        document.getElementById('diaryPayer').value = '';
+        document.getElementById('diaryPhotoInput').value = '';
+        document.getElementById('previewBox').style.display = 'none';
+        diaryImagesTemp = [];
+        saveDB();
+        renderDiary();
+        renderReport();
+    }
+
+    function deleteDiary(index) {
+        if(confirm('刪除此日誌?')) {
+            db[currentUnit].diary.splice(index, 1);
+            saveDB();
+            renderDiary();
+            renderReport();
+        }
+    }
+
+    function openEditModal(index) {
+        let item = db[currentUnit].diary[index];
+        if(!item) return;
+        document.getElementById('editIndex').value = index;
+        document.getElementById('editCategory').value = item.cat || '地盤雜項';
+        document.getElementById('editDate').value = item.date;
+        document.getElementById('editDesc').value = item.desc;
+        document.getElementById('editAmount').value = item.amount !== null && item.amount !== undefined ? Math.abs(item.amount) : '';
+        document.getElementById('editPayer').value = item.payer || '';
+        document.getElementById('editModal').style.display = 'flex';
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').style.display = 'none';
+    }
+
+    function saveEditDiary() {
+        let index = document.getElementById('editIndex').value;
+        let cat = document.getElementById('editCategory').value;
+        let date = document.getElementById('editDate').value;
+        let desc = document.getElementById('editDesc').value;
+        let amount = document.getElementById('editAmount').value;
+        let payer = document.getElementById('editPayer').value.trim();
+
+        if(!desc.trim()) return;
+
+        db[currentUnit].diary[index].cat = cat;
+        db[currentUnit].diary[index].date = date;
+        db[currentUnit].diary[index].desc = desc;
+        db[currentUnit].diary[index].amount = amount !== '' ? Math.abs(parseFloat(amount)) : null;
+        db[currentUnit].diary[index].payer = payer || null;
+
+        saveDB();
+        closeEditModal();
+        renderDiary();
+        renderReport();
+    }
+
+    function renderDiary() {
+        if(!db[currentUnit]) return;
+        let container = document.getElementById('diaryContainer');
+        container.innerHTML = '';
+        let diaries = db[currentUnit].diary || [];
+        diaries.forEach((d, index) => {
+            let isExp = d.amount > 0;
+            let catTag = d.cat || '雜項';
+            let amountDisplay = isExp ? `$${d.amount}` : '';
+            let payerDisplay = (isExp && d.payer) ? `<div style="font-size:11px; color:var(--text-sub); text-align:right;">付款: ${d.payer}</div>` : '';
+            
+            let imgHTML = '';
+            let imgs = d.images || (d.image ? [d.image] : []);
+            if(imgs.length > 0) {
+                imgHTML = '<div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">';
+                imgs.forEach(src => {
+                    imgHTML += `<img src="${src}" onclick="enlargeImage('${src}')" style="width:60px; height:60px; object-fit:cover; border:1px solid #000; cursor:zoom-in;">`;
+                });
+                imgHTML += '</div>';
+            }
+
+            container.innerHTML += `
+                <div class="diary-item ${isExp ? 'expense' : ''}">
+                    <div class="diary-header">
+                        <span class="tag-cat">${catTag}</span>
+                        <span class="diary-date">${d.date}</span>
+                    </div>
+                    <div class="diary-body">
+                        <div class="diary-desc">${d.desc}</div>
+                        <div>
+                            <div class="diary-amount">${amountDisplay}</div>
+                            ${payerDisplay}
+                        </div>
+                    </div>
+                    ${imgHTML}
+                    <div class="diary-actions">
+                        <button class="btn-action" onclick="openEditModal(${index})">修改</button>
+                        <button class="btn-action" style="color:red; border-color:red;" onclick="deleteDiary(${index})">刪除</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    // --- 4. 圖紙 (新分頁) ---
+    function renderDrawings() {
+        if(!db[currentUnit]) return;
+        let container = document.getElementById('drawingsGallery');
+        container.innerHTML = '';
+        let photos = db[currentUnit].drawings || [];
+        
+        photos.forEach((p, index) => {
+            let isPdf = p.isPdf || (p.image && p.image.startsWith('data:application/pdf'));
+            let contentHTML = '';
+
+            if(isPdf) {
+                contentHTML = `
+                    <a href="${p.image}" download="${p.name || 'document.pdf'}" style="aspect-ratio: 1; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#f9fafb; border-bottom:1px solid #000; text-decoration:none; color:#000;">
+                        <span style="font-size:36px;">📄</span>
+                        <span style="font-size:10px; margin-top:8px; font-weight:700;">📥 點擊下載 PDF</span>
+                    </a>
+                `;
+            } else {
+                contentHTML = `<img src="${p.image}" onclick="enlargeImage('${p.image}')">`;
+            }
+
+            container.innerHTML += `
+                <div class="album-item">
+                    <button class="btn-del-photo" onclick="deleteDrawingsPhoto(${index})">✕</button>
+                    ${contentHTML}
+                    <div class="album-item-date">${p.date}</div>
+                    <textarea class="album-remark" placeholder="圖紙備註..." onchange="updateDrawingsRemark(${index}, this.value)">${p.remark || ''}</textarea>
+                </div>
+            `;
+        });
+    }
+
+    function updateDrawingsRemark(index, val) {
+        db[currentUnit].drawings[index].remark = val;
+        saveDB();
+    }
+
+    function deleteDrawingsPhoto(index) {
+        if(confirm('刪除此圖紙？')) {
+            db[currentUnit].drawings.splice(index, 1);
+            saveDB();
+            renderDrawings();
+        }
+    }
+
+    // --- 5. 現場相簿 ---
+    function renderAlbum() {
+        if(!db[currentUnit]) return;
+        let container = document.getElementById('albumGallery');
+        container.innerHTML = '';
+        let photos = db[currentUnit].album || [];
+        
+        photos.forEach((p, index) => {
+            container.innerHTML += `
+                <div class="album-item">
+                    <button class="btn-del-photo" onclick="deleteAlbumPhoto(${index})">✕</button>
+                    <img src="${p.image}" onclick="enlargeImage('${p.image}')">
+                    <div class="album-item-date">${p.date}</div>
+                    <textarea class="album-remark" placeholder="備註..." onchange="updateAlbumRemark(${index}, this.value)">${p.remark || ''}</textarea>
+                </div>
+            `;
+        });
+    }
+
+    function updateAlbumRemark(index, val) {
+        db[currentUnit].album[index].remark = val;
+        saveDB();
+    }
+
+    function deleteAlbumPhoto(index) {
+        if(confirm('刪除此相片？')) {
+            db[currentUnit].album.splice(index, 1);
+            saveDB();
+            renderAlbum();
+        }
+    }
+
+    // --- 6. 留言板 ---
+    function addMessage() {
+        let text = document.getElementById('msgInput').value.trim();
+        if(!text) return;
+        if(!db[currentUnit].messages) db[currentUnit].messages = [];
+        
+        let now = new Date();
+        let timeStr = `${now.getMonth()+1}/${now.getDate()} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+        
+        db[currentUnit].messages.unshift({ text: text, time: timeStr });
+        document.getElementById('msgInput').value = '';
+        saveDB();
+        renderReport();
+    }
+    
+    function deleteMessage(index) {
+        if(confirm('刪除此留言？')) {
+            db[currentUnit].messages.splice(index, 1);
+            saveDB();
+            renderReport();
+        }
+    }
+
+    // --- 7. 單位報告 ---
+    function renderReport() {
+        if(!db[currentUnit]) return;
+        let list = db[currentUnit].checklist || [];
+        let schedules = db[currentUnit].schedule || [];
+        let messages = db[currentUnit].messages || [];
+        
+        let listWithIndex = list.map((item, index) => ({...item, realIndex: index}));
+        let toBuyList = listWithIndex.filter(item => item.status === 1);
+        let toSendList = listWithIndex.filter(item => item.status === 2);
+        let onSiteList = listWithIndex.filter(item => item.status === 3);
+        let doneSchedList = schedules.filter(item => item.done === true);
+
+        document.getElementById('messageList').innerHTML = messages.length ? messages.map((m, idx) => `
+            <li class="message-item">
+                <span>${m.text}</span>
+                <span class="message-time">${m.time} <span style="color:red; cursor:pointer; margin-left:4px;" onclick="deleteMessage(${idx})">✕</span></span>
+            </li>
+        `).join('') : '<li style="font-size:11px; color:#9ca3af;">無留言</li>';
+
+        document.getElementById('reportListOnSite').innerHTML = onSiteList.length ? onSiteList.map(item => `
+            <li>
+                <div class="report-list-item-header">
+                    <span style="flex:1;"><b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name}</span>
+                    <button class="internal-section" onclick="updateStatus(${item.realIndex}, 1)" style="font-size:11px; padding:2px 6px; background:#fff; color:#c2410c; border:1px solid #c2410c; cursor:pointer; font-weight:700;">轉待買</button>
+                </div>
+            </li>
+        `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
+
+        document.getElementById('reportListDoneSched').innerHTML = doneSchedList.length ? doneSchedList.map(item => `
+            <li>
+                <div class="report-list-item-header">
+                    <span style="flex:1;">
+                        <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--text-sub);">${formatShortDate(item.date)} [${item.project}]</div>
+                        <div style="margin-top:2px;">${item.content || '無內容'}</div>
+                    </span> 
+                </div>
+            </li>
+        `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
+
+        document.getElementById('reportListToBuy').innerHTML = toBuyList.length ? toBuyList.map(item => `
+            <li>
+                <div class="report-list-item-header">
+                    <span><b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name}</span>
+                </div>
+            </li>
+        `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
+
+        document.getElementById('reportListToSend').innerHTML = toSendList.length ? toSendList.map(item => `
+            <li>
+                <div class="report-list-item-header">
+                    <span><b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name}</span>
+                </div>
+            </li>
+        `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
+
+        let totalExp = 0;
+        let dHTML = '';
+        let diaries = db[currentUnit].diary || [];
+        diaries.forEach((d) => {
+            if(d.amount > 0) totalExp += d.amount;
+            let amountDisplay = d.amount ? `$${d.amount}` : '';
+            let payerBadge = d.payer ? `<span style="font-size:10px; background:#000; color:#fff; padding:1px 3px; margin-right:4px;">付: ${d.payer}</span>` : '';
+            
+            dHTML += `
+                <li>
+                    <div class="report-list-item-header">
+                        <span style="flex:1;">
+                            <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--text-sub);">${d.date} [${d.cat || ''}]</div>
+                            <div style="margin-top:1px;">${d.desc}</div>
+                        </span> 
+                        <span style="text-align:right;">
+                            ${payerBadge}
+                            <span style="font-family:'Oswald',sans-serif; font-size:16px; font-weight:700; color:#000;">${amountDisplay}</span>
+                        </span>
+                    </div>
+                </li>`;
+        });
+        document.getElementById('reportDiary').innerHTML = dHTML || '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
+        document.getElementById('reportTotal').innerText = `TOTAL: $${totalExp.toFixed(1)}`;
+    }
+
+    function renderApp() {
+        renderChecklist();
+        renderSchedule();
+        renderDiary();
+        renderDrawings();
+        renderAlbum();
+        renderReport();
+    }
+
+    function switchTab(tabId, el) {
+        document.querySelectorAll('.content-section').forEach(sec => sec.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('tab-' + tabId).classList.add('active');
+        el.classList.add('active');
+        if(tabId === 'checklist') renderChecklist();
+        if(tabId === 'report') renderReport();
+        if(tabId === 'schedule') renderSchedule();
+        if(tabId === 'drawings') renderDrawings();
+        if(tabId === 'album') renderAlbum();
+    }
+</script>
 </body>
 </html>
