@@ -588,7 +588,6 @@
     let currentFilterCat = 'ALL'; 
     let isClientView = false;
 
-    // 【最強防護】保證資料同步時清洗所有爛陣列及防死機
     function ensureArray(data) {
         if (!data) return [];
         let arr = [];
@@ -597,11 +596,9 @@
         } else if (typeof data === 'object') {
             arr = Object.values(data);
         }
-        // 只保留真正嘅 Object，自動過濾以前意外存入嘅 null 或單獨文字
         return arr.filter(item => item !== null && typeof item === 'object');
     }
 
-    // 安全讀取分類名 (相容舊資料)
     function getSafeCatName(item) {
         if (item && typeof item.catName === 'string' && item.catName.trim() !== '') {
             return item.catName.replace(/^[A-Z]\.\s*/, '');
@@ -722,7 +719,7 @@
         } else if (type === 'diary') {
             let total = 0;
             diaries.forEach((d) => {
-                let amt = parseFloat(d.amount); // 確保是數字
+                let amt = parseFloat(d.amount); 
                 let amountStr = (!isNaN(amt) && amt > 0) ? ` $${amt}` : '';
                 let payerStr = d.payer ? ` (付: ${d.payer})` : '';
                 text += `${d.date} [${d.cat}] ${d.desc}${amountStr}${payerStr}\n`;
@@ -849,7 +846,6 @@
         });
     }
 
-    // 核心數據連線及同步 (加入 Try-Catch 防止舊數據導致死機)
     dbRef.on('value', (snapshot) => {
         try {
             let rawDb = snapshot.val() || {};
@@ -866,7 +862,6 @@
                 let uData = rawDb[unit];
                 if (typeof uData !== 'object' || uData === null) uData = {};
                 
-                // 強制清洗所有陣列，防範舊數據損壞
                 db[unit] = {
                     _init: uData._init || Date.now(),
                     checklist: ensureArray(uData.checklist),
@@ -895,7 +890,6 @@
             
         } catch (e) {
             console.error("資料解析錯誤: ", e);
-            alert("系統自動修復舊有數據格式中，請重新整理頁面。");
         }
     });
 
@@ -1447,7 +1441,10 @@
             <li>
                 <div class="report-list-item-header">
                     <span style="flex:1;"><b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name || '未命名'}</span>
-                    <button class="internal-section" onclick="updateStatus(${item.realIndex}, 2)" style="font-size:11px; padding:2px 6px; background:#000; color:#fff; border:1px solid #000; cursor:pointer; font-weight:700;">已買</button>
+                    <div style="display:flex; gap:4px;">
+                        <button class="internal-section" onclick="updateStatus(${item.realIndex}, 2)" style="font-size:11px; padding:2px 6px; background:#000; color:#fff; border:1px solid #000; cursor:pointer; font-weight:700;">已買</button>
+                        <button class="internal-section" onclick="updateStatus(${item.realIndex}, 3)" style="font-size:11px; padding:2px 6px; background:var(--color-onsite); color:#fff; border:1px solid var(--color-onsite); cursor:pointer; font-weight:700;">現場有</button>
+                    </div>
                 </div>
             </li>
         `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
@@ -1456,7 +1453,10 @@
             <li>
                 <div class="report-list-item-header">
                     <span style="flex:1;"><b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name || '未命名'}</span>
-                    <button class="internal-section" onclick="updateStatus(${item.realIndex}, 1)" style="font-size:11px; padding:2px 6px; background:#fff; color:#c2410c; border:1px solid #c2410c; cursor:pointer; font-weight:700;">轉待買</button>
+                    <div style="display:flex; gap:4px;">
+                        <button class="internal-section" onclick="updateStatus(${item.realIndex}, 1)" style="font-size:11px; padding:2px 6px; background:#fff; color:var(--color-tobuy); border:1px solid var(--color-tobuy); cursor:pointer; font-weight:700;">轉待買</button>
+                        <button class="internal-section" onclick="updateStatus(${item.realIndex}, 3)" style="font-size:11px; padding:2px 6px; background:var(--color-onsite); color:#fff; border:1px solid var(--color-onsite); cursor:pointer; font-weight:700;">現場有</button>
+                    </div>
                 </div>
             </li>
         `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
@@ -1465,7 +1465,7 @@
         let dHTML = '';
         let diaries = db[currentUnit].diary || [];
         diaries.forEach((d) => {
-            let amt = parseFloat(d.amount); // 修正 Firebase 讀取文字出錯
+            let amt = parseFloat(d.amount); 
             let amountDisplay = (!isNaN(amt) && amt > 0) ? `$${amt}` : '';
             let payerBadge = d.payer ? `<span style="font-size:10px; background:#000; color:#fff; padding:1px 3px; margin-right:4px;">付: ${d.payer}</span>` : '';
             if(!isNaN(amt) && amt > 0) totalExp += amt;
