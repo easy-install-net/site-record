@@ -221,8 +221,8 @@
         .report-h3 { font-family: 'Noto Serif HK', serif; font-size: 14px; font-weight: 900; margin: 0 0 6px 0; padding-bottom: 4px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; } 
         
         .report-list { list-style: none; padding: 0; margin: 0; }
-        .report-list li { padding: 6px 0; border-bottom: 1px solid #e5e7eb; font-size: 13px; display: flex; flex-direction: column; gap: 4px; } 
-        .report-list-item-header { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; gap: 6px; }
+        .report-list li { padding: 8px 0; border-bottom: 1px solid #e5e7eb; font-size: 13px; display: flex; flex-direction: column; gap: 6px; } 
+        .report-list-item-header { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 6px; }
         .total-expense { text-align: right; font-size: 18px; font-weight: 700; border-top: 2px solid #000; margin-top: 8px; padding-top: 6px; } 
         
         #syncStatus { font-size: 11px; text-align: center; color: var(--text-sub); margin-bottom: 6px; font-weight: 700; }
@@ -702,15 +702,24 @@
 
         if (type === 'tobuy') {
             let toBuy = list.filter(i => i.status === 1);
-            toBuy.forEach((i, idx) => text += `${idx+1}. ${i.name} ${i.desc ? '('+i.desc+')' : ''}\n`);
+            toBuy.forEach((i, idx) => {
+                let qtyStr = i.qty ? ` [數量: ${i.qty}]` : '';
+                text += `${idx+1}. ${i.name}${qtyStr}\n`;
+            });
             if(toBuy.length===0) text += "無資料\n";
         } else if (type === 'tosend') {
             let toSend = list.filter(i => i.status === 2);
-            toSend.forEach((i, idx) => text += `${idx+1}. ${i.name} ${i.desc ? '('+i.desc+')' : ''}\n`);
+            toSend.forEach((i, idx) => {
+                let qtyStr = i.qty ? ` [數量: ${i.qty}]` : '';
+                text += `${idx+1}. ${i.name}${qtyStr}\n`;
+            });
             if(toSend.length===0) text += "無資料\n";
         } else if (type === 'onsite') {
             let onSite = list.filter(i => i.status === 3);
-            onSite.forEach((i, idx) => text += `${idx+1}. ${i.name}\n`);
+            onSite.forEach((i, idx) => {
+                let qtyStr = i.qty ? ` [數量: ${i.qty}]` : '';
+                text += `${idx+1}. ${i.name}${qtyStr}\n`;
+            });
             if(onSite.length===0) text += "無資料\n";
         } else if (type === 'doneSched') {
             let doneSched = schedules.filter(i => i.done === true);
@@ -989,7 +998,7 @@
                 <div class="item-card">
                     <div class="item-info">
                         <div class="item-header-row">
-                            <span class="item-code" style="font-size:11px;">${item.code || ''}</span>
+                            <span class="item-code" style="font-size:10px;">${item.code || ''}</span>
                             <div class="item-title">${item.name || '未命名'}</div>
                         </div>
                         <div class="item-desc">${item.desc || ''}</div>
@@ -1010,6 +1019,11 @@
         saveDB();
         renderChecklist();
         renderReport();
+    }
+
+    function updateItemQty(index, qty) {
+        db[currentUnit].checklist[index].qty = qty;
+        saveDB();
     }
 
     function addCustomItem() {
@@ -1417,15 +1431,25 @@
             </li>
         `).join('') : '<li style="font-size:11px; color:#9ca3af;">無留言</li>';
 
+        // 現場已有物資
+        document.getElementById('countOnSite').innerText = onSiteList.length;
         document.getElementById('reportListOnSite').innerHTML = onSiteList.length ? onSiteList.map(item => `
             <li>
-                <div class="report-list-item-header">
-                    <span style="flex:1;"><b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name || '未命名'}</span>
-                    <button class="internal-section" onclick="updateStatus(${item.realIndex}, 1)" style="font-size:11px; padding:2px 6px; background:#fff; color:#c2410c; border:1px solid #c2410c; cursor:pointer; font-weight:700;">轉待買</button>
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom:4px;">
+                    <span style="flex:1; font-size:12px; font-weight:700; line-height:1.2;">
+                        <b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name || '未命名'}
+                    </span>
+                    <div style="display:flex; align-items:center; gap:4px;">
+                        <input type="number" placeholder="數量" value="${item.qty || ''}" onchange="updateItemQty(${item.realIndex}, this.value)" style="width:45px; height:24px; text-align:center; padding:2px; border:1px solid #000; font-size:12px; font-weight:700;">
+                    </div>
+                </div>
+                <div class="internal-section" style="display:flex; justify-content:flex-end; gap:4px;">
+                    <button class="btn-action" onclick="updateStatus(${item.realIndex}, 1)" style="background:#fff; color:#000; border:1px solid #000;">轉待買</button>
                 </div>
             </li>
         `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
 
+        // 已完成日程
         document.getElementById('reportListDoneSched').innerHTML = doneSchedList.length ? doneSchedList.map(item => `
             <li>
                 <div class="report-list-item-header">
@@ -1437,26 +1461,40 @@
             </li>
         `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
 
+        // 待買物資清單
+        document.getElementById('countToBuy').innerText = toBuyList.length;
         document.getElementById('reportListToBuy').innerHTML = toBuyList.length ? toBuyList.map(item => `
             <li>
-                <div class="report-list-item-header">
-                    <span style="flex:1;"><b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name || '未命名'}</span>
-                    <div style="display:flex; gap:4px;">
-                        <button class="internal-section" onclick="updateStatus(${item.realIndex}, 2)" style="font-size:11px; padding:2px 6px; background:#000; color:#fff; border:1px solid #000; cursor:pointer; font-weight:700;">已買</button>
-                        <button class="internal-section" onclick="updateStatus(${item.realIndex}, 3)" style="font-size:11px; padding:2px 6px; background:var(--color-onsite); color:#fff; border:1px solid var(--color-onsite); cursor:pointer; font-weight:700;">現場有</button>
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom:4px;">
+                    <span style="flex:1; font-size:12px; font-weight:700; line-height:1.2;">
+                        <b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name || '未命名'}
+                    </span>
+                    <div style="display:flex; align-items:center; gap:4px;">
+                        <input type="number" placeholder="數量" value="${item.qty || ''}" onchange="updateItemQty(${item.realIndex}, this.value)" style="width:45px; height:24px; text-align:center; padding:2px; border:1px solid #000; font-size:12px; font-weight:700;">
                     </div>
+                </div>
+                <div class="internal-section" style="display:flex; justify-content:flex-end; gap:4px;">
+                    <button class="btn-action" onclick="updateStatus(${item.realIndex}, 2)" style="background:#000; color:#fff; border:1px solid #000;">已買</button>
+                    <button class="btn-action" onclick="updateStatus(${item.realIndex}, 3)" style="background:#fff; color:#000; border:1px solid #000;">現場有</button>
                 </div>
             </li>
         `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
 
+        // 待送現場清單
+        document.getElementById('countToSend').innerText = toSendList.length;
         document.getElementById('reportListToSend').innerHTML = toSendList.length ? toSendList.map(item => `
             <li>
-                <div class="report-list-item-header">
-                    <span style="flex:1;"><b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name || '未命名'}</span>
-                    <div style="display:flex; gap:4px;">
-                        <button class="internal-section" onclick="updateStatus(${item.realIndex}, 1)" style="font-size:11px; padding:2px 6px; background:#fff; color:var(--color-tobuy); border:1px solid var(--color-tobuy); cursor:pointer; font-weight:700;">轉待買</button>
-                        <button class="internal-section" onclick="updateStatus(${item.realIndex}, 3)" style="font-size:11px; padding:2px 6px; background:var(--color-onsite); color:#fff; border:1px solid var(--color-onsite); cursor:pointer; font-weight:700;">現場有</button>
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom:4px;">
+                    <span style="flex:1; font-size:12px; font-weight:700; line-height:1.2;">
+                        <b style="font-family:'Oswald',sans-serif; margin-right:4px; color:var(--text-sub);">${item.code || ''}</b>${item.name || '未命名'}
+                    </span>
+                    <div style="display:flex; align-items:center; gap:4px;">
+                        <input type="number" placeholder="數量" value="${item.qty || ''}" onchange="updateItemQty(${item.realIndex}, this.value)" style="width:45px; height:24px; text-align:center; padding:2px; border:1px solid #000; font-size:12px; font-weight:700;">
                     </div>
+                </div>
+                <div class="internal-section" style="display:flex; justify-content:flex-end; gap:4px;">
+                    <button class="btn-action" onclick="updateStatus(${item.realIndex}, 1)" style="background:#fff; color:#000; border:1px solid #000;">轉待買</button>
+                    <button class="btn-action" onclick="updateStatus(${item.realIndex}, 3)" style="background:#fff; color:#000; border:1px solid #000;">現場有</button>
                 </div>
             </li>
         `).join('') : '<li style="color:var(--text-sub); text-align:center;">無資料</li>';
