@@ -1,121 +1,214 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-HK">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 專屬指揮中心</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>智慧記帳與物料管理</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f4f6f8; margin: 0; padding: 8px; color: #333; } /* 縮小外部 padding */
+    .card { background: #fff; border-radius: 10px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); max-width: 500px; margin: 0 auto; } /* 縮小卡片 padding */
+    h2 { margin-top: 0; margin-bottom: 10px; font-size: 1.15rem; text-align: center; color: #1a1a1a; }
     
-    <link rel="manifest" href="manifest.json">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    label { font-size: 0.8rem; font-weight: 600; color: #555; margin-bottom: 4px; display: block; } /* 縮小標籤與輸入框的距離 */
+    .form-group { margin-bottom: 10px; } /* 縮小各區塊間距 */
     
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h1 { font-size: 24px; color: #4A90E2; text-align: center; }
-        textarea { width: 100%; height: 120px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; margin-bottom: 15px; resize: none; }
-        .btn { display: block; width: 100%; padding: 15px; text-align: center; background-color: #4A90E2; color: white; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; margin-bottom: 12px; font-weight: bold; }
-        .btn:hover { background-color: #357ABD; }
-        .btn-green { background-color: #2ECC71; }
-        .btn-orange { background-color: #F39C12; }
-        .file-input-wrapper { margin-bottom: 15px; }
-        input[type="file"] { width: 100%; padding: 10px; border: 1px dashed #ccc; border-radius: 8px; box-sizing: border-box; background: #fafafa; }
-        .links { display: flex; gap: 10px; margin-top: 20px; }
-        .links a { flex: 1; text-align: center; padding: 12px 5px; background: #f0f0f0; color: #333; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: bold; }
-    </style>
+    input, select, textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #dcdfe6; font-size: 0.95rem; outline: none; background: #fff; } /* 縮小輸入框 padding */
+    input:focus, select:focus, textarea:focus { border-color: #007aff; }
+    
+    /* 3格日期樣式 */
+    .date-row { display: flex; gap: 6px; }
+    .date-row input { text-align: center; font-weight: bold; }
+    
+    /* 按鈕晶片樣式 */
+    .btn-group { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 4px; } /* 縮小按鈕間距 */
+    .chip { padding: 5px 10px; border-radius: 14px; font-size: 0.8rem; background: #f0f2f5; border: 1px solid #e1e4e8; cursor: pointer; user-select: none; transition: 0.2s; } /* 縮小按鈕 padding */
+    .chip.active { background: #007aff; color: #fff; border-color: #007aff; font-weight: 600; }
+    .chip.biz { border-color: #ffd591; background: #fff7e6; color: #d46b08; }
+    .chip.biz.active { background: #fa8c16; color: #fff; border-color: #fa8c16; font-weight: 600; }
+    
+    .preview-box { width: 100%; max-height: 120px; object-fit: contain; border-radius: 6px; margin-top: 6px; display: none; background: #eee; }
+    .submit-btn { width: 100%; padding: 12px; background: #007aff; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: 0.2s; margin-top: 6px; }
+    .submit-btn:disabled { background: #b0c4de; cursor: not-allowed; }
+    .status-msg { margin-top: 8px; text-align: center; font-size: 0.85rem; font-weight: bold; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🧠 AI 指揮中心 (相機版)</h1>
-        
-        <!-- 圖片上傳區 -->
-        <div class="file-input-wrapper">
-            <label style="font-size: 14px; color: #666; font-weight:bold; display:block; margin-bottom:5px;">📷 拍下收據或選擇圖片：</label>
-            <input type="file" id="imageInput" accept="image/*" capture="environment">
-        </div>
 
-        <textarea id="userInput" placeholder="寫下金額、項目，或你的待辦、點子..."></textarea>
+<div class="card">
+  <h2>📝 快速記帳與物料登記</h2>
 
-        <button class="btn btn-orange" id="uploadBtn" onclick="uploadImage()">☁️ 1. 上傳圖片並自動記帳</button>
-        <button class="btn" onclick="generatePrompt()">🪄 2. 文字打包成 AI 指令</button>
-        <a href="https://gemini.google.com/" target="_blank" class="btn btn-green" style="text-decoration: none; box-sizing: border-box;">🤖 3. 打開 AI 處理</a>
-
-        <div class="links">
-            <a href="https://docs.google.com/spreadsheets/d/1FIGvKLNDxsuD0ea-37icGfyINNkrXzGDziY7VbQ-Acc/edit" target="_blank">📊 理財記帳本</a>
-            <a href="https://docs.google.com/spreadsheets/d/1FU-_cU6SUcbt4Z28P3LnNDUC-pOaAyiLB9rtrNYQRlo/edit" target="_blank">💡 生意點子庫</a>
-        </div>
+  <!-- 消費日期 (3 格數字) -->
+  <div class="form-group">
+    <label>📅 消費日期 (年/月/日)</label>
+    <div class="date-row">
+      <input type="number" id="year" placeholder="年" style="flex: 1.2;">
+      <input type="number" id="month" placeholder="月" style="flex: 1;">
+      <input type="number" id="day" placeholder="日" style="flex: 1;">
     </div>
+  </div>
 
-    <script>
-        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxcLThDpbk1qebQqGoW51VB4O7SiDR3XIZ54-KJZN-eox3d_CxN2YsA8mPl-31sCBXA/exec";
+  <!-- 分類快捷鍵 -->
+  <div class="form-group">
+    <label>🏷️ 選擇分類</label>
+    <div style="font-size:0.75rem; color:#888; margin-bottom:2px;">工作與工程採購：</div>
+    <div class="btn-group">
+      <div class="chip biz active" onclick="selectCategory(this, '供應商訂購物料')">📦 供應商訂購物料</div>
+      <div class="chip biz" onclick="selectCategory(this, '工地/現場雜支')">🔧 工地/現場雜支</div>
+      <div class="chip biz" onclick="selectCategory(this, '業務/交際')">💼 業務/交際</div>
+    </div>
+    <div style="font-size:0.75rem; color:#888; margin:4px 0 2px 0;">生活日常消費：</div>
+    <div class="btn-group">
+      <div class="chip" onclick="selectCategory(this, '餐飲')">🍽️ 餐飲</div>
+      <div class="chip" onclick="selectCategory(this, '交通/油費')">🚗 交通/油費</div>
+      <div class="chip" onclick="selectCategory(this, '超市/日常')">🛒 超市/日常</div>
+      <div class="chip" onclick="selectCategory(this, '飲品/小食')">☕ 飲品/小食</div>
+      <div class="chip" onclick="selectCategory(this, '其他雜費')">💡 其他雜費</div>
+      <div class="chip" onclick="selectCategory(this, '其他')">➕ 其他</div>
+    </div>
+    <input type="hidden" id="selectedCategory" value="供應商訂購物料">
+  </div>
 
-        // 記憶功能
-        const inputField = document.getElementById('userInput');
-        window.onload = function() {
-            if(localStorage.getItem('myMindRecord')) {
-                inputField.value = localStorage.getItem('myMindRecord');
-            }
-        }
-        inputField.addEventListener('input', function() {
-            localStorage.setItem('myMindRecord', inputField.value);
-        });
+  <!-- 金額 -->
+  <div class="form-group">
+    <label>💰 金額 (留空則由 AI 辨識)</label>
+    <input type="number" step="any" id="amount" placeholder="例如: 380">
+  </div>
 
-        // 圖片上傳功能
-        function uploadImage() {
-            const fileInput = document.getElementById('imageInput');
-            const file = fileInput.files[0];
-            const note = document.getElementById('userInput').value || '未命名收據';
+  <!-- 消費地點 / 店家 / 供應商 -->
+  <div class="form-group">
+    <label>🏢 店家 / 供應商 (留空由 AI 辨識)</label>
+    <input type="text" id="merchant" placeholder="例如: 大角咀五金 / 大家樂">
+  </div>
 
-            if (!file) {
-                alert("請先選擇一張照片喔！");
-                return;
-            }
+  <!-- 付款方式快捷鍵 -->
+  <div class="form-group">
+    <label>💳 付款方式</label>
+    <div class="btn-group">
+      <div class="chip active" onclick="selectPayment(this, '公司帳戶')">公司帳戶</div>
+      <div class="chip" onclick="selectPayment(this, '現金')">現金</div>
+      <div class="chip" onclick="selectPayment(this, '八達通')">八達通</div>
+      <div class="chip" onclick="selectPayment(this, '信用卡')">信用卡</div>
+      <div class="chip" onclick="selectPayment(this, 'PayMe/FPS')">PayMe/FPS</div>
+    </div>
+    <input type="hidden" id="paymentMethod" value="公司帳戶">
+  </div>
 
-            const uploadBtn = document.getElementById('uploadBtn');
-            uploadBtn.innerText = "⏳ 上傳雲端中...請稍候";
-            uploadBtn.disabled = true;
+  <!-- 消費用途 / 物料備註 -->
+  <div class="form-group">
+    <label>📝 用途目的 / 物料細節</label>
+    <textarea id="notes" rows="2" placeholder="例如: 批盪灰 2 包、螺絲釘"></textarea>
+  </div>
 
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const base64String = e.target.result.split(',')[1];
-                const payload = { imageBase64: base64String, filename: file.name, note: note };
+  <!-- 拍照收據 (選填) -->
+  <div class="form-group">
+    <label>📷 單據拍照 / 上傳 (選填)</label>
+    <input type="file" id="receiptImg" accept="image/*" capture="environment">
+    <img id="preview" class="preview-box">
+  </div>
 
-                fetch(GAS_WEB_APP_URL, {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if(data.status === 'success') {
-                        alert('✅ 上傳成功！圖片已存入 Google Drive，並寫入記帳本。');
-                        fileInput.value = '';
-                        inputField.value = '';
-                        localStorage.removeItem('myMindRecord');
-                    } else {
-                        alert('❌ 上傳失敗：' + data.message);
-                    }
-                })
-                .catch(error => {
-                    alert('❌ 發生錯誤：' + error);
-                })
-                .finally(() => {
-                    uploadBtn.innerText = "☁️ 1. 上傳圖片並自動記帳";
-                    uploadBtn.disabled = false;
-                });
-            };
-            reader.readAsDataURL(file);
-        }
+  <button class="submit-btn" id="submitBtn" onclick="submitData()">💾 儲存並寫入試算表</button>
+  <div class="status-msg" id="statusMsg"></div>
+</div>
 
-        // 打包指令功能
-        function generatePrompt() {
-            const text = inputField.value;
-            if(!text) { alert('請先輸入一點內容喔！'); return; }
-            const prompt = `【請啟動我的專屬教練團】\n以下是我現在遇到的狀況：\n「${text}」\n\n請切換適合的角色幫我處理：\n1. 冷酷秘書\n2. 行動教練\n3. 記帳管家\n4. 生意智囊\n5. 流程架構師`;
-            navigator.clipboard.writeText(prompt).then(() => {
-                alert('✅ 指令已打包！請點擊下方綠色按鈕貼給 AI。');
-                inputField.value = ''; localStorage.removeItem('myMindRecord');
-            });
-        }
-    </script>
+<script>
+  const today = new Date();
+  document.getElementById('year').value = today.getFullYear();
+  document.getElementById('month').value = String(today.getMonth() + 1).padStart(2, '0');
+  document.getElementById('day').value = String(today.getDate()).padStart(2, '0');
+
+  function selectCategory(el, val) {
+    document.querySelectorAll('.chip').forEach(c => {
+      if (c.onclick && c.onclick.toString().includes('selectCategory')) c.classList.remove('active');
+    });
+    el.classList.add('active');
+    document.getElementById('selectedCategory').value = val;
+  }
+
+  function selectPayment(el, val) {
+    document.querySelectorAll('.chip').forEach(c => {
+      if (c.onclick && c.onclick.toString().includes('selectPayment')) c.classList.remove('active');
+    });
+    el.classList.add('active');
+    document.getElementById('paymentMethod').value = val;
+  }
+
+  let base64String = "";
+  document.getElementById('receiptImg').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        base64String = event.target.result.split(',')[1];
+        const preview = document.getElementById('preview');
+        preview.src = event.target.result;
+        preview.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // ⚠️ 請換回你 Google Apps Script 的真實 Web App 網址
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbz_vQ4fMhYnptqZ25fBfU9bWnCqC9_YOUR_GAS_ID/exec";
+
+  async function submitData() {
+    const y = document.getElementById('year').value.trim();
+    const m = String(document.getElementById('month').value.trim()).padStart(2, '0');
+    const d = String(document.getElementById('day').value.trim()).padStart(2, '0');
+    const fullDate = `${y}-${m}-${d}`;
+    const yy = y.slice(-2);
+    const shortDate = `${yy}${m}${d}`; 
+
+    const category = document.getElementById('selectedCategory').value;
+    const amount = document.getElementById('amount').value.trim();
+    const merchant = document.getElementById('merchant').value.trim();
+    const payment = document.getElementById('paymentMethod').value;
+    const notes = document.getElementById('notes').value.trim();
+
+    const imgFilename = `${shortDate}-${amount || "待定"}-${merchant || "未命名"}.jpg`;
+
+    const btn = document.getElementById('submitBtn');
+    const msg = document.getElementById('statusMsg');
+    btn.disabled = true;
+    btn.innerText = "⏳ 儲存與分析中...";
+    msg.style.color = "#007aff";
+    msg.innerText = "正在同步至試算表...";
+
+    const payload = {
+      date: fullDate,
+      category: category,
+      amount: amount,
+      merchant: merchant,
+      payment: payment,
+      notes: notes,
+      imageBase64: base64String,
+      filename: imgFilename
+    };
+
+    try {
+      const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (data.status === "success") {
+        msg.style.color = "#52c41a";
+        msg.innerText = `✅ 成功！(${data.item || merchant} - $${data.amount || amount})`;
+        document.getElementById('amount').value = "";
+        document.getElementById('merchant').value = "";
+        document.getElementById('notes').value = "";
+        document.getElementById('receiptImg').value = "";
+        document.getElementById('preview').style.display = "none";
+        base64String = "";
+      } else {
+        msg.style.color = "#ff4d4f";
+        msg.innerText = "❌ 發生錯誤: " + data.message;
+      }
+    } catch (err) {
+      msg.style.color = "#ff4d4f";
+      msg.innerText = "❌ 發送失敗，請確認網路。";
+    } finally {
+      btn.disabled = false;
+      btn.innerText = "💾 儲存並寫入試算表";
+    }
+  }
+</script>
 </body>
 </html>
