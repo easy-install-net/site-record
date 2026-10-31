@@ -2,287 +2,295 @@
 <html lang="zh-HK">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI 中心</title>
   <style>
-    /* 整體字體加大 + 方形黑粗框硬派風格 */
-    * { box-sizing: border-box; font-family: -apple-system, sans-serif; font-size: 17px; }
-    body { background-color: #fff; margin: 0; padding: 2px; padding-bottom: 60px; color: #000; }
-    
-    .header { background: #000; color: #fff; padding: 8px; text-align: center; font-weight: bold; margin-bottom: 4px; border: 2px solid #000; }
-    .card { background: #fff; padding: 4px; margin-bottom: 4px; border: 2px solid #000; }
-    
-    label { font-size: 15px; font-weight: bold; color: #000; margin-bottom: 2px; display: block; }
-    .form-group { margin-bottom: 6px; }
-    
-    input, select, textarea { 
-      width: 100%; 
-      padding: 12px 8px; 
-      border: 2px solid #000; 
-      border-radius: 0; 
-      outline: none; 
-      font-weight: bold;
-      background: #fff; 
-    }
-    input:focus, textarea:focus { background: #ffffd0; }
-    
-    .date-row { display: flex; gap: 4px; }
-    .date-row input { text-align: center; font-weight: bold; padding: 12px 4px; }
-    
-    .btn-group { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 2px; }
-    .chip { 
-      padding: 8px 10px; 
-      border-radius: 0; 
-      font-size: 15px; 
-      background: #fff; 
-      border: 2px solid #000; 
-      color: #000; 
-      cursor: pointer; 
-      font-weight: bold; 
-    }
-    .chip.active { background: #000; color: #fff; }
-    .chip.biz { background: #e0e0e0; }
-    .chip.biz.active { background: #000; color: #fff; }
-    
-    .preview-box { width: 100%; max-height: 120px; object-fit: contain; margin-top: 4px; display: none; border: 2px solid #000; }
-    
-    .submit-btn { width: 100%; padding: 14px; background: #000; color: #fff; border: 2px solid #000; border-radius: 0; font-weight: bold; font-size: 18px; cursor: pointer; }
-    .submit-btn:disabled { background: #666; border-color: #666; }
-    .status-msg { margin-top: 4px; text-align: center; font-size: 14px; font-weight: bold; }
-    
-    .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #fff; display: flex; border-top: 2px solid #000; z-index: 100; }
-    .nav-item { flex: 1; text-align: center; padding: 14px 0; font-size: 16px; color: #000; cursor: pointer; font-weight: bold; border-right: 2px solid #000; }
-    .nav-item:last-child { border-right: none; }
-    .nav-item.active { background: #000; color: #fff; }
-    
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }
+    body { background-color: #f4f6f9; color: #333; padding-bottom: 70px; }
+    .header { background: #000; color: #fff; padding: 15px; text-align: center; font-size: 18px; font-weight: bold; }
+    .container { padding: 15px; max-width: 600px; margin: auto; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    .ai-response { background: #fff; padding: 12px; font-size: 16px; min-height: 80px; border: 2px solid #000; margin-top: 6px; white-space: pre-wrap; font-weight: bold; }
+
+    /* 表單元件 */
+    .card { background: #fff; border-radius: 10px; padding: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); margin-bottom: 15px; }
+    .card-title { font-size: 15px; font-weight: bold; margin-bottom: 12px; color: #111; }
+    label { display: block; font-size: 13px; color: #666; margin-bottom: 5px; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 12px; }
+    textarea { resize: vertical; min-height: 90px; }
+
+    /* 按鈕樣式 */
+    .btn { width: 100%; padding: 12px; background: #000; color: #fff; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
+    .btn:active { background: #333; }
+    .btn-secondary { background: #e0e0e0; color: #333; margin-top: 8px; }
+
+    /* AI 引導標籤區域 */
+    .tag-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .tag { background: #eef2f7; color: #1976d2; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid #d0e1fd; transition: background 0.2s; }
+    .tag:active { background: #bbdefb; }
+
+    /* 回覆視窗 */
+    .reply-box { background: #fafafa; border: 1px dashed #ccc; border-radius: 6px; padding: 12px; font-size: 14px; white-space: pre-wrap; word-break: break-all; margin-top: 15px; min-height: 40px; }
+
+    /* 底部導覽列 */
+    .nav-bar { position: fixed; bottom: 0; left: 0; width: 100%; height: 55px; background: #fff; display: flex; border-top: 1px solid #ddd; }
+    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; color: #888; cursor: pointer; text-decoration: none; }
+    .nav-item.active { color: #000; font-weight: bold; }
+    .nav-item svg { width: 20px; height: 20px; margin-bottom: 2px; }
   </style>
 </head>
 <body>
 
-<div class="header" id="headerTitle">💰 記帳與物料</div>
+  <div class="header" id="pageTitle">🤖 AI 助理</div>
 
-<!-- 分頁 1: 記帳 -->
-<div id="tab-expense" class="tab-content active">
-  <div class="card">
-    <div class="form-group">
-      <label>📅 日期 (年/月/日)</label>
-      <div class="date-row">
-        <input type="number" id="year" placeholder="年" style="flex: 1.2;">
-        <input type="number" id="month" placeholder="月" style="flex: 1;">
-        <input type="number" id="day" placeholder="日" style="flex: 1;">
+  <div class="container">
+
+    <!-- 頁面 1：AI 助理 -->
+    <div id="tab-ai" class="tab-content active">
+      <div class="card">
+        <div class="card-title">💡 快捷提示／引導分類（點擊快速填入）：</div>
+        <div class="tag-container">
+          <span class="tag" onclick="setPrompt('公司點子：我想推廣新屋苑工程業務，有咩具體拓展點子？')">💡 推廣點子</span>
+          <span class="tag" onclick="setPrompt('公司點子：如何與室內設計師或五金舖建立長期合作分成？')">🤝 異業合作</span>
+          <span class="tag" onclick="setPrompt('客人投訴工程延誤一日，仲好生氣，應該點樣得體覆佢？')">💢 客訴應對</span>
+          <span class="tag" onclick="setPrompt('客人問點解報價比出面貴少少，如何解釋物料同手工價值？')">💰 報價回覆</span>
+          <span class="tag" onclick="setPrompt('請幫我將以下對話翻譯為英文：今日下午 3 點師傅會到現場檢查水喉。')">🌐 中英翻譯</span>
+        </div>
+
+        <label for="aiPrompt">輸入您的問題或構想：</label>
+        <textarea id="aiPrompt" placeholder="點選上方標籤或直接在此輸入文字..."></textarea>
+        <button class="btn" onclick="sendToAI()">✨ 送出給 AI</button>
+
+        <div class="reply-box" id="aiReply">💡 AI 回覆將會顯示於此...</div>
       </div>
     </div>
-    <div class="form-group">
-      <label>🏷️ 分類</label>
-      <div class="btn-group">
-        <div class="chip biz active" onclick="selectCategory(this, '供應商訂購物料')">📦 供應商</div>
-        <div class="chip biz" onclick="selectCategory(this, '工地/現場雜支')">🔧 工地</div>
-        <div class="chip biz" onclick="selectCategory(this, '業務/交際')">💼 業務</div>
-        <div class="chip" onclick="selectCategory(this, '餐飲')">🍽️ 餐飲</div>
-        <div class="chip" onclick="selectCategory(this, '交通/油費')">🚗 交通</div>
-        <div class="chip" onclick="selectCategory(this, '超市/日常')">🛒 超市</div>
-        <div class="chip" onclick="selectCategory(this, '其他')">➕ 其他</div>
+
+    <!-- 頁面 2：記帳功能 -->
+    <div id="tab-expense" class="tab-content">
+      <div class="card">
+        <div class="card-title">📝 新增消費記錄</div>
+        <label>日期</label>
+        <input type="date" id="expDate">
+
+        <label>分類</label>
+        <select id="expCategory">
+          <option value="材料採購">材料採購</option>
+          <option value="工具設備">工具設備</option>
+          <option value="餐飲伙食">餐飲伙食</option>
+          <option value="交通泊車">交通泊車</option>
+          <option value="雜項支出">雜項支出</option>
+        </select>
+
+        <label>商戶 / 項目</label>
+        <input type="text" id="expMerchant" placeholder="例如：五金材料行">
+
+        <label>金額 (HKD)</label>
+        <input type="number" id="expAmount" placeholder="0.00">
+
+        <label>支付方式</label>
+        <select id="expPayment">
+          <option value="現金">現金</option>
+          <option value="FPS 轉數快">FPS 轉數快</option>
+          <option value="信用卡">信用卡</option>
+          <option value="公司戶口">公司戶口</option>
+        </select>
+
+        <label>備註</label>
+        <input type="text" id="expNotes" placeholder="額外備註事項">
+
+        <label>上傳單據 (選填)</label>
+        <input type="file" id="expReceipt" accept="image/*">
+
+        <button class="btn" onclick="submitExpense()">儲存開支</button>
       </div>
-      <input type="hidden" id="selectedCategory" value="供應商訂購物料">
     </div>
-    <div class="date-row">
-      <div class="form-group" style="flex:1;">
-        <label>💰 金額 (留空AI猜)</label>
-        <input type="number" step="any" id="amount" placeholder="金額">
+
+    <!-- 頁面 3：日曆待辦 -->
+    <div id="tab-calendar" class="tab-content">
+      <div class="card">
+        <div class="card-title">📅 新增工程 / 預約行程</div>
+        <label>行程標題</label>
+        <input type="text" id="calTitle" placeholder="例如：太古城陳生安裝工程">
+
+        <label>日期與時間</label>
+        <input type="datetime-local" id="calTime">
+
+        <button class="btn" onclick="addCalendarEvent()">新增至 Google 日曆</button>
+        <button class="btn btn-secondary" onclick="loadCalendarEvents()">載入近期行程</button>
+
+        <div class="reply-box" id="calReply">🔹 近期行程將顯示於此...</div>
       </div>
-      <div class="form-group" style="flex:1.5;">
-        <label>🏢 店家/供應商</label>
-        <input type="text" id="merchant" placeholder="店家名稱">
-      </div>
     </div>
-    <div class="form-group">
-      <label>💳 方式</label>
-      <div class="btn-group">
-        <div class="chip active" onclick="selectPayment(this, '公司帳戶')">公司</div>
-        <div class="chip" onclick="selectPayment(this, '現金')">現金</div>
-        <div class="chip" onclick="selectPayment(this, '八達通')">八達通</div>
-        <div class="chip" onclick="selectPayment(this, '信用卡')">信用卡</div>
-        <div class="chip" onclick="selectPayment(this, 'PayMe/FPS')">PayMe</div>
-      </div>
-      <input type="hidden" id="paymentMethod" value="公司帳戶">
-    </div>
-    <div class="form-group">
-      <label>📝 用途/備註</label>
-      <textarea id="notes" rows="2" placeholder="例如: 批盪灰 2 包"></textarea>
-    </div>
-    <div class="form-group">
-      <label>📷 單據拍照</label>
-      <input type="file" id="receiptImg" accept="image/*" capture="environment">
-      <img id="preview" class="preview-box">
-    </div>
-    <button class="submit-btn" id="submitBtn" onclick="submitData()">💾 儲存並寫入</button>
-    <div class="status-msg" id="statusMsg"></div>
+
   </div>
-</div>
 
-<!-- 分頁 2: AI 助理 -->
-<div id="tab-ai" class="tab-content">
-  <div class="card">
-    <label>🤖 詢問 AI (分析、建議、翻譯)</label>
-    <textarea id="aiPrompt" rows="4" placeholder="請輸入問題..."></textarea>
-    <button class="submit-btn" onclick="askAI()" style="background:#000; margin-top:4px;">✨ 送出給 AI</button>
-    <label style="margin-top:10px;">💡 AI 回覆：</label>
-    <div class="ai-response" id="aiResult">等待輸入...</div>
+  <!-- 底部選單 -->
+  <div class="nav-bar">
+    <div class="nav-item active" onclick="switchTab('ai', '🤖 AI 助理')">
+      <div>🤖</div>
+      <div>AI 助理</div>
+    </div>
+    <div class="nav-item" onclick="switchTab('expense', '📝 支出記帳')">
+      <div>📝</div>
+      <div>記帳</div>
+    </div>
+    <div class="nav-item" onclick="switchTab('calendar', '📅 日曆待辦')">
+      <div>📅</div>
+      <div>行事曆</div>
+    </div>
   </div>
-</div>
 
-<!-- 分頁 3: 日曆 -->
-<div id="tab-calendar" class="tab-content">
-  <div class="card">
-    <label>➕ 新增 Google Calendar 行程</label>
-    <input type="text" id="taskTitle" placeholder="事項 (例: 下午開會)" style="margin-bottom:4px;">
-    <input type="datetime-local" id="taskTime" style="margin-bottom:4px;">
-    <button class="submit-btn" onclick="addCalendar()">📅 加入行事曆</button>
-    <div class="status-msg" id="calMsg"></div>
-  </div>
-  <div class="card">
-    <label>📋 近期行程</label>
-    <div class="ai-response" id="calendarList">點擊下方載入...</div>
-    <button class="submit-btn" onclick="loadCalendar()" style="background:#fff; color:#000; margin-top:4px;">🔄 載入行程</button>
-  </div>
-</div>
+  <script>
+    // 你的 Google Apps Script 部署網址
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbz35AiQLOXjozhorHcTWm4Yai7dM6CbEE-07PsBoCH2hpXnwNyFU66mWGUp0z79EVGh/exec";
 
-<!-- 底部導覽列 -->
-<div class="bottom-nav">
-  <div class="nav-item active" onclick="switchTab('expense', '💰 記帳與物料', this)">🧾 記帳</div>
-  <div class="nav-item" onclick="switchTab('ai', '🤖 AI 助理', this)">✨ AI 助理</div>
-  <div class="nav-item" onclick="switchTab('calendar', '📅 日曆待辦', this)">📆 日曆</div>
-</div>
+    // 初始化設定當前日期
+    document.getElementById('expDate').value = new Date().toISOString().split('T')[0];
 
-<script>
-  // ✅ 你的全新 GAS URL，我已經幫你填好，絕對不會有錯了！
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbz35AiQLOXjozhorHcTWm4Yai7dM6CbEE-07PsBoCH2hpXnwNyFU66mWGuP0z79EVGh/exec";
+    // 切換分頁
+    function switchTab(tabId, title) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
 
-  const today = new Date();
-  document.getElementById('year').value = today.getFullYear();
-  document.getElementById('month').value = String(today.getMonth() + 1).padStart(2, '0');
-  document.getElementById('day').value = String(today.getDate()).padStart(2, '0');
-
-  function switchTab(tabId, title, element) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('tab-' + tabId).classList.add('active');
-    element.classList.add('active');
-    document.getElementById('headerTitle').innerText = title;
-  }
-
-  function selectCategory(el, val) {
-    el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById('selectedCategory').value = val;
-  }
-  function selectPayment(el, val) {
-    el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById('paymentMethod').value = val;
-  }
-
-  let base64String = "";
-  document.getElementById('receiptImg').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = function(event) {
-        base64String = event.target.result.split(',')[1];
-        const preview = document.getElementById('preview');
-        preview.src = event.target.result;
-        preview.style.display = 'block';
-      };
-      reader.readAsDataURL(file);
+      document.getElementById('tab-' + tabId).classList.add('active');
+      document.getElementById('pageTitle').innerText = title;
+      event.currentTarget.classList.add('active');
     }
-  });
 
-  async function submitData() {
-    const y = document.getElementById('year').value.trim();
-    const m = String(document.getElementById('month').value.trim()).padStart(2, '0');
-    const d = String(document.getElementById('day').value.trim()).padStart(2, '0');
-    const fullDate = `${y}-${m}-${d}`;
-    const shortDate = `${y.slice(-2)}${m}${d}`; 
+    // 引導點子與範本快捷填入
+    function setPrompt(text) {
+      const promptInput = document.getElementById('aiPrompt');
+      promptInput.value = text;
+      promptInput.focus();
+    }
 
-    const payload = {
-      action: "expense",
-      date: fullDate,
-      category: document.getElementById('selectedCategory').value,
-      amount: document.getElementById('amount').value.trim(),
-      merchant: document.getElementById('merchant').value.trim(),
-      payment: document.getElementById('paymentMethod').value,
-      notes: document.getElementById('notes').value.trim(),
-      imageBase64: base64String,
-      filename: `${shortDate}-${document.getElementById('amount').value.trim() || "待定"}-${document.getElementById('merchant').value.trim() || "未命名"}.jpg`
-    };
+    // 發送 AI 提問
+    function sendToAI() {
+      const prompt = document.getElementById('aiPrompt').value.trim();
+      const replyBox = document.getElementById('aiReply');
 
-    const btn = document.getElementById('submitBtn');
-    const msg = document.getElementById('statusMsg');
-    btn.disabled = true; msg.style.color = "blue"; msg.innerText = "寫入中...";
-
-    try {
-      const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (data.status === "success") {
-        msg.style.color = "green"; msg.innerText = `✅ 成功！`;
-        document.getElementById('amount').value = ""; document.getElementById('merchant').value = "";
-        document.getElementById('notes').value = ""; document.getElementById('receiptImg').value = "";
-        document.getElementById('preview').style.display = "none"; base64String = "";
-      } else {
-        msg.style.color = "red"; msg.innerText = "❌ 錯誤: " + data.message;
+      if (!prompt) {
+        alert("請先輸入內容或點選上方範本！");
+        return;
       }
-    } catch (err) {
-      msg.style.color = "red"; msg.innerText = "❌ 網路錯誤";
-    } finally { btn.disabled = false; }
-  }
 
-  async function askAI() {
-    const prompt = document.getElementById('aiPrompt').value.trim();
-    const resBox = document.getElementById('aiResult');
-    if (!prompt) return resBox.innerText = "請輸入問題！";
-    
-    resBox.innerText = "⏳ AI 思考中...";
-    try {
-      const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "ai_ask", prompt: prompt }) });
-      const data = await res.json();
-      resBox.innerText = data.status === "success" ? data.reply : "❌ 錯誤: " + data.reply;
-    } catch(e) {
-      resBox.innerText = "❌ 網路連線錯誤";
-    }
-  }
+      replyBox.innerText = "⏳ 處理中，請稍候...";
 
-  async function addCalendar() {
-    const title = document.getElementById('taskTitle').value.trim();
-    const time = document.getElementById('taskTime').value;
-    const msg = document.getElementById('calMsg');
-    if (!title || !time) { msg.style.color = "red"; msg.innerText = "請輸入標題與時間！"; return; }
-    
-    msg.style.color = "blue"; msg.innerText = "⏳ 寫入中...";
-    try {
-      const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "add_calendar", title: title, time: time }) });
-      const data = await res.json();
-      msg.style.color = data.status === "success" ? "green" : "red";
-      msg.innerText = data.status === "success" ? "✅ 成功寫入日曆！" : "❌ 錯誤: " + data.message;
-      if(data.status === "success") { document.getElementById('taskTitle').value = ""; document.getElementById('taskTime').value = ""; }
-    } catch(e) {
-      msg.style.color = "red"; msg.innerText = "❌ 網路連線錯誤";
+      fetch(GAS_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "ai_ask", prompt: prompt })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "success") {
+          replyBox.innerText = data.reply;
+        } else {
+          replyBox.innerText = "❌ 錯誤: " + data.reply;
+        }
+      })
+      .catch(err => {
+        replyBox.innerText = "❌ 連線錯誤: " + err;
+      });
     }
-  }
 
-  async function loadCalendar() {
-    const list = document.getElementById('calendarList');
-    list.innerText = "⏳ 載入中...";
-    try {
-      const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "load_calendar" }) });
-      const data = await res.json();
-      list.innerText = data.status === "success" ? data.reply : "❌ 載入失敗: " + data.reply;
-    } catch(e) {
-      list.innerText = "❌ 網路連線錯誤";
+    // 提交記帳
+    function submitExpense() {
+      const date = document.getElementById('expDate').value;
+      const category = document.getElementById('expCategory').value;
+      const merchant = document.getElementById('expMerchant').value;
+      const amount = document.getElementById('expAmount').value;
+      const payment = document.getElementById('expPayment').value;
+      const notes = document.getElementById('expNotes').value;
+      const fileInput = document.getElementById('expReceipt');
+
+      if (!amount) {
+        alert("請輸入金額！");
+        return;
+      }
+
+      const postData = {
+        action: "expense",
+        date: date,
+        category: category,
+        merchant: merchant,
+        amount: amount,
+        payment: payment,
+        notes: notes
+      };
+
+      if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          postData.imageBase64 = e.target.result.split(',')[1];
+          postData.filename = file.name;
+          sendExpenseRequest(postData);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        sendExpenseRequest(postData);
+      }
     }
-  }
-</script>
+
+    function sendExpenseRequest(data) {
+      fetch(GAS_URL, {
+        method: "POST",
+        body: JSON.stringify(data)
+      })
+      .then(res => res.json())
+      .then(res => {
+        if (res.status === "success") {
+          alert("✅ 記帳成功！");
+          document.getElementById('expMerchant').value = '';
+          document.getElementById('expAmount').value = '';
+          document.getElementById('expNotes').value = '';
+          document.getElementById('expReceipt').value = '';
+        } else {
+          alert("❌ 失敗: " + res.message);
+        }
+      })
+      .catch(err => alert("❌ 連線異常: " + err));
+    }
+
+    // 日曆：新增行程
+    function addCalendarEvent() {
+      const title = document.getElementById('calTitle').value;
+      const time = document.getElementById('calTime').value;
+
+      if (!title || !time) {
+        alert("請填寫行程標題與時間！");
+        return;
+      }
+
+      fetch(GAS_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "add_calendar", title: title, time: time })
+      })
+      .then(res => res.json())
+      .then(data => {
+        alert(data.message);
+        document.getElementById('calTitle').value = '';
+      })
+      .catch(err => alert("❌ 新增失敗: " + err));
+    }
+
+    // 日曆：載入近期行程
+    function loadCalendarEvents() {
+      const replyBox = document.getElementById('calReply');
+      replyBox.innerText = "⏳ 載入行程中...";
+
+      fetch(GAS_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "load_calendar" })
+      })
+      .then(res => res.json())
+      .then(data => {
+        replyBox.innerText = data.reply;
+      })
+      .catch(err => {
+        replyBox.innerText = "❌ 讀取失敗: " + err;
+      });
+    }
+  </script>
 </body>
 </html>
