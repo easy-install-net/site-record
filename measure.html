@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>度尺寶 Pro - 終極穩定版</title>
+    <title>度尺寶 Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -37,7 +37,7 @@
 <body class="text-gray-100 font-sans antialiased h-screen flex flex-col overflow-hidden select-none">
     <div id="app" v-cloak class="h-full flex flex-col w-full">
         
-        <!-- 頂部導航 -->
+        <!-- 頂部導航列 -->
         <header class="bg-black text-white p-1 border-b border-gray-800 flex justify-between items-center z-10 shrink-0">
             <h1 class="text-sm font-bold truncate flex-1">
                 <span v-if="currentView === 'projects'">工程存檔目錄</span>
@@ -69,7 +69,7 @@
             </div>
         </header>
 
-        <!-- 第 1 級：工程目錄 -->
+        <!-- 第 1 級：工程存檔目錄 (首頁) -->
         <main v-show="currentView === 'projects'" class="flex-1 bg-gray-900 p-2 overflow-auto">
             <div v-if="projectList.length === 0" class="text-center text-gray-400 mt-12 text-sm font-bold">
                 目前沒有任何工程存檔，請點擊右上角「新建工程」。
@@ -86,7 +86,7 @@
             </div>
         </main>
 
-        <!-- 第 2 級：平面圖 -->
+        <!-- 第 2 級：平面圖打釘定位 -->
         <main v-show="currentView === 'plan'" class="flex-1 relative overflow-auto bg-gray-900 flex flex-col items-center justify-start">
             <div class="w-full bg-black border-b border-gray-700 p-1 flex gap-1 items-center shrink-0">
                 <span class="text-sm font-bold text-gray-400 whitespace-nowrap">單位:</span>
@@ -115,8 +115,8 @@
             </div>
         </main>
 
-        <!-- 第 3 級：相片標註畫板 (終極比例運算解法) -->
-        <main v-show="currentView === 'photo'" class="flex-1 relative bg-black overflow-hidden flex flex-col justify-center items-center">
+        <!-- 第 3 級：相片標註畫板 (物理夾鉗 + 圖層分家架構) -->
+        <main v-show="currentView === 'photo'" class="flex-1 relative bg-black overflow-hidden flex flex-col justify-center items-center" ref="workspace">
             
             <div v-if="activePin && activePin.photo" class="absolute top-2 z-20 flex gap-[2px] bg-black/80 backdrop-blur p-[2px] rounded border border-gray-700 shadow-lg">
                 <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-white text-black' : 'bg-black text-white'" class="px-4 py-1 text-sm font-bold rounded">拉線</button>
@@ -131,31 +131,33 @@
                 </label>
             </div>
 
-            <!-- 外框容器：純 CSS 鎖死相片比例，隨手機縮放 -->
-            <div v-else-if="activePin && activePin.photo" 
-                 class="relative w-full max-h-full flex items-center justify-center" 
-                 ref="svgContainer"
-                 :style="{ aspectRatio: `${activePin.photoW} / ${activePin.photoH}` }">
+            <!-- 物理夾鉗實體容器：寫死 px 尺寸，徹底隔絕 iOS 撐爆與變形 -->
+            <div v-else-if="activePin && activePin.photo"
+                 ref="clampBox"
+                 class="relative select-none touch-none"
+                 :style="{ width: boxW + 'px', height: boxH + 'px' }"
+                 @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd"
+                 @mousedown="handleTouchStart" @mousemove="handleTouchMove" @mouseup="handleTouchEnd" @mouseleave="handleTouchEnd">
                 
-                <svg :viewBox="`0 0 ${activePin.photoW} ${activePin.photoH}`"
-                     class="absolute w-full h-full touch-none select-none"
-                     @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd"
-                     @mousedown="handleTouchStart" @mousemove="handleTouchMove" @mouseup="handleTouchEnd" @mouseleave="handleTouchEnd">
-                    
-                    <image :href="activePin.photo" x="0" y="0" :width="activePin.photoW" :height="activePin.photoH" />
+                <!-- 底層：原生 HTML <img> (iOS 絕對穩定渲染，不走 SVG) -->
+                <img :src="activePin.photo" 
+                     class="absolute inset-0 w-full h-full object-fill pointer-events-none block"
+                     @load="calculateClamp">
 
-                    <!-- 已儲存的線 -->
+                <!-- 頂層：全透明純向量 SVG (只畫線和放印章，零相片負擔) -->
+                <svg class="absolute inset-0 w-full h-full pointer-events-none"
+                     :viewBox="`0 0 ${activePin.photoW || 1200} ${activePin.photoH || 900}`">
+                    
                     <path v-for="path in (activePin.paths || [])" :key="path.id" :d="path.d" stroke="#ff0044" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                     <line v-for="line in (activePin.lines || [])" :key="line.id" :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2" stroke="#ff0044" stroke-width="5" stroke-linecap="round" />
 
-                    <!-- 正在畫的線 -->
                     <path v-if="currentPath" :d="currentPath" stroke="#ff0044" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                     <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" stroke="#ff0044" stroke-width="5" stroke-dasharray="8" />
 
-                    <!-- 印章 -->
+                    <!-- 印章與標記 (SVG 向量渲染，特大粗體) -->
                     <g v-for="marker in activePin.markers" :key="marker.id"
                        :transform="`translate(${marker.x}, ${marker.y})`"
-                       class="cursor-move"
+                       class="pointer-events-auto cursor-move"
                        @touchstart.stop.prevent="e => startDrag(marker, e)"
                        @mousedown.stop.prevent="e => startDrag(marker, e)">
                         
@@ -173,7 +175,7 @@
             </div>
         </main>
 
-        <!-- 底部抽屜 (新增 7 種實戰印章) -->
+        <!-- 底部極簡抽屜 (12 款地盤專用印章) -->
         <transition name="slide-up">
             <div v-if="showBottomSheet && activeMarker" class="fixed inset-x-0 bottom-0 bg-white text-black border-t-2 border-black z-50 flex flex-col shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
                 <div class="p-[2px] border-b border-gray-300 flex justify-between items-center bg-gray-100 shrink-0">
@@ -189,6 +191,7 @@
                 </div>
                 
                 <div class="p-[2px] overflow-y-auto bg-white max-h-[40vh]">
+                    <!-- 印章分類面板 -->
                     <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-1 p-1">
                         <div class="flex items-center gap-1 flex-wrap">
                             <span class="text-[11px] font-bold text-red-700 bg-red-100 px-1 border border-red-300 rounded">瑕疵</span>
@@ -203,7 +206,7 @@
                             <button v-for="stamp in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-blue-600 text-blue-800 font-bold text-[13px] px-2 py-1">{{ stamp }}</button>
                         </div>
                     </div>
-                    <!-- 其他選項卡同上... -->
+
                     <div v-else-if="['window', 'door', 'beam', 'column'].includes(activeMarker.type)" class="p-[2px]">
                         <div class="grid grid-cols-3 gap-[2px]">
                             <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
@@ -213,6 +216,7 @@
                         </div>
                         <button @click="showBottomSheet = false; saveCurrentProject()" class="w-full mt-1 bg-black text-white font-bold py-1 text-base">確定</button>
                     </div>
+
                     <div v-else class="flex flex-col gap-[2px] p-[2px]">
                         <div class="flex gap-[2px] overflow-x-auto no-scrollbar">
                             <span class="text-[12px] font-bold bg-gray-200 px-1 shrink-0 flex items-center">基礎</span>
@@ -229,6 +233,7 @@
             </div>
         </transition>
 
+        <!-- 匯出中指示遮罩 -->
         <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center text-white font-bold">
             <div class="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-3"></div>
             <p class="text-base">{{ processingText }}</p>
@@ -236,7 +241,7 @@
     </div>
 
     <script>
-        const { createApp, ref, reactive, onMounted } = Vue;
+        const { createApp, ref, reactive, onMounted, nextTick } = Vue;
         localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
         createApp({
@@ -255,7 +260,32 @@
                 const isProcessing = ref(false);
                 const processingText = ref('');
 
-                const svgContainer = ref(null);
+                // 物理夾鉗變數
+                const workspace = ref(null);
+                const clampBox = ref(null);
+                const boxW = ref(300);
+                const boxH = ref(400);
+
+                const calculateClamp = () => {
+                    if (!workspace.value || !activePin.value || !activePin.value.photo) return;
+                    const ws = workspace.value.getBoundingClientRect();
+                    const availW = Math.max(100, ws.width - 12);
+                    const availH = Math.max(100, ws.height - 12);
+                    const pw = activePin.value.photoW || 1200;
+                    const ph = activePin.value.photoH || 900;
+                    const wsRatio = availW / availH;
+                    const photoRatio = pw / ph;
+
+                    if (photoRatio > wsRatio) {
+                        boxW.value = Math.floor(availW);
+                        boxH.value = Math.floor(availW / photoRatio);
+                    } else {
+                        boxH.value = Math.floor(availH);
+                        boxW.value = Math.floor(availH * photoRatio);
+                    }
+                };
+
+                // 繪圖與拖曳邏輯
                 const isDrawing = ref(false);
                 const startPos = ref({ x: 0, y: 0 });
                 const currentLine = ref(null);
@@ -265,21 +295,21 @@
                 const draggedMarker = ref(null);
                 const dragOrigin = ref({ x: 0, y: 0 });
 
-                // 核心解法：極簡小學數學 (純比例轉換，無錯位)
+                // 1:1 絕對坐標計算 (純比例換算，零黑邊誤差)
                 const getCoords = (e) => {
-                    const rect = svgContainer.value.getBoundingClientRect();
-                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                    
-                    // 點擊座標佔螢幕實體的百分比
-                    const percentX = (clientX - rect.left) / rect.width;
-                    const percentY = (clientY - rect.top) / rect.height;
-                    
-                    // 換算成 1200px 宇宙內的實體坐標
-                    return {
-                        x: Math.round(percentX * activePin.value.photoW),
-                        y: Math.round(percentY * activePin.value.photoH)
-                    };
+                    if (!clampBox.value) return { x: 0, y: 0 };
+                    const rect = clampBox.value.getBoundingClientRect();
+                    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+                    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+                    const pw = activePin.value.photoW || 1200;
+                    const ph = activePin.value.photoH || 900;
+
+                    let nx = (cx - rect.left) / rect.width;
+                    let ny = (cy - rect.top) / rect.height;
+                    nx = Math.max(0, Math.min(1, nx));
+                    ny = Math.max(0, Math.min(1, ny));
+
+                    return { x: Math.round(nx * pw), y: Math.round(ny * ph) };
                 };
 
                 const startDrag = (marker, e) => {
@@ -304,7 +334,8 @@
                     if (draggedMarker.value) {
                         e.preventDefault();
                         const p = getCoords(e);
-                        draggedMarker.value.x = p.x; draggedMarker.value.y = p.y;
+                        draggedMarker.value.x = p.x;
+                        draggedMarker.value.y = p.y;
                     } else if (isDrawing.value) {
                         e.preventDefault();
                         const p = getCoords(e);
@@ -321,8 +352,10 @@
                     if (draggedMarker.value) {
                         const p = getCoords(e.changedTouches ? e.changedTouches[0] : e);
                         const dist = Math.hypot(p.x - dragOrigin.value.x, p.y - dragOrigin.value.y);
-                        if (dist < 10) openBottomSheet(draggedMarker.value);
-                        draggedMarker.value = null; saveCurrentProject(); return;
+                        if (dist < 12) openBottomSheet(draggedMarker.value);
+                        draggedMarker.value = null;
+                        saveCurrentProject();
+                        return;
                     }
 
                     if (!isDrawing.value) return;
@@ -330,20 +363,25 @@
                     const endPos = getCoords(e.changedTouches ? e.changedTouches[0] : e);
                     const drawDist = Math.hypot(endPos.x - startPos.value.x, endPos.y - startPos.value.y);
 
-                    if (drawDist < 10) {
+                    if (drawDist < 12) {
                         currentLine.value = null; currentPath.value = null;
                         const newMarker = { id: Date.now(), x: endPos.x, y: endPos.y, w: 140, h: 56, type: 'general', data: { val: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '' } };
-                        updateMarkerSize(newMarker); activePin.value.markers.push(newMarker); openBottomSheet(newMarker);
+                        updateMarkerSize(newMarker);
+                        activePin.value.markers.push(newMarker);
+                        openBottomSheet(newMarker);
                     } else {
                         if (drawMode.value === 'line' && currentLine.value) {
                             activePin.value.lines.push({ ...currentLine.value, id: Date.now() });
                             const midX = Math.round((currentLine.value.x1 + currentLine.value.x2) / 2);
                             const midY = Math.round((currentLine.value.y1 + currentLine.value.y2) / 2);
                             const newMarker = { id: Date.now() + 1, x: midX, y: midY, w: 140, h: 56, type: 'general', data: { val: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '' } };
-                            updateMarkerSize(newMarker); activePin.value.markers.push(newMarker); openBottomSheet(newMarker);
+                            updateMarkerSize(newMarker);
+                            activePin.value.markers.push(newMarker);
+                            openBottomSheet(newMarker);
                             currentLine.value = null;
                         } else if (drawMode.value === 'freehand' && currentPath.value) {
-                            activePin.value.paths.push({ id: Date.now(), d: currentPath.value }); currentPath.value = null;
+                            activePin.value.paths.push({ id: Date.now(), d: currentPath.value });
+                            currentPath.value = null;
                         }
                     }
                     saveCurrentProject();
@@ -356,7 +394,7 @@
                             const img = new Image(); img.src = e.target.result;
                             img.onload = () => {
                                 const canvas = document.createElement('canvas');
-                                const MAX = 1200; // 絕對鎖死最大寬度
+                                const MAX = 1200;
                                 let w = img.width, h = img.height;
                                 if (w > MAX || h > MAX) {
                                     if (w > h) { h = Math.round((h * MAX) / w); w = MAX; }
@@ -373,10 +411,15 @@
                 const handleImageUpload = async (e, type) => {
                     const file = e.target.files[0]; if (!file) return;
                     const res = await compressImage(file);
-                    if (type === 'plan') { planImage.value = res.b64; } 
-                    else if (type === 'photo' && activePin.value) {
-                        activePin.value.photo = res.b64; activePin.value.photoW = res.w; activePin.value.photoH = res.h;
-                        if (!activePin.value.lines) activePin.value.lines = []; if (!activePin.value.paths) activePin.value.paths = [];
+                    if (type === 'plan') {
+                        planImage.value = res.b64;
+                    } else if (type === 'photo' && activePin.value) {
+                        activePin.value.photo = res.b64;
+                        activePin.value.photoW = res.w;
+                        activePin.value.photoH = res.h;
+                        if (!activePin.value.lines) activePin.value.lines = [];
+                        if (!activePin.value.paths) activePin.value.paths = [];
+                        nextTick(() => calculateClamp());
                     }
                     saveCurrentProject();
                 };
@@ -384,26 +427,63 @@
                 const addPinOnPlan = (e) => {
                     if (!planImage.value) return;
                     const rect = e.currentTarget.getBoundingClientRect();
-                    const x = ((e.clientX - rect.left) / rect.width) * 100; const y = ((e.clientY - rect.top) / rect.height) * 100;
+                    const x = ((e.clientX - rect.left) / rect.width) * 100;
+                    const y = ((e.clientY - rect.top) / rect.height) * 100;
                     const newPin = { id: Date.now(), name: `位置 ${pins.value.length + 1}`, x, y, photo: null, photoW: 1200, photoH: 900, markers: [], lines: [], paths: [] };
-                    pins.value.push(newPin); saveCurrentProject(); openPin(newPin);
+                    pins.value.push(newPin);
+                    saveCurrentProject();
+                    openPin(newPin);
                 };
 
-                const openPin = (pin) => { activePin.value = pin; currentView.value = 'photo'; deleteConfirm.value = false; };
+                const openPin = (pin) => {
+                    activePin.value = pin;
+                    currentView.value = 'photo';
+                    deleteConfirm.value = false;
+                    nextTick(() => calculateClamp());
+                };
+
                 const handleDeletePin = () => {
-                    if (deleteConfirm.value) { pins.value = pins.value.filter(p => p.id !== activePin.value.id); currentView.value = 'plan'; activePin.value = null; deleteConfirm.value = false; saveCurrentProject(); } 
-                    else { deleteConfirm.value = true; setTimeout(() => { deleteConfirm.value = false; }, 3000); }
+                    if (deleteConfirm.value) {
+                        pins.value = pins.value.filter(p => p.id !== activePin.value.id);
+                        currentView.value = 'plan';
+                        activePin.value = null;
+                        deleteConfirm.value = false;
+                        saveCurrentProject();
+                    } else {
+                        deleteConfirm.value = true;
+                        setTimeout(() => { deleteConfirm.value = false; }, 3000);
+                    }
                 };
 
-                const undoPath = () => { if (activePin.value.paths && activePin.value.paths.length > 0) { activePin.value.paths.pop(); saveCurrentProject(); } };
+                const undoPath = () => {
+                    if (activePin.value.paths && activePin.value.paths.length > 0) {
+                        activePin.value.paths.pop();
+                        saveCurrentProject();
+                    }
+                };
+
                 const openBottomSheet = (marker) => { activeMarker.value = marker; showBottomSheet.value = true; };
-                const deleteMarker = () => { activePin.value.markers = activePin.value.markers.filter(m => m.id !== activeMarker.value.id); showBottomSheet.value = false; saveCurrentProject(); };
-                const applyStamp = (txt) => { if (activeMarker.value) { activeMarker.value.data.val = txt; updateMarkerSize(activeMarker.value); showBottomSheet.value = false; saveCurrentProject(); } };
+                const deleteMarker = () => {
+                    activePin.value.markers = activePin.value.markers.filter(m => m.id !== activeMarker.value.id);
+                    showBottomSheet.value = false;
+                    saveCurrentProject();
+                };
+
+                const applyStamp = (txt) => {
+                    if (activeMarker.value) {
+                        activeMarker.value.data.val = txt;
+                        updateMarkerSize(activeMarker.value);
+                        showBottomSheet.value = false;
+                        saveCurrentProject();
+                    }
+                };
 
                 const updateMarkerSize = (marker) => {
-                    const lines = getMarkerLines(marker); let maxLen = 0;
+                    const lines = getMarkerLines(marker);
+                    let maxLen = 0;
                     lines.forEach(l => { if (l.length > maxLen) maxLen = l.length; });
-                    marker.w = Math.max(120, maxLen * 30 + 36); marker.h = Math.max(54, lines.length * 36 + 18);
+                    marker.w = Math.max(120, maxLen * 30 + 36);
+                    marker.h = Math.max(54, lines.length * 36 + 18);
                 };
 
                 const getStampStyle = (marker) => {
@@ -425,7 +505,8 @@
                         return lines;
                     }
                     if (marker.type === 'stamp') return [marker.data.val || '未定'];
-                    const label = marker.data.name ? `${marker.data.name}: ` : ''; return [`${label}${marker.data.val || '?'}mm`];
+                    const label = marker.data.name ? `${marker.data.name}: ` : '';
+                    return [`${label}${marker.data.val || '?'}mm`];
                 };
 
                 const getTagName = (t) => ({ 'window': '窗', 'door': '門洞', 'beam': '樑', 'column': '柱' })[t] || '';
@@ -437,51 +518,110 @@
                 })[t] || [];
                 const getFieldLabel = (t, k) => { const f = getTagFields(t).find(i => i.key === k); return f ? f.label : k; };
 
-                // 本地資料庫
+                // 多工程管理 (IndexedDB)
                 const loadProjectList = async () => {
-                    const keys = await localforage.keys(); const list = [];
-                    for (let k of keys) { if (k.startsWith('proj_')) { const d = await localforage.getItem(k); if (d) list.push({ id: d.id, name: d.name, date: d.date, pinCount: d.pins ? d.pins.length : 0 }); } }
+                    const keys = await localforage.keys();
+                    const list = [];
+                    for (let k of keys) {
+                        if (k.startsWith('proj_')) {
+                            const d = await localforage.getItem(k);
+                            if (d) list.push({ id: d.id, name: d.name, date: d.date, pinCount: d.pins ? d.pins.length : 0 });
+                        }
+                    }
                     projectList.value = list.sort((a, b) => b.id - a.id);
                 };
+
                 const createNewProject = () => {
-                    const id = Date.now(); project.id = id; project.name = ''; project.date = new Date().toISOString().split('T')[0];
-                    planImage.value = null; pins.value = []; currentView.value = 'plan'; saveCurrentProject();
+                    const id = Date.now();
+                    project.id = id;
+                    project.name = '';
+                    project.date = new Date().toISOString().split('T')[0];
+                    planImage.value = null;
+                    pins.value = [];
+                    currentView.value = 'plan';
+                    saveCurrentProject();
                 };
+
                 const loadProject = async (id) => {
                     const d = await localforage.getItem('proj_' + id);
-                    if (d) { project.id = d.id; project.name = d.name; project.date = d.date; planImage.value = d.planImage; pins.value = d.pins || []; currentView.value = 'plan'; }
+                    if (d) {
+                        project.id = d.id;
+                        project.name = d.name;
+                        project.date = d.date;
+                        planImage.value = d.planImage;
+                        pins.value = d.pins || [];
+                        currentView.value = 'plan';
+                    }
                 };
+
                 const saveCurrentProject = async () => {
                     if (!project.id) return;
                     const d = { id: project.id, name: project.name, date: project.date, planImage: planImage.value, pins: JSON.parse(JSON.stringify(pins.value)) };
                     await localforage.setItem('proj_' + project.id, d);
                 };
-                const deleteProject = async (id) => { if (confirm("確定刪除此工程？")) { await localforage.removeItem('proj_' + id); loadProjectList(); } };
-                const backToProjects = () => { saveCurrentProject(); loadProjectList(); currentView.value = 'projects'; };
-                onMounted(() => { loadProjectList(); });
 
-                // 轉印與匯出
+                const deleteProject = async (id) => {
+                    if (confirm("確定刪除此工程？")) {
+                        await localforage.removeItem('proj_' + id);
+                        loadProjectList();
+                    }
+                };
+
+                const backToProjects = () => {
+                    saveCurrentProject();
+                    loadProjectList();
+                    currentView.value = 'projects';
+                };
+
+                onMounted(() => {
+                    loadProjectList();
+                    window.addEventListener('resize', calculateClamp);
+                });
+
+                // 單張相片合成器 (1200px 高清轉印)
                 const renderPinCanvas = (pin) => {
                     return new Promise((resolve) => {
-                        const img = new Image(); img.src = pin.photo;
+                        const img = new Image();
+                        img.src = pin.photo;
                         img.onload = () => {
-                            const canvas = document.createElement('canvas'); const w = pin.photoW; const h = pin.photoH;
-                            canvas.width = w; canvas.height = h; const ctx = canvas.getContext('2d');
+                            const canvas = document.createElement('canvas');
+                            const w = pin.photoW || 1200;
+                            const h = pin.photoH || 900;
+                            canvas.width = w; canvas.height = h;
+                            const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0, w, h);
-                            ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0, 0, w, 70);
-                            ctx.fillStyle = '#fff'; ctx.font = 'bold 30px sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+
+                            ctx.fillStyle = 'rgba(0,0,0,0.85)';
+                            ctx.fillRect(0, 0, w, 70);
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 30px sans-serif';
+                            ctx.textBaseline = 'middle';
+                            ctx.textAlign = 'left';
                             ctx.fillText(`📍 ${project.name || '未命名'} | ${pin.name} | ${project.date}`, 20, 35);
 
                             ctx.strokeStyle = '#ff0044'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-                            if (pin.lines) pin.lines.forEach(l => { ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); });
-                            if (pin.paths) pin.paths.forEach(p => { const path = new Path2D(p.d); ctx.stroke(path); });
+                            if (pin.lines) {
+                                pin.lines.forEach(l => {
+                                    ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
+                                });
+                            }
+                            if (pin.paths) {
+                                pin.paths.forEach(p => {
+                                    const path = new Path2D(p.d);
+                                    ctx.stroke(path);
+                                });
+                            }
 
                             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                             if (pin.markers) {
                                 pin.markers.forEach(m => {
-                                    const style = getStampStyle(m); ctx.fillStyle = style.bg; ctx.strokeStyle = style.stroke; ctx.lineWidth = 4;
-                                    ctx.fillRect(m.x - m.w / 2, m.y - m.h / 2, m.w, m.h); ctx.strokeRect(m.x - m.w / 2, m.y - m.h / 2, m.w, m.h);
-                                    const lines = getMarkerLines(m); ctx.font = 'bold 28px sans-serif';
+                                    const style = getStampStyle(m);
+                                    ctx.fillStyle = style.bg; ctx.strokeStyle = style.stroke; ctx.lineWidth = 4;
+                                    ctx.fillRect(m.x - m.w / 2, m.y - m.h / 2, m.w, m.h);
+                                    ctx.strokeRect(m.x - m.w / 2, m.y - m.h / 2, m.w, m.h);
+
+                                    const lines = getMarkerLines(m);
+                                    ctx.font = 'bold 28px sans-serif';
                                     lines.forEach((line, i) => {
                                         const textY = m.y - (m.h / 2) + 26 + (i * 34);
                                         ctx.lineWidth = 6; ctx.strokeStyle = '#000'; ctx.strokeText(line, m.x, textY);
@@ -498,55 +638,130 @@
                     if (!activePin.value || !activePin.value.photo) return;
                     isProcessing.value = true; processingText.value = '正在產出單張相片...';
                     const dataUrl = await renderPinCanvas(activePin.value);
-                    const link = document.createElement('a'); link.download = `${project.name || '工程'}_${activePin.value.name}.jpg`;
-                    link.href = dataUrl; link.click(); isProcessing.value = false;
+                    const link = document.createElement('a');
+                    link.download = `${project.name || '工程'}_${activePin.value.name}.jpg`;
+                    link.href = dataUrl; link.click();
+                    isProcessing.value = false;
                 };
 
+                // A4 四格 PDF 報告生成器 (Canvas 原生轉印，繁體中文零亂碼)
                 const exportPdfReport = async () => {
-                    isProcessing.value = true; processingText.value = '正在排版 A4 PDF 報告...';
+                    isProcessing.value = true;
+                    processingText.value = '正在排版 A4 四格 PDF 報告...';
                     setTimeout(async () => {
                         try {
-                            const { jsPDF } = window.jspdf; const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-                            const PAGE_W = 1240, PAGE_H = 1754;
-                            
-                            const page1Canvas = document.createElement('canvas'); page1Canvas.width = PAGE_W; page1Canvas.height = PAGE_H;
-                            const ctx1 = page1Canvas.getContext('2d'); ctx1.fillStyle = '#ffffff'; ctx1.fillRect(0, 0, PAGE_W, PAGE_H);
+                            const { jsPDF } = window.jspdf;
+                            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                            const PAGE_W = 1240;
+                            const PAGE_H = 1754;
+
+                            // --- 第 1 頁：全案平面定位總圖 ---
+                            const page1Canvas = document.createElement('canvas');
+                            page1Canvas.width = PAGE_W; page1Canvas.height = PAGE_H;
+                            const ctx1 = page1Canvas.getContext('2d');
+                            ctx1.fillStyle = '#ffffff'; ctx1.fillRect(0, 0, PAGE_W, PAGE_H);
+
                             ctx1.fillStyle = '#111827'; ctx1.fillRect(0, 0, PAGE_W, 140);
                             ctx1.fillStyle = '#ffffff'; ctx1.font = 'bold 44px sans-serif'; ctx1.textAlign = 'left';
-                            ctx1.fillText(`工程度尺報告: ${project.name || '未命名'}`, 50, 70);
-                            ctx1.font = 'bold 26px sans-serif'; ctx1.fillStyle = '#9ca3af'; ctx1.fillText(`度尺日期: ${project.date}   |   標註位置總數: ${pins.value.length} 個`, 50, 115);
+                            ctx1.fillText(`工程度尺總表: ${project.name || '未命名'}`, 50, 70);
+                            ctx1.font = 'bold 26px sans-serif'; ctx1.fillStyle = '#9ca3af';
+                            ctx1.fillText(`度尺日期: ${project.date}   |   標註位置總數: ${pins.value.length} 個`, 50, 115);
 
                             if (planImage.value) {
-                                const pImg = new Image(); pImg.src = planImage.value; await new Promise(r => pImg.onload = r);
-                                const planDrawW = PAGE_W - 100; const planDrawH = Math.min(1200, (pImg.height / pImg.width) * planDrawW);
-                                const planDrawX = 50, planDrawY = 180;
+                                const pImg = new Image();
+                                pImg.src = planImage.value;
+                                await new Promise(r => pImg.onload = r);
+                                const planDrawW = PAGE_W - 100;
+                                const planDrawH = Math.min(1300, (pImg.height / pImg.width) * planDrawW);
+                                const planDrawX = 50; const planDrawY = 180;
                                 ctx1.drawImage(pImg, planDrawX, planDrawY, planDrawW, planDrawH);
+
                                 pins.value.forEach((pin, idx) => {
-                                    const px = planDrawX + (pin.x / 100) * planDrawW; const py = planDrawY + (pin.y / 100) * planDrawH;
-                                    ctx1.beginPath(); ctx1.arc(px, py - 25, 22, 0, 2 * Math.PI); ctx1.fillStyle = '#dc2626'; ctx1.fill();
-                                    ctx1.fillStyle = '#ffffff'; ctx1.font = 'bold 24px sans-serif'; ctx1.textAlign = 'center'; ctx1.textBaseline = 'middle'; ctx1.fillText(idx + 1, px, py - 25);
+                                    const px = planDrawX + (pin.x / 100) * planDrawW;
+                                    const py = planDrawY + (pin.y / 100) * planDrawH;
+                                    ctx1.beginPath(); ctx1.arc(px, py - 25, 22, 0, 2 * Math.PI);
+                                    ctx1.fillStyle = '#dc2626'; ctx1.fill();
+                                    ctx1.fillStyle = '#ffffff'; ctx1.font = 'bold 24px sans-serif';
+                                    ctx1.textAlign = 'center'; ctx1.textBaseline = 'middle';
+                                    ctx1.fillText(idx + 1, px, py - 25);
                                 });
                             }
                             doc.addImage(page1Canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
 
-                            for (let i = 0; i < pins.value.length; i++) {
-                                const pin = pins.value[i]; if (!pin.photo) continue;
+                            // --- 第 2 頁及之後：每頁 4 格相片 (2 x 2 矩陣) ---
+                            const photoPins = pins.value.filter(p => p.photo);
+                            const totalPages = Math.ceil(photoPins.length / 4);
+
+                            // 2x2 格位配置參數
+                            const marginX = 50;
+                            const marginY = 130;
+                            const gap = 30;
+                            const cellW = (PAGE_W - (marginX * 2) - gap) / 2; // 545px
+                            const cellH = (PAGE_H - marginY - 60 - gap) / 2;   // 767px
+
+                            const cellSlots = [
+                                { x: marginX, y: marginY },
+                                { x: marginX + cellW + gap, y: marginY },
+                                { x: marginX, y: marginY + cellH + gap },
+                                { x: marginX + cellW + gap, y: marginY + cellH + gap }
+                            ];
+
+                            for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
                                 doc.addPage();
-                                const pageNCanvas = document.createElement('canvas'); pageNCanvas.width = PAGE_W; pageNCanvas.height = PAGE_H;
-                                const ctxN = pageNCanvas.getContext('2d'); ctxN.fillStyle = '#ffffff'; ctxN.fillRect(0, 0, PAGE_W, PAGE_H);
-                                ctxN.fillStyle = '#1f2937'; ctxN.fillRect(0, 0, PAGE_W, 110);
-                                ctxN.fillStyle = '#ffffff'; ctxN.font = 'bold 40px sans-serif'; ctxN.textAlign = 'left'; ctxN.fillText(`[位置 ${i + 1}]  ${pin.name}`, 50, 70);
-                                
-                                const renderedPhotoData = await renderPinCanvas(pin); const phImg = new Image(); phImg.src = renderedPhotoData; await new Promise(r => phImg.onload = r);
-                                const maxW = PAGE_W - 100; const maxH = PAGE_H - 200;
-                                let dw = maxW; let dh = (phImg.height / phImg.width) * dw;
-                                if (dh > maxH) { dh = maxH; dw = (phImg.width / phImg.height) * dh; }
-                                const dx = (PAGE_W - dw) / 2; const dy = 150 + ((maxH - dh) / 2);
-                                ctxN.drawImage(phImg, dx, dy, dw, dh);
+                                const pageNCanvas = document.createElement('canvas');
+                                pageNCanvas.width = PAGE_W; pageNCanvas.height = PAGE_H;
+                                const ctxN = pageNCanvas.getContext('2d');
+                                ctxN.fillStyle = '#f3f4f6'; ctxN.fillRect(0, 0, PAGE_W, PAGE_H);
+
+                                // 頁首條
+                                ctxN.fillStyle = '#1f2937'; ctxN.fillRect(0, 0, PAGE_W, 90);
+                                ctxN.fillStyle = '#ffffff'; ctxN.font = 'bold 36px sans-serif'; ctxN.textAlign = 'left';
+                                ctxN.fillText(`${project.name || '工程'} - 現場詳細記錄 (第 ${pageIdx + 1} / ${totalPages} 頁)`, 50, 58);
+
+                                for (let slot = 0; slot < 4; slot++) {
+                                    const pinIndex = (pageIdx * 4) + slot;
+                                    if (pinIndex >= photoPins.length) break;
+
+                                    const pin = photoPins[pinIndex];
+                                    const slotPos = cellSlots[slot];
+
+                                    // 格子白底卡片
+                                    ctxN.fillStyle = '#ffffff';
+                                    ctxN.fillRect(slotPos.x, slotPos.y, cellW, cellH);
+                                    ctxN.strokeStyle = '#d1d5db'; ctxN.lineWidth = 2;
+                                    ctxN.strokeRect(slotPos.x, slotPos.y, cellW, cellH);
+
+                                    // 格子小標題
+                                    ctxN.fillStyle = '#111827'; ctxN.fillRect(slotPos.x, slotPos.y, cellW, 55);
+                                    ctxN.fillStyle = '#ffffff'; ctxN.font = 'bold 26px sans-serif'; ctxN.textAlign = 'left';
+                                    ctxN.fillText(`📍 [位置 ${pinIndex + 1}] ${pin.name}`, slotPos.x + 16, slotPos.y + 36);
+
+                                    // 相片本體自適應縮放至小格內
+                                    const renderedData = await renderPinCanvas(pin);
+                                    const phImg = new Image(); phImg.src = renderedData;
+                                    await new Promise(r => phImg.onload = r);
+
+                                    const maxPhotoW = cellW - 20;
+                                    const maxPhotoH = cellH - 75;
+                                    let dw = maxPhotoW;
+                                    let dh = (phImg.height / phImg.width) * dw;
+                                    if (dh > maxPhotoH) {
+                                        dh = maxPhotoH;
+                                        dw = (phImg.width / phImg.height) * dh;
+                                    }
+                                    const dx = slotPos.x + (cellW - dw) / 2;
+                                    const dy = slotPos.y + 65 + ((maxPhotoH - dh) / 2);
+
+                                    ctxN.drawImage(phImg, dx, dy, dw, dh);
+                                }
+
                                 doc.addImage(pageNCanvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
                             }
+
                             doc.save(`${project.name || '工程'}_度尺報告.pdf`);
-                        } catch (err) { alert("生成 PDF 失敗，請重試。"); }
+                        } catch (err) {
+                            alert("生成 PDF 失敗，請重試。");
+                        }
                         isProcessing.value = false;
                     }, 50);
                 };
@@ -554,8 +769,8 @@
                 return {
                     currentView, projectList, project, planImage, pins, activePin, drawMode,
                     showBottomSheet, activeMarker, deleteConfirm, isProcessing, processingText,
-                    svgContainer, currentLine, currentPath,
-                    handleImageUpload, addPinOnPlan, openPin, handleDeletePin, undoPath,
+                    workspace, clampBox, boxW, boxH, currentLine, currentPath,
+                    calculateClamp, handleImageUpload, addPinOnPlan, openPin, handleDeletePin, undoPath,
                     handleTouchStart, handleTouchMove, handleTouchEnd, startDrag,
                     openBottomSheet, deleteMarker, applyStamp, updateMarkerSize, getStampStyle, getMarkerLines,
                     createNewProject, loadProject, deleteProject, backToProjects, saveCurrentProject,
