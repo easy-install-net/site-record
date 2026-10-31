@@ -2,7 +2,7 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>度尺寶 Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
@@ -10,154 +10,174 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         [v-cloak] { display: none !important; }
-        body { 
-            -webkit-tap-highlight-color: transparent; 
-            overscroll-behavior-y: none;
-            touch-action: none;
-            background-color: #000;
-        }
-        .slide-up-enter-active, .slide-up-leave-active { transition: transform 0.2s ease-out; }
-        .slide-up-enter-from, .slide-up-leave-to { transform: translateY(100%); }
-        ::-webkit-scrollbar { width: 0px; height: 0px; }
+        * { box-sizing: border-box; }
         
+        /* 根治手機爆畫面：鎖定動態視口 100dvh */
+        html, body { 
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%; height: 100%; height: 100dvh;
+            margin: 0; padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            -webkit-tap-highlight-color: transparent; 
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* 強制所有輸入框字體 >= 16px，防止 iOS Safari 自動放大頁面導致錯位 */
+        input, select, textarea {
+            font-size: 16px !important;
+        }
+
+        .touch-scrollable {
+            touch-action: pan-y;
+            -webkit-overflow-scrolling: touch;
+        }
+
         .micro-btn { 
-            padding: 2px 5px; 
+            padding: 3px 6px; 
             font-size: 13px; 
             font-weight: bold;
             line-height: 1.2; 
-            border: 1px solid #000; 
-            border-radius: 2px; 
+            border: 1px solid #4b5563; 
+            border-radius: 3px; 
             white-space: nowrap; 
-            background: #fff; 
-            color: #000; 
+            background: #ffffff; 
+            color: #000000; 
         }
-        .micro-btn:active { background: #000; color: #fff; }
+        .micro-btn:active { background: #000000; color: #ffffff; }
     </style>
 </head>
-<body class="text-gray-100 font-sans antialiased h-screen flex flex-col overflow-hidden select-none">
-    <div id="app" v-cloak class="h-full flex flex-col w-full">
+<body class="text-gray-100 font-sans antialiased">
+    <div id="app" v-cloak class="fixed inset-0 w-full h-full flex flex-col overflow-hidden">
         
-        <!-- 頂部導航列 -->
-        <header class="bg-black text-white p-1 border-b border-gray-800 flex justify-between items-center z-10 shrink-0">
+        <!-- 頂部導航列 (高度鎖死 44px) -->
+        <header class="h-11 shrink-0 bg-black text-white px-2 border-b border-gray-800 flex justify-between items-center z-30">
             <h1 class="text-sm font-bold truncate flex-1">
                 <span v-if="currentView === 'projects'">工程存檔目錄</span>
                 <span v-else-if="currentView === 'plan'">{{ project.name || '未命名工程' }} - 平面圖</span>
                 <span v-else-if="currentView === 'photo'">{{ activePin.name || '相片標註' }}</span>
             </h1>
             
-            <div class="flex gap-1">
-                <button v-if="currentView === 'projects'" @click="createNewProject" class="bg-blue-700 text-white px-3 py-[2px] rounded text-sm font-bold border border-blue-500">
+            <div class="flex gap-1 items-center">
+                <button v-if="currentView === 'projects'" @click="createNewProject" class="bg-blue-600 active:bg-blue-800 text-white px-3 py-1 rounded text-xs font-bold border border-blue-400">
                     新建工程
                 </button>
 
-                <button v-if="currentView === 'plan' && pins.length > 0" @click="exportPdfReport" class="bg-blue-700 text-white px-2 py-[2px] rounded text-sm font-bold border border-blue-500">
+                <button v-if="currentView === 'plan' && pins.length > 0" @click="exportPdfReport" class="bg-blue-600 active:bg-blue-800 text-white px-2 py-1 rounded text-xs font-bold border border-blue-400">
                     匯出 A4 PDF
                 </button>
-                <button v-if="currentView === 'plan'" @click="backToProjects" class="bg-gray-800 px-2 py-[2px] rounded text-sm font-bold border border-gray-600">
+                <button v-if="currentView === 'plan'" @click="backToProjects" class="bg-gray-800 active:bg-gray-700 px-2 py-1 rounded text-xs font-bold border border-gray-600">
                     工程目錄
                 </button>
 
-                <button v-if="currentView === 'photo' && activePin.photo" @click="exportSingleImage" class="bg-green-700 text-white px-2 py-[2px] rounded text-sm font-bold border border-green-500">
+                <button v-if="currentView === 'photo' && activePin.photo" @click="exportSingleImage" class="bg-green-700 active:bg-green-800 text-white px-2 py-1 rounded text-xs font-bold border border-green-500">
                     單張下載
                 </button>
-                <button v-if="currentView === 'photo'" @click="handleDeletePin" :class="deleteConfirm ? 'bg-red-600 border-red-400' : 'bg-red-900 border-red-700'" class="text-white px-2 py-[2px] rounded text-sm font-bold border">
+                <button v-if="currentView === 'photo'" @click="handleDeletePin" :class="deleteConfirm ? 'bg-red-600 border-red-400' : 'bg-red-900 border-red-700'" class="text-white px-2 py-1 rounded text-xs font-bold border">
                     {{ deleteConfirm ? '確認刪除?' : '刪除圖釘' }}
                 </button>
-                <button v-if="currentView === 'photo'" @click="currentView = 'plan'" class="bg-gray-800 px-2 py-[2px] rounded text-sm font-bold border border-gray-600">
+                <button v-if="currentView === 'photo'" @click="currentView = 'plan'" class="bg-gray-800 active:bg-gray-700 px-2 py-1 rounded text-xs font-bold border border-gray-600">
                     回平面圖
                 </button>
             </div>
         </header>
 
         <!-- 第 1 級：工程存檔目錄 (首頁) -->
-        <main v-show="currentView === 'projects'" class="flex-1 bg-gray-900 p-2 overflow-auto">
-            <div v-if="projectList.length === 0" class="text-center text-gray-400 mt-12 text-sm font-bold">
+        <main v-show="currentView === 'projects'" class="flex-1 min-h-0 bg-gray-900 p-3 overflow-y-auto touch-scrollable">
+            <div v-if="projectList.length === 0" class="text-center text-gray-400 mt-16 text-sm font-bold">
                 目前沒有任何工程存檔，請點擊右上角「新建工程」。
             </div>
-            <div v-for="proj in projectList" :key="proj.id" class="bg-black border border-gray-700 p-3 rounded mb-2 flex justify-between items-center shadow-lg">
-                <div class="flex-1" @click="loadProject(proj.id)">
-                    <div class="font-bold text-lg text-white">{{ proj.name || '未命名工程' }}</div>
+            <div v-for="proj in projectList" :key="proj.id" class="bg-black border border-gray-700 p-3 rounded mb-3 flex justify-between items-center shadow-lg">
+                <div class="flex-1 mr-2" @click="loadProject(proj.id)">
+                    <div class="font-bold text-base text-white truncate">{{ proj.name || '未命名工程' }}</div>
                     <div class="text-xs text-gray-400 mt-1">日期: {{ proj.date }} | 記錄點: {{ proj.pinCount }} 個</div>
                 </div>
-                <div class="flex gap-2">
-                    <button @click="loadProject(proj.id)" class="bg-gray-700 text-white px-4 py-2 rounded text-sm font-bold">開啟</button>
-                    <button @click="deleteProject(proj.id)" class="bg-red-900 text-white px-3 py-2 rounded text-sm font-bold border border-red-700">刪除</button>
+                <div class="flex gap-2 shrink-0">
+                    <button @click="loadProject(proj.id)" class="bg-gray-700 text-white px-3 py-1.5 rounded text-xs font-bold">開啟</button>
+                    <button @click="deleteProject(proj.id)" class="bg-red-900 text-white px-3 py-1.5 rounded text-xs font-bold border border-red-700">刪除</button>
                 </div>
             </div>
         </main>
 
         <!-- 第 2 級：平面圖打釘定位 -->
-        <main v-show="currentView === 'plan'" class="flex-1 relative overflow-auto bg-gray-900 flex flex-col items-center justify-start">
-            <div class="w-full bg-black border-b border-gray-700 p-1 flex gap-1 items-center shrink-0">
-                <span class="text-sm font-bold text-gray-400 whitespace-nowrap">單位:</span>
-                <input type="text" v-model="project.name" @blur="saveCurrentProject" placeholder="輸入工程單位名稱" class="flex-1 bg-gray-800 text-white border border-gray-600 text-base p-1 rounded font-bold focus:outline-none">
-                <span class="text-xs font-bold text-gray-400 ml-1">{{ project.date }}</span>
+        <main v-show="currentView === 'plan'" class="flex-1 min-h-0 bg-gray-900 flex flex-col overflow-hidden">
+            <div class="w-full bg-black border-b border-gray-700 p-2 flex gap-2 items-center shrink-0">
+                <span class="text-xs font-bold text-gray-400 whitespace-nowrap">單位:</span>
+                <input type="text" v-model="project.name" @blur="saveCurrentProject" placeholder="輸入工程單位名稱" class="flex-1 bg-gray-800 text-white border border-gray-600 text-sm px-2 py-1 rounded font-bold focus:outline-none">
+                <span class="text-xs font-bold text-gray-400">{{ project.date }}</span>
             </div>
 
-            <div v-if="!planImage" class="flex-1 flex items-center justify-center w-full">
-                <label class="bg-white text-black px-6 py-3 rounded text-sm font-bold cursor-pointer inline-block border-2 border-black">
+            <div v-if="!planImage" class="flex-1 flex items-center justify-center p-4">
+                <label class="bg-white text-black px-6 py-3 rounded text-sm font-bold cursor-pointer inline-block border-2 border-black active:bg-gray-200">
                     拍照 / 匯入平面圖
                     <input type="file" accept="image/*" class="hidden" @change="e => handleImageUpload(e, 'plan')">
                 </label>
             </div>
             
-            <div v-else class="relative inline-block w-full max-w-3xl mt-2" @click="addPinOnPlan">
-                <img :src="planImage" class="w-full h-auto max-h-[80vh] object-contain border border-gray-700">
-                <div v-for="(pin, index) in pins" :key="pin.id" 
-                     class="absolute w-8 h-8 -ml-4 -mt-8 flex flex-col items-center justify-center cursor-pointer"
-                     :style="{ left: pin.x + '%', top: pin.y + '%' }"
-                     @click.stop="openPin(pin)">
-                    <div class="bg-red-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow">
-                        {{ index + 1 }}
+            <div v-else class="flex-1 min-h-0 relative overflow-auto p-2 flex items-center justify-center touch-scrollable" @click="addPinOnPlan">
+                <div class="relative inline-block max-w-full max-h-full">
+                    <img :src="planImage" class="max-w-full max-h-[78dvh] object-contain block border border-gray-700">
+                    <div v-for="(pin, index) in pins" :key="pin.id" 
+                         class="absolute w-8 h-8 -ml-4 -mt-8 flex flex-col items-center justify-center cursor-pointer"
+                         :style="{ left: pin.x + '%', top: pin.y + '%' }"
+                         @click.stop="openPin(pin)">
+                        <div class="bg-red-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow">
+                            {{ index + 1 }}
+                        </div>
+                        <div class="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-red-600 -mt-[2px]"></div>
                     </div>
-                    <div class="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-red-600 -mt-[2px]"></div>
                 </div>
             </div>
         </main>
 
-        <!-- 第 3 級：相片標註畫板 (物理夾鉗 + 圖層分家架構) -->
-        <main v-show="currentView === 'photo'" class="flex-1 relative bg-black overflow-hidden flex flex-col justify-center items-center" ref="workspace">
+        <!-- 第 3 級：相片標註畫板 (物理夾鉗自適應 + 1:1 絕對對齊) -->
+        <main v-show="currentView === 'photo'" ref="workspace" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col items-center justify-center">
             
-            <div v-if="activePin && activePin.photo" class="absolute top-2 z-20 flex gap-[2px] bg-black/80 backdrop-blur p-[2px] rounded border border-gray-700 shadow-lg">
-                <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-white text-black' : 'bg-black text-white'" class="px-4 py-1 text-sm font-bold rounded">拉線</button>
-                <button @click="drawMode = 'freehand'" :class="drawMode === 'freehand' ? 'bg-white text-black' : 'bg-black text-white'" class="px-4 py-1 text-sm font-bold rounded">塗鴉</button>
-                <button v-if="activePin.paths && activePin.paths.length" @click.stop="undoPath" class="bg-gray-800 text-white px-3 py-1 text-sm font-bold rounded border border-gray-600 ml-1">復原</button>
+            <!-- 模式切換按鈕 -->
+            <div v-if="activePin && activePin.photo" class="absolute top-2 z-20 flex gap-1 bg-black/85 backdrop-blur p-1 rounded border border-gray-700 shadow-lg">
+                <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-white text-black' : 'bg-black text-white'" class="px-3 py-1 text-xs font-bold rounded">拉線</button>
+                <button @click="drawMode = 'freehand'" :class="drawMode === 'freehand' ? 'bg-white text-black' : 'bg-black text-white'" class="px-3 py-1 text-xs font-bold rounded">塗鴉</button>
+                <button v-if="activePin.paths && activePin.paths.length" @click.stop="undoPath" class="bg-gray-800 text-white px-2 py-1 text-xs font-bold rounded border border-gray-600 ml-1">復原</button>
             </div>
 
-            <div v-if="activePin && !activePin.photo" class="flex-1 flex items-center justify-center w-full">
-                <label class="bg-white text-black px-6 py-3 rounded text-sm font-bold cursor-pointer inline-block border-2 border-black">
+            <!-- 未上傳相片 -->
+            <div v-if="activePin && !activePin.photo" class="flex-1 flex items-center justify-center p-4">
+                <label class="bg-white text-black px-6 py-3 rounded text-sm font-bold cursor-pointer inline-block border-2 border-black active:bg-gray-200">
                     拍攝現場相片
                     <input type="file" accept="image/*" class="hidden" @change="e => handleImageUpload(e, 'photo')">
                 </label>
             </div>
 
-            <!-- 物理夾鉗實體容器：寫死 px 尺寸，徹底隔絕 iOS 撐爆與變形 -->
-            <div v-else-if="activePin && activePin.photo"
-                 ref="clampBox"
-                 class="relative select-none touch-none"
-                 :style="{ width: boxW + 'px', height: boxH + 'px' }"
-                 @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd"
-                 @mousedown="handleTouchStart" @mousemove="handleTouchMove" @mouseup="handleTouchEnd" @mouseleave="handleTouchEnd">
+            <!-- 自適應相片外框：嚴格收容於螢幕內部，絕對不爆邊 -->
+            <div v-else-if="activePin && activePin.photo" 
+                 :style="wrapperStyle" 
+                 class="select-none touch-none">
                 
-                <!-- 底層：原生 HTML <img> (iOS 絕對穩定渲染，不走 SVG) -->
-                <img :src="activePin.photo" 
-                     class="absolute inset-0 w-full h-full object-fill pointer-events-none block"
-                     @load="calculateClamp">
+                <!-- 底層原生相片 (等比例填滿，零變形) -->
+                <img :src="activePin.photo" class="w-full h-full block pointer-events-none select-none object-fill">
 
-                <!-- 頂層：全透明純向量 SVG (只畫線和放印章，零相片負擔) -->
-                <svg class="absolute inset-0 w-full h-full pointer-events-none"
-                     :viewBox="`0 0 ${activePin.photoW || 1200} ${activePin.photoH || 900}`">
+                <!-- 頂層全透明 SVG 畫板 (1:1 映射原始相片像素) -->
+                <svg ref="svgCanvas"
+                     class="absolute inset-0 w-full h-full select-none touch-none"
+                     :viewBox="`0 0 ${activePin.photoW || 1200} ${activePin.photoH || 900}`"
+                     preserveAspectRatio="none"
+                     @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd"
+                     @mousedown="handleTouchStart" @mousemove="handleTouchMove" @mouseup="handleTouchEnd">
                     
+                    <!-- 筆跡與拉線 -->
                     <path v-for="path in (activePin.paths || [])" :key="path.id" :d="path.d" stroke="#ff0044" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                     <line v-for="line in (activePin.lines || [])" :key="line.id" :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2" stroke="#ff0044" stroke-width="5" stroke-linecap="round" />
 
+                    <!-- 即時繪製軌跡 -->
                     <path v-if="currentPath" :d="currentPath" stroke="#ff0044" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                     <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" stroke="#ff0044" stroke-width="5" stroke-dasharray="8" />
 
-                    <!-- 印章與標記 (SVG 向量渲染，特大粗體) -->
+                    <!-- 標記與印章 -->
                     <g v-for="marker in activePin.markers" :key="marker.id"
                        :transform="`translate(${marker.x}, ${marker.y})`"
-                       class="pointer-events-auto cursor-move"
+                       class="cursor-move"
                        @touchstart.stop.prevent="e => startDrag(marker, e)"
                        @mousedown.stop.prevent="e => startDrag(marker, e)">
                         
@@ -175,63 +195,82 @@
             </div>
         </main>
 
-        <!-- 底部極簡抽屜 (12 款地盤專用印章) -->
-        <transition name="slide-up">
-            <div v-if="showBottomSheet && activeMarker" class="fixed inset-x-0 bottom-0 bg-white text-black border-t-2 border-black z-50 flex flex-col shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
-                <div class="p-[2px] border-b border-gray-300 flex justify-between items-center bg-gray-100 shrink-0">
-                    <div class="flex gap-[2px] overflow-x-auto no-scrollbar">
-                        <button @click="activeMarker.type = 'general'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'general' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">尺寸</button>
-                        <button @click="activeMarker.type = 'door'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'door' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">門洞</button>
-                        <button @click="activeMarker.type = 'window'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'window' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">窗</button>
-                        <button @click="activeMarker.type = 'beam'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'beam' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">樑</button>
-                        <button @click="activeMarker.type = 'column'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'column' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">柱</button>
-                        <button @click="activeMarker.type = 'stamp'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'stamp' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">印章</button>
-                    </div>
-                    <button @click="deleteMarker" class="text-red-600 font-bold p-[2px] px-3 text-[14px] shrink-0 ml-1 border border-red-600 rounded">刪除</button>
+        <!-- 遮罩背景 (點擊背景即可自動保存退出抽屜) -->
+        <div v-if="showBottomSheet && activeMarker" 
+             class="fixed inset-0 bg-black/60 z-40" 
+             @click="closeBottomSheet"></div>
+
+        <!-- 懸浮抽屜：標籤設定 (頂端固定「確定完成」大按鈕，鍵盤彈出絕不遮擋) -->
+        <div v-if="showBottomSheet && activeMarker" 
+             class="fixed inset-x-2 bottom-2 max-h-[82dvh] bg-white text-black border-2 border-black rounded-lg z-50 flex flex-col shadow-2xl overflow-hidden touch-scrollable">
+            
+            <!-- 抽屜頂部操作列 (最安全位置：永遠置頂可見) -->
+            <div class="p-2 bg-gray-900 text-white flex justify-between items-center border-b border-gray-700 shrink-0">
+                <span class="font-bold text-xs text-yellow-400">標註設定 (點擊外部或按確定)</span>
+                <div class="flex gap-2">
+                    <button @click="deleteMarker" class="bg-red-700 active:bg-red-800 text-white font-bold px-3 py-1 rounded text-xs border border-red-500">刪除標籤</button>
+                    <button @click="closeBottomSheet" class="bg-green-600 active:bg-green-700 text-white font-bold px-4 py-1 rounded text-xs border border-green-400 shadow">確定完成</button>
                 </div>
-                
-                <div class="p-[2px] overflow-y-auto bg-white max-h-[40vh]">
-                    <!-- 印章分類面板 -->
-                    <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-1 p-1">
-                        <div class="flex items-center gap-1 flex-wrap">
-                            <span class="text-[11px] font-bold text-red-700 bg-red-100 px-1 border border-red-300 rounded">瑕疵</span>
-                            <button v-for="stamp in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-red-600 text-red-700 font-bold text-[13px] px-2 py-1">{{ stamp }}</button>
-                        </div>
-                        <div class="flex items-center gap-1 flex-wrap">
-                            <span class="text-[11px] font-bold text-yellow-800 bg-yellow-100 px-1 border border-yellow-300 rounded">水電</span>
-                            <button v-for="stamp in ['開關', '插座', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-yellow-600 text-yellow-900 font-bold text-[13px] px-2 py-1">{{ stamp }}</button>
-                        </div>
-                        <div class="flex items-center gap-1 flex-wrap">
-                            <span class="text-[11px] font-bold text-blue-700 bg-blue-100 px-1 border border-blue-300 rounded">動線</span>
-                            <button v-for="stamp in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-blue-600 text-blue-800 font-bold text-[13px] px-2 py-1">{{ stamp }}</button>
+            </div>
+
+            <!-- 分類選單橫列 -->
+            <div class="p-1 border-b border-gray-200 flex gap-1 overflow-x-auto bg-gray-100 shrink-0">
+                <button @click="activeMarker.type = 'general'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'general' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">尺寸</button>
+                <button @click="activeMarker.type = 'door'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'door' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">門洞</button>
+                <button @click="activeMarker.type = 'window'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'window' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">窗</button>
+                <button @click="activeMarker.type = 'beam'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'beam' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">樑</button>
+                <button @click="activeMarker.type = 'column'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'column' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">柱</button>
+                <button @click="activeMarker.type = 'stamp'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'stamp' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">印章</button>
+            </div>
+            
+            <!-- 內容輸入區 -->
+            <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable">
+                <!-- 12 種印章庫 -->
+                <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2">
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <span class="text-[11px] font-bold text-red-700 bg-red-100 px-1 border border-red-300 rounded">瑕疵打拆</span>
+                        <button v-for="stamp in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-red-600 text-red-700 font-bold px-2 py-1">{{ stamp }}</button>
+                    </div>
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <span class="text-[11px] font-bold text-yellow-800 bg-yellow-100 px-1 border border-yellow-300 rounded">水電收口</span>
+                        <button v-for="stamp in ['開關', '插座', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-yellow-600 text-yellow-900 font-bold px-2 py-1">{{ stamp }}</button>
+                    </div>
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <span class="text-[11px] font-bold text-blue-700 bg-blue-100 px-1 border border-blue-300 rounded">動線結構</span>
+                        <button v-for="stamp in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-blue-600 text-blue-800 font-bold px-2 py-1">{{ stamp }}</button>
+                    </div>
+                </div>
+
+                <!-- 門洞/窗/樑/柱組合標籤 -->
+                <div v-else-if="['window', 'door', 'beam', 'column'].includes(activeMarker.type)">
+                    <div class="grid grid-cols-3 gap-2">
+                        <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
+                            <label class="text-xs font-bold text-gray-700 bg-gray-200 px-1 py-0.5">{{ field.label }}</label>
+                            <input type="number" v-model="activeMarker.data[field.key]" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="w-full border-2 border-black p-1 text-base font-bold bg-white text-black text-center focus:outline-none rounded">
                         </div>
                     </div>
+                    <button @click="closeBottomSheet" class="w-full mt-3 bg-black text-white font-bold py-2 rounded text-sm active:bg-gray-800">確定完成</button>
+                </div>
 
-                    <div v-else-if="['window', 'door', 'beam', 'column'].includes(activeMarker.type)" class="p-[2px]">
-                        <div class="grid grid-cols-3 gap-[2px]">
-                            <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
-                                <label class="text-[12px] font-bold text-gray-700 leading-tight bg-gray-200 px-1">{{ field.label }}</label>
-                                <input type="number" v-model="activeMarker.data[field.key]" @input="updateMarkerSize(activeMarker)" class="w-full border-2 border-black p-[2px] text-lg font-bold bg-white text-black text-center focus:outline-none rounded-none">
-                            </div>
-                        </div>
-                        <button @click="showBottomSheet = false; saveCurrentProject()" class="w-full mt-1 bg-black text-white font-bold py-1 text-base">確定</button>
+                <!-- 尺寸數值標籤 -->
+                <div v-else class="flex flex-col gap-2">
+                    <div class="flex gap-1 overflow-x-auto pb-1">
+                        <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎</span>
+                        <button v-for="w in ['高','闊','總高','總深','腰墨','牆厚']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
                     </div>
-
-                    <div v-else class="flex flex-col gap-[2px] p-[2px]">
-                        <div class="flex gap-[2px] overflow-x-auto no-scrollbar">
-                            <span class="text-[12px] font-bold bg-gray-200 px-1 shrink-0 flex items-center">基礎</span>
-                            <button v-for="w in ['高','闊','總高','總深','腰墨','牆厚']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
-                        </div>
-                        <div class="flex items-stretch gap-[2px] mt-1">
-                            <input type="text" v-model="activeMarker.data.name" @input="updateMarkerSize(activeMarker)" class="w-16 border-2 border-black p-[2px] text-base font-bold bg-white focus:outline-none rounded-none text-center" placeholder="名稱">
-                            <span class="font-bold self-center text-lg">:</span>
-                            <input type="number" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" class="flex-1 border-2 border-black p-[2px] px-3 text-2xl font-bold bg-white text-black focus:outline-none rounded-none" placeholder="數值 (mm)">
-                            <button @click="showBottomSheet = false; saveCurrentProject()" class="bg-black text-white font-bold px-6 text-lg rounded-none">確定</button>
-                        </div>
+                    <div class="flex gap-1 overflow-x-auto pb-1">
+                        <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">水電</span>
+                        <button v-for="w in ['制中','制邊-牆','制底-地','喉邊-牆','喉底-地']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
+                    </div>
+                    <div class="flex items-stretch gap-2 mt-1">
+                        <input type="text" v-model="activeMarker.data.name" @input="updateMarkerSize(activeMarker)" class="w-20 border-2 border-black p-1 text-base font-bold bg-white focus:outline-none rounded text-center" placeholder="名稱">
+                        <span class="font-bold self-center text-lg">:</span>
+                        <input type="number" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1 px-2 text-xl font-bold bg-white text-black focus:outline-none rounded" placeholder="數值 (mm)">
+                        <button @click="closeBottomSheet" class="bg-black text-white font-bold px-4 rounded text-sm active:bg-gray-800">確定</button>
                     </div>
                 </div>
             </div>
-        </transition>
+        </div>
 
         <!-- 匯出中指示遮罩 -->
         <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center text-white font-bold">
@@ -241,7 +280,7 @@
     </div>
 
     <script>
-        const { createApp, ref, reactive, onMounted, nextTick } = Vue;
+        const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
         localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
         createApp({
@@ -260,32 +299,51 @@
                 const isProcessing = ref(false);
                 const processingText = ref('');
 
-                // 物理夾鉗變數
+                // 物理夾鉗動態計算
                 const workspace = ref(null);
-                const clampBox = ref(null);
-                const boxW = ref(300);
-                const boxH = ref(400);
+                const svgCanvas = ref(null);
+                const wsW = ref(window.innerWidth || 360);
+                const wsH = ref((window.innerHeight || 600) - 44);
 
-                const calculateClamp = () => {
-                    if (!workspace.value || !activePin.value || !activePin.value.photo) return;
-                    const ws = workspace.value.getBoundingClientRect();
-                    const availW = Math.max(100, ws.width - 12);
-                    const availH = Math.max(100, ws.height - 12);
-                    const pw = activePin.value.photoW || 1200;
-                    const ph = activePin.value.photoH || 900;
-                    const wsRatio = availW / availH;
-                    const photoRatio = pw / ph;
-
-                    if (photoRatio > wsRatio) {
-                        boxW.value = Math.floor(availW);
-                        boxH.value = Math.floor(availW / photoRatio);
-                    } else {
-                        boxH.value = Math.floor(availH);
-                        boxW.value = Math.floor(availH * photoRatio);
+                const updateWorkspaceSize = () => {
+                    if (workspace.value) {
+                        const rect = workspace.value.getBoundingClientRect();
+                        if (rect.width > 20 && rect.height > 20) {
+                            wsW.value = rect.width;
+                            wsH.value = rect.height;
+                        }
                     }
                 };
 
-                // 繪圖與拖曳邏輯
+                // 核心運算：外框比例完全鎖死，橫相直相 100% 嚴格收容於螢幕
+                const wrapperStyle = computed(() => {
+                    if (!activePin.value || !activePin.value.photo) return { display: 'none' };
+                    const pw = activePin.value.photoW || 1200;
+                    const ph = activePin.value.photoH || 900;
+                    
+                    const availW = Math.max(50, wsW.value - 12);
+                    const availH = Math.max(50, wsH.value - 12);
+                    const photoRatio = pw / ph;
+                    const availRatio = availW / availH;
+
+                    let finalW, finalH;
+                    if (photoRatio > availRatio) {
+                        finalW = availW;
+                        finalH = availW / photoRatio;
+                    } else {
+                        finalH = availH;
+                        finalW = availH * photoRatio;
+                    }
+
+                    return {
+                        width: `${Math.floor(finalW)}px`,
+                        height: `${Math.floor(finalH)}px`,
+                        position: 'relative',
+                        margin: 'auto'
+                    };
+                });
+
+                // 繪圖與拖曳
                 const isDrawing = ref(false);
                 const startPos = ref({ x: 0, y: 0 });
                 const currentLine = ref(null);
@@ -295,21 +353,21 @@
                 const draggedMarker = ref(null);
                 const dragOrigin = ref({ x: 0, y: 0 });
 
-                // 1:1 絕對坐標計算 (純比例換算，零黑邊誤差)
+                // 1:1 絕對坐標投影 (無黑邊誤差)
                 const getCoords = (e) => {
-                    if (!clampBox.value) return { x: 0, y: 0 };
-                    const rect = clampBox.value.getBoundingClientRect();
+                    if (!svgCanvas.value) return { x: 0, y: 0 };
+                    const rect = svgCanvas.value.getBoundingClientRect();
                     const cx = e.touches ? e.touches[0].clientX : e.clientX;
                     const cy = e.touches ? e.touches[0].clientY : e.clientY;
                     const pw = activePin.value.photoW || 1200;
                     const ph = activePin.value.photoH || 900;
 
-                    let nx = (cx - rect.left) / rect.width;
-                    let ny = (cy - rect.top) / rect.height;
-                    nx = Math.max(0, Math.min(1, nx));
-                    ny = Math.max(0, Math.min(1, ny));
+                    let rx = (cx - rect.left) / rect.width;
+                    let ry = (cy - rect.top) / rect.height;
+                    rx = Math.max(0, Math.min(1, rx));
+                    ry = Math.max(0, Math.min(1, ry));
 
-                    return { x: Math.round(nx * pw), y: Math.round(ny * ph) };
+                    return { x: Math.round(rx * pw), y: Math.round(ry * ph) };
                 };
 
                 const startDrag = (marker, e) => {
@@ -387,6 +445,7 @@
                     saveCurrentProject();
                 };
 
+                // 相片自適應壓縮
                 const compressImage = (file) => {
                     return new Promise((resolve) => {
                         const reader = new FileReader(); reader.readAsDataURL(file);
@@ -419,7 +478,7 @@
                         activePin.value.photoH = res.h;
                         if (!activePin.value.lines) activePin.value.lines = [];
                         if (!activePin.value.paths) activePin.value.paths = [];
-                        nextTick(() => calculateClamp());
+                        nextTick(() => updateWorkspaceSize());
                     }
                     saveCurrentProject();
                 };
@@ -439,7 +498,10 @@
                     activePin.value = pin;
                     currentView.value = 'photo';
                     deleteConfirm.value = false;
-                    nextTick(() => calculateClamp());
+                    nextTick(() => {
+                        updateWorkspaceSize();
+                        setTimeout(updateWorkspaceSize, 60);
+                    });
                 };
 
                 const handleDeletePin = () => {
@@ -463,6 +525,7 @@
                 };
 
                 const openBottomSheet = (marker) => { activeMarker.value = marker; showBottomSheet.value = true; };
+                const closeBottomSheet = () => { showBottomSheet.value = false; saveCurrentProject(); };
                 const deleteMarker = () => {
                     activePin.value.markers = activePin.value.markers.filter(m => m.id !== activeMarker.value.id);
                     showBottomSheet.value = false;
@@ -473,8 +536,7 @@
                     if (activeMarker.value) {
                         activeMarker.value.data.val = txt;
                         updateMarkerSize(activeMarker.value);
-                        showBottomSheet.value = false;
-                        saveCurrentProject();
+                        closeBottomSheet();
                     }
                 };
 
@@ -518,7 +580,7 @@
                 })[t] || [];
                 const getFieldLabel = (t, k) => { const f = getTagFields(t).find(i => i.key === k); return f ? f.label : k; };
 
-                // 多工程管理 (IndexedDB)
+                // 本地資料庫
                 const loadProjectList = async () => {
                     const keys = await localforage.keys();
                     const list = [];
@@ -575,10 +637,11 @@
 
                 onMounted(() => {
                     loadProjectList();
-                    window.addEventListener('resize', calculateClamp);
+                    window.addEventListener('resize', updateWorkspaceSize);
+                    window.addEventListener('orientationchange', () => setTimeout(updateWorkspaceSize, 150));
                 });
 
-                // 單張相片合成器 (1200px 高清轉印)
+                // 單張相片高清合成轉印
                 const renderPinCanvas = (pin) => {
                     return new Promise((resolve) => {
                         const img = new Image();
@@ -644,7 +707,7 @@
                     isProcessing.value = false;
                 };
 
-                // A4 四格 PDF 報告生成器 (Canvas 原生轉印，繁體中文零亂碼)
+                // A4 2x2 四格 PDF 報告生成器 (Canvas 原生轉印，繁體中文零亂碼)
                 const exportPdfReport = async () => {
                     isProcessing.value = true;
                     processingText.value = '正在排版 A4 四格 PDF 報告...';
@@ -655,7 +718,7 @@
                             const PAGE_W = 1240;
                             const PAGE_H = 1754;
 
-                            // --- 第 1 頁：全案平面定位總圖 ---
+                            // 第 1 頁：全案平面總圖
                             const page1Canvas = document.createElement('canvas');
                             page1Canvas.width = PAGE_W; page1Canvas.height = PAGE_H;
                             const ctx1 = page1Canvas.getContext('2d');
@@ -688,11 +751,10 @@
                             }
                             doc.addImage(page1Canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
 
-                            // --- 第 2 頁及之後：每頁 4 格相片 (2 x 2 矩陣) ---
+                            // 第 2 頁及之後：每頁 4 格相片 (2 x 2 矩陣)
                             const photoPins = pins.value.filter(p => p.photo);
                             const totalPages = Math.ceil(photoPins.length / 4);
 
-                            // 2x2 格位配置參數
                             const marginX = 50;
                             const marginY = 130;
                             const gap = 30;
@@ -713,7 +775,6 @@
                                 const ctxN = pageNCanvas.getContext('2d');
                                 ctxN.fillStyle = '#f3f4f6'; ctxN.fillRect(0, 0, PAGE_W, PAGE_H);
 
-                                // 頁首條
                                 ctxN.fillStyle = '#1f2937'; ctxN.fillRect(0, 0, PAGE_W, 90);
                                 ctxN.fillStyle = '#ffffff'; ctxN.font = 'bold 36px sans-serif'; ctxN.textAlign = 'left';
                                 ctxN.fillText(`${project.name || '工程'} - 現場詳細記錄 (第 ${pageIdx + 1} / ${totalPages} 頁)`, 50, 58);
@@ -725,18 +786,15 @@
                                     const pin = photoPins[pinIndex];
                                     const slotPos = cellSlots[slot];
 
-                                    // 格子白底卡片
                                     ctxN.fillStyle = '#ffffff';
                                     ctxN.fillRect(slotPos.x, slotPos.y, cellW, cellH);
                                     ctxN.strokeStyle = '#d1d5db'; ctxN.lineWidth = 2;
                                     ctxN.strokeRect(slotPos.x, slotPos.y, cellW, cellH);
 
-                                    // 格子小標題
                                     ctxN.fillStyle = '#111827'; ctxN.fillRect(slotPos.x, slotPos.y, cellW, 55);
                                     ctxN.fillStyle = '#ffffff'; ctxN.font = 'bold 26px sans-serif'; ctxN.textAlign = 'left';
                                     ctxN.fillText(`📍 [位置 ${pinIndex + 1}] ${pin.name}`, slotPos.x + 16, slotPos.y + 36);
 
-                                    // 相片本體自適應縮放至小格內
                                     const renderedData = await renderPinCanvas(pin);
                                     const phImg = new Image(); phImg.src = renderedData;
                                     await new Promise(r => phImg.onload = r);
@@ -769,10 +827,10 @@
                 return {
                     currentView, projectList, project, planImage, pins, activePin, drawMode,
                     showBottomSheet, activeMarker, deleteConfirm, isProcessing, processingText,
-                    workspace, clampBox, boxW, boxH, currentLine, currentPath,
-                    calculateClamp, handleImageUpload, addPinOnPlan, openPin, handleDeletePin, undoPath,
+                    workspace, svgCanvas, wrapperStyle, currentLine, currentPath,
+                    handleImageUpload, addPinOnPlan, openPin, handleDeletePin, undoPath,
                     handleTouchStart, handleTouchMove, handleTouchEnd, startDrag,
-                    openBottomSheet, deleteMarker, applyStamp, updateMarkerSize, getStampStyle, getMarkerLines,
+                    openBottomSheet, closeBottomSheet, deleteMarker, applyStamp, updateMarkerSize, getStampStyle, getMarkerLines,
                     createNewProject, loadProject, deleteProject, backToProjects, saveCurrentProject,
                     getTagFields, exportSingleImage, exportPdfReport
                 };
