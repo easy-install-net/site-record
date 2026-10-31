@@ -260,14 +260,18 @@
       el.focus();
     }
 
-    // 免 CORS 封鎖的通訊封裝
+    // 免 CORS 阻擋的完美通訊封裝 (改用標準表單 URLSearchParams 傳遞)
     function callAPI(payload) {
       return fetch(API_ENDPOINT, {
         method: "POST",
-        // 使用 text/plain 避免跨域預檢 preflight 阻擋
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
-      }).then(r => r.json());
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: new URLSearchParams({
+          "postData": JSON.stringify(payload)
+        })
+      })
+      .then(r => r.json());
     }
 
     // 暫存變數
