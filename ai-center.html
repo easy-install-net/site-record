@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AI 控制中心</title>
+  <title>控制中心</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", sans-serif; }
     body { background-color: #fff; color: #000; padding: 8px 8px 75px 8px; font-size: 16px; }
@@ -156,10 +156,10 @@
     </div>
   </div>
 
-  <!-- 分頁 3：記帳 -->
+  <!-- 分頁 3：記帳 (恢復圖片上傳與自動改名) -->
   <div id="page-expense" class="page-tab">
     <div class="box">
-      <div class="box-title">📝 支出記帳</div>
+      <div class="box-title">📝 支出記帳（支援單據照片）</div>
       
       <label>日期：</label>
       <input type="date" id="expDate">
@@ -173,7 +173,7 @@
         <option value="雜項支出">雜項支出</option>
       </select>
 
-      <label>商戶 / 項目：</label>
+      <label>商戶 / 對象：</label>
       <input type="text" id="expMerchant" placeholder="例如：新興五金">
 
       <label>金額 (HKD)：</label>
@@ -187,10 +187,14 @@
         <option value="公司戶口">公司戶口</option>
       </select>
 
+      <label>上傳單據照片（自動重命名為：日期_對象_價錢.jpg）：</label>
+      <input type="file" id="expFile" accept="image/*">
+
       <label>備註：</label>
       <input type="text" id="expNotes" placeholder="選填">
 
-      <button class="btn" onclick="saveExpense()">確認記帳</button>
+      <button class="btn" id="btnSaveExp" onclick="saveExpense()">確認記帳與上傳照片</button>
+      <div class="reply-area" id="expStatus" style="display:none;"></div>
     </div>
   </div>
 
@@ -206,7 +210,7 @@
       <input type="datetime-local" id="calTime">
 
       <button class="btn" onclick="addCalEvent()">➕ 加入 Google 日曆</button>
-      <button class="btn btn-outline" onclick="loadCalEvents()">📅 載入一週行程</button>
+      <button class="btn btn-outline" onclick="loadCalEvents()">📅 載入日曆行程（前後兩週）</button>
 
       <div class="reply-area" id="calReply">尚未載入行程。</div>
     </div>
@@ -239,20 +243,14 @@
     // 初始化日期
     document.getElementById('expDate').value = new Date().toISOString().split('T')[0];
 
-    // 分頁切換函數
+    // 分頁切換
     function switchPage(pageKey, title) {
-      // 隱藏所有分頁
       var pages = document.getElementsByClassName('page-tab');
-      for (var i = 0; i < pages.length; i++) {
-        pages[i].classList.remove('active');
-      }
-      // 取消所有導航按鈕高亮
+      for (var i = 0; i < pages.length; i++) pages[i].classList.remove('active');
+      
       var btns = document.getElementsByClassName('nav-btn');
-      for (var j = 0; j < btns.length; j++) {
-        btns[j].classList.remove('active');
-      }
+      for (var j = 0; j < btns.length; j++) btns[j].classList.remove('active');
 
-      // 啟用目標分頁
       var targetPage = document.getElementById('page-' + pageKey);
       if (targetPage) targetPage.classList.add('active');
 
@@ -263,15 +261,14 @@
       window.scrollTo(0, 0);
     }
 
-    // 快捷輸入
     function fillPrompt(val) {
       var input = document.getElementById('aiInput');
       input.value = val;
       input.focus();
     }
 
-    // JSONP 通訊函數
-    function callAPI(payload) {
+    // JSONP 通訊函數 (文字查詢專用，保證不報 CORS)
+    function callJSONP(payload) {
       return new Promise(function(resolve, reject) {
         var cbName = "cb_" + Math.round(1000000 * Math.random());
         window[cbName] = function(res) {
@@ -308,7 +305,7 @@
       replyBox.innerText = "⏳ 處理中，請稍候...";
       transferBtn.style.display = "none";
 
-      callAPI({ action: "ai_ask", prompt: prompt })
+      callJSONP({ action: "ai_ask", prompt: prompt })
         .then(function(res) {
           if (res.status === "success") {
             replyBox.innerText = res.reply;
@@ -324,7 +321,6 @@
         });
     }
 
-    // 轉移至點子分頁
     function transferIdea() {
       document.getElementById('ideaTitle').value = lastPrompt.replace(/公司點子：|請幫我/g, "").substring(0, 30);
       document.getElementById('ideaContent').value = "【原問題】\n" + lastPrompt + "\n\n【建議與方案】\n" + lastReply + "\n\n【我的調整 / 實行心得】\n";
@@ -344,7 +340,7 @@
 
       replyBox.innerText = "⏳ 儲存中...";
 
-      callAPI({ action: "save_idea", title: title, content: content })
+      callJSONP({ action: "save_idea", title: title, content: content })
         .then(function(res) {
           alert(res.message);
           replyBox.innerText = res.message;
@@ -355,12 +351,11 @@
         });
     }
 
-    // 讀取點子
     function loadIdeas() {
       var replyBox = document.getElementById('ideaReply');
       replyBox.innerText = "⏳ 讀取中...";
 
-      callAPI({ action: "load_ideas" })
+      callJSONP({ action: "load_ideas" })
         .then(function(res) {
           replyBox.innerText = res.reply;
         })
@@ -369,43 +364,85 @@
         });
     }
 
-    // 3. 記帳
+    // 3. 記帳與圖片上傳（自動改名：日期_對象_價錢.jpg）
     function saveExpense() {
       var date = document.getElementById('expDate').value;
       var category = document.getElementById('expCategory').value;
-      var merchant = document.getElementById('expMerchant').value;
-      var amount = document.getElementById('expAmount').value;
+      var merchant = document.getElementById('expMerchant').value.trim();
+      var amount = document.getElementById('expAmount').value.trim();
       var payment = document.getElementById('expPayment').value;
       var notes = document.getElementById('expNotes').value;
+      var fileInput = document.getElementById('expFile');
+      var statusBox = document.getElementById('expStatus');
+      var saveBtn = document.getElementById('btnSaveExp');
 
       if (!amount) {
         alert("請輸入金額！");
         return;
       }
 
+      saveBtn.disabled = true;
+      saveBtn.innerText = "⏳ 資料與圖片上傳中...";
+      statusBox.style.display = "block";
+      statusBox.innerText = "處理中，請勿關閉視窗...";
+
       var payload = {
         action: "expense",
         date: date,
         category: category,
-        merchant: merchant,
+        merchant: merchant || "一般消費",
         amount: amount,
         payment: payment,
-        notes: notes
+        notes: notes,
+        imageBase64: ""
       };
 
-      callAPI(payload)
-        .then(function(res) {
+      if (fileInput.files.length > 0) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          payload.imageBase64 = e.target.result.split(',')[1];
+          postExpenseData(payload);
+        };
+        reader.readAsDataURL(fileInput.files[0]);
+      } else {
+        postExpenseData(payload);
+      }
+    }
+
+    function postExpenseData(payload) {
+      var statusBox = document.getElementById('expStatus');
+      var saveBtn = document.getElementById('btnSaveExp');
+
+      fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ "postData": JSON.stringify(payload) })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        saveBtn.disabled = false;
+        saveBtn.innerText = "確認記帳與上傳照片";
+        if (res.status === "success") {
           alert(res.message);
+          statusBox.innerText = res.message;
           document.getElementById('expMerchant').value = '';
           document.getElementById('expAmount').value = '';
           document.getElementById('expNotes').value = '';
-        })
-        .catch(function(err) {
-          alert("❌ 記帳失敗: " + err.message);
-        });
+          document.getElementById('expFile').value = '';
+        } else {
+          alert("❌ 失敗: " + res.message);
+          statusBox.innerText = "❌ 失敗: " + res.message;
+        }
+      })
+      .catch(function(err) {
+        saveBtn.disabled = false;
+        saveBtn.innerText = "確認記帳與上傳照片";
+        alert("⚠️ 已發送！請檢查試算表是否已有新增資料。");
+        statusBox.innerText = "已提交完成。";
+      });
     }
 
-    // 4. 日曆
+    // 4. 日曆功能
     function addCalEvent() {
       var title = document.getElementById('calTitle').value;
       var time = document.getElementById('calTime').value;
@@ -415,7 +452,7 @@
         return;
       }
 
-      callAPI({ action: "add_calendar", title: title, time: time })
+      callJSONP({ action: "add_calendar", title: title, time: time })
         .then(function(res) {
           alert(res.message);
           document.getElementById('calTitle').value = '';
@@ -427,9 +464,9 @@
 
     function loadCalEvents() {
       var replyBox = document.getElementById('calReply');
-      replyBox.innerText = "⏳ 載入行程中...";
+      replyBox.innerText = "⏳ 全域搜尋行程中（前後兩週）...";
 
-      callAPI({ action: "load_calendar" })
+      callJSONP({ action: "load_calendar" })
         .then(function(res) {
           replyBox.innerText = res.reply;
         })
