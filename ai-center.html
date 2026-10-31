@@ -5,41 +5,66 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>AI 中心</title>
   <style>
-    /* 極致緊湊風格 */
-    * { box-sizing: border-box; font-family: -apple-system, sans-serif; font-size: 14px; }
-    body { background-color: #f0f0f0; margin: 0; padding: 4px; padding-bottom: 55px; color: #111; }
+    /* 整體字體加大 + 方形黑粗框硬派風格 */
+    * { box-sizing: border-box; font-family: -apple-system, sans-serif; font-size: 17px; /* 字體加大 */ }
+    body { background-color: #fff; margin: 0; padding: 2px; padding-bottom: 60px; color: #000; } /* 外部 Padding 減到極致 */
     
-    .header { background: #333; color: #fff; padding: 8px; text-align: center; font-weight: bold; margin-bottom: 6px; border-radius: 4px; }
-    .card { background: #fff; padding: 8px; margin-bottom: 6px; border-radius: 4px; border: 1px solid #ddd; }
+    /* 標題與卡片：全改為黑框方形 */
+    .header { background: #000; color: #fff; padding: 8px; text-align: center; font-weight: bold; margin-bottom: 4px; border: 2px solid #000; }
+    .card { background: #fff; padding: 4px; margin-bottom: 4px; border: 2px solid #000; }
     
-    label { font-size: 12px; font-weight: bold; color: #444; margin-bottom: 2px; display: block; }
-    .form-group { margin-bottom: 8px; }
-    input, select, textarea { width: 100%; padding: 6px; border-radius: 2px; border: 1px solid #ccc; outline: none; }
-    input:focus, textarea:focus { border-color: #007aff; }
+    label { font-size: 15px; font-weight: bold; color: #000; margin-bottom: 2px; display: block; }
+    .form-group { margin-bottom: 6px; }
+    
+    /* 輸入框放大 + 方形黑框 */
+    input, select, textarea { 
+      width: 100%; 
+      padding: 12px 8px; /* 內部高度放大，更好點擊與輸入 */
+      border: 2px solid #000; 
+      border-radius: 0; /* 零圓角 */
+      outline: none; 
+      font-weight: bold;
+      background: #fff; 
+    }
+    input:focus, textarea:focus { background: #ffffd0; /* 點擊輸入時會亮黃底，防看錯 */ }
     
     /* 日期 3 格 */
     .date-row { display: flex; gap: 4px; }
-    .date-row input { text-align: center; font-weight: bold; padding: 4px; }
+    .date-row input { text-align: center; font-weight: bold; padding: 12px 4px; }
     
-    /* 緊湊按鈕晶片 */
+    /* 緊湊按鈕晶片 - 方形黑框 */
     .btn-group { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 2px; }
-    .chip { padding: 4px 8px; border-radius: 4px; font-size: 12px; background: #eee; border: 1px solid #ccc; cursor: pointer; }
-    .chip.active { background: #007aff; color: #fff; border-color: #007aff; }
-    .chip.biz { background: #fff3e0; border-color: #ffb74d; color: #e65100; }
-    .chip.biz.active { background: #f57c00; color: #fff; border-color: #f57c00; }
+    .chip { 
+      padding: 8px 10px; 
+      border-radius: 0; 
+      font-size: 15px; 
+      background: #fff; 
+      border: 2px solid #000; 
+      color: #000; 
+      cursor: pointer; 
+      font-weight: bold; 
+    }
+    .chip.active { background: #000; color: #fff; }
+    /* 工作類別底色微灰區分 */
+    .chip.biz { background: #e0e0e0; }
+    .chip.biz.active { background: #000; color: #fff; }
     
-    .preview-box { width: 100%; max-height: 100px; object-fit: contain; margin-top: 4px; display: none; background: #eee; }
-    .submit-btn { width: 100%; padding: 10px; background: #007aff; color: #fff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
-    .status-msg { margin-top: 4px; text-align: center; font-size: 12px; font-weight: bold; }
+    .preview-box { width: 100%; max-height: 120px; object-fit: contain; margin-top: 4px; display: none; border: 2px solid #000; }
     
-    /* 底部導覽 */
-    .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #fff; display: flex; border-top: 1px solid #ccc; z-index: 100; }
-    .nav-item { flex: 1; text-align: center; padding: 8px 0; font-size: 12px; color: #666; cursor: pointer; }
-    .nav-item.active { background: #007aff; color: #fff; font-weight: bold; }
+    /* 提交按鈕放大 */
+    .submit-btn { width: 100%; padding: 14px; background: #000; color: #fff; border: 2px solid #000; border-radius: 0; font-weight: bold; font-size: 18px; cursor: pointer; }
+    .submit-btn:disabled { background: #666; border-color: #666; }
+    .status-msg { margin-top: 4px; text-align: center; font-size: 14px; font-weight: bold; }
+    
+    /* 底部導覽 - 方形黑框分隔 */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #fff; display: flex; border-top: 2px solid #000; z-index: 100; }
+    .nav-item { flex: 1; text-align: center; padding: 14px 0; font-size: 16px; color: #000; cursor: pointer; font-weight: bold; border-right: 2px solid #000; }
+    .nav-item:last-child { border-right: none; }
+    .nav-item.active { background: #000; color: #fff; }
     
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    .ai-response { background: #fafafa; padding: 8px; font-size: 13px; min-height: 60px; border: 1px solid #ddd; margin-top: 6px; white-space: pre-wrap; }
+    .ai-response { background: #fff; padding: 12px; font-size: 16px; min-height: 80px; border: 2px solid #000; margin-top: 6px; white-space: pre-wrap; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -93,7 +118,7 @@
     </div>
     <div class="form-group">
       <label>📝 用途/備註</label>
-      <input type="text" id="notes" placeholder="例如: 批盪灰 2 包">
+      <textarea id="notes" rows="2" placeholder="例如: 批盪灰 2 包"></textarea>
     </div>
     <div class="form-group">
       <label>📷 單據拍照</label>
@@ -110,7 +135,7 @@
   <div class="card">
     <label>🤖 詢問 AI (分析、建議、翻譯)</label>
     <textarea id="aiPrompt" rows="4" placeholder="請輸入問題..."></textarea>
-    <button class="submit-btn" onclick="askAI()" style="background:#555; margin-top:4px;">✨ 送出給 AI</button>
+    <button class="submit-btn" onclick="askAI()" style="background:#000; margin-top:4px;">✨ 送出給 AI</button>
     <label style="margin-top:10px;">💡 AI 回覆：</label>
     <div class="ai-response" id="aiResult">等待輸入...</div>
   </div>
@@ -122,13 +147,13 @@
     <label>➕ 新增 Google Calendar 行程</label>
     <input type="text" id="taskTitle" placeholder="事項 (例: 下午開會)" style="margin-bottom:4px;">
     <input type="datetime-local" id="taskTime" style="margin-bottom:4px;">
-    <button class="submit-btn" onclick="addCalendar()" style="background:#f57c00;">📅 加入行事曆</button>
+    <button class="submit-btn" onclick="addCalendar()">📅 加入行事曆</button>
     <div class="status-msg" id="calMsg"></div>
   </div>
   <div class="card">
     <label>📋 近期行程</label>
     <div class="ai-response" id="calendarList">點擊下方載入...</div>
-    <button class="submit-btn" onclick="loadCalendar()" style="background:#eee; color:#333; margin-top:4px;">🔄 載入行程</button>
+    <button class="submit-btn" onclick="loadCalendar()" style="background:#fff; color:#000; margin-top:4px;">🔄 載入行程</button>
   </div>
 </div>
 
@@ -140,16 +165,14 @@
 </div>
 
 <script>
-  // ✅ 你的真實 GAS URL，已經填好了，千萬不要改動這行！
+  // ✅ 你的真實 GAS URL (不需修改)
   const GAS_URL = "https://script.google.com/macros/s/AKfycbxcLThDpbk1qebQqGoW51VB4O7SiDR3XIZ54-KJZN-eox3d_CxN2YsA8mPl-31sCBXA/exec";
 
-  // 日期預設
   const today = new Date();
   document.getElementById('year').value = today.getFullYear();
   document.getElementById('month').value = String(today.getMonth() + 1).padStart(2, '0');
   document.getElementById('day').value = String(today.getDate()).padStart(2, '0');
 
-  // 切換分頁
   function switchTab(tabId, title, element) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -169,7 +192,6 @@
     document.getElementById('paymentMethod').value = val;
   }
 
-  // 圖片轉 Base64
   let base64String = "";
   document.getElementById('receiptImg').addEventListener('change', function(e) {
     const file = e.target.files[0];
@@ -185,7 +207,6 @@
     }
   });
 
-  // 提交記帳
   async function submitData() {
     const y = document.getElementById('year').value.trim();
     const m = String(document.getElementById('month').value.trim()).padStart(2, '0');
@@ -225,7 +246,6 @@
     } finally { btn.disabled = false; }
   }
 
-  // AI 助理連線
   async function askAI() {
     const prompt = document.getElementById('aiPrompt').value.trim();
     const resBox = document.getElementById('aiResult');
@@ -234,44 +254,3 @@
     resBox.innerText = "⏳ AI 思考中...";
     try {
       const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "ai_ask", prompt: prompt }) });
-      const data = await res.json();
-      resBox.innerText = data.status === "success" ? data.reply : "❌ 發生錯誤";
-    } catch(e) {
-      resBox.innerText = "❌ 網路連線錯誤";
-    }
-  }
-
-  // 日曆新增連線
-  async function addCalendar() {
-    const title = document.getElementById('taskTitle').value.trim();
-    const time = document.getElementById('taskTime').value;
-    const msg = document.getElementById('calMsg');
-    if (!title || !time) { msg.style.color = "red"; msg.innerText = "請輸入標題與時間！"; return; }
-    
-    msg.style.color = "blue"; msg.innerText = "⏳ 寫入中...";
-    try {
-      const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "add_calendar", title: title, time: time }) });
-      const data = await res.json();
-      msg.style.color = data.status === "success" ? "green" : "red";
-      msg.innerText = data.status === "success" ? "✅ 成功寫入日曆！" : "❌ 錯誤";
-      if(data.status === "success") { document.getElementById('taskTitle').value = ""; document.getElementById('taskTime').value = ""; }
-    } catch(e) {
-      msg.style.color = "red"; msg.innerText = "❌ 網路連線錯誤";
-    }
-  }
-
-  // 日曆讀取連線
-  async function loadCalendar() {
-    const list = document.getElementById('calendarList');
-    list.innerText = "⏳ 載入中...";
-    try {
-      const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "load_calendar" }) });
-      const data = await res.json();
-      list.innerText = data.status === "success" ? data.reply : "❌ 載入失敗";
-    } catch(e) {
-      list.innerText = "❌ 網路連線錯誤";
-    }
-  }
-</script>
-</body>
-</html>
