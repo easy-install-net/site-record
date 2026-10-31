@@ -3,80 +3,76 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>控制中心</title>
+  <title>AI 控制中心</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", sans-serif; }
-    body { background-color: #fff; color: #000; padding: 8px 8px 70px 8px; font-size: 16px; line-height: 1.35; }
-    
-    /* 頂部黑框標題 */
-    .header { border: 2px solid #000; padding: 8px; text-align: center; font-size: 18px; font-weight: 900; letter-spacing: 1px; margin-bottom: 8px; background: #fff; }
+    body { background-color: #fff; color: #000; padding: 8px 8px 75px 8px; font-size: 16px; }
 
-    /* 分頁顯示控制 */
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
+    /* 頂部標題 */
+    .header { border: 2px solid #000; padding: 10px; text-align: center; font-size: 18px; font-weight: 900; margin-bottom: 8px; background: #fff; }
 
-    /* 黑白極簡卡片容器：減小 padding */
-    .box { border: 2px solid #000; padding: 8px; margin-bottom: 8px; background: #fff; }
-    .box-title { font-size: 16px; font-weight: bold; margin-bottom: 6px; border-bottom: 1.5px solid #000; padding-bottom: 4px; display: flex; align-items: center; gap: 5px; }
+    /* 黑白卡片容器 */
+    .box { border: 2px solid #000; padding: 10px; margin-bottom: 10px; background: #fff; }
+    .box-title { font-size: 16px; font-weight: bold; margin-bottom: 8px; border-bottom: 2px solid #000; padding-bottom: 4px; }
 
-    /* 表單元件：大字體、緊湊邊距、黑框 */
-    label { display: block; font-size: 14px; font-weight: bold; margin-bottom: 3px; margin-top: 4px; }
+    /* 表單元件 */
+    label { display: block; font-size: 14px; font-weight: bold; margin: 6px 0 2px 0; }
     input, select, textarea {
       width: 100%;
-      padding: 7px;
+      padding: 8px;
       font-size: 16px;
       border: 1.5px solid #000;
       border-radius: 0;
       outline: none;
       background: #fff;
       color: #000;
-      margin-bottom: 5px;
+      margin-bottom: 6px;
       -webkit-appearance: none;
     }
-    textarea { resize: vertical; min-height: 95px; font-size: 15px; }
+    textarea { resize: vertical; min-height: 90px; }
 
-    /* 黑框線按鈕 */
+    /* 黑白大按鈕 */
     .btn {
       width: 100%;
-      padding: 10px;
+      padding: 12px;
       font-size: 16px;
       font-weight: bold;
       border: 2px solid #000;
       background: #000;
       color: #fff;
       cursor: pointer;
-      margin-top: 5px;
-      border-radius: 0;
+      margin-top: 6px;
       display: block;
       text-align: center;
+      border-radius: 0;
     }
     .btn:active { background: #333; }
     .btn-outline { background: #fff; color: #000; }
     .btn-outline:active { background: #eee; }
 
-    /* 快捷分類標籤（黑框線膠囊） */
-    .tag-container { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+    /* 引導分類標籤 */
+    .tag-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
     .tag {
       border: 1.5px solid #000;
       background: #fff;
       color: #000;
-      padding: 3px 6px;
+      padding: 4px 8px;
       font-size: 13px;
       font-weight: bold;
       cursor: pointer;
     }
     .tag:active { background: #000; color: #fff; }
 
-    /* 回覆與顯示區塊（黑框簡約） */
+    /* 結果回覆區塊 */
     .reply-area {
       border: 1.5px dashed #000;
-      padding: 6px;
-      margin-top: 6px;
+      padding: 8px;
+      margin-top: 8px;
       font-size: 15px;
-      min-height: 40px;
+      min-height: 45px;
       white-space: pre-wrap;
       word-break: break-all;
-      background: #fafafa;
+      background: #fdfdfd;
     }
 
     /* 底部固定導航列 */
@@ -85,7 +81,7 @@
       bottom: 0;
       left: 0;
       width: 100%;
-      height: 55px;
+      height: 58px;
       background: #fff;
       border-top: 2px solid #000;
       display: flex;
@@ -99,8 +95,8 @@
       justify-content: center;
       font-size: 12px;
       font-weight: bold;
-      color: #777;
-      border-right: 1px solid #eee;
+      color: #666;
+      border-right: 1px solid #ddd;
       cursor: pointer;
       background: #fff;
     }
@@ -110,55 +106,58 @@
       background: #f0f0f0;
       border-top: 3px solid #000;
     }
-    .nav-btn .icon { font-size: 16px; margin-bottom: 2px; }
+    .nav-btn .icon { font-size: 17px; margin-bottom: 2px; }
+
+    /* 分頁顯示邏輯 */
+    .page-tab { display: none; }
+    .page-tab.active { display: block; }
   </style>
 </head>
 <body>
 
-  <div class="header" id="pageTitle">🤖 AI 助理</div>
+  <div class="header" id="topTitle">🤖 AI 助理</div>
 
   <!-- 分頁 1：AI 助理 -->
-  <div id="tab-ai" class="tab-content active">
+  <div id="page-ai" class="page-tab active">
     <div class="box">
-      <div class="box-title">⚡ 快速引導分類</div>
+      <div class="box-title">⚡ 快速分類引導</div>
       <div class="tag-container">
-        <span class="tag" onclick="quickFill('公司點子：我想推廣新屋苑工程業務，有咩拓展點子？')">💡 推廣點子</span>
-        <span class="tag" onclick="quickFill('公司點子：如何與室內設計師或五金舖建立長期合作分成？')">🤝 異業合作</span>
-        <span class="tag" onclick="quickFill('客人投訴工程延誤一日，仲好生氣，應該點樣得體覆佢？')">💢 客訴應對</span>
-        <span class="tag" onclick="quickFill('客人問點解報價比出面貴少少，如何解釋物料同手工價值？')">💰 報價回覆</span>
-        <span class="tag" onclick="quickFill('請幫我將以下對話翻譯為英文：今日下午 3 點師傅會到現場檢查水喉。')">🌐 中英翻譯</span>
+        <span class="tag" onclick="fillPrompt('公司點子：我想推廣新屋苑工程業務，有咩拓展點子？')">💡 推廣點子</span>
+        <span class="tag" onclick="fillPrompt('公司點子：如何與室內設計師或五金舖建立長期合作分成？')">🤝 異業合作</span>
+        <span class="tag" onclick="fillPrompt('客人投訴工程延誤一日，仲好生氣，應該點樣得體覆佢？')">💢 客訴應對</span>
+        <span class="tag" onclick="fillPrompt('客人問點解報價比出面貴少少，如何解釋物料同手工價值？')">💰 報價回覆</span>
+        <span class="tag" onclick="fillPrompt('請幫我將以下對話翻譯為英文：今日下午 3 點師傅會到現場檢查水喉。')">🌐 中英翻譯</span>
       </div>
 
       <label>輸入問題或構想：</label>
-      <textarea id="aiInput" placeholder="點擊上方標籤或直接打字..."></textarea>
+      <textarea id="aiInput" placeholder="點擊上方標籤或輸入內容..."></textarea>
       <button class="btn" onclick="askAI()">✨ 送出查詢</button>
 
-      <div class="reply-area" id="aiResult">等待輸入...</div>
-      <button class="btn btn-outline" id="btnCopyIdea" style="display:none;" onclick="copyToIdeaTab()">📌 轉移此內容到「點子記錄」編輯</button>
+      <div class="reply-area" id="aiReply">等待查詢...</div>
+      <button class="btn btn-outline" id="btnTransfer" style="display:none;" onclick="transferIdea()">📌 轉移此內容到「點子記錄」編輯</button>
     </div>
   </div>
 
-  <!-- 分頁 2：點子記錄與修改 -->
-  <div id="tab-ideas" class="tab-content">
+  <!-- 分頁 2：點子記錄 -->
+  <div id="page-idea" class="page-tab">
     <div class="box">
       <div class="box-title">💡 公司點子編輯與歸檔</div>
       
-      <label>主題 / 項目標題：</label>
+      <label>點子主題：</label>
       <input type="text" id="ideaTitle" placeholder="例如：新屋苑二人同行優惠">
 
-      <label>詳細內容（可隨意修改增減）：</label>
-      <textarea id="ideaBody" style="min-height: 120px;" placeholder="在此輸入或貼上修改你的想法..."></textarea>
+      <label>詳細內容（隨意修改增減）：</label>
+      <textarea id="ideaContent" style="min-height: 120px;" placeholder="寫下你的想法或從 AI 轉存過來修改..."></textarea>
 
-      <!-- 操作按鈕 -->
       <button class="btn" onclick="saveIdea()">💾 儲存到 Google 試算表</button>
-      <button class="btn btn-outline" onclick="fetchIdeas()">📖 載入歷史點子清單</button>
+      <button class="btn btn-outline" onclick="loadIdeas()">📖 載入歷史點子清單</button>
 
-      <div class="reply-area" id="ideaList">點擊「載入歷史點子清單」可查看過往記錄。</div>
+      <div class="reply-area" id="ideaReply">點擊「載入歷史點子清單」可查看試算表記錄。</div>
     </div>
   </div>
 
   <!-- 分頁 3：記帳 -->
-  <div id="tab-expense" class="tab-content">
+  <div id="page-expense" class="page-tab">
     <div class="box">
       <div class="box-title">📝 支出記帳</div>
       
@@ -170,4 +169,274 @@
         <option value="材料採購">材料採購</option>
         <option value="工具設備">工具設備</option>
         <option value="餐飲伙食">餐飲伙食</option>
-        <option value="交通泊車">交通泊車</option
+        <option value="交通泊車">交通泊車</option>
+        <option value="雜項支出">雜項支出</option>
+      </select>
+
+      <label>商戶 / 項目：</label>
+      <input type="text" id="expMerchant" placeholder="例如：新興五金">
+
+      <label>金額 (HKD)：</label>
+      <input type="number" id="expAmount" placeholder="0.00">
+
+      <label>支付方式：</label>
+      <select id="expPayment">
+        <option value="現金">現金</option>
+        <option value="FPS 轉數快">FPS 轉數快</option>
+        <option value="信用卡">信用卡</option>
+        <option value="公司戶口">公司戶口</option>
+      </select>
+
+      <label>備註：</label>
+      <input type="text" id="expNotes" placeholder="選填">
+
+      <button class="btn" onclick="saveExpense()">確認記帳</button>
+    </div>
+  </div>
+
+  <!-- 分頁 4：行事曆 -->
+  <div id="page-calendar" class="page-tab">
+    <div class="box">
+      <div class="box-title">📅 日曆待辦</div>
+
+      <label>行程標題：</label>
+      <input type="text" id="calTitle" placeholder="例如：太古城陳生安裝">
+
+      <label>時間：</label>
+      <input type="datetime-local" id="calTime">
+
+      <button class="btn" onclick="addCalEvent()">➕ 加入 Google 日曆</button>
+      <button class="btn btn-outline" onclick="loadCalEvents()">📅 載入一週行程</button>
+
+      <div class="reply-area" id="calReply">尚未載入行程。</div>
+    </div>
+  </div>
+
+  <!-- 底部固定導航列 -->
+  <div class="navbar">
+    <div class="nav-btn active" id="nav-btn-ai" onclick="switchPage('ai', '🤖 AI 助理')">
+      <span class="icon">🤖</span>
+      <span>AI 助理</span>
+    </div>
+    <div class="nav-btn" id="nav-btn-idea" onclick="switchPage('idea', '💡 點子筆記')">
+      <span class="icon">💡</span>
+      <span>點子筆記</span>
+    </div>
+    <div class="nav-btn" id="nav-btn-expense" onclick="switchPage('expense', '📝 支出記帳')">
+      <span class="icon">📝</span>
+      <span>記帳</span>
+    </div>
+    <div class="nav-btn" id="nav-btn-calendar" onclick="switchPage('calendar', '📅 日曆待辦')">
+      <span class="icon">📅</span>
+      <span>行事曆</span>
+    </div>
+  </div>
+
+  <script>
+    // 你的 Apps Script 部署 URL
+    const API_URL = "https://script.google.com/macros/s/AKfycbyFY5fI-DuqNLF_FE3E4NAli_IaFiZ5hKEiDJRaKdrjcGKpm0-P32UNEXZ6BUsQVwP0/exec";
+
+    // 初始化日期
+    document.getElementById('expDate').value = new Date().toISOString().split('T')[0];
+
+    // 分頁切換函數
+    function switchPage(pageKey, title) {
+      // 隱藏所有分頁
+      var pages = document.getElementsByClassName('page-tab');
+      for (var i = 0; i < pages.length; i++) {
+        pages[i].classList.remove('active');
+      }
+      // 取消所有導航按鈕高亮
+      var btns = document.getElementsByClassName('nav-btn');
+      for (var j = 0; j < btns.length; j++) {
+        btns[j].classList.remove('active');
+      }
+
+      // 啟用目標分頁
+      var targetPage = document.getElementById('page-' + pageKey);
+      if (targetPage) targetPage.classList.add('active');
+
+      var targetBtn = document.getElementById('nav-btn-' + pageKey);
+      if (targetBtn) targetBtn.classList.add('active');
+
+      document.getElementById('topTitle').innerText = title;
+      window.scrollTo(0, 0);
+    }
+
+    // 快捷輸入
+    function fillPrompt(val) {
+      var input = document.getElementById('aiInput');
+      input.value = val;
+      input.focus();
+    }
+
+    // JSONP 通訊函數
+    function callAPI(payload) {
+      return new Promise(function(resolve, reject) {
+        var cbName = "cb_" + Math.round(1000000 * Math.random());
+        window[cbName] = function(res) {
+          delete window[cbName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+          resolve(res);
+        };
+
+        var script = document.createElement("script");
+        script.src = API_URL + "?callback=" + cbName + "&data=" + encodeURIComponent(JSON.stringify(payload));
+        script.onerror = function() {
+          delete window[cbName];
+          if (script.parentNode) script.parentNode.removeChild(script);
+          reject(new Error("網路連線逾時"));
+        };
+        document.body.appendChild(script);
+      });
+    }
+
+    var lastPrompt = "";
+    var lastReply = "";
+
+    // 1. AI 查詢
+    function askAI() {
+      var prompt = document.getElementById('aiInput').value.trim();
+      var replyBox = document.getElementById('aiReply');
+      var transferBtn = document.getElementById('btnTransfer');
+
+      if (!prompt) {
+        alert("請輸入問題！");
+        return;
+      }
+
+      replyBox.innerText = "⏳ 處理中，請稍候...";
+      transferBtn.style.display = "none";
+
+      callAPI({ action: "ai_ask", prompt: prompt })
+        .then(function(res) {
+          if (res.status === "success") {
+            replyBox.innerText = res.reply;
+            lastPrompt = prompt;
+            lastReply = res.reply;
+            transferBtn.style.display = "block";
+          } else {
+            replyBox.innerText = "❌ " + (res.reply || res.message);
+          }
+        })
+        .catch(function(err) {
+          replyBox.innerText = "❌ 連線錯誤: " + err.message;
+        });
+    }
+
+    // 轉移至點子分頁
+    function transferIdea() {
+      document.getElementById('ideaTitle').value = lastPrompt.replace(/公司點子：|請幫我/g, "").substring(0, 30);
+      document.getElementById('ideaContent').value = "【原問題】\n" + lastPrompt + "\n\n【建議與方案】\n" + lastReply + "\n\n【我的調整 / 實行心得】\n";
+      switchPage('idea', '💡 點子筆記');
+    }
+
+    // 2. 儲存點子
+    function saveIdea() {
+      var title = document.getElementById('ideaTitle').value.trim();
+      var content = document.getElementById('ideaContent').value.trim();
+      var replyBox = document.getElementById('ideaReply');
+
+      if (!content) {
+        alert("請輸入點子內容！");
+        return;
+      }
+
+      replyBox.innerText = "⏳ 儲存中...";
+
+      callAPI({ action: "save_idea", title: title, content: content })
+        .then(function(res) {
+          alert(res.message);
+          replyBox.innerText = res.message;
+        })
+        .catch(function(err) {
+          alert("❌ 儲存失敗: " + err.message);
+          replyBox.innerText = "❌ 儲存失敗: " + err.message;
+        });
+    }
+
+    // 讀取點子
+    function loadIdeas() {
+      var replyBox = document.getElementById('ideaReply');
+      replyBox.innerText = "⏳ 讀取中...";
+
+      callAPI({ action: "load_ideas" })
+        .then(function(res) {
+          replyBox.innerText = res.reply;
+        })
+        .catch(function(err) {
+          replyBox.innerText = "❌ 載入失敗: " + err.message;
+        });
+    }
+
+    // 3. 記帳
+    function saveExpense() {
+      var date = document.getElementById('expDate').value;
+      var category = document.getElementById('expCategory').value;
+      var merchant = document.getElementById('expMerchant').value;
+      var amount = document.getElementById('expAmount').value;
+      var payment = document.getElementById('expPayment').value;
+      var notes = document.getElementById('expNotes').value;
+
+      if (!amount) {
+        alert("請輸入金額！");
+        return;
+      }
+
+      var payload = {
+        action: "expense",
+        date: date,
+        category: category,
+        merchant: merchant,
+        amount: amount,
+        payment: payment,
+        notes: notes
+      };
+
+      callAPI(payload)
+        .then(function(res) {
+          alert(res.message);
+          document.getElementById('expMerchant').value = '';
+          document.getElementById('expAmount').value = '';
+          document.getElementById('expNotes').value = '';
+        })
+        .catch(function(err) {
+          alert("❌ 記帳失敗: " + err.message);
+        });
+    }
+
+    // 4. 日曆
+    function addCalEvent() {
+      var title = document.getElementById('calTitle').value;
+      var time = document.getElementById('calTime').value;
+
+      if (!title || !time) {
+        alert("請填寫標題及時間！");
+        return;
+      }
+
+      callAPI({ action: "add_calendar", title: title, time: time })
+        .then(function(res) {
+          alert(res.message);
+          document.getElementById('calTitle').value = '';
+        })
+        .catch(function(err) {
+          alert("❌ 新增失敗: " + err.message);
+        });
+    }
+
+    function loadCalEvents() {
+      var replyBox = document.getElementById('calReply');
+      replyBox.innerText = "⏳ 載入行程中...";
+
+      callAPI({ action: "load_calendar" })
+        .then(function(res) {
+          replyBox.innerText = res.reply;
+        })
+        .catch(function(err) {
+          replyBox.innerText = "❌ 載入失敗: " + err.message;
+        });
+    }
+  </script>
+</body>
+</html>
