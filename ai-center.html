@@ -254,3 +254,42 @@
     resBox.innerText = "⏳ AI 思考中...";
     try {
       const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "ai_ask", prompt: prompt }) });
+      const data = await res.json();
+      resBox.innerText = data.status === "success" ? data.reply : "❌ 發生錯誤";
+    } catch(e) {
+      resBox.innerText = "❌ 網路連線錯誤";
+    }
+  }
+
+  async function addCalendar() {
+    const title = document.getElementById('taskTitle').value.trim();
+    const time = document.getElementById('taskTime').value;
+    const msg = document.getElementById('calMsg');
+    if (!title || !time) { msg.style.color = "red"; msg.innerText = "請輸入標題與時間！"; return; }
+    
+    msg.style.color = "blue"; msg.innerText = "⏳ 寫入中...";
+    try {
+      const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "add_calendar", title: title, time: time }) });
+      const data = await res.json();
+      msg.style.color = data.status === "success" ? "green" : "red";
+      msg.innerText = data.status === "success" ? "✅ 成功寫入日曆！" : "❌ 錯誤";
+      if(data.status === "success") { document.getElementById('taskTitle').value = ""; document.getElementById('taskTime').value = ""; }
+    } catch(e) {
+      msg.style.color = "red"; msg.innerText = "❌ 網路連線錯誤";
+    }
+  }
+
+  async function loadCalendar() {
+    const list = document.getElementById('calendarList');
+    list.innerText = "⏳ 載入中...";
+    try {
+      const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "load_calendar" }) });
+      const data = await res.json();
+      list.innerText = data.status === "success" ? data.reply : "❌ 載入失敗";
+    } catch(e) {
+      list.innerText = "❌ 網路連線錯誤";
+    }
+  }
+</script>
+</body>
+</html>
