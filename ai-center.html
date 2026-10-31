@@ -260,18 +260,19 @@
       el.focus();
     }
 
-    // 免 CORS 阻擋的完美通訊封裝 (改用標準表單 URLSearchParams 傳遞)
+// 徹底解決 CORS 的通訊函數
     function callAPI(payload) {
-      return fetch(API_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: new URLSearchParams({
-          "postData": JSON.stringify(payload)
-        })
-      })
-      .then(r => r.json());
+      // 若包含圖片則走 POST，一般文字走 GET
+      if (payload.action === "expense" && payload.imageBase64) {
+        return fetch(API_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ "postData": JSON.stringify(payload) })
+        }).then(r => r.json());
+      } else {
+        const url = API_ENDPOINT + "?data=" + encodeURIComponent(JSON.stringify(payload));
+        return fetch(url).then(r => r.json());
+      }
     }
 
     // 暫存變數
