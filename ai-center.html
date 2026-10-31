@@ -260,21 +260,26 @@
       el.focus();
     }
 
-// 徹底解決 CORS 的通訊函數
+// 終極抗 CORS 阻擋：JSONP 通訊函數
     function callAPI(payload) {
-      // 若包含圖片則走 POST，一般文字走 GET
-      if (payload.action === "expense" && payload.imageBase64) {
-        return fetch(API_ENDPOINT, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ "postData": JSON.stringify(payload) })
-        }).then(r => r.json());
-      } else {
-        const url = API_ENDPOINT + "?data=" + encodeURIComponent(JSON.stringify(payload));
-        return fetch(url).then(r => r.json());
-      }
-    }
+      return new Promise((resolve, reject) => {
+        const callbackName = "jsonp_cb_" + Math.round(100000 * Math.random());
+        window[callbackName] = function(data) {
+          delete window[callbackName];
+          document.body.removeChild(script);
+          resolve(data);
+        };
 
+        const script = document.createElement("script");
+        script.src = API_ENDPOINT + "?callback=" + callbackName + "&data=" + encodeURIComponent(JSON.stringify(payload));
+        script.onerror = function() {
+          delete window[callbackName];
+          document.body.removeChild(script);
+          reject(new Error("網路請求異常或逾時"));
+        };
+        document.body.appendChild(script);
+      });
+    }
     // 暫存變數
     let currentQ = "";
     let currentA = "";
