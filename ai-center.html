@@ -3,136 +3,173 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>智慧記帳與物料管理</title>
+  <title>AI 中心</title>
   <style>
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: #f4f6f8; margin: 0; padding: 8px; color: #333; } /* 縮小外部 padding */
-    .card { background: #fff; border-radius: 10px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); max-width: 500px; margin: 0 auto; } /* 縮小卡片 padding */
-    h2 { margin-top: 0; margin-bottom: 10px; font-size: 1.15rem; text-align: center; color: #1a1a1a; }
+    /* 極致緊湊風格 */
+    * { box-sizing: border-box; font-family: -apple-system, sans-serif; font-size: 14px; }
+    body { background-color: #f0f0f0; margin: 0; padding: 4px; padding-bottom: 55px; color: #111; }
     
-    label { font-size: 0.8rem; font-weight: 600; color: #555; margin-bottom: 4px; display: block; } /* 縮小標籤與輸入框的距離 */
-    .form-group { margin-bottom: 10px; } /* 縮小各區塊間距 */
+    .header { background: #333; color: #fff; padding: 8px; text-align: center; font-weight: bold; margin-bottom: 6px; border-radius: 4px; }
+    .card { background: #fff; padding: 8px; margin-bottom: 6px; border-radius: 4px; border: 1px solid #ddd; }
     
-    input, select, textarea { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #dcdfe6; font-size: 0.95rem; outline: none; background: #fff; } /* 縮小輸入框 padding */
-    input:focus, select:focus, textarea:focus { border-color: #007aff; }
+    label { font-size: 12px; font-weight: bold; color: #444; margin-bottom: 2px; display: block; }
+    .form-group { margin-bottom: 8px; }
+    input, select, textarea { width: 100%; padding: 6px; border-radius: 2px; border: 1px solid #ccc; outline: none; }
+    input:focus, textarea:focus { border-color: #007aff; }
     
-    /* 3格日期樣式 */
-    .date-row { display: flex; gap: 6px; }
-    .date-row input { text-align: center; font-weight: bold; }
+    /* 日期 3 格 */
+    .date-row { display: flex; gap: 4px; }
+    .date-row input { text-align: center; font-weight: bold; padding: 4px; }
     
-    /* 按鈕晶片樣式 */
-    .btn-group { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 4px; } /* 縮小按鈕間距 */
-    .chip { padding: 5px 10px; border-radius: 14px; font-size: 0.8rem; background: #f0f2f5; border: 1px solid #e1e4e8; cursor: pointer; user-select: none; transition: 0.2s; } /* 縮小按鈕 padding */
-    .chip.active { background: #007aff; color: #fff; border-color: #007aff; font-weight: 600; }
-    .chip.biz { border-color: #ffd591; background: #fff7e6; color: #d46b08; }
-    .chip.biz.active { background: #fa8c16; color: #fff; border-color: #fa8c16; font-weight: 600; }
+    /* 緊湊按鈕晶片 */
+    .btn-group { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 2px; }
+    .chip { padding: 4px 8px; border-radius: 4px; font-size: 12px; background: #eee; border: 1px solid #ccc; cursor: pointer; }
+    .chip.active { background: #007aff; color: #fff; border-color: #007aff; }
+    .chip.biz { background: #fff3e0; border-color: #ffb74d; color: #e65100; }
+    .chip.biz.active { background: #f57c00; color: #fff; border-color: #f57c00; }
     
-    .preview-box { width: 100%; max-height: 120px; object-fit: contain; border-radius: 6px; margin-top: 6px; display: none; background: #eee; }
-    .submit-btn { width: 100%; padding: 12px; background: #007aff; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: 0.2s; margin-top: 6px; }
-    .submit-btn:disabled { background: #b0c4de; cursor: not-allowed; }
-    .status-msg { margin-top: 8px; text-align: center; font-size: 0.85rem; font-weight: bold; }
+    .preview-box { width: 100%; max-height: 100px; object-fit: contain; margin-top: 4px; display: none; background: #eee; }
+    .submit-btn { width: 100%; padding: 10px; background: #007aff; color: #fff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+    .status-msg { margin-top: 4px; text-align: center; font-size: 12px; font-weight: bold; }
+    
+    /* 底部導覽 */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #fff; display: flex; border-top: 1px solid #ccc; z-index: 100; }
+    .nav-item { flex: 1; text-align: center; padding: 8px 0; font-size: 12px; color: #666; cursor: pointer; }
+    .nav-item.active { background: #007aff; color: #fff; font-weight: bold; }
+    
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .ai-response { background: #fafafa; padding: 8px; font-size: 13px; min-height: 60px; border: 1px solid #ddd; margin-top: 6px; white-space: pre-wrap; }
   </style>
 </head>
 <body>
 
-<div class="card">
-  <h2>📝 快速記帳與物料登記</h2>
+<div class="header" id="headerTitle">💰 記帳與物料</div>
 
-  <!-- 消費日期 (3 格數字) -->
-  <div class="form-group">
-    <label>📅 消費日期 (年/月/日)</label>
+<!-- 分頁 1: 記帳 -->
+<div id="tab-expense" class="tab-content active">
+  <div class="card">
+    <div class="form-group">
+      <label>📅 日期 (年/月/日)</label>
+      <div class="date-row">
+        <input type="number" id="year" placeholder="年" style="flex: 1.2;">
+        <input type="number" id="month" placeholder="月" style="flex: 1;">
+        <input type="number" id="day" placeholder="日" style="flex: 1;">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>🏷️ 分類</label>
+      <div class="btn-group">
+        <div class="chip biz active" onclick="selectCategory(this, '供應商訂購物料')">📦 供應商</div>
+        <div class="chip biz" onclick="selectCategory(this, '工地/現場雜支')">🔧 工地</div>
+        <div class="chip biz" onclick="selectCategory(this, '業務/交際')">💼 業務</div>
+        <div class="chip" onclick="selectCategory(this, '餐飲')">🍽️ 餐飲</div>
+        <div class="chip" onclick="selectCategory(this, '交通/油費')">🚗 交通</div>
+        <div class="chip" onclick="selectCategory(this, '超市/日常')">🛒 超市</div>
+        <div class="chip" onclick="selectCategory(this, '其他')">➕ 其他</div>
+      </div>
+      <input type="hidden" id="selectedCategory" value="供應商訂購物料">
+    </div>
     <div class="date-row">
-      <input type="number" id="year" placeholder="年" style="flex: 1.2;">
-      <input type="number" id="month" placeholder="月" style="flex: 1;">
-      <input type="number" id="day" placeholder="日" style="flex: 1;">
+      <div class="form-group" style="flex:1;">
+        <label>💰 金額 (留空AI猜)</label>
+        <input type="number" step="any" id="amount" placeholder="金額">
+      </div>
+      <div class="form-group" style="flex:1.5;">
+        <label>🏢 店家/供應商</label>
+        <input type="text" id="merchant" placeholder="店家名稱">
+      </div>
     </div>
-  </div>
-
-  <!-- 分類快捷鍵 -->
-  <div class="form-group">
-    <label>🏷️ 選擇分類</label>
-    <div style="font-size:0.75rem; color:#888; margin-bottom:2px;">工作與工程採購：</div>
-    <div class="btn-group">
-      <div class="chip biz active" onclick="selectCategory(this, '供應商訂購物料')">📦 供應商訂購物料</div>
-      <div class="chip biz" onclick="selectCategory(this, '工地/現場雜支')">🔧 工地/現場雜支</div>
-      <div class="chip biz" onclick="selectCategory(this, '業務/交際')">💼 業務/交際</div>
+    <div class="form-group">
+      <label>💳 方式</label>
+      <div class="btn-group">
+        <div class="chip active" onclick="selectPayment(this, '公司帳戶')">公司</div>
+        <div class="chip" onclick="selectPayment(this, '現金')">現金</div>
+        <div class="chip" onclick="selectPayment(this, '八達通')">八達通</div>
+        <div class="chip" onclick="selectPayment(this, '信用卡')">信用卡</div>
+        <div class="chip" onclick="selectPayment(this, 'PayMe/FPS')">PayMe</div>
+      </div>
+      <input type="hidden" id="paymentMethod" value="公司帳戶">
     </div>
-    <div style="font-size:0.75rem; color:#888; margin:4px 0 2px 0;">生活日常消費：</div>
-    <div class="btn-group">
-      <div class="chip" onclick="selectCategory(this, '餐飲')">🍽️ 餐飲</div>
-      <div class="chip" onclick="selectCategory(this, '交通/油費')">🚗 交通/油費</div>
-      <div class="chip" onclick="selectCategory(this, '超市/日常')">🛒 超市/日常</div>
-      <div class="chip" onclick="selectCategory(this, '飲品/小食')">☕ 飲品/小食</div>
-      <div class="chip" onclick="selectCategory(this, '其他雜費')">💡 其他雜費</div>
-      <div class="chip" onclick="selectCategory(this, '其他')">➕ 其他</div>
+    <div class="form-group">
+      <label>📝 用途/備註</label>
+      <input type="text" id="notes" placeholder="例如: 批盪灰 2 包">
     </div>
-    <input type="hidden" id="selectedCategory" value="供應商訂購物料">
-  </div>
-
-  <!-- 金額 -->
-  <div class="form-group">
-    <label>💰 金額 (留空則由 AI 辨識)</label>
-    <input type="number" step="any" id="amount" placeholder="例如: 380">
-  </div>
-
-  <!-- 消費地點 / 店家 / 供應商 -->
-  <div class="form-group">
-    <label>🏢 店家 / 供應商 (留空由 AI 辨識)</label>
-    <input type="text" id="merchant" placeholder="例如: 大角咀五金 / 大家樂">
-  </div>
-
-  <!-- 付款方式快捷鍵 -->
-  <div class="form-group">
-    <label>💳 付款方式</label>
-    <div class="btn-group">
-      <div class="chip active" onclick="selectPayment(this, '公司帳戶')">公司帳戶</div>
-      <div class="chip" onclick="selectPayment(this, '現金')">現金</div>
-      <div class="chip" onclick="selectPayment(this, '八達通')">八達通</div>
-      <div class="chip" onclick="selectPayment(this, '信用卡')">信用卡</div>
-      <div class="chip" onclick="selectPayment(this, 'PayMe/FPS')">PayMe/FPS</div>
+    <div class="form-group">
+      <label>📷 單據拍照</label>
+      <input type="file" id="receiptImg" accept="image/*" capture="environment">
+      <img id="preview" class="preview-box">
     </div>
-    <input type="hidden" id="paymentMethod" value="公司帳戶">
+    <button class="submit-btn" id="submitBtn" onclick="submitData()">💾 儲存並寫入</button>
+    <div class="status-msg" id="statusMsg"></div>
   </div>
-
-  <!-- 消費用途 / 物料備註 -->
-  <div class="form-group">
-    <label>📝 用途目的 / 物料細節</label>
-    <textarea id="notes" rows="2" placeholder="例如: 批盪灰 2 包、螺絲釘"></textarea>
-  </div>
-
-  <!-- 拍照收據 (選填) -->
-  <div class="form-group">
-    <label>📷 單據拍照 / 上傳 (選填)</label>
-    <input type="file" id="receiptImg" accept="image/*" capture="environment">
-    <img id="preview" class="preview-box">
-  </div>
-
-  <button class="submit-btn" id="submitBtn" onclick="submitData()">💾 儲存並寫入試算表</button>
-  <div class="status-msg" id="statusMsg"></div>
 </div>
 
-<>
+<!-- 分頁 2: AI 助理 -->
+<div id="tab-ai" class="tab-content">
+  <div class="card">
+    <label>🤖 詢問 AI (分析、建議、翻譯)</label>
+    <textarea id="aiPrompt" rows="4" placeholder="請輸入問題..."></textarea>
+    <button class="submit-btn" onclick="askAI()" style="background:#555; margin-top:4px;">✨ 送出給 AI</button>
+    <label style="margin-top:10px;">💡 AI 回覆：</label>
+    <div class="ai-response" id="aiResult">等待輸入...</div>
+  </div>
+</div>
+
+<!-- 分頁 3: 日曆 -->
+<div id="tab-calendar" class="tab-content">
+  <div class="card">
+    <label>➕ 新增 Google Calendar 行程</label>
+    <input type="text" id="taskTitle" placeholder="事項 (例: 下午開會)" style="margin-bottom:4px;">
+    <input type="datetime-local" id="taskTime" style="margin-bottom:4px;">
+    <button class="submit-btn" onclick="addCalendar()" style="background:#f57c00;">📅 加入行事曆</button>
+    <div class="status-msg" id="calMsg"></div>
+  </div>
+  <div class="card">
+    <label>📋 近期行程</label>
+    <div class="ai-response" id="calendarList">點擊下方載入...</div>
+    <button class="submit-btn" onclick="loadCalendar()" style="background:#eee; color:#333; margin-top:4px;">🔄 載入行程</button>
+  </div>
+</div>
+
+<!-- 底部導覽列 -->
+<div class="bottom-nav">
+  <div class="nav-item active" onclick="switchTab('expense', '💰 記帳與物料', this)">🧾 記帳</div>
+  <div class="nav-item" onclick="switchTab('ai', '🤖 AI 助理', this)">✨ AI 助理</div>
+  <div class="nav-item" onclick="switchTab('calendar', '📅 日曆待辦', this)">📆 日曆</div>
+</div>
+
+<script>
+  // ✅ 你的真實 GAS URL，已經填好了，千萬不要改動這行！
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbxcLThDpbk1qebQqGoW51VB4O7SiDR3XIZ54-KJZN-eox3d_CxN2YsA8mPl-31sCBXA/exec";
+
+  // 日期預設
   const today = new Date();
   document.getElementById('year').value = today.getFullYear();
   document.getElementById('month').value = String(today.getMonth() + 1).padStart(2, '0');
   document.getElementById('day').value = String(today.getDate()).padStart(2, '0');
 
+  // 切換分頁
+  function switchTab(tabId, title, element) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('tab-' + tabId).classList.add('active');
+    element.classList.add('active');
+    document.getElementById('headerTitle').innerText = title;
+  }
+
   function selectCategory(el, val) {
-    document.querySelectorAll('.chip').forEach(c => {
-      if (c.onclick && c.onclick.toString().includes('selectCategory')) c.classList.remove('active');
-    });
+    el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
     el.classList.add('active');
     document.getElementById('selectedCategory').value = val;
   }
-
   function selectPayment(el, val) {
-    document.querySelectorAll('.chip').forEach(c => {
-      if (c.onclick && c.onclick.toString().includes('selectPayment')) c.classList.remove('active');
-    });
+    el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
     el.classList.add('active');
     document.getElementById('paymentMethod').value = val;
   }
 
+  // 圖片轉 Base64
   let base64String = "";
   document.getElementById('receiptImg').addEventListener('change', function(e) {
     const file = e.target.files[0];
@@ -148,65 +185,91 @@
     }
   });
 
-  // ⚠️ 請換回你 Google Apps Script 的真實 Web App 網址
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbxcLThDpbk1qebQqGoW51VB4O7SiDR3XIZ54-KJZN-eox3d_CxN2YsA8mPl-31sCBXA/exec)";
-
+  // 提交記帳
   async function submitData() {
     const y = document.getElementById('year').value.trim();
     const m = String(document.getElementById('month').value.trim()).padStart(2, '0');
     const d = String(document.getElementById('day').value.trim()).padStart(2, '0');
     const fullDate = `${y}-${m}-${d}`;
-    const yy = y.slice(-2);
-    const shortDate = `${yy}${m}${d}`; 
+    const shortDate = `${y.slice(-2)}${m}${d}`; 
 
-    const category = document.getElementById('selectedCategory').value;
-    const amount = document.getElementById('amount').value.trim();
-    const merchant = document.getElementById('merchant').value.trim();
-    const payment = document.getElementById('paymentMethod').value;
-    const notes = document.getElementById('notes').value.trim();
-
-    const imgFilename = `${shortDate}-${amount || "待定"}-${merchant || "未命名"}.jpg`;
+    const payload = {
+      action: "expense",
+      date: fullDate,
+      category: document.getElementById('selectedCategory').value,
+      amount: document.getElementById('amount').value.trim(),
+      merchant: document.getElementById('merchant').value.trim(),
+      payment: document.getElementById('paymentMethod').value,
+      notes: document.getElementById('notes').value.trim(),
+      imageBase64: base64String,
+      filename: `${shortDate}-${document.getElementById('amount').value.trim() || "待定"}-${document.getElementById('merchant').value.trim() || "未命名"}.jpg`
+    };
 
     const btn = document.getElementById('submitBtn');
     const msg = document.getElementById('statusMsg');
-    btn.disabled = true;
-    btn.innerText = "⏳ 儲存與分析中...";
-    msg.style.color = "#007aff";
-    msg.innerText = "正在同步至試算表...";
-
-    const payload = {
-      date: fullDate,
-      category: category,
-      amount: amount,
-      merchant: merchant,
-      payment: payment,
-      notes: notes,
-      imageBase64: base64String,
-      filename: imgFilename
-    };
+    btn.disabled = true; msg.style.color = "blue"; msg.innerText = "寫入中...";
 
     try {
       const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify(payload) });
       const data = await res.json();
       if (data.status === "success") {
-        msg.style.color = "#52c41a";
-        msg.innerText = `✅ 成功！(${data.item || merchant} - $${data.amount || amount})`;
-        document.getElementById('amount').value = "";
-        document.getElementById('merchant').value = "";
-        document.getElementById('notes').value = "";
-        document.getElementById('receiptImg').value = "";
-        document.getElementById('preview').style.display = "none";
-        base64String = "";
+        msg.style.color = "green"; msg.innerText = `✅ 成功！`;
+        document.getElementById('amount').value = ""; document.getElementById('merchant').value = "";
+        document.getElementById('notes').value = ""; document.getElementById('receiptImg').value = "";
+        document.getElementById('preview').style.display = "none"; base64String = "";
       } else {
-        msg.style.color = "#ff4d4f";
-        msg.innerText = "❌ 發生錯誤: " + data.message;
+        msg.style.color = "red"; msg.innerText = "❌ " + data.message;
       }
     } catch (err) {
-      msg.style.color = "#ff4d4f";
-      msg.innerText = "❌ 發送失敗，請確認網路。";
-    } finally {
-      btn.disabled = false;
-      btn.innerText = "💾 儲存並寫入試算表";
+      msg.style.color = "red"; msg.innerText = "❌ 網路錯誤";
+    } finally { btn.disabled = false; }
+  }
+
+  // AI 助理連線
+  async function askAI() {
+    const prompt = document.getElementById('aiPrompt').value.trim();
+    const resBox = document.getElementById('aiResult');
+    if (!prompt) return resBox.innerText = "請輸入問題！";
+    
+    resBox.innerText = "⏳ AI 思考中...";
+    try {
+      const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "ai_ask", prompt: prompt }) });
+      const data = await res.json();
+      resBox.innerText = data.status === "success" ? data.reply : "❌ 發生錯誤";
+    } catch(e) {
+      resBox.innerText = "❌ 網路連線錯誤";
+    }
+  }
+
+  // 日曆新增連線
+  async function addCalendar() {
+    const title = document.getElementById('taskTitle').value.trim();
+    const time = document.getElementById('taskTime').value;
+    const msg = document.getElementById('calMsg');
+    if (!title || !time) { msg.style.color = "red"; msg.innerText = "請輸入標題與時間！"; return; }
+    
+    msg.style.color = "blue"; msg.innerText = "⏳ 寫入中...";
+    try {
+      const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "add_calendar", title: title, time: time }) });
+      const data = await res.json();
+      msg.style.color = data.status === "success" ? "green" : "red";
+      msg.innerText = data.status === "success" ? "✅ 成功寫入日曆！" : "❌ 錯誤";
+      if(data.status === "success") { document.getElementById('taskTitle').value = ""; document.getElementById('taskTime').value = ""; }
+    } catch(e) {
+      msg.style.color = "red"; msg.innerText = "❌ 網路連線錯誤";
+    }
+  }
+
+  // 日曆讀取連線
+  async function loadCalendar() {
+    const list = document.getElementById('calendarList');
+    list.innerText = "⏳ 載入中...";
+    try {
+      const res = await fetch(GAS_URL, { method: "POST", body: JSON.stringify({ action: "load_calendar" }) });
+      const data = await res.json();
+      list.innerText = data.status === "success" ? data.reply : "❌ 載入失敗";
+    } catch(e) {
+      list.innerText = "❌ 網路連線錯誤";
     }
   }
 </script>
