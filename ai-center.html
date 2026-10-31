@@ -12,7 +12,7 @@
     .tab-content { display: none; }
     .tab-content.active { display: block; }
 
-    /* 表單元件 */
+    /* 表單與卡片 */
     .card { background: #fff; border-radius: 10px; padding: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); margin-bottom: 15px; }
     .card-title { font-size: 15px; font-weight: bold; margin-bottom: 12px; color: #111; }
     label { display: block; font-size: 13px; color: #666; margin-bottom: 5px; }
@@ -23,20 +23,21 @@
     .btn { width: 100%; padding: 12px; background: #000; color: #fff; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
     .btn:active { background: #333; }
     .btn-secondary { background: #e0e0e0; color: #333; margin-top: 8px; }
+    .btn-transfer { background: #2e7d32; color: #fff; margin-top: 10px; display: none; }
 
-    /* AI 引導標籤區域 */
+    /* AI 引導標籤 */
     .tag-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-    .tag { background: #eef2f7; color: #1976d2; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid #d0e1fd; transition: background 0.2s; }
+    .tag { background: #eef2f7; color: #1976d2; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid #d0e1fd; }
     .tag:active { background: #bbdefb; }
 
-    /* 回覆視窗 */
+    /* 訊息顯示框 */
     .reply-box { background: #fafafa; border: 1px dashed #ccc; border-radius: 6px; padding: 12px; font-size: 14px; white-space: pre-wrap; word-break: break-all; margin-top: 15px; min-height: 40px; }
 
-    /* 底部導覽列 */
+    /* 底部導覽列 (4 分頁) */
     .nav-bar { position: fixed; bottom: 0; left: 0; width: 100%; height: 55px; background: #fff; display: flex; border-top: 1px solid #ddd; }
-    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; color: #888; cursor: pointer; text-decoration: none; }
+    .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; color: #888; cursor: pointer; }
     .nav-item.active { color: #000; font-weight: bold; }
-    .nav-item svg { width: 20px; height: 20px; margin-bottom: 2px; }
+    .nav-item .icon { font-size: 17px; margin-bottom: 2px; }
   </style>
 </head>
 <body>
@@ -48,7 +49,7 @@
     <!-- 頁面 1：AI 助理 -->
     <div id="tab-ai" class="tab-content active">
       <div class="card">
-        <div class="card-title">💡 快捷提示／引導分類（點擊快速填入）：</div>
+        <div class="card-title">💡 快捷提示／引導分類：</div>
         <div class="tag-container">
           <span class="tag" onclick="setPrompt('公司點子：我想推廣新屋苑工程業務，有咩具體拓展點子？')">💡 推廣點子</span>
           <span class="tag" onclick="setPrompt('公司點子：如何與室內設計師或五金舖建立長期合作分成？')">🤝 異業合作</span>
@@ -57,15 +58,34 @@
           <span class="tag" onclick="setPrompt('請幫我將以下對話翻譯為英文：今日下午 3 點師傅會到現場檢查水喉。')">🌐 中英翻譯</span>
         </div>
 
-        <label for="aiPrompt">輸入您的問題或構想：</label>
-        <textarea id="aiPrompt" placeholder="點選上方標籤或直接在此輸入文字..."></textarea>
+        <label for="aiPrompt">輸入問題或諮詢業務想法：</label>
+        <textarea id="aiPrompt" placeholder="點選上方標籤或直接輸入文字..."></textarea>
         <button class="btn" onclick="sendToAI()">✨ 送出給 AI</button>
 
         <div class="reply-box" id="aiReply">💡 AI 回覆將會顯示於此...</div>
+        <button class="btn btn-transfer" id="btnTransferIdea" onclick="transferToIdeaTab()">📌 將此回覆轉存到「點子記錄」編輯</button>
       </div>
     </div>
 
-    <!-- 頁面 2：記帳功能 -->
+    <!-- 頁面 2：點子記錄與修改 -->
+    <div id="tab-ideas" class="tab-content">
+      <div class="card">
+        <div class="card-title">💡 編輯並記錄好點子</div>
+        
+        <label>點子主題 / 項目標題</label>
+        <input type="text" id="ideaTitle" placeholder="例如：新屋苑二人同行優惠推廣">
+
+        <label>詳細內容（可隨意修改或加入自己的心得）</label>
+        <textarea id="ideaContent" style="min-height: 140px;" placeholder="寫下你的具體點子或直接從 AI 轉存過來修改..."></textarea>
+
+        <button class="btn" onclick="saveIdeaToSheet()">💾 儲存到 Google 試算表</button>
+        <button class="btn btn-secondary" onclick="loadSavedIdeas()">📖 載入歷史點子清單</button>
+
+        <div class="reply-box" id="ideaHistoryReply">🔹 點擊上方按鈕載入儲存過的點子記錄...</div>
+      </div>
+    </div>
+
+    <!-- 頁面 3：記帳功能 -->
     <div id="tab-expense" class="tab-content">
       <div class="card">
         <div class="card-title">📝 新增消費記錄</div>
@@ -105,7 +125,7 @@
       </div>
     </div>
 
-    <!-- 頁面 3：日曆待辦 -->
+    <!-- 頁面 4：日曆待辦 -->
     <div id="tab-calendar" class="tab-content">
       <div class="card">
         <div class="card-title">📅 新增工程 / 預約行程</div>
@@ -124,57 +144,65 @@
 
   </div>
 
-  <!-- 底部選單 -->
+  <!-- 底部導覽列 -->
   <div class="nav-bar">
-    <div class="nav-item active" onclick="switchTab('ai', '🤖 AI 助理')">
-      <div>🤖</div>
+    <div class="nav-item active" onclick="switchTab('ai', '🤖 AI 助理', this)">
+      <div class="icon">🤖</div>
       <div>AI 助理</div>
     </div>
-    <div class="nav-item" onclick="switchTab('expense', '📝 支出記帳')">
-      <div>📝</div>
+    <div class="nav-item" onclick="switchTab('ideas', '💡 點子記錄', this)">
+      <div class="icon">💡</div>
+      <div>點子筆記</div>
+    </div>
+    <div class="nav-item" onclick="switchTab('expense', '📝 支出記帳', this)">
+      <div class="icon">📝</div>
       <div>記帳</div>
     </div>
-    <div class="nav-item" onclick="switchTab('calendar', '📅 日曆待辦')">
-      <div>📅</div>
+    <div class="nav-item" onclick="switchTab('calendar', '📅 日曆待辦', this)">
+      <div class="icon">📅</div>
       <div>行事曆</div>
     </div>
   </div>
 
   <script>
-    // 你的 Google Apps Script 部署網址
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbxcLThDpbk1qebQqGoW51VB4O7SiDR3XIZ54-KJZN-eox3d_CxN2YsA8mPl-31sCBXA/exec";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbz35AiQLOXjozhorHcTWm4Yai7dM6CbEE-07PsBoCH2hpXnwNyFU66mWGUp0z79EVGh/exec";
 
-    // 初始化設定當前日期
+    // 初始化日期
     document.getElementById('expDate').value = new Date().toISOString().split('T')[0];
 
     // 切換分頁
-    function switchTab(tabId, title) {
+    function switchTab(tabId, title, btnElement) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
 
       document.getElementById('tab-' + tabId).classList.add('active');
       document.getElementById('pageTitle').innerText = title;
-      event.currentTarget.classList.add('active');
+      if (btnElement) btnElement.classList.add('active');
     }
 
-    // 引導點子與範本快捷填入
+    // 填入快捷提示
     function setPrompt(text) {
-      const promptInput = document.getElementById('aiPrompt');
-      promptInput.value = text;
-      promptInput.focus();
+      const input = document.getElementById('aiPrompt');
+      input.value = text;
+      input.focus();
     }
 
-    // 發送 AI 提問
+    // 提問 AI
+    let lastUserPrompt = "";
+    let lastAIReply = "";
+
     function sendToAI() {
       const prompt = document.getElementById('aiPrompt').value.trim();
       const replyBox = document.getElementById('aiReply');
+      const transferBtn = document.getElementById('btnTransferIdea');
 
       if (!prompt) {
-        alert("請先輸入內容或點選上方範本！");
+        alert("請先輸入問題！");
         return;
       }
 
-      replyBox.innerText = "⏳ 處理中，請稍候...";
+      replyBox.innerText = "⏳ 思考中，請稍候...";
+      transferBtn.style.display = "none";
 
       fetch(GAS_URL, {
         method: "POST",
@@ -184,6 +212,10 @@
       .then(data => {
         if (data.status === "success") {
           replyBox.innerText = data.reply;
+          lastUserPrompt = prompt;
+          lastAIReply = data.reply;
+          // 顯示「轉存為點子」按鈕
+          transferBtn.style.display = "block";
         } else {
           replyBox.innerText = "❌ 錯誤: " + data.reply;
         }
@@ -193,7 +225,56 @@
       });
     }
 
-    // 提交記帳
+    // 將 AI 回覆帶入「點子記錄」分頁
+    function transferToIdeaTab() {
+      document.getElementById('ideaTitle').value = lastUserPrompt.replace(/公司點子：|請幫我/g, "").substring(0, 30);
+      document.getElementById('ideaContent').value = "【原問題】\n" + lastUserPrompt + "\n\n【建議與方案】\n" + lastAIReply + "\n\n【我的調整 / 實行心得】\n";
+      
+      // 自動切換到點子分頁
+      const ideaNavItem = document.querySelectorAll('.nav-item')[1];
+      switchTab('ideas', '💡 點子記錄', ideaNavItem);
+    }
+
+    // 儲存修改後的點子
+    function saveIdeaToSheet() {
+      const title = document.getElementById('ideaTitle').value.trim();
+      const content = document.getElementById('ideaContent').value.trim();
+
+      if (!content) {
+        alert("請輸入點子內容！");
+        return;
+      }
+
+      fetch(GAS_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "save_idea", title: title || "未命名點子", content: content })
+      })
+      .then(res => res.json())
+      .then(data => {
+        alert(data.message);
+      })
+      .catch(err => alert("❌ 儲存失敗: " + err));
+    }
+
+    // 讀取歷史點子
+    function loadSavedIdeas() {
+      const historyBox = document.getElementById('ideaHistoryReply');
+      historyBox.innerText = "⏳ 載入點子中...";
+
+      fetch(GAS_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "load_ideas" })
+      })
+      .then(res => res.json())
+      .then(data => {
+        historyBox.innerText = data.reply;
+      })
+      .catch(err => {
+        historyBox.innerText = "❌ 讀取失敗: " + err;
+      });
+    }
+
+    // 記帳提交
     function submitExpense() {
       const date = document.getElementById('expDate').value;
       const category = document.getElementById('expCategory').value;
