@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>度尺寶 Pro - 雲端安全旗艦版</title>
+    <title>度尺寶 Pro - 逆矩陣精準版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -111,7 +111,7 @@
             </div>
         </header>
 
-        <!-- 第 1 級：工程存檔目錄 (雲端與本地同步) -->
+        <!-- 第 1 級：工程存檔目錄 -->
         <main v-show="currentView === 'projects'" class="flex-1 min-h-0 bg-gray-900 p-3 overflow-y-auto touch-scrollable">
             <div v-if="projectList.length === 0" class="text-center text-gray-400 mt-16 text-sm font-bold">
                 目前沒有任何工程存檔，點擊右上角「新建工程」開始。
@@ -144,7 +144,6 @@
             </div>
             
             <div v-else class="flex-1 min-h-0 relative overflow-auto p-2 flex items-center justify-center touch-scrollable">
-                <!-- 容器緊貼圖片實體，打釘事件直接綁定在圖片本體，徹底剔除黑邊干擾 -->
                 <div class="relative inline-block max-w-full max-h-full">
                     <img :src="planImage" 
                          @click="handlePlanImageClick"
@@ -163,10 +162,9 @@
             </div>
         </main>
 
-        <!-- 第 3 級：相片標註畫板 (真實相片尺寸映射 + 印章拉線連動刪除 + 全能復原) -->
+        <!-- 第 3 級：相片標註畫板 (逆矩陣投影 + 原生鎖死 viewBox + 1:1 咬緊手指) -->
         <main v-show="currentView === 'photo'" ref="workspace" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col items-center justify-center">
             
-            <!-- 頂部操作按鈕 -->
             <div v-if="activePin && activePin.photo" class="absolute top-2 z-20 flex gap-1 bg-black/85 backdrop-blur p-1 rounded border border-gray-700 shadow-lg">
                 <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-white text-black' : 'bg-black text-white'" class="px-3 py-1 text-xs font-bold rounded">拉線度尺</button>
                 <button @click="drawMode = 'freehand'" :class="drawMode === 'freehand' ? 'bg-white text-black' : 'bg-black text-white'" class="px-3 py-1 text-xs font-bold rounded">自由塗鴉</button>
@@ -184,14 +182,13 @@
 
             <div v-else-if="activePin && activePin.photo" 
                  :style="wrapperStyle" 
-                 class="select-none touch-none">
+                 class="select-none touch-none relative">
                 
                 <img :src="activePin.photo" class="w-full h-full block pointer-events-none select-none object-fill">
 
-                <!-- 頂層全透明 SVG 畫板：viewBox 與相片真實像素嚴格 1:1 對齊 -->
+                <!-- 頂層全透明 SVG 畫板：由 JS 強制鎖死 viewBox，preserveAspectRatio 鎖定 none 確保百分之百貼合 -->
                 <svg ref="svgCanvas"
                      class="absolute inset-0 w-full h-full select-none touch-none"
-                     :viewBox="`0 0 ${activePin.photoW || 1200} ${activePin.photoH || 900}`"
                      preserveAspectRatio="none"
                      @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd"
                      @mousedown="handleTouchStart" @mousemove="handleTouchMove" @mouseup="handleTouchEnd">
@@ -202,18 +199,17 @@
                     <!-- 度尺紅線 -->
                     <line v-for="line in (activePin.lines || [])" :key="line.id" :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2" stroke="#ff0044" stroke-width="5" stroke-linecap="round" />
 
-                    <!-- 即時繪製中的暫存預覽 -->
+                    <!-- 即時預覽 -->
                     <path v-if="currentPath" :d="currentPath" stroke="#ff0044" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                     <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" stroke="#ff0044" stroke-width="5" stroke-dasharray="8" />
 
-                    <!-- 印章與尺寸 (透明實體點擊區 + 純文字 5px 描邊 + 所見即所得零漂移) -->
+                    <!-- 印章與尺寸 (透明感應區 + 純文字 5px 黑色描邊) -->
                     <g v-for="marker in activePin.markers" :key="marker.id"
                        :transform="`translate(${marker.x}, ${marker.y})`"
                        class="cursor-move"
                        @touchstart.stop.prevent="e => startDrag(marker, e)"
                        @mousedown.stop.prevent="e => startDrag(marker, e)">
                         
-                        <!-- 實體點擊感應區 (剛好包覆文字，不額外延伸誤觸) -->
                         <rect :x="-marker.w/2" :y="-marker.h/2" :width="marker.w" :height="marker.h" fill="transparent" />
 
                         <text text-anchor="middle" dominant-baseline="central"
@@ -228,12 +224,12 @@
             </div>
         </main>
 
-        <!-- 抽屜外部遮罩 (點擊自動完成退出) -->
+        <!-- 懸浮抽屜外部遮罩 -->
         <div v-if="showBottomSheet && activeMarker" 
              class="fixed inset-0 bg-black/60 z-40" 
              @click="closeBottomSheet"></div>
 
-        <!-- 懸浮抽屜：標註設定 (刪除印章連帶刪除拉線) -->
+        <!-- 懸浮抽屜：標註設定 -->
         <div v-if="showBottomSheet && activeMarker" 
              class="fixed inset-x-2 bottom-2 max-h-[82dvh] bg-white text-black border-2 border-black rounded-lg z-50 flex flex-col shadow-2xl overflow-hidden touch-scrollable">
             
@@ -257,7 +253,6 @@
             </div>
             
             <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable">
-                <!-- 地盤專用 12 款印章庫 -->
                 <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2">
                     <div class="flex items-center gap-1 flex-wrap">
                         <span class="text-[11px] font-bold text-red-700 bg-red-100 px-1 border border-red-300 rounded">瑕疵打拆</span>
@@ -273,7 +268,6 @@
                     </div>
                 </div>
 
-                <!-- 門洞/窗/樑/柱 組合尺寸 -->
                 <div v-else-if="['window', 'door', 'beam', 'column'].includes(activeMarker.type)">
                     <div class="grid grid-cols-3 gap-2">
                         <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
@@ -284,7 +278,6 @@
                     <button @click="closeBottomSheet" class="w-full mt-3 bg-black text-white font-bold py-2 rounded text-sm active:bg-gray-800">確定完成</button>
                 </div>
 
-                <!-- 基礎/水電 一般尺寸 -->
                 <div v-else class="flex flex-col gap-2">
                     <div class="flex gap-1 overflow-x-auto pb-1">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎</span>
@@ -304,7 +297,7 @@
             </div>
         </div>
 
-        <!-- 轉檔與下載指示遮罩 -->
+        <!-- 轉檔與下載遮罩 -->
         <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center text-white font-bold">
             <div class="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-3"></div>
             <p class="text-base">{{ processingText }}</p>
@@ -312,7 +305,7 @@
     </div>
 
     <script>
-        const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
+        const { createApp, ref, reactive, computed, onMounted, nextTick, watch } = Vue;
         localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
         // Firebase 專案設定
@@ -381,6 +374,16 @@
                             wsH.value = rect.height;
                         }
                     }
+                    syncSvgViewBox();
+                };
+
+                // 原生鎖死 SVG viewBox，杜絕瀏覽器小寫 viewbox 渲染 BUG
+                const syncSvgViewBox = () => {
+                    if (svgCanvas.value && activePin.value && activePin.value.photo) {
+                        const pw = activePin.value.photoW || 1200;
+                        const ph = activePin.value.photoH || 900;
+                        svgCanvas.value.setAttribute('viewBox', `0 0 ${pw} ${ph}`);
+                    }
                 };
 
                 // 動態鎖定相片真實比例
@@ -423,26 +426,42 @@
                 const markerOrigin = ref({ x: 0, y: 0 });
                 const isDraggingMarker = ref(false);
 
-                // 是否有可復原的項目
                 const hasUndoItems = computed(() => {
                     return activePin.value && activePin.value.historyStack && activePin.value.historyStack.length > 0;
                 });
 
-                // 計算精確點位 (強制加入邊界限制 Clamp，絕不出界)
+                // ★★★ 核心突破：專業級「逆矩陣座標投影（getScreenCTM.inverse）」 ★★★
                 const getCoords = (e) => {
-                    if (!svgCanvas.value) return { x: 0, y: 0 };
-                    const rect = svgCanvas.value.getBoundingClientRect();
-                    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-                    const cy = e.touches ? e.touches[0].clientY : e.clientY;
-                    const pw = activePin.value.photoW || 1200;
-                    const ph = activePin.value.photoH || 900;
+                    const svg = svgCanvas.value;
+                    if (!svg) return { x: 0, y: 0 };
 
-                    let rx = (cx - rect.left) / rect.width;
-                    let ry = (cy - rect.top) / rect.height;
-                    rx = Math.max(0, Math.min(1, rx));
-                    ry = Math.max(0, Math.min(1, ry));
+                    let cx = 0, cy = 0;
+                    if (e.touches && e.touches.length > 0) {
+                        cx = e.touches[0].clientX;
+                        cy = e.touches[0].clientY;
+                    } else if (e.changedTouches && e.changedTouches.length > 0) {
+                        cx = e.changedTouches[0].clientX;
+                        cy = e.changedTouches[0].clientY;
+                    } else if (e.clientX !== undefined) {
+                        cx = e.clientX;
+                        cy = e.clientY;
+                    }
 
-                    return { x: Math.round(rx * pw), y: Math.round(ry * ph) };
+                    // 呼叫 SVG 底層硬體矩陣轉換
+                    const pt = svg.createSVGPoint();
+                    pt.x = cx;
+                    pt.y = cy;
+                    const ctm = svg.getScreenCTM();
+                    if (!ctm) return { x: 0, y: 0 };
+                    const svgP = pt.matrixTransform(ctm.inverse());
+
+                    const pw = (activePin.value && activePin.value.photoW) || 1200;
+                    const ph = (activePin.value && activePin.value.photoH) || 900;
+
+                    return {
+                        x: Math.round(Math.max(0, Math.min(pw, svgP.x))),
+                        y: Math.round(Math.max(0, Math.min(ph, svgP.y)))
+                    };
                 };
 
                 const startDrag = (marker, e) => {
@@ -472,7 +491,6 @@
                         const p = getCoords(e);
                         const dist = Math.hypot(p.x - dragOrigin.value.x, p.y - dragOrigin.value.y);
                         
-                        // 判定為拖曳：手指移動到哪裡，印章就精準跟到哪裡（所見即所得，零飄移）
                         if (dist > 6) {
                             isDraggingMarker.value = true;
                             draggedMarker.value.x = p.x;
@@ -482,7 +500,8 @@
                         e.preventDefault();
                         const p = getCoords(e);
                         if (drawMode.value === 'line') {
-                            currentLine.value.x2 = p.x; currentLine.value.y2 = p.y;
+                            currentLine.value.x2 = p.x; 
+                            currentLine.value.y2 = p.y;
                         } else {
                             tempPoints.push([p.x, p.y]);
                             currentPath.value = `M ${tempPoints.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`;
@@ -493,12 +512,10 @@
                 const handleTouchEnd = (e) => {
                     if (draggedMarker.value) {
                         if (!isDraggingMarker.value) {
-                            // 原地點擊：打開設定抽屜
                             draggedMarker.value.x = markerOrigin.value.x;
                             draggedMarker.value.y = markerOrigin.value.y;
                             openBottomSheet(draggedMarker.value);
                         } else {
-                            // 拖動完畢：原地儲存
                             saveCurrentProject();
                         }
                         draggedMarker.value = null;
@@ -508,13 +525,12 @@
 
                     if (!isDrawing.value) return;
                     isDrawing.value = false;
-                    const endPos = getCoords(e.changedTouches ? e.changedTouches[0] : e);
+                    const endPos = getCoords(e);
                     const drawDist = Math.hypot(endPos.x - startPos.value.x, endPos.y - startPos.value.y);
 
                     if (!activePin.value.historyStack) activePin.value.historyStack = [];
 
                     if (drawDist < 12) {
-                        // 輕觸畫布直接打印章
                         currentLine.value = null; currentPath.value = null;
                         const markerId = Date.now();
                         const newMarker = { id: markerId, lineId: null, x: endPos.x, y: endPos.y, w: 140, h: 56, type: 'general', data: { val: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '' } };
@@ -524,7 +540,6 @@
                         openBottomSheet(newMarker);
                     } else {
                         if (drawMode.value === 'line' && currentLine.value) {
-                            // 畫線：將直線 ID 與新生成的印章雙向綁定
                             const lineId = Date.now();
                             activePin.value.lines.push({ ...currentLine.value, id: lineId });
                             const midX = Math.round((currentLine.value.x1 + currentLine.value.x2) / 2);
@@ -574,7 +589,6 @@
                     }
                     activePin.value.markers = (activePin.value.markers || []).filter(m => m.id !== mId);
                     
-                    // 同步清理 historyStack
                     if (activePin.value.historyStack) {
                         activePin.value.historyStack = activePin.value.historyStack.filter(h => h.markerId !== mId);
                     }
@@ -583,12 +597,14 @@
                     saveCurrentProject();
                 };
 
-                // 圖片壓縮並提取真實解析度 (杜絕預設 1200x900 橫向盲猜導致直相變形)
+                // 圖片壓縮並提取真實長闊
                 const compressImage = (file) => {
                     return new Promise((resolve) => {
-                        const reader = new FileReader(); reader.readAsDataURL(file);
+                        const reader = new FileReader(); 
+                        reader.readAsDataURL(file);
                         reader.onload = (e) => {
-                            const img = new Image(); img.src = e.target.result;
+                            const img = new Image(); 
+                            img.src = e.target.result;
                             img.onload = () => {
                                 const canvas = document.createElement('canvas');
                                 const MAX = 1200;
@@ -598,8 +614,10 @@
                                     if (w > h) { h = Math.round((h * MAX) / w); w = MAX; }
                                     else { w = Math.round((w * MAX) / h); h = MAX; }
                                 }
-                                canvas.width = w; canvas.height = h;
-                                const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+                                canvas.width = w; 
+                                canvas.height = h;
+                                const ctx = canvas.getContext('2d'); 
+                                ctx.drawImage(img, 0, 0, w, h);
                                 resolve({ b64: canvas.toDataURL('image/jpeg', 0.65), w, h });
                             };
                         };
@@ -618,12 +636,15 @@
                         if (!activePin.value.lines) activePin.value.lines = [];
                         if (!activePin.value.paths) activePin.value.paths = [];
                         if (!activePin.value.historyStack) activePin.value.historyStack = [];
-                        nextTick(() => updateWorkspaceSize());
+                        nextTick(() => {
+                            updateWorkspaceSize();
+                            syncSvgViewBox();
+                        });
                     }
                     saveCurrentProject();
                 };
 
-                // 平面圖打釘：嚴格只認 <img> 實體邊界，徹底剔除黑邊飄移
+                // 平面圖打釘：只認 <img> 實體邊界，徹底剔除黑邊飄移
                 const handlePlanImageClick = (e) => {
                     const img = e.currentTarget;
                     const rect = img.getBoundingClientRect();
@@ -654,16 +675,23 @@
                     deleteConfirm.value = false;
                     nextTick(() => {
                         updateWorkspaceSize();
-                        setTimeout(updateWorkspaceSize, 60);
+                        syncSvgViewBox();
+                        setTimeout(() => {
+                            updateWorkspaceSize();
+                            syncSvgViewBox();
+                        }, 60);
                     });
 
-                    // 雲端子集合按需加載 (若本地無大圖)
+                    // 雲端按需下載相片
                     if (!pin.photo && db && project.id) {
                         try {
                             const pinDoc = await db.collection('site_projects').doc(`proj_${project.id}`).collection('pins').doc(`pin_${pin.id}`).get();
                             if (pinDoc.exists) {
                                 Object.assign(pin, pinDoc.data());
-                                nextTick(() => updateWorkspaceSize());
+                                nextTick(() => {
+                                    updateWorkspaceSize();
+                                    syncSvgViewBox();
+                                });
                             }
                         } catch (err) {
                             console.log("Cloud pin fetch bypass:", err);
@@ -710,14 +738,13 @@
                     marker.h = Math.max(54, lines.length * 36 + 18);
                 };
 
-                // 印章顏色配置 (自帶 5px 黑色描邊)
                 const getStampColor = (marker) => {
                     if (marker.type === 'stamp') {
                         const val = marker.data.val;
-                        if (['需清拆', '牆身斜', '牆體不平整', '局部凸出'].includes(val)) return '#ff453a'; // 亮紅
-                        if (['開關', '插座', '地腳線'].includes(val)) return '#ffd60a'; // 鮮黃
-                        if (['留通道', '開門方向'].includes(val)) return '#0a84ff'; // 亮藍
-                        if (['可保留', '實地台'].includes(val)) return '#30d158'; // 亮綠
+                        if (['需清拆', '牆身斜', '牆體不平整', '局部凸出'].includes(val)) return '#ff453a';
+                        if (['開關', '插座', '地腳線'].includes(val)) return '#ffd60a';
+                        if (['留通道', '開門方向'].includes(val)) return '#0a84ff';
+                        if (['可保留', '實地台'].includes(val)) return '#30d158';
                         return '#ffd60a';
                     }
                     return '#ffffff';
@@ -743,7 +770,7 @@
                 })[t] || [];
                 const getFieldLabel = (t, k) => { const f = getTagFields(t).find(i => i.key === k); return f ? f.label : k; };
 
-                // 雲端與本地同步核心 (帶 updatedAt 時間戳比對防覆蓋)
+                // 雲端與本地同步核心
                 const saveCurrentProject = async () => {
                     if (!project.id) return;
                     const now = Date.now();
@@ -763,7 +790,6 @@
                         try {
                             const projRef = db.collection('site_projects').doc(`proj_${project.id}`);
                             
-                            // 主檔：僅存摘要 (<100KB)
                             await projRef.set({
                                 id: project.id,
                                 name: project.name || '',
@@ -773,7 +799,6 @@
                                 updatedAt: now
                             }, { merge: true });
 
-                            // 子集合：單張相片獨立文件 (~150KB)，杜絕 1MB 超載
                             if (activePin.value && activePin.value.photo) {
                                 await projRef.collection('pins').doc(`pin_${activePin.value.id}`).set({
                                     id: activePin.value.id,
@@ -858,7 +883,6 @@
                         currentView.value = 'plan';
                     }
 
-                    // 雲端最新比對
                     if (db && auth && auth.currentUser) {
                         try {
                             const projDoc = await db.collection('site_projects').doc(`proj_${id}`).get();
@@ -867,7 +891,6 @@
                                 const cloudTime = pd.updatedAt || 0;
                                 const localTime = (d && d.updatedAt) ? d.updatedAt : 0;
 
-                                // 若雲端版本更新，以雲端為準覆蓋本地舊線條
                                 if (cloudTime >= localTime) {
                                     project.name = pd.name;
                                     project.date = pd.date;
@@ -918,7 +941,6 @@
                     window.addEventListener('resize', updateWorkspaceSize);
                     window.addEventListener('orientationchange', () => setTimeout(updateWorkspaceSize, 150));
 
-                    // 嚴格監聽授權：取得 Google 匿名通行證後才開始請求雲端
                     if (auth) {
                         auth.onAuthStateChanged((user) => {
                             if (user) {
@@ -934,7 +956,7 @@
                     }
                 });
 
-                // 單張相片高清轉印 (純文字 + 5px 黑邊)
+                // 單張相片高清合成轉印
                 const renderPinCanvas = (pin) => {
                     return new Promise((resolve) => {
                         const img = new Image();
