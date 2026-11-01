@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>度尺寶 Pro - 6位數工程碼同步版</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- 換用極速 Cloudflare CDN，根治香港流動網絡 unpkg 逾時導致黑屏 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
@@ -224,12 +225,18 @@
             </div>
         </main>
 
-        <!-- 彈窗：輸入 6 位數工程碼加入 -->
+        <!-- 彈窗：輸入 6 位數工程碼加入 (徹底修復點擊失靈與鍵盤彈出問題) -->
         <div v-if="showJoinModal" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
             <div class="bg-gray-900 border border-gray-700 w-full max-w-xs rounded-lg p-4 text-white shadow-2xl">
                 <h3 class="text-base font-bold text-yellow-400 mb-1">🔑 輸入 6 位數工程碼</h3>
                 <p class="text-xs text-gray-400 mb-3">輸入其他手機畫面頂部的 6 位數字即可直接同步：</p>
-                <input type="number" v-model="inputJoinCode" placeholder="例如: 849201" class="w-full bg-black border-2 border-yellow-500 rounded p-2 text-center text-2xl font-mono font-bold tracking-widest text-white mb-4 focus:outline-none">
+                <input type="text" 
+                       inputmode="numeric" 
+                       pattern="[0-9]*" 
+                       maxlength="6" 
+                       v-model="inputJoinCode" 
+                       placeholder="例如: 849201" 
+                       class="w-full bg-black border-2 border-yellow-500 rounded p-2 text-center text-2xl font-mono font-bold tracking-widest text-white mb-4 focus:outline-none">
                 <div class="flex gap-2">
                     <button @click="showJoinModal = false" class="flex-1 bg-gray-800 text-white font-bold py-2 rounded text-xs">取消</button>
                     <button @click="joinProjectByCode" class="flex-1 bg-yellow-500 active:bg-yellow-600 text-black font-bold py-2 rounded text-xs">立即連通</button>
@@ -271,7 +278,7 @@
                         <button v-for="stamp in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-red-600 text-red-700 font-bold px-2 py-1">{{ stamp }}</button>
                     </div>
                     
-                    <!-- ★ 更新水電收口陣列 -->
+                    <!-- 水電收口更新陣列 -->
                     <div class="flex items-center gap-1 flex-wrap">
                         <span class="text-[11px] font-bold text-yellow-800 bg-yellow-100 px-1 border border-yellow-300 rounded">水電收口</span>
                         <button v-for="stamp in ['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-yellow-600 text-yellow-900 font-bold px-2 py-1">{{ stamp }}</button>
@@ -282,7 +289,7 @@
                         <button v-for="stamp in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-blue-600 text-blue-800 font-bold px-2 py-1">{{ stamp }}</button>
                     </div>
 
-                    <!-- ★ 新增：自由打字印章 -->
+                    <!-- 自由打字印章 -->
                     <div class="flex items-stretch gap-2 mt-1 pt-2 border-t border-gray-200">
                         <span class="text-[11px] font-bold text-purple-700 bg-purple-100 px-1 border border-purple-300 rounded flex items-center whitespace-nowrap">自由印</span>
                         <input type="text" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1 px-2 text-base font-bold bg-white text-black focus:outline-none rounded" placeholder="自訂印章內容...">
@@ -301,7 +308,7 @@
                 </div>
 
                 <div v-else class="flex flex-col gap-2">
-                    <!-- ★ 更新基礎尺寸陣列 -->
+                    <!-- 基礎尺寸更新陣列 -->
                     <div class="flex gap-1 overflow-x-auto pb-1">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎</span>
                         <button v-for="w in ['高','闊','深','厚','總高','總深','腰墨','牆厚','留位']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
@@ -734,7 +741,6 @@
                     marker.h = Math.max(54, lines.length * 36 + 18);
                 };
 
-                // ★ 加入水電收口新詞彙的顏色判定；自訂文字預設白色
                 const getStampColor = (marker) => {
                     if (marker.type === 'stamp') {
                         const val = marker.data.val;
@@ -742,7 +748,7 @@
                         if (['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線'].includes(val)) return '#ffd60a';
                         if (['留通道', '開門方向'].includes(val)) return '#0a84ff';
                         if (['可保留', '實地台'].includes(val)) return '#30d158';
-                        return '#ffffff'; // 自訂自由印章預設白色
+                        return '#ffffff';
                     }
                     return '#ffffff';
                 };
@@ -859,8 +865,9 @@
                     attachRealtimeSync(newCode);
                 };
 
+                // ★ 徹底修復：按鈕失靈問題（安全轉換字串，杜絕 trim is not a function 崩潰）
                 const joinProjectByCode = async () => {
-                    const code = inputJoinCode.value.trim();
+                    const code = String(inputJoinCode.value || '').trim();
                     if (!code || code.length !== 6) {
                         alert("請輸入完整的 6 位數字工程碼");
                         return;
@@ -868,9 +875,10 @@
                     isProcessing.value = true;
                     processingText.value = '正在搜尋並連通工程...';
                     try {
+                        if (!db) throw new Error("資料庫未初始化");
                         const doc = await db.collection('site_projects').doc(code).get();
                         if (!doc.exists) {
-                            alert("找不到此工程碼，請確認號碼是否正確。");
+                            alert("找不到工程碼 #" + code + "，請確認號碼是否正確。");
                             isProcessing.value = false;
                             return;
                         }
@@ -878,12 +886,14 @@
                         inputJoinCode.value = '';
                         await loadProject(code);
                     } catch(err) {
-                        alert("連線失敗，請檢查網路。");
+                        alert("連線失敗：" + (err.message || "請檢查網路"));
                     }
                     isProcessing.value = false;
                 };
 
+                // ★ 連通載入防護：完整還原平面釘位與相片資料，杜絕空白覆蓋
                 const loadProject = async (code) => {
+                    code = String(code);
                     const d = await localforage.getItem('proj_' + code);
                     if (d) {
                         project.code = d.code;
@@ -907,11 +917,17 @@
                                 const pinsSnap = await db.collection('site_projects').doc(code).collection('pins').get();
                                 const fullPins = [];
                                 pinsSnap.forEach(pDoc => fullPins.push(pDoc.data()));
+                                
                                 if (fullPins.length > 0) {
                                     pins.value = fullPins.sort((a, b) => a.id - b.id);
+                                } else if (pd.pinList && pd.pinList.length > 0 && pins.value.length === 0) {
+                                    // 若釘位尚未拍照，安全補齊基礎釘位資料
+                                    pins.value = pd.pinList.map(p => ({
+                                        id: p.id, name: p.name, x: p.x, y: p.y,
+                                        photo: null, photoW: 1200, photoH: 900, markers: [], lines: [], paths: [], historyStack: []
+                                    }));
                                 }
                                 currentView.value = 'plan';
-                                saveCurrentProject();
                                 attachRealtimeSync(code);
                             }
                         } catch (e) {
@@ -925,7 +941,7 @@
                         await localforage.removeItem('proj_' + code);
                         if (db) {
                             try {
-                                await db.collection('site_projects').doc(code).delete();
+                                await db.collection('site_projects').doc(String(code)).delete();
                             } catch (e) {}
                         }
                         loadProjectList();
