@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>度尺寶 Pro - 6位數工程碼連通版</title>
+    <title>度尺寶 Pro - 6位數工程碼同步版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
-    <!-- Firebase SDK (認證 + 資料庫) -->
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -74,16 +74,22 @@
                 <span :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold shrink-0">
                     {{ cloudStatusText }}
                 </span>
+                
+                <!-- 6 位數工程碼標籤 -->
+                <span v-if="project.code && currentView !== 'projects'" class="bg-yellow-400 text-black text-xs font-black px-1.5 py-0.5 rounded tracking-wider shrink-0">
+                    #{{ project.code }}
+                </span>
+
                 <h1 class="text-xs font-bold truncate">
                     <span v-if="currentView === 'projects'">工程目錄</span>
-                    <span v-else-if="currentView === 'plan'">{{ project.name || '未命名' }} (碼: {{ project.code }})</span>
+                    <span v-else-if="currentView === 'plan'">{{ project.name || '未命名' }}</span>
                     <span v-else-if="currentView === 'photo'">{{ activePin.name || '相片標註' }}</span>
                 </h1>
             </div>
             
             <div class="flex gap-1 items-center shrink-0">
-                <button v-if="currentView === 'projects'" @click="showCodeModal = true" class="bg-amber-600 active:bg-amber-700 text-white px-2.5 py-1 rounded text-xs font-bold border border-amber-400">
-                    輸入工程碼
+                <button v-if="currentView === 'projects'" @click="showJoinModal = true" class="bg-yellow-600 active:bg-yellow-700 text-black px-2 py-1 rounded text-xs font-bold border border-yellow-400">
+                    🔑 輸入工程碼
                 </button>
                 <button v-if="currentView === 'projects'" @click="createNewProject" class="bg-blue-600 active:bg-blue-800 text-white px-2.5 py-1 rounded text-xs font-bold border border-blue-400">
                     新建工程
@@ -102,24 +108,22 @@
                 <button v-if="currentView === 'photo'" @click="handleDeletePin" :class="deleteConfirm ? 'bg-red-600 border-red-400' : 'bg-red-900 border-red-700'" class="text-white px-2 py-1 rounded text-xs font-bold border">
                     {{ deleteConfirm ? '確認刪除?' : '刪除釘位' }}
                 </button>
-                <button v-if="currentView === 'photo'" @click="exitPhotoView" class="bg-gray-800 active:bg-gray-700 px-2 py-1 rounded text-xs font-bold border border-gray-600">
+                <button v-if="currentView === 'photo'" @click="currentView = 'plan'" class="bg-gray-800 active:bg-gray-700 px-2 py-1 rounded text-xs font-bold border border-gray-600">
                     回平面圖
                 </button>
             </div>
         </header>
 
-        <!-- 第 1 級：工程存檔目錄 -->
+        <!-- 第 1 級：工程目錄 (顯示 6 位數工程碼) -->
         <main v-show="currentView === 'projects'" class="flex-1 min-h-0 bg-gray-900 p-3 overflow-y-auto touch-scrollable">
             <div v-if="projectList.length === 0" class="text-center text-gray-400 mt-16 text-sm font-bold">
-                目前沒有工程。可點擊「新建工程」或按「輸入工程碼」連通其他手機！
+                目前沒有工程。可點擊右上角「新建工程」或「輸入工程碼」連通其他手機。
             </div>
-            <div v-for="proj in projectList" :key="proj.id" class="bg-black border border-gray-700 p-3 rounded mb-3 flex justify-between items-center shadow-lg">
+            <div v-for="proj in projectList" :key="proj.code" class="bg-black border border-gray-700 p-3 rounded mb-3 flex justify-between items-center shadow-lg">
                 <div class="flex-1 mr-2 cursor-pointer" @click="loadProject(proj.code)">
                     <div class="flex items-center gap-2">
-                        <span class="font-bold text-base text-white truncate">{{ proj.name || '未命名工程' }}</span>
-                        <span class="bg-amber-900/60 border border-amber-600 text-amber-300 text-[11px] px-1.5 py-0.5 rounded font-mono font-bold">
-                            碼: {{ proj.code }}
-                        </span>
+                        <span class="bg-yellow-400 text-black text-xs font-black px-1.5 py-0.5 rounded">#{{ proj.code }}</span>
+                        <div class="font-bold text-base text-white truncate">{{ proj.name || '未命名工程' }}</div>
                     </div>
                     <div class="text-xs text-gray-400 mt-1">日期: {{ proj.date }} | 記錄點: {{ proj.pinCount }} 個</div>
                 </div>
@@ -133,14 +137,9 @@
         <!-- 第 2 級：平面圖打釘定位 -->
         <main v-show="currentView === 'plan'" class="flex-1 min-h-0 bg-gray-900 flex flex-col overflow-hidden">
             <div class="w-full bg-black border-b border-gray-700 p-2 flex gap-2 items-center shrink-0">
-                <span class="text-xs font-bold text-gray-400 whitespace-nowrap">單位:</span>
+                <span class="text-xs font-bold text-yellow-400">工程碼: {{ project.code }}</span>
                 <input type="text" v-model="project.name" @blur="saveCurrentProject" placeholder="輸入工程單位名稱" class="flex-1 bg-gray-800 text-white border border-gray-600 text-sm px-2 py-1 rounded font-bold focus:outline-none">
-                
-                <!-- 6 位數工程碼顯示標籤 (點擊可複製) -->
-                <button @click="copyProjectCode" class="bg-amber-500/20 active:bg-amber-500/40 border border-amber-500 text-amber-300 px-2 py-1 rounded text-xs font-mono font-bold flex items-center gap-1">
-                    <span>🔑 碼: {{ project.code }}</span>
-                    <span class="text-[10px] text-amber-200 bg-amber-800/80 px-1 rounded">複製</span>
-                </button>
+                <span class="text-xs font-bold text-gray-400">{{ project.date }}</span>
             </div>
 
             <div v-if="!planImage" class="flex-1 flex items-center justify-center p-4">
@@ -193,6 +192,7 @@
                 
                 <img :src="activePin.photo" class="w-full h-full block pointer-events-none select-none object-fill">
 
+                <!-- 頂層全透明 SVG 畫板 (逆矩陣投影) -->
                 <svg ref="svgCanvas"
                      class="absolute inset-0 w-full h-full select-none touch-none"
                      preserveAspectRatio="none"
@@ -225,20 +225,19 @@
             </div>
         </main>
 
-        <!-- 輸入 6 位數工程碼彈窗 -->
-        <div v-if="showCodeModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-            <div class="bg-gray-900 border border-gray-700 rounded-xl p-5 w-full max-w-sm text-center shadow-2xl">
-                <h3 class="text-base font-bold text-white mb-2">連通其他裝置工程</h3>
-                <p class="text-xs text-gray-400 mb-4">輸入另一部手機或電腦顯示的 6 位數工程碼：</p>
-                <input type="number" v-model="inputProjectCode" placeholder="例如: 882103" class="w-full text-center text-2xl font-mono font-bold tracking-widest p-2 bg-black text-amber-400 border-2 border-amber-500 rounded focus:outline-none mb-4">
+        <!-- 彈窗：輸入 6 位數工程碼加入 -->
+        <div v-if="showJoinModal" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+            <div class="bg-gray-900 border border-gray-700 w-full max-w-xs rounded-lg p-4 text-white shadow-2xl">
+                <h3 class="text-base font-bold text-yellow-400 mb-1">🔑 輸入 6 位數工程碼</h3>
+                <p class="text-xs text-gray-400 mb-3">輸入其他手機畫面頂部的 6 位數字即可直接同步：</p>
+                <input type="number" v-model="inputJoinCode" placeholder="例如: 849201" class="w-full bg-black border-2 border-yellow-500 rounded p-2 text-center text-2xl font-mono font-bold tracking-widest text-white mb-4 focus:outline-none">
                 <div class="flex gap-2">
-                    <button @click="showCodeModal = false" class="flex-1 bg-gray-800 text-gray-300 py-2 rounded text-sm font-bold border border-gray-600">取消</button>
-                    <button @click="connectByCode" class="flex-1 bg-amber-500 text-black py-2 rounded text-sm font-bold shadow active:bg-amber-600">立即連通</button>
+                    <button @click="showJoinModal = false" class="flex-1 bg-gray-800 text-white font-bold py-2 rounded text-xs">取消</button>
+                    <button @click="joinProjectByCode" class="flex-1 bg-yellow-500 active:bg-yellow-600 text-black font-bold py-2 rounded text-xs">立即連通</button>
                 </div>
             </div>
         </div>
 
-        <!-- 懸浮抽屜外部遮罩 -->
         <div v-if="showBottomSheet && activeMarker" 
              class="fixed inset-0 bg-black/60 z-40" 
              @click="closeBottomSheet"></div>
@@ -311,6 +310,7 @@
             </div>
         </div>
 
+        <!-- 轉檔與下載遮罩 -->
         <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center text-white font-bold">
             <div class="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-3"></div>
             <p class="text-base">{{ processingText }}</p>
@@ -318,7 +318,7 @@
     </div>
 
     <script>
-        const { createApp, ref, reactive, computed, onMounted, nextTick, watch } = Vue;
+        const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
         localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
         const firebaseConfig = {
@@ -347,25 +347,22 @@
             setup() {
                 const currentView = ref('projects');
                 const projectList = ref([]);
-                const project = reactive({ id: '', code: '', name: '', date: '' });
+                const project = reactive({ code: '', name: '', date: '' });
                 const planImage = ref(null);
                 const pins = ref([]);
                 const activePin = ref(null);
 
-                // 6 位數工程碼輸入彈窗
-                const showCodeModal = ref(false);
-                const inputProjectCode = ref('');
+                const showJoinModal = ref(false);
+                const inputJoinCode = ref('');
 
-                // 即時監聽訂閱器
-                let unsubProjectListener = null;
-                let unsubPinListener = null;
+                let realtimePinsUnsub = null;
 
                 const cloudSyncState = ref('connecting');
                 const cloudStatusText = computed(() => {
                     if (cloudSyncState.value === 'connecting') return '☁️ 連線中...';
-                    if (cloudSyncState.value === 'syncing') return '☁️ 同步中...';
+                    if (cloudSyncState.value === 'syncing') return '☁️ 廣播中...';
                     if (cloudSyncState.value === 'error') return '☁️ 離線模式';
-                    return '☁️ 雲端已連通';
+                    return '☁️ 雲端同步';
                 });
                 const cloudStatusClass = computed(() => {
                     if (cloudSyncState.value === 'connecting' || cloudSyncState.value === 'syncing') return 'bg-yellow-800 text-yellow-200 border border-yellow-600';
@@ -446,25 +443,22 @@
                     return activePin.value && activePin.value.historyStack && activePin.value.historyStack.length > 0;
                 });
 
+                // 逆矩陣精準座標投影
                 const getCoords = (e) => {
                     const svg = svgCanvas.value;
                     if (!svg) return { x: 0, y: 0 };
 
                     let cx = 0, cy = 0;
                     if (e.touches && e.touches.length > 0) {
-                        cx = e.touches[0].clientX;
-                        cy = e.touches[0].clientY;
+                        cx = e.touches[0].clientX; cy = e.touches[0].clientY;
                     } else if (e.changedTouches && e.changedTouches.length > 0) {
-                        cx = e.changedTouches[0].clientX;
-                        cy = e.changedTouches[0].clientY;
+                        cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY;
                     } else if (e.clientX !== undefined) {
-                        cx = e.clientX;
-                        cy = e.clientY;
+                        cx = e.clientX; cy = e.clientY;
                     }
 
                     const pt = svg.createSVGPoint();
-                    pt.x = cx;
-                    pt.y = cy;
+                    pt.x = cx; pt.y = cy;
                     const ctm = svg.getScreenCTM();
                     if (!ctm) return { x: 0, y: 0 };
                     const svgP = pt.matrixTransform(ctm.inverse());
@@ -517,4 +511,479 @@
                             currentLine.value.x2 = p.x; 
                             currentLine.value.y2 = p.y;
                         } else {
-                            tempPoints.push(
+                            tempPoints.push([p.x, p.y]);
+                            currentPath.value = `M ${tempPoints.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`;
+                        }
+                    }
+                };
+
+                const handleTouchEnd = (e) => {
+                    if (draggedMarker.value) {
+                        if (!isDraggingMarker.value) {
+                            draggedMarker.value.x = markerOrigin.value.x;
+                            draggedMarker.value.y = markerOrigin.value.y;
+                            openBottomSheet(draggedMarker.value);
+                        } else {
+                            saveCurrentProject();
+                        }
+                        draggedMarker.value = null;
+                        isDraggingMarker.value = false;
+                        return;
+                    }
+
+                    if (!isDrawing.value) return;
+                    isDrawing.value = false;
+                    const endPos = getCoords(e);
+                    const drawDist = Math.hypot(endPos.x - startPos.value.x, endPos.y - startPos.value.y);
+
+                    if (!activePin.value.historyStack) activePin.value.historyStack = [];
+
+                    if (drawDist < 12) {
+                        currentLine.value = null; currentPath.value = null;
+                        const markerId = Date.now();
+                        const newMarker = { id: markerId, lineId: null, x: endPos.x, y: endPos.y, w: 140, h: 56, type: 'general', data: { val: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '' } };
+                        updateMarkerSize(newMarker);
+                        activePin.value.markers.push(newMarker);
+                        activePin.value.historyStack.push({ type: 'marker', markerId });
+                        openBottomSheet(newMarker);
+                    } else {
+                        if (drawMode.value === 'line' && currentLine.value) {
+                            const lineId = Date.now();
+                            activePin.value.lines.push({ ...currentLine.value, id: lineId });
+                            const midX = Math.round((currentLine.value.x1 + currentLine.value.x2) / 2);
+                            const midY = Math.round((currentLine.value.y1 + currentLine.value.y2) / 2);
+                            
+                            const markerId = Date.now() + 1;
+                            const newMarker = { id: markerId, lineId: lineId, x: midX, y: midY, w: 140, h: 56, type: 'general', data: { val: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '' } };
+                            updateMarkerSize(newMarker);
+                            activePin.value.markers.push(newMarker);
+                            
+                            activePin.value.historyStack.push({ type: 'line_marker', lineId, markerId });
+                            openBottomSheet(newMarker);
+                            currentLine.value = null;
+                        } else if (drawMode.value === 'freehand' && currentPath.value) {
+                            const pathId = Date.now();
+                            activePin.value.paths.push({ id: pathId, d: currentPath.value });
+                            activePin.value.historyStack.push({ type: 'freehand', pathId });
+                            currentPath.value = null;
+                        }
+                    }
+                    saveCurrentProject();
+                };
+
+                const undoLastAction = () => {
+                    if (!activePin.value || !activePin.value.historyStack || activePin.value.historyStack.length === 0) return;
+                    const action = activePin.value.historyStack.pop();
+                    if (action.type === 'line_marker') {
+                        activePin.value.lines = (activePin.value.lines || []).filter(l => l.id !== action.lineId);
+                        activePin.value.markers = (activePin.value.markers || []).filter(m => m.id !== action.markerId);
+                    } else if (action.type === 'marker') {
+                        activePin.value.markers = (activePin.value.markers || []).filter(m => m.id !== action.markerId);
+                    } else if (action.type === 'freehand') {
+                        activePin.value.paths = (activePin.value.paths || []).filter(p => p.id !== action.pathId);
+                    }
+                    saveCurrentProject();
+                };
+
+                const deleteMarker = () => {
+                    if (!activeMarker.value) return;
+                    const mId = activeMarker.value.id;
+                    const lId = activeMarker.value.lineId;
+
+                    if (lId) {
+                        activePin.value.lines = (activePin.value.lines || []).filter(l => l.id !== lId);
+                    }
+                    activePin.value.markers = (activePin.value.markers || []).filter(m => m.id !== mId);
+                    
+                    if (activePin.value.historyStack) {
+                        activePin.value.historyStack = activePin.value.historyStack.filter(h => h.markerId !== mId);
+                    }
+
+                    showBottomSheet.value = false;
+                    saveCurrentProject();
+                };
+
+                const compressImage = (file) => {
+                    return new Promise((resolve) => {
+                        const reader = new FileReader(); 
+                        reader.readAsDataURL(file);
+                        reader.onload = (e) => {
+                            const img = new Image(); 
+                            img.src = e.target.result;
+                            img.onload = () => {
+                                const canvas = document.createElement('canvas');
+                                const MAX = 1200;
+                                let w = img.naturalWidth || img.width;
+                                let h = img.naturalHeight || img.height;
+                                if (w > MAX || h > MAX) {
+                                    if (w > h) { h = Math.round((h * MAX) / w); w = MAX; }
+                                    else { w = Math.round((w * MAX) / h); h = MAX; }
+                                }
+                                canvas.width = w; 
+                                canvas.height = h;
+                                const ctx = canvas.getContext('2d'); 
+                                ctx.drawImage(img, 0, 0, w, h);
+                                resolve({ b64: canvas.toDataURL('image/jpeg', 0.65), w, h });
+                            };
+                        };
+                    });
+                };
+
+                const handleImageUpload = async (e, type) => {
+                    const file = e.target.files[0]; if (!file) return;
+                    const res = await compressImage(file);
+                    if (type === 'plan') {
+                        planImage.value = res.b64;
+                    } else if (type === 'photo' && activePin.value) {
+                        activePin.value.photo = res.b64;
+                        activePin.value.photoW = res.w;
+                        activePin.value.photoH = res.h;
+                        if (!activePin.value.lines) activePin.value.lines = [];
+                        if (!activePin.value.paths) activePin.value.paths = [];
+                        if (!activePin.value.historyStack) activePin.value.historyStack = [];
+                        nextTick(() => {
+                            updateWorkspaceSize();
+                            syncSvgViewBox();
+                        });
+                    }
+                    saveCurrentProject();
+                };
+
+                const handlePlanImageClick = (e) => {
+                    const img = e.currentTarget;
+                    const rect = img.getBoundingClientRect();
+                    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+                    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+
+                    const newPin = { 
+                        id: Date.now(), 
+                        name: `位置 ${pins.value.length + 1}`, 
+                        x: parseFloat(x.toFixed(2)), 
+                        y: parseFloat(y.toFixed(2)), 
+                        photo: null, 
+                        photoW: 1200, 
+                        photoH: 900, 
+                        markers: [], 
+                        lines: [], 
+                        paths: [], 
+                        historyStack: [] 
+                    };
+                    pins.value.push(newPin);
+                    saveCurrentProject();
+                    openPin(newPin);
+                };
+
+                const openPin = (pin) => {
+                    activePin.value = pin;
+                    currentView.value = 'photo';
+                    deleteConfirm.value = false;
+                    nextTick(() => {
+                        updateWorkspaceSize();
+                        syncSvgViewBox();
+                        setTimeout(() => {
+                            updateWorkspaceSize();
+                            syncSvgViewBox();
+                        }, 60);
+                    });
+                };
+
+                const handleDeletePin = async () => {
+                    if (deleteConfirm.value) {
+                        const delId = activePin.value.id;
+                        pins.value = pins.value.filter(p => p.id !== delId);
+                        currentView.value = 'plan';
+                        activePin.value = null;
+                        deleteConfirm.value = false;
+                        saveCurrentProject();
+
+                        if (db && project.code) {
+                            try {
+                                await db.collection('site_projects').doc(project.code).collection('pins').doc(`pin_${delId}`).delete();
+                            } catch(e) {}
+                        }
+                    } else {
+                        deleteConfirm.value = true;
+                        setTimeout(() => { deleteConfirm.value = false; }, 3000);
+                    }
+                };
+
+                const openBottomSheet = (marker) => { activeMarker.value = marker; showBottomSheet.value = true; };
+                const closeBottomSheet = () => { showBottomSheet.value = false; saveCurrentProject(); };
+
+                const applyStamp = (txt) => {
+                    if (activeMarker.value) {
+                        activeMarker.value.data.val = txt;
+                        updateMarkerSize(activeMarker.value);
+                        closeBottomSheet();
+                    }
+                };
+
+                const updateMarkerSize = (marker) => {
+                    const lines = getMarkerLines(marker);
+                    let maxLen = 0;
+                    lines.forEach(l => { if (l.length > maxLen) maxLen = l.length; });
+                    marker.w = Math.max(120, maxLen * 30 + 36);
+                    marker.h = Math.max(54, lines.length * 36 + 18);
+                };
+
+                const getStampColor = (marker) => {
+                    if (marker.type === 'stamp') {
+                        const val = marker.data.val;
+                        if (['需清拆', '牆身斜', '牆體不平整', '局部凸出'].includes(val)) return '#ff453a';
+                        if (['開關', '插座', '地腳線'].includes(val)) return '#ffd60a';
+                        if (['留通道', '開門方向'].includes(val)) return '#0a84ff';
+                        if (['可保留', '實地台'].includes(val)) return '#30d158';
+                        return '#ffd60a';
+                    }
+                    return '#ffffff';
+                };
+
+                const getMarkerLines = (marker) => {
+                    if (['window', 'door', 'beam', 'column'].includes(marker.type)) {
+                        const lines = [getTagFields(marker.type)[0] ? getTagName(marker.type) : ''];
+                        for (let k in marker.data) if (marker.data[k] && getFieldLabel(marker.type, k) !== k) lines.push(`${getFieldLabel(marker.type, k)}:${marker.data[k]}`);
+                        return lines;
+                    }
+                    if (marker.type === 'stamp') return [marker.data.val || '未定'];
+                    const label = marker.data.name ? `${marker.data.name}: ` : '';
+                    return [`${label}${marker.data.val || '?'}`];
+                };
+
+                const getTagName = (t) => ({ 'window': '窗', 'door': '門洞', 'beam': '樑', 'column': '柱' })[t] || '';
+                const getTagFields = (t) => ({
+                    'door': [{ key: 'w_in', label: '闊' }, { key: 'h_in', label: '高' }, { key: 't', label: '牆厚' }],
+                    'window': [{ key: 'w_in', label: '內闊' }, { key: 'h_in', label: '內高' }, { key: 'd_in', label: '內深' }],
+                    'beam': [{ key: 'w', label: '樑闊' }, { key: 'd', label: '樑深' }, { key: 'h', label: '底高' }],
+                    'column': [{ key: 'w', label: '柱闊' }, { key: 'd', label: '柱深' }, { key: 'h', label: '柱高' }]
+                })[t] || [];
+                const getFieldLabel = (t, k) => { const f = getTagFields(t).find(i => i.key === k); return f ? f.label : k; };
+
+                // ★ 雙軌儲存與即時廣播 (以 6 位數工程碼為雲端唯一 KEY)
+                const saveCurrentProject = async () => {
+                    if (!project.code) return;
+                    const now = Date.now();
+                    
+                    const localData = { 
+                        code: project.code, 
+                        name: project.name, 
+                        date: project.date, 
+                        planImage: planImage.value, 
+                        pins: JSON.parse(JSON.stringify(pins.value)),
+                        updatedAt: now
+                    };
+                    await localforage.setItem('proj_' + project.code, localData);
+
+                    if (db && auth && auth.currentUser) {
+                        cloudSyncState.value = 'syncing';
+                        try {
+                            const projRef = db.collection('site_projects').doc(project.code);
+                            
+                            await projRef.set({
+                                code: project.code,
+                                name: project.name || '',
+                                date: project.date || '',
+                                planImage: planImage.value || null,
+                                pinList: pins.value.map(p => ({ id: p.id, name: p.name, x: p.x, y: p.y })),
+                                updatedAt: now
+                            }, { merge: true });
+
+                            if (activePin.value && activePin.value.photo) {
+                                await projRef.collection('pins').doc(`pin_${activePin.value.id}`).set({
+                                    id: activePin.value.id,
+                                    name: activePin.value.name,
+                                    x: activePin.value.x,
+                                    y: activePin.value.y,
+                                    photo: activePin.value.photo,
+                                    photoW: activePin.value.photoW || 1200,
+                                    photoH: activePin.value.photoH || 900,
+                                    markers: activePin.value.markers || [],
+                                    lines: activePin.value.lines || [],
+                                    paths: activePin.value.paths || [],
+                                    historyStack: activePin.value.historyStack || [],
+                                    updatedAt: now
+                                }, { merge: true });
+                            }
+                            cloudSyncState.value = 'ready';
+                        } catch (err) {
+                            console.error("Firestore sync error:", err);
+                            cloudSyncState.value = 'error';
+                        }
+                    }
+                };
+
+                // ★ 開啟工程並掛載即時監聽器 (onSnapshot 雙機廣播)
+                const attachRealtimeSync = (code) => {
+                    if (realtimePinsUnsub) realtimePinsUnsub();
+                    if (!db || !code) return;
+
+                    realtimePinsUnsub = db.collection('site_projects').doc(code).collection('pins')
+                        .onSnapshot((snapshot) => {
+                            if (isDrawing.value || isDraggingMarker.value) return; // 正在操作時暫不覆蓋
+                            
+                            snapshot.docChanges().forEach((change) => {
+                                const pinData = change.doc.data();
+                                if (change.type === 'added' || change.type === 'modified') {
+                                    const idx = pins.value.findIndex(p => p.id === pinData.id);
+                                    if (idx !== -1) {
+                                        // 雲端版本更新且本地沒在拉線，自動同步
+                                        if ((pinData.updatedAt || 0) > (pins.value[idx].updatedAt || 0)) {
+                                            Object.assign(pins.value[idx], pinData);
+                                        }
+                                    } else {
+                                        pins.value.push(pinData);
+                                    }
+                                } else if (change.type === 'removed') {
+                                    pins.value = pins.value.filter(p => p.id !== pinData.id);
+                                }
+                            });
+                        }, (err) => {
+                            console.log("Realtime unsub error:", err);
+                        });
+                };
+
+                const createNewProject = () => {
+                    // 自動生成 6 位數工程碼
+                    const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+                    project.code = newCode;
+                    project.name = '';
+                    project.date = new Date().toISOString().split('T')[0];
+                    planImage.value = null;
+                    pins.value = [];
+                    currentView.value = 'plan';
+                    saveCurrentProject();
+                    attachRealtimeSync(newCode);
+                };
+
+                const joinProjectByCode = async () => {
+                    const code = inputJoinCode.value.trim();
+                    if (!code || code.length !== 6) {
+                        alert("請輸入完整的 6 位數字工程碼");
+                        return;
+                    }
+                    isProcessing.value = true;
+                    processingText.value = '正在搜尋並連通工程...';
+                    try {
+                        const doc = await db.collection('site_projects').doc(code).get();
+                        if (!doc.exists) {
+                            alert("找不到此工程碼，請確認號碼是否正確。");
+                            isProcessing.value = false;
+                            return;
+                        }
+                        showJoinModal.value = false;
+                        inputJoinCode.value = '';
+                        await loadProject(code);
+                    } catch(err) {
+                        alert("連線失敗，請檢查網路。");
+                    }
+                    isProcessing.value = false;
+                };
+
+                const loadProject = async (code) => {
+                    // 本地優先加載
+                    const d = await localforage.getItem('proj_' + code);
+                    if (d) {
+                        project.code = d.code;
+                        project.name = d.name;
+                        project.date = d.date;
+                        planImage.value = d.planImage;
+                        pins.value = d.pins || [];
+                        currentView.value = 'plan';
+                    }
+
+                    // 從 Firestore 完整拉取雲端內容
+                    if (db && auth && auth.currentUser) {
+                        try {
+                            const projDoc = await db.collection('site_projects').doc(code).get();
+                            if (projDoc.exists) {
+                                const pd = projDoc.data();
+                                project.code = pd.code;
+                                project.name = pd.name;
+                                project.date = pd.date;
+                                if (pd.planImage) planImage.value = pd.planImage;
+
+                                const pinsSnap = await db.collection('site_projects').doc(code).collection('pins').get();
+                                const fullPins = [];
+                                pinsSnap.forEach(pDoc => fullPins.push(pDoc.data()));
+                                if (fullPins.length > 0) {
+                                    pins.value = fullPins.sort((a, b) => a.id - b.id);
+                                }
+                                currentView.value = 'plan';
+                                saveCurrentProject();
+                                attachRealtimeSync(code);
+                            }
+                        } catch (e) {
+                            console.log("Cloud load bypass:", e);
+                        }
+                    }
+                };
+
+                const deleteProject = async (code) => {
+                    if (confirm("確定刪除此工程？")) {
+                        await localforage.removeItem('proj_' + code);
+                        if (db) {
+                            try {
+                                await db.collection('site_projects').doc(code).delete();
+                            } catch (e) {}
+                        }
+                        loadProjectList();
+                    }
+                };
+
+                const loadProjectList = async () => {
+                    const keys = await localforage.keys();
+                    const list = [];
+                    for (let k of keys) {
+                        if (k.startsWith('proj_')) {
+                            const d = await localforage.getItem(k);
+                            if (d && d.code) list.push({ code: d.code, name: d.name, date: d.date, pinCount: d.pins ? d.pins.length : 0, updatedAt: d.updatedAt || 0 });
+                        }
+                    }
+                    projectList.value = list.sort((a, b) => b.updatedAt - a.updatedAt);
+                };
+
+                const backToProjects = () => {
+                    if (realtimePinsUnsub) realtimePinsUnsub();
+                    saveCurrentProject();
+                    loadProjectList();
+                    currentView.value = 'projects';
+                };
+
+                onMounted(() => {
+                    loadProjectList();
+                    window.addEventListener('resize', updateWorkspaceSize);
+                    window.addEventListener('orientationchange', () => setTimeout(updateWorkspaceSize, 150));
+
+                    if (auth) {
+                        auth.onAuthStateChanged((user) => {
+                            if (user) {
+                                cloudSyncState.value = 'ready';
+                            } else {
+                                auth.signInAnonymously().catch(err => {
+                                    console.error("匿名認證失敗:", err);
+                                    cloudSyncState.value = 'error';
+                                });
+                            }
+                        });
+                    }
+                });
+
+                // 單張相片轉印
+                const renderPinCanvas = (pin, isForPdf = false) => {
+                    return new Promise((resolve) => {
+                        const img = new Image();
+                        img.src = pin.photo;
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const w = pin.photoW || 1200;
+                            const h = pin.photoH || 900;
+                            canvas.width = w; canvas.height = h;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, w, h);
+
+                            if (!isForPdf) {
+                                ctx.fillStyle = 'rgba(0,0,0,0.85)';
+                                ctx.fillRect(0, 0, w, 70);
+                                ctx.fillStyle = '#fff';
+                                ctx.font = 'bold 30px sans-serif';
+                                ctx.textBaseline = 'middle';
+                                ctx.textAlign = 'left';
