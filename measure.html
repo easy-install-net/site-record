@@ -203,7 +203,7 @@
                     <path v-if="currentPath" :d="currentPath" stroke="#ff0044" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                     <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" stroke="#ff0044" stroke-width="5" stroke-dasharray="8" />
 
-                    <!-- 印章與尺寸 (透明感應區 + 純文字 5px 黑色描邊) -->
+                    <!-- 印章與尺寸 (移除 mm 後綴以淨化圖面) -->
                     <g v-for="marker in activePin.markers" :key="marker.id"
                        :transform="`translate(${marker.x}, ${marker.y})`"
                        class="cursor-move"
@@ -360,7 +360,6 @@
                 const isProcessing = ref(false);
                 const processingText = ref('');
 
-                // 物理夾鉗
                 const workspace = ref(null);
                 const svgCanvas = ref(null);
                 const wsW = ref(window.innerWidth || 360);
@@ -377,7 +376,6 @@
                     syncSvgViewBox();
                 };
 
-                // 原生鎖死 SVG viewBox，杜絕瀏覽器小寫 viewbox 渲染 BUG
                 const syncSvgViewBox = () => {
                     if (svgCanvas.value && activePin.value && activePin.value.photo) {
                         const pw = activePin.value.photoW || 1200;
@@ -386,7 +384,6 @@
                     }
                 };
 
-                // 動態鎖定相片真實比例
                 const wrapperStyle = computed(() => {
                     if (!activePin.value || !activePin.value.photo) return { display: 'none' };
                     const pw = activePin.value.photoW || 1200;
@@ -414,7 +411,6 @@
                     };
                 });
 
-                // 繪圖與拖曳邏輯
                 const isDrawing = ref(false);
                 const startPos = ref({ x: 0, y: 0 });
                 const currentLine = ref(null);
@@ -430,7 +426,6 @@
                     return activePin.value && activePin.value.historyStack && activePin.value.historyStack.length > 0;
                 });
 
-                // ★★★ 核心突破：專業級「逆矩陣座標投影（getScreenCTM.inverse）」 ★★★
                 const getCoords = (e) => {
                     const svg = svgCanvas.value;
                     if (!svg) return { x: 0, y: 0 };
@@ -447,7 +442,6 @@
                         cy = e.clientY;
                     }
 
-                    // 呼叫 SVG 底層硬體矩陣轉換
                     const pt = svg.createSVGPoint();
                     pt.x = cx;
                     pt.y = cy;
@@ -563,7 +557,6 @@
                     saveCurrentProject();
                 };
 
-                // 全能復原 (Undo)
                 const undoLastAction = () => {
                     if (!activePin.value || !activePin.value.historyStack || activePin.value.historyStack.length === 0) return;
                     const action = activePin.value.historyStack.pop();
@@ -578,7 +571,6 @@
                     saveCurrentProject();
                 };
 
-                // 刪除印章 (連帶刪除綁定的紅線)
                 const deleteMarker = () => {
                     if (!activeMarker.value) return;
                     const mId = activeMarker.value.id;
@@ -597,7 +589,6 @@
                     saveCurrentProject();
                 };
 
-                // 圖片壓縮並提取真實長闊
                 const compressImage = (file) => {
                     return new Promise((resolve) => {
                         const reader = new FileReader(); 
@@ -644,7 +635,6 @@
                     saveCurrentProject();
                 };
 
-                // 平面圖打釘：只認 <img> 實體邊界，徹底剔除黑邊飄移
                 const handlePlanImageClick = (e) => {
                     const img = e.currentTarget;
                     const rect = img.getBoundingClientRect();
@@ -682,7 +672,6 @@
                         }, 60);
                     });
 
-                    // 雲端按需下載相片
                     if (!pin.photo && db && project.id) {
                         try {
                             const pinDoc = await db.collection('site_projects').doc(`proj_${project.id}`).collection('pins').doc(`pin_${pin.id}`).get();
@@ -750,6 +739,7 @@
                     return '#ffffff';
                 };
 
+                // ★ 已修改：移除標籤最後的 'mm'
                 const getMarkerLines = (marker) => {
                     if (['window', 'door', 'beam', 'column'].includes(marker.type)) {
                         const lines = [getTagFields(marker.type)[0] ? getTagName(marker.type) : ''];
@@ -758,7 +748,7 @@
                     }
                     if (marker.type === 'stamp') return [marker.data.val || '未定'];
                     const label = marker.data.name ? `${marker.data.name}: ` : '';
-                    return [`${label}${marker.data.val || '?'}mm`];
+                    return [`${label}${marker.data.val || '?'}`];
                 };
 
                 const getTagName = (t) => ({ 'window': '窗', 'door': '門洞', 'beam': '樑', 'column': '柱' })[t] || '';
@@ -770,7 +760,6 @@
                 })[t] || [];
                 const getFieldLabel = (t, k) => { const f = getTagFields(t).find(i => i.key === k); return f ? f.label : k; };
 
-                // 雲端與本地同步核心
                 const saveCurrentProject = async () => {
                     if (!project.id) return;
                     const now = Date.now();
@@ -956,7 +945,6 @@
                     }
                 });
 
-                // 單張相片高清合成轉印
                 const renderPinCanvas = (pin) => {
                     return new Promise((resolve) => {
                         const img = new Image();
@@ -1022,7 +1010,6 @@
                     isProcessing.value = false;
                 };
 
-                // A4 四格 PDF 報告生成器
                 const exportPdfReport = async () => {
                     isProcessing.value = true;
                     processingText.value = '正在排版 A4 四格 PDF 報告...';
@@ -1033,7 +1020,6 @@
                             const PAGE_W = 1240;
                             const PAGE_H = 1754;
 
-                            // 第 1 頁：平面總圖
                             const page1Canvas = document.createElement('canvas');
                             page1Canvas.width = PAGE_W; page1Canvas.height = PAGE_H;
                             const ctx1 = page1Canvas.getContext('2d');
@@ -1066,7 +1052,6 @@
                             }
                             doc.addImage(page1Canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
 
-                            // 第 2 頁起：2 x 2 四格矩陣
                             const photoPins = pins.value.filter(p => p.photo);
                             const totalPages = Math.ceil(photoPins.length / 4);
 
