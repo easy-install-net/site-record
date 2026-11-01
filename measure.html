@@ -18,7 +18,6 @@
         [v-cloak] { display: none !important; }
         * { box-sizing: border-box; }
         
-        /* 根治手機瀏覽器視口跳動：動態視口鎖死 100dvh */
         html, body { 
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -31,7 +30,6 @@
             user-select: none;
         }
 
-        /* 輸入框字體鎖定 >= 16px，徹底杜絕 iOS Safari 彈出鍵盤時強制放大頁面造成座標錯位 */
         input, select, textarea {
             font-size: 16px !important;
         }
@@ -54,7 +52,6 @@
         }
         .micro-btn:active { background: #000000; color: #ffffff; }
 
-        /* 純文字無底框印章：5px 實體黑描邊，任何底色均能清晰對齊 */
         .stamp-text {
             font-weight: 900;
             font-size: 28px;
@@ -71,7 +68,7 @@
 <body class="text-gray-100 font-sans antialiased">
     <div id="app" v-cloak class="fixed inset-0 w-full h-full flex flex-col overflow-hidden">
         
-        <!-- 頂部導航列 (44px 嚴格固定高度) -->
+        <!-- 頂部導航列 -->
         <header class="h-11 shrink-0 bg-black text-white px-2 border-b border-gray-800 flex justify-between items-center z-30">
             <div class="flex items-center gap-1.5 truncate flex-1 mr-1">
                 <span :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold shrink-0">
@@ -128,7 +125,7 @@
             </div>
         </main>
 
-        <!-- 第 2 級：平面圖打釘定位 (實體相片精準打釘，杜絕黑邊飄移) -->
+        <!-- 第 2 級：平面圖打釘定位 -->
         <main v-show="currentView === 'plan'" class="flex-1 min-h-0 bg-gray-900 flex flex-col overflow-hidden">
             <div class="w-full bg-black border-b border-gray-700 p-2 flex gap-2 items-center shrink-0">
                 <span class="text-xs font-bold text-gray-400 whitespace-nowrap">單位:</span>
@@ -162,7 +159,7 @@
             </div>
         </main>
 
-        <!-- 第 3 級：相片標註畫板 (逆矩陣投影 + 原生鎖死 viewBox + 1:1 咬緊手指) -->
+        <!-- 第 3 級：相片標註畫板 -->
         <main v-show="currentView === 'photo'" ref="workspace" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col items-center justify-center">
             
             <div v-if="activePin && activePin.photo" class="absolute top-2 z-20 flex gap-1 bg-black/85 backdrop-blur p-1 rounded border border-gray-700 shadow-lg">
@@ -186,24 +183,18 @@
                 
                 <img :src="activePin.photo" class="w-full h-full block pointer-events-none select-none object-fill">
 
-                <!-- 頂層全透明 SVG 畫板：由 JS 強制鎖死 viewBox，preserveAspectRatio 鎖定 none 確保百分之百貼合 -->
                 <svg ref="svgCanvas"
                      class="absolute inset-0 w-full h-full select-none touch-none"
                      preserveAspectRatio="none"
                      @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd"
                      @mousedown="handleTouchStart" @mousemove="handleTouchMove" @mouseup="handleTouchEnd">
                     
-                    <!-- 自由塗鴉線 -->
                     <path v-for="path in (activePin.paths || [])" :key="path.id" :d="path.d" stroke="#ff0044" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-                    
-                    <!-- 度尺紅線 -->
                     <line v-for="line in (activePin.lines || [])" :key="line.id" :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2" stroke="#ff0044" stroke-width="5" stroke-linecap="round" />
 
-                    <!-- 即時預覽 -->
                     <path v-if="currentPath" :d="currentPath" stroke="#ff0044" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                     <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" stroke="#ff0044" stroke-width="5" stroke-dasharray="8" />
 
-                    <!-- 印章與尺寸 (移除 mm 後綴以淨化圖面) -->
                     <g v-for="marker in activePin.markers" :key="marker.id"
                        :transform="`translate(${marker.x}, ${marker.y})`"
                        class="cursor-move"
@@ -224,7 +215,6 @@
             </div>
         </main>
 
-        <!-- 懸浮抽屜外部遮罩 -->
         <div v-if="showBottomSheet && activeMarker" 
              class="fixed inset-0 bg-black/60 z-40" 
              @click="closeBottomSheet"></div>
@@ -290,14 +280,13 @@
                     <div class="flex items-stretch gap-2 mt-1">
                         <input type="text" v-model="activeMarker.data.name" @input="updateMarkerSize(activeMarker)" class="w-20 border-2 border-black p-1 text-base font-bold bg-white focus:outline-none rounded text-center" placeholder="名稱">
                         <span class="font-bold self-center text-lg">:</span>
-                        <input type="number" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1 px-2 text-xl font-bold bg-white text-black focus:outline-none rounded" placeholder="數值 (mm)">
+                        <input type="number" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1 px-2 text-xl font-bold bg-white text-black focus:outline-none rounded" placeholder="數值">
                         <button @click="closeBottomSheet" class="bg-black text-white font-bold px-4 rounded text-sm active:bg-gray-800">確定</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 轉檔與下載遮罩 -->
         <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center text-white font-bold">
             <div class="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-3"></div>
             <p class="text-base">{{ processingText }}</p>
@@ -308,7 +297,6 @@
         const { createApp, ref, reactive, computed, onMounted, nextTick, watch } = Vue;
         localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
-        // Firebase 專案設定
         const firebaseConfig = {
             apiKey: "AIzaSyCSRfZdAVh8ADPNtayW5lyDtmE0xDsJXNg",
             authDomain: "gen-lang-client-0208380044.firebaseapp.com",
@@ -739,7 +727,6 @@
                     return '#ffffff';
                 };
 
-                // ★ 已修改：移除標籤最後的 'mm'
                 const getMarkerLines = (marker) => {
                     if (['window', 'door', 'beam', 'column'].includes(marker.type)) {
                         const lines = [getTagFields(marker.type)[0] ? getTagName(marker.type) : ''];
@@ -945,7 +932,8 @@
                     }
                 });
 
-                const renderPinCanvas = (pin) => {
+                // ★ 加入 isForPdf 參數：如果是匯出 PDF，自動隱藏相片內部的黑色標題列
+                const renderPinCanvas = (pin, isForPdf = false) => {
                     return new Promise((resolve) => {
                         const img = new Image();
                         img.src = pin.photo;
@@ -957,13 +945,16 @@
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0, w, h);
 
-                            ctx.fillStyle = 'rgba(0,0,0,0.85)';
-                            ctx.fillRect(0, 0, w, 70);
-                            ctx.fillStyle = '#fff';
-                            ctx.font = 'bold 30px sans-serif';
-                            ctx.textBaseline = 'middle';
-                            ctx.textAlign = 'left';
-                            ctx.fillText(`📍 ${project.name || '未命名'} | ${pin.name} | ${project.date}`, 20, 35);
+                            // PDF 排版時，自動隱藏相片內部標題列，避免「雙重標題」
+                            if (!isForPdf) {
+                                ctx.fillStyle = 'rgba(0,0,0,0.85)';
+                                ctx.fillRect(0, 0, w, 70);
+                                ctx.fillStyle = '#fff';
+                                ctx.font = 'bold 30px sans-serif';
+                                ctx.textBaseline = 'middle';
+                                ctx.textAlign = 'left';
+                                ctx.fillText(`📍 ${project.name || '未命名'} | ${pin.name} | ${project.date}`, 20, 35);
+                            }
 
                             ctx.strokeStyle = '#ff0044'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
                             if (pin.lines) {
@@ -1003,13 +994,15 @@
                 const exportSingleImage = async () => {
                     if (!activePin.value || !activePin.value.photo) return;
                     isProcessing.value = true; processingText.value = '正在產出單張相片...';
-                    const dataUrl = await renderPinCanvas(activePin.value);
+                    // 單張下載：保持 isForPdf 為 false，保留相片內部標題
+                    const dataUrl = await renderPinCanvas(activePin.value, false);
                     const link = document.createElement('a');
                     link.download = `${project.name || '工程'}_${activePin.value.name}.jpg`;
                     link.href = dataUrl; link.click();
                     isProcessing.value = false;
                 };
 
+                // ★ PDF 匯出排版大翻新：白底黑字 + 簡潔線條分隔
                 const exportPdfReport = async () => {
                     isProcessing.value = true;
                     processingText.value = '正在排版 A4 四格 PDF 報告...';
@@ -1020,16 +1013,20 @@
                             const PAGE_W = 1240;
                             const PAGE_H = 1754;
 
+                            // 第一頁：總表
                             const page1Canvas = document.createElement('canvas');
                             page1Canvas.width = PAGE_W; page1Canvas.height = PAGE_H;
                             const ctx1 = page1Canvas.getContext('2d');
                             ctx1.fillStyle = '#ffffff'; ctx1.fillRect(0, 0, PAGE_W, PAGE_H);
 
-                            ctx1.fillStyle = '#111827'; ctx1.fillRect(0, 0, PAGE_W, 140);
-                            ctx1.fillStyle = '#ffffff'; ctx1.font = 'bold 44px sans-serif'; ctx1.textAlign = 'left';
+                            // ★ 頂部標題改為純白底色、黑色粗體字，加上灰色底線分隔
+                            ctx1.fillStyle = '#ffffff'; ctx1.fillRect(0, 0, PAGE_W, 140);
+                            ctx1.fillStyle = '#000000'; ctx1.font = 'bold 44px sans-serif'; ctx1.textAlign = 'left';
                             ctx1.fillText(`工程度尺總表: ${project.name || '未命名'}`, 50, 70);
-                            ctx1.font = 'bold 26px sans-serif'; ctx1.fillStyle = '#9ca3af';
+                            ctx1.font = 'bold 26px sans-serif'; ctx1.fillStyle = '#4b5563';
                             ctx1.fillText(`度尺日期: ${project.date}   |   標註位置總數: ${pins.value.length} 個`, 50, 115);
+                            ctx1.strokeStyle = '#e5e7eb'; ctx1.lineWidth = 2;
+                            ctx1.beginPath(); ctx1.moveTo(50, 135); ctx1.lineTo(PAGE_W - 50, 135); ctx1.stroke();
 
                             if (planImage.value) {
                                 const pImg = new Image();
@@ -1052,6 +1049,7 @@
                             }
                             doc.addImage(page1Canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
 
+                            // 第二頁起：四格矩陣相片
                             const photoPins = pins.value.filter(p => p.photo);
                             const totalPages = Math.ceil(photoPins.length / 4);
 
@@ -1073,11 +1071,14 @@
                                 const pageNCanvas = document.createElement('canvas');
                                 pageNCanvas.width = PAGE_W; pageNCanvas.height = PAGE_H;
                                 const ctxN = pageNCanvas.getContext('2d');
-                                ctxN.fillStyle = '#f3f4f6'; ctxN.fillRect(0, 0, PAGE_W, PAGE_H);
+                                ctxN.fillStyle = '#ffffff'; ctxN.fillRect(0, 0, PAGE_W, PAGE_H);
 
-                                ctxN.fillStyle = '#1f2937'; ctxN.fillRect(0, 0, PAGE_W, 90);
-                                ctxN.fillStyle = '#ffffff'; ctxN.font = 'bold 36px sans-serif'; ctxN.textAlign = 'left';
+                                // ★ 第二頁頂部標題同樣改為白底黑字分隔線
+                                ctxN.fillStyle = '#ffffff'; ctxN.fillRect(0, 0, PAGE_W, 90);
+                                ctxN.fillStyle = '#000000'; ctxN.font = 'bold 36px sans-serif'; ctxN.textAlign = 'left';
                                 ctxN.fillText(`${project.name || '工程'} - 現場詳細記錄 (第 ${pageIdx + 1} / ${totalPages} 頁)`, 50, 58);
+                                ctxN.strokeStyle = '#e5e7eb'; ctxN.lineWidth = 2;
+                                ctxN.beginPath(); ctxN.moveTo(50, 80); ctxN.lineTo(PAGE_W - 50, 80); ctxN.stroke();
 
                                 for (let slot = 0; slot < 4; slot++) {
                                     const pinIndex = (pageIdx * 4) + slot;
@@ -1086,21 +1087,26 @@
                                     const pin = photoPins[pinIndex];
                                     const slotPos = cellSlots[slot];
 
+                                    // 四格外框
                                     ctxN.fillStyle = '#ffffff';
                                     ctxN.fillRect(slotPos.x, slotPos.y, cellW, cellH);
                                     ctxN.strokeStyle = '#d1d5db'; ctxN.lineWidth = 2;
                                     ctxN.strokeRect(slotPos.x, slotPos.y, cellW, cellH);
 
-                                    ctxN.fillStyle = '#111827'; ctxN.fillRect(slotPos.x, slotPos.y, cellW, 55);
-                                    ctxN.fillStyle = '#ffffff'; ctxN.font = 'bold 26px sans-serif'; ctxN.textAlign = 'left';
+                                    // ★ 四格內部的小標題列：改為超淺灰底色配黑字，清爽不搶眼
+                                    ctxN.fillStyle = '#f9fafb'; ctxN.fillRect(slotPos.x, slotPos.y, cellW, 55);
+                                    ctxN.fillStyle = '#000000'; ctxN.font = 'bold 26px sans-serif'; ctxN.textAlign = 'left';
                                     ctxN.fillText(`📍 [位置 ${pinIndex + 1}] ${pin.name}`, slotPos.x + 16, slotPos.y + 36);
+                                    ctxN.beginPath(); ctxN.moveTo(slotPos.x, slotPos.y + 55); ctxN.lineTo(slotPos.x + cellW, slotPos.y + 55); ctxN.stroke();
 
-                                    const renderedData = await renderPinCanvas(pin);
+                                    // ★ 繪製相片本體 (傳入 true 隱藏相片內部的黑色疊加標題)
+                                    const renderedData = await renderPinCanvas(pin, true);
                                     const phImg = new Image(); phImg.src = renderedData;
                                     await new Promise(r => phImg.onload = r);
 
+                                    // 完美置中相片
                                     const maxPhotoW = cellW - 20;
-                                    const maxPhotoH = cellH - 75;
+                                    const maxPhotoH = cellH - 75; // 扣除上方 55px 標題與底部 20px 留白
                                     let dw = maxPhotoW;
                                     let dh = (phImg.height / phImg.width) * dw;
                                     if (dh > maxPhotoH) {
@@ -1108,7 +1114,7 @@
                                         dw = (phImg.width / phImg.height) * dh;
                                     }
                                     const dx = slotPos.x + (cellW - dw) / 2;
-                                    const dy = slotPos.y + 65 + ((maxPhotoH - dh) / 2);
+                                    const dy = slotPos.y + 55 + ((cellH - 55 - dh) / 2); // 在剩餘空間垂直置中
 
                                     ctxN.drawImage(phImg, dx, dy, dw, dh);
                                 }
