@@ -250,7 +250,7 @@
                     </div>
                     <div class="flex items-center gap-1 flex-wrap">
                         <span class="text-[11px] font-bold text-yellow-800 bg-yellow-100 px-1 border border-yellow-300 rounded">水電收口</span>
-                        <button v-for="stamp in ['開關', '插座', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-yellow-600 text-yellow-900 font-bold px-2 py-1">{{ stamp }}</button>
+                        <button v-for="stamp in ['開關', '單插','孖插','獨13A','冷曲','網', '槽','地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-yellow-600 text-yellow-900 font-bold px-2 py-1">{{ stamp }}</button>
                     </div>
                     <div class="flex items-center gap-1 flex-wrap">
                         <span class="text-[11px] font-bold text-blue-700 bg-blue-100 px-1 border border-blue-300 rounded">動線結構</span>
@@ -271,7 +271,7 @@
                 <div v-else class="flex flex-col gap-2">
                     <div class="flex gap-1 overflow-x-auto pb-1">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎</span>
-                        <button v-for="w in ['高','闊','總高','總深','腰墨','牆厚']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
+                        <button v-for="w in ['高','闊','深','總高','總深','腰墨','牆厚']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
                     </div>
                     <div class="flex gap-1 overflow-x-auto pb-1">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">水電</span>
@@ -719,7 +719,7 @@
                     if (marker.type === 'stamp') {
                         const val = marker.data.val;
                         if (['需清拆', '牆身斜', '牆體不平整', '局部凸出'].includes(val)) return '#ff453a';
-                        if (['開關', '插座', '地腳線'].includes(val)) return '#ffd60a';
+                        if (['開關', '單插','孖插','獨13A','冷曲','網', '槽','地腳線'].includes(val)) return '#ffd60a';
                         if (['留通道', '開門方向'].includes(val)) return '#0a84ff';
                         if (['可保留', '實地台'].includes(val)) return '#30d158';
                         return '#ffd60a';
