@@ -75,7 +75,6 @@
                     {{ cloudStatusText }}
                 </span>
                 
-                <!-- 6 位數工程碼標籤 -->
                 <span v-if="project.code && currentView !== 'projects'" class="bg-yellow-400 text-black text-xs font-black px-1.5 py-0.5 rounded tracking-wider shrink-0">
                     #{{ project.code }}
                 </span>
@@ -114,7 +113,7 @@
             </div>
         </header>
 
-        <!-- 第 1 級：工程目錄 (顯示 6 位數工程碼) -->
+        <!-- 第 1 級：工程目錄 -->
         <main v-show="currentView === 'projects'" class="flex-1 min-h-0 bg-gray-900 p-3 overflow-y-auto touch-scrollable">
             <div v-if="projectList.length === 0" class="text-center text-gray-400 mt-16 text-sm font-bold">
                 目前沒有工程。可點擊右上角「新建工程」或「輸入工程碼」連通其他手機。
@@ -271,13 +270,23 @@
                         <span class="text-[11px] font-bold text-red-700 bg-red-100 px-1 border border-red-300 rounded">瑕疵打拆</span>
                         <button v-for="stamp in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-red-600 text-red-700 font-bold px-2 py-1">{{ stamp }}</button>
                     </div>
+                    
+                    <!-- ★ 更新水電收口陣列 -->
                     <div class="flex items-center gap-1 flex-wrap">
                         <span class="text-[11px] font-bold text-yellow-800 bg-yellow-100 px-1 border border-yellow-300 rounded">水電收口</span>
-                        <button v-for="stamp in ['開關', '插座', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-yellow-600 text-yellow-900 font-bold px-2 py-1">{{ stamp }}</button>
+                        <button v-for="stamp in ['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-yellow-600 text-yellow-900 font-bold px-2 py-1">{{ stamp }}</button>
                     </div>
+                    
                     <div class="flex items-center gap-1 flex-wrap">
                         <span class="text-[11px] font-bold text-blue-700 bg-blue-100 px-1 border border-blue-300 rounded">動線結構</span>
                         <button v-for="stamp in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-blue-600 text-blue-800 font-bold px-2 py-1">{{ stamp }}</button>
+                    </div>
+
+                    <!-- ★ 新增：自由打字印章 -->
+                    <div class="flex items-stretch gap-2 mt-1 pt-2 border-t border-gray-200">
+                        <span class="text-[11px] font-bold text-purple-700 bg-purple-100 px-1 border border-purple-300 rounded flex items-center whitespace-nowrap">自由印</span>
+                        <input type="text" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1 px-2 text-base font-bold bg-white text-black focus:outline-none rounded" placeholder="自訂印章內容...">
+                        <button @click="closeBottomSheet" class="bg-black text-white font-bold px-3 rounded text-sm active:bg-gray-800 shrink-0">確定</button>
                     </div>
                 </div>
 
@@ -292,9 +301,10 @@
                 </div>
 
                 <div v-else class="flex flex-col gap-2">
+                    <!-- ★ 更新基礎尺寸陣列 -->
                     <div class="flex gap-1 overflow-x-auto pb-1">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎</span>
-                        <button v-for="w in ['高','闊','總高','總深','腰墨','牆厚']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
+                        <button v-for="w in ['高','闊','深','厚','總高','總深','腰墨','牆厚','留位']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
                     </div>
                     <div class="flex gap-1 overflow-x-auto pb-1">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">水電</span>
@@ -310,7 +320,6 @@
             </div>
         </div>
 
-        <!-- 轉檔與下載遮罩 -->
         <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center text-white font-bold">
             <div class="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-3"></div>
             <p class="text-base">{{ processingText }}</p>
@@ -443,7 +452,6 @@
                     return activePin.value && activePin.value.historyStack && activePin.value.historyStack.length > 0;
                 });
 
-                // 逆矩陣精準座標投影
                 const getCoords = (e) => {
                     const svg = svgCanvas.value;
                     if (!svg) return { x: 0, y: 0 };
@@ -726,14 +734,15 @@
                     marker.h = Math.max(54, lines.length * 36 + 18);
                 };
 
+                // ★ 加入水電收口新詞彙的顏色判定；自訂文字預設白色
                 const getStampColor = (marker) => {
                     if (marker.type === 'stamp') {
                         const val = marker.data.val;
                         if (['需清拆', '牆身斜', '牆體不平整', '局部凸出'].includes(val)) return '#ff453a';
-                        if (['開關', '插座', '地腳線'].includes(val)) return '#ffd60a';
+                        if (['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線'].includes(val)) return '#ffd60a';
                         if (['留通道', '開門方向'].includes(val)) return '#0a84ff';
                         if (['可保留', '實地台'].includes(val)) return '#30d158';
-                        return '#ffd60a';
+                        return '#ffffff'; // 自訂自由印章預設白色
                     }
                     return '#ffffff';
                 };
@@ -758,7 +767,6 @@
                 })[t] || [];
                 const getFieldLabel = (t, k) => { const f = getTagFields(t).find(i => i.key === k); return f ? f.label : k; };
 
-                // ★ 雙軌儲存與即時廣播 (以 6 位數工程碼為雲端唯一 KEY)
                 const saveCurrentProject = async () => {
                     if (!project.code) return;
                     const now = Date.now();
@@ -811,21 +819,19 @@
                     }
                 };
 
-                // ★ 開啟工程並掛載即時監聽器 (onSnapshot 雙機廣播)
                 const attachRealtimeSync = (code) => {
                     if (realtimePinsUnsub) realtimePinsUnsub();
                     if (!db || !code) return;
 
                     realtimePinsUnsub = db.collection('site_projects').doc(code).collection('pins')
                         .onSnapshot((snapshot) => {
-                            if (isDrawing.value || isDraggingMarker.value) return; // 正在操作時暫不覆蓋
+                            if (isDrawing.value || isDraggingMarker.value) return;
                             
                             snapshot.docChanges().forEach((change) => {
                                 const pinData = change.doc.data();
                                 if (change.type === 'added' || change.type === 'modified') {
                                     const idx = pins.value.findIndex(p => p.id === pinData.id);
                                     if (idx !== -1) {
-                                        // 雲端版本更新且本地沒在拉線，自動同步
                                         if ((pinData.updatedAt || 0) > (pins.value[idx].updatedAt || 0)) {
                                             Object.assign(pins.value[idx], pinData);
                                         }
@@ -842,7 +848,6 @@
                 };
 
                 const createNewProject = () => {
-                    // 自動生成 6 位數工程碼
                     const newCode = Math.floor(100000 + Math.random() * 900000).toString();
                     project.code = newCode;
                     project.name = '';
@@ -879,7 +884,6 @@
                 };
 
                 const loadProject = async (code) => {
-                    // 本地優先加載
                     const d = await localforage.getItem('proj_' + code);
                     if (d) {
                         project.code = d.code;
@@ -890,7 +894,6 @@
                         currentView.value = 'plan';
                     }
 
-                    // 從 Firestore 完整拉取雲端內容
                     if (db && auth && auth.currentUser) {
                         try {
                             const projDoc = await db.collection('site_projects').doc(code).get();
@@ -967,7 +970,6 @@
                     }
                 });
 
-                // 單張相片轉印
                 const renderPinCanvas = (pin, isForPdf = false) => {
                     return new Promise((resolve) => {
                         const img = new Image();
@@ -987,3 +989,186 @@
                                 ctx.font = 'bold 30px sans-serif';
                                 ctx.textBaseline = 'middle';
                                 ctx.textAlign = 'left';
+                                ctx.fillText(`📍 ${project.name || '未命名'} | ${pin.name} | ${project.date}`, 20, 35);
+                            }
+
+                            ctx.strokeStyle = '#ff0044'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                            if (pin.lines) {
+                                pin.lines.forEach(l => {
+                                    ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
+                                });
+                            }
+                            if (pin.paths) {
+                                pin.paths.forEach(p => {
+                                    const path = new Path2D(p.d);
+                                    ctx.stroke(path);
+                                });
+                            }
+
+                            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                            if (pin.markers) {
+                                pin.markers.forEach(m => {
+                                    const lines = getMarkerLines(m);
+                                    const color = getStampColor(m);
+                                    ctx.font = '900 28px sans-serif';
+                                    lines.forEach((line, i) => {
+                                        const textY = m.y - (lines.length > 1 ? 16 : 0) + (i * 34);
+                                        ctx.lineWidth = 7; 
+                                        ctx.strokeStyle = '#000000'; 
+                                        ctx.lineJoin = 'round';
+                                        ctx.strokeText(line, m.x, textY);
+                                        ctx.fillStyle = color; 
+                                        ctx.fillText(line, m.x, textY);
+                                    });
+                                });
+                            }
+                            resolve(canvas.toDataURL('image/jpeg', 0.85));
+                        };
+                    });
+                };
+
+                const exportSingleImage = async () => {
+                    if (!activePin.value || !activePin.value.photo) return;
+                    isProcessing.value = true; processingText.value = '正在產出單張相片...';
+                    const dataUrl = await renderPinCanvas(activePin.value, false);
+                    const link = document.createElement('a');
+                    link.download = `${project.name || '工程'}_${activePin.value.name}.jpg`;
+                    link.href = dataUrl; link.click();
+                    isProcessing.value = false;
+                };
+
+                const exportPdfReport = async () => {
+                    isProcessing.value = true;
+                    processingText.value = '正在排版 A4 四格 PDF 報告...';
+                    setTimeout(async () => {
+                        try {
+                            const { jsPDF } = window.jspdf;
+                            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                            const PAGE_W = 1240;
+                            const PAGE_H = 1754;
+
+                            const page1Canvas = document.createElement('canvas');
+                            page1Canvas.width = PAGE_W; page1Canvas.height = PAGE_H;
+                            const ctx1 = page1Canvas.getContext('2d');
+                            ctx1.fillStyle = '#ffffff'; ctx1.fillRect(0, 0, PAGE_W, PAGE_H);
+
+                            ctx1.fillStyle = '#ffffff'; ctx1.fillRect(0, 0, PAGE_W, 140);
+                            ctx1.fillStyle = '#000000'; ctx1.font = 'bold 44px sans-serif'; ctx1.textAlign = 'left';
+                            ctx1.fillText(`工程度尺總表: ${project.name || '未命名'} (#${project.code})`, 50, 70);
+                            ctx1.font = 'bold 26px sans-serif'; ctx1.fillStyle = '#4b5563';
+                            ctx1.fillText(`度尺日期: ${project.date}   |   標註位置總數: ${pins.value.length} 個`, 50, 115);
+                            ctx1.strokeStyle = '#e5e7eb'; ctx1.lineWidth = 2;
+                            ctx1.beginPath(); ctx1.moveTo(50, 135); ctx1.lineTo(PAGE_W - 50, 135); ctx1.stroke();
+
+                            if (planImage.value) {
+                                const pImg = new Image();
+                                pImg.src = planImage.value;
+                                await new Promise(r => pImg.onload = r);
+                                const planDrawW = PAGE_W - 100;
+                                const planDrawH = Math.min(1300, (pImg.height / pImg.width) * planDrawW);
+                                const planDrawX = 50; const planDrawY = 180;
+                                ctx1.drawImage(pImg, planDrawX, planDrawY, planDrawW, planDrawH);
+
+                                pins.value.forEach((pin, idx) => {
+                                    const px = planDrawX + (pin.x / 100) * planDrawW;
+                                    const py = planDrawY + (pin.y / 100) * planDrawH;
+                                    ctx1.beginPath(); ctx1.arc(px, py - 25, 22, 0, 2 * Math.PI);
+                                    ctx1.fillStyle = '#dc2626'; ctx1.fill();
+                                    ctx1.fillStyle = '#ffffff'; ctx1.font = 'bold 24px sans-serif';
+                                    ctx1.textAlign = 'center'; ctx1.textBaseline = 'middle';
+                                    ctx1.fillText(idx + 1, px, py - 25);
+                                });
+                            }
+                            doc.addImage(page1Canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
+
+                            const photoPins = pins.value.filter(p => p.photo);
+                            const totalPages = Math.ceil(photoPins.length / 4);
+
+                            const marginX = 50;
+                            const marginY = 130;
+                            const gap = 30;
+                            const cellW = (PAGE_W - (marginX * 2) - gap) / 2;
+                            const cellH = (PAGE_H - marginY - 60 - gap) / 2;
+
+                            const cellSlots = [
+                                { x: marginX, y: marginY },
+                                { x: marginX + cellW + gap, y: marginY },
+                                { x: marginX, y: marginY + cellH + gap },
+                                { x: marginX + cellW + gap, y: marginY + cellH + gap }
+                            ];
+
+                            for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+                                doc.addPage();
+                                const pageNCanvas = document.createElement('canvas');
+                                pageNCanvas.width = PAGE_W; pageNCanvas.height = PAGE_H;
+                                const ctxN = pageNCanvas.getContext('2d');
+                                ctxN.fillStyle = '#ffffff'; ctxN.fillRect(0, 0, PAGE_W, PAGE_H);
+
+                                ctxN.fillStyle = '#ffffff'; ctxN.fillRect(0, 0, PAGE_W, 90);
+                                ctxN.fillStyle = '#000000'; ctxN.font = 'bold 36px sans-serif'; ctxN.textAlign = 'left';
+                                ctxN.fillText(`${project.name || '工程'} - 現場詳細記錄 (第 ${pageIdx + 1} / ${totalPages} 頁)`, 50, 58);
+                                ctxN.strokeStyle = '#e5e7eb'; ctxN.lineWidth = 2;
+                                ctxN.beginPath(); ctxN.moveTo(50, 80); ctxN.lineTo(PAGE_W - 50, 80); ctxN.stroke();
+
+                                for (let slot = 0; slot < 4; slot++) {
+                                    const pinIndex = (pageIdx * 4) + slot;
+                                    if (pinIndex >= photoPins.length) break;
+
+                                    const pin = photoPins[pinIndex];
+                                    const slotPos = cellSlots[slot];
+
+                                    ctxN.fillStyle = '#ffffff';
+                                    ctxN.fillRect(slotPos.x, slotPos.y, cellW, cellH);
+                                    ctxN.strokeStyle = '#d1d5db'; ctxN.lineWidth = 2;
+                                    ctxN.strokeRect(slotPos.x, slotPos.y, cellW, cellH);
+
+                                    ctxN.fillStyle = '#f9fafb'; ctxN.fillRect(slotPos.x, slotPos.y, cellW, 55);
+                                    ctxN.fillStyle = '#000000'; ctxN.font = 'bold 26px sans-serif'; ctxN.textAlign = 'left';
+                                    ctxN.fillText(`📍 [位置 ${pinIndex + 1}] ${pin.name}`, slotPos.x + 16, slotPos.y + 36);
+                                    ctxN.beginPath(); ctxN.moveTo(slotPos.x, slotPos.y + 55); ctxN.lineTo(slotPos.x + cellW, slotPos.y + 55); ctxN.stroke();
+
+                                    const renderedData = await renderPinCanvas(pin, true);
+                                    const phImg = new Image(); phImg.src = renderedData;
+                                    await new Promise(r => phImg.onload = r);
+
+                                    const maxPhotoW = cellW - 20;
+                                    const maxPhotoH = cellH - 75;
+                                    let dw = maxPhotoW;
+                                    let dh = (phImg.height / phImg.width) * dw;
+                                    if (dh > maxPhotoH) {
+                                        dh = maxPhotoH;
+                                        dw = (phImg.width / phImg.height) * dh;
+                                    }
+                                    const dx = slotPos.x + (cellW - dw) / 2;
+                                    const dy = slotPos.y + 55 + ((cellH - 55 - dh) / 2);
+
+                                    ctxN.drawImage(phImg, dx, dy, dw, dh);
+                                }
+
+                                doc.addImage(pageNCanvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
+                            }
+
+                            doc.save(`${project.name || '工程'}_#${project.code}_度尺報告.pdf`);
+                        } catch (err) {
+                            alert("生成 PDF 失敗，請重試。");
+                        }
+                        isProcessing.value = false;
+                    }, 50);
+                };
+
+                return {
+                    currentView, projectList, project, planImage, pins, activePin, drawMode,
+                    showBottomSheet, activeMarker, deleteConfirm, isProcessing, processingText,
+                    cloudStatusText, cloudStatusClass, showJoinModal, inputJoinCode, joinProjectByCode,
+                    workspace, svgCanvas, wrapperStyle, currentLine, currentPath, hasUndoItems,
+                    handleImageUpload, handlePlanImageClick, openPin, handleDeletePin, undoLastAction,
+                    handleTouchStart, handleTouchMove, handleTouchEnd, startDrag,
+                    openBottomSheet, closeBottomSheet, deleteMarker, applyStamp, updateMarkerSize, getStampColor, getMarkerLines,
+                    createNewProject, loadProject, deleteProject, backToProjects, saveCurrentProject,
+                    getTagFields, exportSingleImage, exportPdfReport
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
