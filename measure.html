@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>度尺寶 Pro - 專屬小鍵盤 3數值版</title>
+    <title>度尺寶 Pro - 專屬小鍵盤 3數值版 (修復黑屏)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -237,7 +237,25 @@
             </div>
         </main>
 
-        <!-- 遮罩背景 -->
+        <!-- 彈窗：輸入 6 位數工程碼加入 -->
+        <div v-if="showJoinModal" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+            <div class="bg-gray-900 border border-gray-700 w-full max-w-sm rounded-lg p-5 text-white shadow-2xl">
+                <h3 class="text-base font-bold text-yellow-400 mb-2">🔑 輸入 6 位數工程碼</h3>
+                <p class="text-xs text-gray-400 mb-4">輸入其他手機畫面頂部的 6 位數字即可直接同步：</p>
+                <input type="text" 
+                       inputmode="numeric" 
+                       pattern="[0-9]*" 
+                       maxlength="6" 
+                       v-model="inputJoinCode" 
+                       placeholder="例如: 849201" 
+                       class="w-full bg-black border-2 border-yellow-500 rounded p-3 text-center text-3xl font-mono font-bold tracking-widest text-white mb-5 focus:outline-none">
+                <div class="flex gap-2">
+                    <button @click="showJoinModal = false" class="flex-1 bg-gray-800 text-white font-bold py-2.5 rounded text-sm">取消</button>
+                    <button @click="joinProjectByCode" class="flex-1 bg-yellow-500 active:bg-yellow-600 text-black font-bold py-2.5 rounded text-sm">立即連通</button>
+                </div>
+            </div>
+        </div>
+
         <div v-if="showBottomSheet && activeMarker" 
              class="fixed inset-0 bg-black/60 z-40 backdrop-blur-[2px]" 
              @click="closeBottomSheet"></div>
@@ -351,7 +369,7 @@
                 </div>
             </div>
 
-            <!-- ★ 頁面專屬九宮格小鍵盤 (只要不是自由印或名稱框，就顯示) -->
+            <!-- ★ 頁面專屬九宮格小鍵盤 -->
             <div v-if="showCustomKeypad" class="bg-gray-200 p-2 pt-3 border-t border-gray-300 grid grid-cols-3 gap-2 shrink-0 pb-6">
                 <button v-for="n in [1,2,3,4,5,6,7,8,9]" :key="n" @click.stop="handleKeypad(String(n))" class="bg-white border border-gray-300 rounded shadow-sm text-2xl font-bold py-3 active:bg-gray-300">{{ n }}</button>
                 <button @click.stop="handleKeypad('DEL')" class="bg-red-100 border border-red-300 text-red-700 rounded shadow-sm text-lg font-bold py-3 active:bg-red-200">⌫ 刪除</button>
@@ -653,6 +671,25 @@
                     activePin.value.historyStack.push(action); saveActivePin();
                 };
 
+                // ★ 這裡補回丟失的 handleDeletePin，修復刪除釘位的報錯
+                const handleDeletePin = async () => {
+                    if (deleteConfirm.value) {
+                        const delId = activePin.value.id;
+                        pins.value = pins.value.filter(p => p.id !== delId);
+                        currentView.value = 'plan';
+                        activePin.value = null;
+                        deleteConfirm.value = false;
+                        saveProjectMeta();
+                        if (db && project.code) {
+                            try { await db.collection('site_projects').doc(project.code).collection('pins').doc(`pin_${delId}`).delete(); } 
+                            catch(e) {}
+                        }
+                    } else {
+                        deleteConfirm.value = true;
+                        setTimeout(() => { deleteConfirm.value = false; }, 3000);
+                    }
+                };
+
                 const deleteMarker = () => {
                     if (!activeMarker.value) return;
                     const mId = activeMarker.value.id; const lId = activeMarker.value.lineId;
@@ -661,6 +698,18 @@
                     if (activePin.value.historyStack) activePin.value.historyStack = activePin.value.historyStack.filter(h => h.markerId !== mId);
                     activePin.value.redoStack = []; 
                     showBottomSheet.value = false; saveActivePin();
+                };
+
+                // ★ 這裡補回丟失的 openPin，修復打開釘位的崩潰報錯！
+                const openPin = (pin) => { 
+                    activePin.value = pin; 
+                    currentView.value = 'photo'; 
+                    deleteConfirm.value = false;
+                    nextTick(() => {
+                        updateWorkspaceSize();
+                        syncSvgViewBox();
+                        setTimeout(() => { updateWorkspaceSize(); syncSvgViewBox(); }, 60);
+                    });
                 };
 
                 // ★ 開啟彈窗時，自動判斷邊一格要發藍光 (Focus)
@@ -788,7 +837,6 @@
                 })[t] || [];
                 const getFieldLabel = (t, k) => { const f = getTagFields(t).find(i => i.key === k); return f ? f.label : k; };
 
-                // ... 以下為存檔及其他核心代碼 (無變動) ...
                 const compressImage = (file) => {
                     return new Promise((resolve) => {
                         const reader = new FileReader(); reader.readAsDataURL(file);
