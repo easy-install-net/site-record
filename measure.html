@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>度尺寶 Pro - 主動防覆蓋同步版</title>
+    <title>度尺寶 Pro - 獨立解耦防撞版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -40,15 +40,15 @@
         }
 
         .micro-btn { 
-            padding: 4px 7px; 
+            padding: 5px 8px; 
             font-size: 13px; 
             font-weight: bold; 
             line-height: 1.2; 
-            border: 1px solid #4b5563; 
-            border-radius: 4px; 
+            border: 1px solid #d1d5db; 
+            border-radius: 6px; 
             white-space: nowrap; 
-            background: #ffffff; 
-            color: #000000; 
+            background: #f3f4f6; 
+            color: #111827; 
         }
         .micro-btn:active { background: #000000; color: #ffffff; }
 
@@ -94,7 +94,7 @@
                     新建工程
                 </button>
 
-                <!-- ★ 新增：主動拉取雲端最新進度按鈕 (杜絕覆蓋，主控權交給使用者) -->
+                <!-- 主動拉取雲端最新進度 (智慧合併) -->
                 <button v-if="['plan', 'photo'].includes(currentView)" @click="pullLatestFromCloud" class="bg-purple-600 active:bg-purple-800 text-white px-2 py-1 rounded text-xs font-bold border border-purple-400 shadow">
                     🔄 更新圖紙
                 </button>
@@ -142,7 +142,7 @@
         <main v-show="currentView === 'plan'" class="flex-1 min-h-0 bg-gray-900 flex flex-col overflow-hidden">
             <div class="w-full bg-black border-b border-gray-700 p-2 flex gap-2 items-center shrink-0">
                 <span class="text-xs font-bold text-yellow-400">工程碼: {{ project.code }}</span>
-                <input type="text" v-model="project.name" @blur="saveCurrentProject" placeholder="輸入工程單位名稱" class="flex-1 bg-gray-800 text-white border border-gray-600 text-sm px-2 py-1 rounded font-bold focus:outline-none">
+                <input type="text" v-model="project.name" @blur="saveProjectMeta" placeholder="輸入工程單位名稱" class="flex-1 bg-gray-800 text-white border border-gray-600 text-sm px-2 py-1 rounded font-bold focus:outline-none">
                 <span class="text-xs font-bold text-gray-400">{{ project.date }}</span>
             </div>
 
@@ -196,7 +196,7 @@
                 
                 <img :src="activePin.photo" class="w-full h-full block pointer-events-none select-none object-fill">
 
-                <!-- 頂層全透明 SVG 畫板 (逆矩陣投影) -->
+                <!-- 頂層全透明 SVG 畫板 -->
                 <svg ref="svgCanvas"
                      class="absolute inset-0 w-full h-full select-none touch-none"
                      preserveAspectRatio="none"
@@ -248,81 +248,115 @@
             </div>
         </div>
 
+        <!-- 遮罩背景 -->
         <div v-if="showBottomSheet && activeMarker" 
-             class="fixed inset-0 bg-black/60 z-40" 
+             class="fixed inset-0 bg-black/60 z-40 backdrop-blur-[2px]" 
              @click="closeBottomSheet"></div>
 
-        <!-- 懸浮抽屜：標註設定 -->
+        <!-- ★ 改造：居中偏下拇指舒適區彈窗 (打字框置頂第一行) -->
         <div v-if="showBottomSheet && activeMarker" 
-             class="fixed inset-x-2 bottom-2 max-h-[82dvh] bg-white text-black border-2 border-black rounded-lg z-50 flex flex-col shadow-2xl overflow-hidden touch-scrollable">
+             class="fixed left-1/2 -translate-x-1/2 bottom-8 w-[92vw] max-w-sm bg-white text-black border-2 border-black rounded-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[75dvh]">
             
-            <div class="p-2 bg-gray-900 text-white flex justify-between items-center border-b border-gray-700 shrink-0">
-                <span class="font-bold text-xs text-yellow-400">標註設定 (點擊外部自動保存)</span>
-                <div class="flex gap-2">
-                    <button @click="deleteMarker" class="bg-red-700 active:bg-red-800 text-white font-bold px-3 py-1 rounded text-xs border border-red-500">
-                        {{ activeMarker.lineId ? '刪除尺寸與紅線' : '刪除標籤' }}
+            <!-- 卡片頂部功能列 -->
+            <div class="p-2.5 bg-gray-900 text-white flex justify-between items-center border-b border-gray-700 shrink-0">
+                <span class="font-bold text-xs text-yellow-400">📍 標註設定</span>
+                <div class="flex gap-1.5">
+                    <button @click="deleteMarker" class="bg-red-700 active:bg-red-800 text-white font-bold px-2.5 py-1 rounded text-xs border border-red-500">
+                        {{ activeMarker.lineId ? '刪尺寸與線' : '刪除標籤' }}
                     </button>
-                    <button @click="closeBottomSheet" class="bg-green-600 active:bg-green-700 text-white font-bold px-4 py-1 rounded text-xs border border-green-400 shadow">確定完成</button>
+                    <button @click="closeBottomSheet" class="bg-green-600 active:bg-green-700 text-white font-bold px-3 py-1 rounded text-xs border border-green-400 shadow">
+                        完成
+                    </button>
                 </div>
             </div>
 
-            <div class="p-1 border-b border-gray-200 flex gap-1 overflow-x-auto bg-gray-100 shrink-0">
+            <!-- 分類頁籤 -->
+            <div class="p-1.5 border-b border-gray-200 flex gap-1 overflow-x-auto bg-gray-100 shrink-0">
                 <button @click="activeMarker.type = 'general'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'general' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">尺寸</button>
+                <button @click="activeMarker.type = 'stamp'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'stamp' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">印章</button>
                 <button @click="activeMarker.type = 'door'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'door' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">門洞</button>
                 <button @click="activeMarker.type = 'window'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'window' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">窗</button>
                 <button @click="activeMarker.type = 'beam'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'beam' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">樑</button>
                 <button @click="activeMarker.type = 'column'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'column' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">柱</button>
-                <button @click="activeMarker.type = 'stamp'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'stamp' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">印章</button>
             </div>
             
-            <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable">
-                <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2">
-                    <div class="flex items-center gap-1 flex-wrap">
-                        <span class="text-[11px] font-bold text-red-700 bg-red-100 px-1 border border-red-300 rounded">瑕疵打拆</span>
-                        <button v-for="stamp in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-red-600 text-red-700 font-bold px-2 py-1">{{ stamp }}</button>
-                    </div>
-                    
-                    <div class="flex items-center gap-1 flex-wrap">
-                        <span class="text-[11px] font-bold text-yellow-800 bg-yellow-100 px-1 border border-yellow-300 rounded">水電收口</span>
-                        <button v-for="stamp in ['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-yellow-600 text-yellow-900 font-bold px-2 py-1">{{ stamp }}</button>
-                    </div>
-                    
-                    <div class="flex items-center gap-1 flex-wrap">
-                        <span class="text-[11px] font-bold text-blue-700 bg-blue-100 px-1 border border-blue-300 rounded">動線結構</span>
-                        <button v-for="stamp in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-blue-600 text-blue-800 font-bold px-2 py-1">{{ stamp }}</button>
+            <div class="p-3 overflow-y-auto bg-white flex-1 touch-scrollable">
+                
+                <!-- 【模式 A：印章模式】打字框置頂第一行 -->
+                <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2.5">
+                    <!-- 第一行：自由打字框 -->
+                    <div class="flex items-stretch gap-1.5 bg-purple-50 p-1.5 rounded-lg border border-purple-200">
+                        <input type="text" 
+                               v-model="activeMarker.data.val" 
+                               @input="updateMarkerSize(activeMarker)" 
+                               @keyup.enter="closeBottomSheet" 
+                               class="flex-1 border-2 border-black p-1.5 px-2 text-base font-bold bg-white text-black focus:outline-none rounded" 
+                               placeholder="自訂文字印章...">
+                        <button @click="closeBottomSheet" class="bg-black text-white font-bold px-3 rounded text-sm active:bg-gray-800 shrink-0">
+                            確定
+                        </button>
                     </div>
 
-                    <div class="flex items-stretch gap-2 mt-1 pt-2 border-t border-gray-200">
-                        <span class="text-[11px] font-bold text-purple-700 bg-purple-100 px-1 border border-purple-300 rounded flex items-center whitespace-nowrap">自由印</span>
-                        <input type="text" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1 px-2 text-base font-bold bg-white text-black focus:outline-none rounded" placeholder="自訂印章內容...">
-                        <button @click="closeBottomSheet" class="bg-black text-white font-bold px-3 rounded text-sm active:bg-gray-800 shrink-0">確定</button>
+                    <!-- 快捷電印章 -->
+                    <div class="flex flex-col gap-1">
+                        <span class="text-[11px] font-bold text-yellow-800">水電常用</span>
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <button v-for="stamp in ['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border-yellow-500 text-yellow-950 bg-yellow-50 font-bold px-2 py-1">{{ stamp }}</button>
+                        </div>
+                    </div>
+
+                    <!-- 瑕疵打拆 -->
+                    <div class="flex flex-col gap-1">
+                        <span class="text-[11px] font-bold text-red-700">瑕疵打拆</span>
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <button v-for="stamp in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border-red-500 text-red-700 bg-red-50 font-bold px-2 py-1">{{ stamp }}</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 動線結構 -->
+                    <div class="flex flex-col gap-1">
+                        <span class="text-[11px] font-bold text-blue-700">動線結構</span>
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <button v-for="stamp in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border-blue-500 text-blue-800 bg-blue-50 font-bold px-2 py-1">{{ stamp }}</button>
+                        </div>
                     </div>
                 </div>
 
+                <!-- 【模式 B：門窗結構模式】 -->
                 <div v-else-if="['window', 'door', 'beam', 'column'].includes(activeMarker.type)">
                     <div class="grid grid-cols-3 gap-2">
                         <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
-                            <label class="text-xs font-bold text-gray-700 bg-gray-200 px-1 py-0.5">{{ field.label }}</label>
-                            <input type="number" v-model="activeMarker.data[field.key]" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="w-full border-2 border-black p-1 text-base font-bold bg-white text-black text-center focus:outline-none rounded">
+                            <label class="text-xs font-bold text-gray-700 bg-gray-100 px-1 py-0.5 rounded-t text-center">{{ field.label }}</label>
+                            <input type="number" v-model="activeMarker.data[field.key]" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="w-full border-2 border-black p-1 text-base font-bold bg-white text-black text-center focus:outline-none rounded-b">
                         </div>
                     </div>
-                    <button @click="closeBottomSheet" class="w-full mt-3 bg-black text-white font-bold py-2 rounded text-sm active:bg-gray-800">確定完成</button>
+                    <button @click="closeBottomSheet" class="w-full mt-3 bg-black text-white font-bold py-2 rounded text-sm active:bg-gray-800">完成</button>
                 </div>
 
-                <div v-else class="flex flex-col gap-2">
-                    <div class="flex gap-1 overflow-x-auto pb-1">
-                        <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎</span>
-                        <button v-for="w in ['高','闊','深','厚','總高','總深','腰墨','牆厚','留位']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
-                    </div>
-                    <div class="flex gap-1 overflow-x-auto pb-1">
-                        <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">水電</span>
-                        <button v-for="w in ['制中','制邊-牆','制底-地','喉邊-牆','喉底-地']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
-                    </div>
-                    <div class="flex items-stretch gap-2 mt-1">
+                <!-- 【模式 C：常規尺寸模式】打字框置頂第一行 -->
+                <div v-else class="flex flex-col gap-2.5">
+                    <!-- 第一行：大字體數值輸入框 -->
+                    <div class="flex items-stretch gap-1.5 bg-gray-50 p-1.5 rounded-lg border border-gray-300">
                         <input type="text" v-model="activeMarker.data.name" @input="updateMarkerSize(activeMarker)" class="w-20 border-2 border-black p-1 text-base font-bold bg-white focus:outline-none rounded text-center" placeholder="名稱">
                         <span class="font-bold self-center text-lg">:</span>
                         <input type="number" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1 px-2 text-xl font-bold bg-white text-black focus:outline-none rounded" placeholder="數值">
-                        <button @click="closeBottomSheet" class="bg-black text-white font-bold px-4 rounded text-sm active:bg-gray-800">確定</button>
+                        <button @click="closeBottomSheet" class="bg-black text-white font-bold px-3 rounded text-sm active:bg-gray-800 shrink-0">確定</button>
+                    </div>
+
+                    <!-- 基礎尺寸快捷按鈕 -->
+                    <div class="flex flex-col gap-1">
+                        <span class="text-[11px] font-bold text-gray-600">基礎尺寸</span>
+                        <div class="flex gap-1.5 overflow-x-auto pb-1">
+                            <button v-for="w in ['高','闊','深','厚','總高','總深','腰墨','牆厚','留位']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
+                        </div>
+                    </div>
+
+                    <!-- 水電位置快捷按鈕 -->
+                    <div class="flex flex-col gap-1">
+                        <span class="text-[11px] font-bold text-gray-600">水電點位</span>
+                        <div class="flex gap-1.5 overflow-x-auto pb-1">
+                            <button v-for="w in ['制中','制邊-牆','制底-地','喉邊-牆','喉底-地']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -373,7 +407,6 @@
                 const inputJoinCode = ref('');
 
                 const cloudSyncState = ref('connecting');
-                // ★ 狀態文字優化，符合手動同步邏輯
                 const cloudStatusText = computed(() => {
                     if (cloudSyncState.value === 'connecting') return '☁️ 連線中...';
                     if (cloudSyncState.value === 'syncing') return '☁️ 儲存中...';
@@ -539,7 +572,7 @@
                             draggedMarker.value.y = markerOrigin.value.y;
                             openBottomSheet(draggedMarker.value);
                         } else {
-                            saveCurrentProject(); // 這是真實動作，允許存檔
+                            saveActivePin();
                         }
                         draggedMarker.value = null;
                         isDraggingMarker.value = false;
@@ -583,7 +616,7 @@
                             currentPath.value = null;
                         }
                     }
-                    saveCurrentProject(); // 真實動作放手後，發出存檔
+                    saveActivePin();
                 };
 
                 const undoLastAction = () => {
@@ -597,7 +630,7 @@
                     } else if (action.type === 'freehand') {
                         activePin.value.paths = (activePin.value.paths || []).filter(p => p.id !== action.pathId);
                     }
-                    saveCurrentProject(); // 撤銷亦屬於修改，允許存檔
+                    saveActivePin();
                 };
 
                 const deleteMarker = () => {
@@ -615,7 +648,7 @@
                     }
 
                     showBottomSheet.value = false;
-                    saveCurrentProject(); // 刪除亦屬於修改，允許存檔
+                    saveActivePin();
                 };
 
                 const compressImage = (file) => {
@@ -649,6 +682,7 @@
                     const res = await compressImage(file);
                     if (type === 'plan') {
                         planImage.value = res.b64;
+                        saveProjectMeta();
                     } else if (type === 'photo' && activePin.value) {
                         activePin.value.photo = res.b64;
                         activePin.value.photoW = res.w;
@@ -660,8 +694,8 @@
                             updateWorkspaceSize();
                             syncSvgViewBox();
                         });
+                        saveActivePin();
                     }
-                    saveCurrentProject();
                 };
 
                 const handlePlanImageClick = (e) => {
@@ -681,11 +715,12 @@
                         markers: [], 
                         lines: [], 
                         paths: [], 
-                        historyStack: [] 
+                        historyStack: [],
+                        updatedAt: Date.now()
                     };
                     pins.value.push(newPin);
-                    saveCurrentProject(); // 打釘是修改，允許存檔
                     openPin(newPin);
+                    saveActivePin();
                 };
 
                 const openPin = (pin) => {
@@ -709,7 +744,7 @@
                         currentView.value = 'plan';
                         activePin.value = null;
                         deleteConfirm.value = false;
-                        saveCurrentProject();
+                        saveProjectMeta();
 
                         if (db && project.code) {
                             try {
@@ -726,7 +761,7 @@
                 
                 const closeBottomSheet = () => { 
                     showBottomSheet.value = false; 
-                    saveCurrentProject(); // 關閉抽屜通常代表修改完畢，發出存檔
+                    saveActivePin();
                 };
 
                 const applyStamp = (txt) => {
@@ -777,11 +812,10 @@
                 })[t] || [];
                 const getFieldLabel = (t, k) => { const f = getTagFields(t).find(i => i.key === k); return f ? f.label : k; };
 
-                // ★ 主動推播函式 (此函式只會在發生「實質修改」時被呼叫)
-                const saveCurrentProject = async () => {
+                // ★ 母工程專屬存檔 (只存名稱、日期、平面圖，絕對不帶 pinList，消滅整包覆蓋)
+                const saveProjectMeta = async () => {
                     if (!project.code) return;
                     const now = Date.now();
-                    
                     const localData = { 
                         code: project.code, 
                         name: project.name, 
@@ -793,38 +827,58 @@
                     await localforage.setItem('proj_' + project.code, localData);
 
                     if (db && auth && auth.currentUser) {
-                        cloudSyncState.value = 'syncing';
                         try {
-                            const projRef = db.collection('site_projects').doc(project.code);
-                            
-                            await projRef.set({
+                            await db.collection('site_projects').doc(project.code).set({
                                 code: project.code,
                                 name: project.name || '',
                                 date: project.date || '',
                                 planImage: planImage.value || null,
-                                pinList: pins.value.map(p => ({ id: p.id, name: p.name, x: p.x, y: p.y })),
-                                updatedAt: now // 實質修改，打上最新時間戳
+                                updatedAt: now
                             }, { merge: true });
+                        } catch (e) {
+                            console.error("Meta save error:", e);
+                        }
+                    }
+                };
 
-                            if (activePin.value && activePin.value.photo) {
-                                await projRef.collection('pins').doc(`pin_${activePin.value.id}`).set({
-                                    id: activePin.value.id,
-                                    name: activePin.value.name,
-                                    x: activePin.value.x,
-                                    y: activePin.value.y,
-                                    photo: activePin.value.photo,
-                                    photoW: activePin.value.photoW || 1200,
-                                    photoH: activePin.value.photoH || 900,
-                                    markers: activePin.value.markers || [],
-                                    lines: activePin.value.lines || [],
-                                    paths: activePin.value.paths || [],
-                                    historyStack: activePin.value.historyStack || [],
-                                    updatedAt: now
-                                }, { merge: true });
-                            }
+                // ★ 釘位獨立儲存 (只寫入單個釘位，即使斷線重連也絕不覆蓋別人的釘位)
+                const saveActivePin = async () => {
+                    if (!project.code || !activePin.value) return;
+                    const now = Date.now();
+                    activePin.value.updatedAt = now;
+
+                    // 本機更新
+                    const d = await localforage.getItem('proj_' + project.code) || {};
+                    d.pins = JSON.parse(JSON.stringify(pins.value));
+                    d.updatedAt = now;
+                    await localforage.setItem('proj_' + project.code, d);
+
+                    // 雲端獨立文檔寫入
+                    if (db && auth && auth.currentUser) {
+                        cloudSyncState.value = 'syncing';
+                        try {
+                            const pinData = {
+                                id: activePin.value.id,
+                                name: activePin.value.name,
+                                x: activePin.value.x,
+                                y: activePin.value.y,
+                                photo: activePin.value.photo || null,
+                                photoW: activePin.value.photoW || 1200,
+                                photoH: activePin.value.photoH || 900,
+                                markers: activePin.value.markers || [],
+                                lines: activePin.value.lines || [],
+                                paths: activePin.value.paths || [],
+                                historyStack: activePin.value.historyStack || [],
+                                updatedAt: now
+                            };
+
+                            await db.collection('site_projects').doc(project.code)
+                                    .collection('pins').doc(`pin_${activePin.value.id}`)
+                                    .set(pinData, { merge: true });
+
                             cloudSyncState.value = 'ready';
                         } catch (err) {
-                            console.error("Firestore sync error:", err);
+                            console.error("Pin save error:", err);
                             cloudSyncState.value = 'error';
                         }
                     }
@@ -838,7 +892,7 @@
                     planImage.value = null;
                     pins.value = [];
                     currentView.value = 'plan';
-                    saveCurrentProject(); // 建立新工程屬於修改，允許存檔
+                    saveProjectMeta();
                 };
 
                 const joinProjectByCode = async () => {
@@ -866,19 +920,19 @@
                     isProcessing.value = false;
                 };
 
-                // ★ 新增：主動拉取最新資料 (由右上角「更新圖紙」按鈕觸發)
                 const pullLatestFromCloud = async () => {
                     if (!project.code) return;
                     isProcessing.value = true;
-                    processingText.value = '正在拉取雲端最新進度...';
+                    processingText.value = '正在雙向智慧整合最新進度...';
                     await loadProject(project.code);
                     isProcessing.value = false;
                 };
 
-                // ★ 徹底修復：安全載入雲端資料 (強制覆蓋本地，且絕不觸發假存檔上傳)
+                // ★ 雙向智慧合併載入 (Smart Merge：雙機各自新增的釘位自動融合，絕不抹除)
                 const loadProject = async (code) => {
                     code = String(code);
-                    // 1. 本地快取預覽防白屏
+                    
+                    // 1. 本地快取秒開防白屏
                     const d = await localforage.getItem('proj_' + code);
                     if (d) {
                         project.code = d.code;
@@ -889,7 +943,7 @@
                         currentView.value = 'plan';
                     }
 
-                    // 2. 雲端真理強制覆蓋
+                    // 2. 雲端真理融合
                     if (db && auth && auth.currentUser) {
                         try {
                             cloudSyncState.value = 'syncing';
@@ -901,33 +955,57 @@
                                 project.date = pd.date;
                                 if (pd.planImage) planImage.value = pd.planImage;
 
+                                // 抓取雲端所有獨立釘位文檔
                                 const pinsSnap = await db.collection('site_projects').doc(code).collection('pins').get();
-                                const fullPins = [];
-                                pinsSnap.forEach(pDoc => fullPins.push(pDoc.data()));
-                                
-                                if (fullPins.length > 0) {
-                                    pins.value = fullPins.sort((a, b) => a.id - b.id);
-                                } else if (pd.pinList && pd.pinList.length > 0 && pins.value.length === 0) {
-                                    pins.value = pd.pinList.map(p => ({
-                                        id: p.id, name: p.name, x: p.x, y: p.y,
-                                        photo: null, photoW: 1200, photoH: 900, markers: [], lines: [], paths: [], historyStack: []
-                                    }));
+                                const cloudPinsMap = new Map();
+                                pinsSnap.forEach(pDoc => {
+                                    const p = pDoc.data();
+                                    cloudPinsMap.set(p.id, p);
+                                });
+
+                                // 智慧融合：保留本地尚未上傳的新增釘位，同時拉入雲端最新成果
+                                const merged = [];
+                                const seenIds = new Set();
+
+                                for (const lp of pins.value) {
+                                    seenIds.add(lp.id);
+                                    if (cloudPinsMap.has(lp.id)) {
+                                        const cp = cloudPinsMap.get(lp.id);
+                                        // 誰的時間戳新就用誰
+                                        if ((cp.updatedAt || 0) >= (lp.updatedAt || 0)) {
+                                            merged.push(cp);
+                                        } else {
+                                            merged.push(lp);
+                                        }
+                                    } else {
+                                        // 本機離線新增的釘位 -> 完整保留！
+                                        merged.push(lp);
+                                    }
                                 }
+
+                                // 雲端有而本機沒有的釘位 -> 自動納入！
+                                cloudPinsMap.forEach((cp, cid) => {
+                                    if (!seenIds.has(cid)) {
+                                        merged.push(cp);
+                                    }
+                                });
+
+                                pins.value = merged.sort((a, b) => a.id - b.id);
                                 currentView.value = 'plan';
-                                
-                                // 【關鍵防護】：只更新本地快取，絕對不可呼叫 saveCurrentProject() 回灌雲端！
+
+                                // 僅更新本地快取，絕對不執行全盤反向覆蓋
                                 await localforage.setItem('proj_' + code, { 
                                     code: project.code, 
                                     name: project.name, 
                                     date: project.date, 
                                     planImage: planImage.value, 
                                     pins: JSON.parse(JSON.stringify(pins.value)),
-                                    updatedAt: pd.updatedAt || Date.now() // 保留雲端時間戳，不造假
+                                    updatedAt: Date.now()
                                 });
                                 cloudSyncState.value = 'ready';
                             }
                         } catch (e) {
-                            console.log("Cloud load bypass:", e);
+                            console.log("Cloud merge bypass:", e);
                             cloudSyncState.value = 'error';
                         }
                     }
@@ -958,7 +1036,6 @@
                 };
 
                 const backToProjects = () => {
-                    // 【關鍵防護】：拔除 saveCurrentProject()，退出畫面不准產生假存檔上傳
                     loadProjectList();
                     currentView.value = 'projects';
                 };
@@ -1176,7 +1253,7 @@
                     handleImageUpload, handlePlanImageClick, openPin, handleDeletePin, undoLastAction,
                     handleTouchStart, handleTouchMove, handleTouchEnd, startDrag,
                     openBottomSheet, closeBottomSheet, deleteMarker, applyStamp, updateMarkerSize, getStampColor, getMarkerLines,
-                    createNewProject, loadProject, deleteProject, backToProjects, saveCurrentProject,
+                    createNewProject, loadProject, deleteProject, backToProjects, saveProjectMeta, saveActivePin,
                     getTagFields, exportSingleImage, exportPdfReport
                 };
             }
