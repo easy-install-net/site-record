@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>度尺寶 Pro - 終極防撞與返回系統</title>
+    <title>度尺寶 Pro - 大按鈕盲撳適配版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -16,7 +16,10 @@
 
     <style>
         [v-cloak] { display: none !important; }
-        * { box-sizing: border-box; }
+        * { 
+            box-sizing: border-box; 
+            touch-action: manipulation !important; /* 🌟 徹底封殺手機雙擊放大 */
+        }
         
         html, body { 
             position: fixed;
@@ -39,13 +42,14 @@
             -webkit-overflow-scrolling: touch;
         }
 
+        /* ★ 按鈕全面放大，增加 Padding，適合地盤粗手指 */
         .micro-btn { 
-            padding: 5px 8px; 
-            font-size: 13px; 
+            padding: 8px 12px; 
+            font-size: 15px; 
             font-weight: bold; 
             line-height: 1.2; 
             border: 1px solid #d1d5db; 
-            border-radius: 6px; 
+            border-radius: 8px; 
             white-space: nowrap; 
             background: #f3f4f6; 
             color: #111827; 
@@ -68,85 +72,85 @@
 <body class="text-gray-100 font-sans antialiased">
     <div id="app" v-cloak class="fixed inset-0 w-full h-full flex flex-col overflow-hidden">
         
-        <!-- 頂部導航列 -->
-        <header class="h-11 shrink-0 bg-black text-white px-2 border-b border-gray-800 flex justify-between items-center z-30">
-            <div class="flex items-center gap-1.5 truncate flex-1 mr-1">
-                <span :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold shrink-0">
+        <!-- ★ 頂部導航列加厚至 h-14，按鈕字體升級至 text-sm -->
+        <header class="h-14 shrink-0 bg-black text-white px-2 border-b border-gray-800 flex justify-between items-center z-30">
+            <div class="flex items-center gap-2 truncate flex-1 mr-2">
+                <span :class="cloudStatusClass" class="text-xs px-2 py-1 rounded font-mono font-bold shrink-0">
                     {{ cloudStatusText }}
                 </span>
                 
-                <span v-if="project.code && currentView !== 'projects'" class="bg-yellow-400 text-black text-xs font-black px-1.5 py-0.5 rounded tracking-wider shrink-0">
+                <span v-if="project.code && currentView !== 'projects'" class="bg-yellow-400 text-black text-sm font-black px-2 py-1 rounded tracking-wider shrink-0">
                     #{{ project.code }}
                 </span>
 
-                <h1 class="text-xs font-bold truncate">
+                <h1 class="text-sm font-bold truncate">
                     <span v-if="currentView === 'projects'">工程目錄</span>
                     <span v-else-if="currentView === 'plan'">{{ project.name || '未命名' }}</span>
                     <span v-else-if="currentView === 'photo'">{{ activePin.name || '相片標註' }}</span>
                 </h1>
             </div>
             
-            <div class="flex gap-1 items-center shrink-0">
-                <button v-if="currentView === 'projects'" @click="showJoinModal = true" class="bg-yellow-600 active:bg-yellow-700 text-black px-2 py-1 rounded text-xs font-bold border border-yellow-400">
+            <div class="flex gap-1.5 items-center shrink-0">
+                <button v-if="currentView === 'projects'" @click="showJoinModal = true" class="bg-yellow-600 active:bg-yellow-700 text-black px-3 py-1.5 rounded text-sm font-bold border border-yellow-400">
                     🔑 輸入工程碼
                 </button>
-                <button v-if="currentView === 'projects'" @click="createNewProject" class="bg-blue-600 active:bg-blue-800 text-white px-2.5 py-1 rounded text-xs font-bold border border-blue-400">
+                <button v-if="currentView === 'projects'" @click="createNewProject" class="bg-blue-600 active:bg-blue-800 text-white px-3 py-1.5 rounded text-sm font-bold border border-blue-400">
                     新建工程
                 </button>
 
-                <button v-if="['plan', 'photo'].includes(currentView)" @click="pullLatestFromCloud" class="bg-purple-600 active:bg-purple-800 text-white px-2 py-1 rounded text-xs font-bold border border-purple-400 shadow">
+                <button v-if="['plan', 'photo'].includes(currentView)" @click="pullLatestFromCloud" class="bg-purple-600 active:bg-purple-800 text-white px-3 py-1.5 rounded text-sm font-bold border border-purple-400 shadow">
                     🔄 更新圖紙
                 </button>
 
-                <button v-if="currentView === 'plan' && pins.length > 0" @click="exportPdfReport" class="bg-blue-600 active:bg-blue-800 text-white px-2 py-1 rounded text-xs font-bold border border-blue-400">
+                <button v-if="currentView === 'plan' && pins.length > 0" @click="exportPdfReport" class="bg-blue-600 active:bg-blue-800 text-white px-3 py-1.5 rounded text-sm font-bold border border-blue-400">
                     匯出 PDF
                 </button>
-                <button v-if="currentView === 'plan'" @click="backToProjects" class="bg-gray-800 active:bg-gray-700 px-2 py-1 rounded text-xs font-bold border border-gray-600">
+                <button v-if="currentView === 'plan'" @click="backToProjects" class="bg-gray-800 active:bg-gray-700 px-3 py-1.5 rounded text-sm font-bold border border-gray-600">
                     目錄
                 </button>
 
-                <button v-if="currentView === 'photo' && activePin.photo" @click="exportSingleImage" class="bg-green-700 active:bg-green-800 text-white px-2 py-1 rounded text-xs font-bold border border-green-500">
+                <button v-if="currentView === 'photo' && activePin.photo" @click="exportSingleImage" class="bg-green-700 active:bg-green-800 text-white px-3 py-1.5 rounded text-sm font-bold border border-green-500">
                     下載
                 </button>
-                <button v-if="currentView === 'photo'" @click="handleDeletePin" :class="deleteConfirm ? 'bg-red-600 border-red-400' : 'bg-red-900 border-red-700'" class="text-white px-2 py-1 rounded text-xs font-bold border">
+                <button v-if="currentView === 'photo'" @click="handleDeletePin" :class="deleteConfirm ? 'bg-red-600 border-red-400' : 'bg-red-900 border-red-700'" class="text-white px-3 py-1.5 rounded text-sm font-bold border">
                     {{ deleteConfirm ? '確認刪除?' : '刪釘位' }}
                 </button>
-                <button v-if="currentView === 'photo'" @click="currentView = 'plan'" class="bg-gray-800 active:bg-gray-700 px-2 py-1 rounded text-xs font-bold border border-gray-600">
+                <button v-if="currentView === 'photo'" @click="currentView = 'plan'" class="bg-gray-800 active:bg-gray-700 px-3 py-1.5 rounded text-sm font-bold border border-gray-600">
                     返回
                 </button>
             </div>
         </header>
 
         <!-- 第 1 級：工程目錄 -->
-        <main v-show="currentView === 'projects'" class="flex-1 min-h-0 bg-gray-900 p-3 overflow-y-auto touch-scrollable">
-            <div v-if="projectList.length === 0" class="text-center text-gray-400 mt-16 text-sm font-bold">
+        <main v-show="currentView === 'projects'" class="flex-1 min-h-0 bg-gray-900 p-4 overflow-y-auto touch-scrollable">
+            <div v-if="projectList.length === 0" class="text-center text-gray-400 mt-16 text-base font-bold">
                 目前沒有工程。可點擊右上角「新建工程」或「輸入工程碼」連通其他手機。
             </div>
-            <div v-for="proj in projectList" :key="proj.code" class="bg-black border border-gray-700 p-3 rounded mb-3 flex justify-between items-center shadow-lg">
-                <div class="flex-1 mr-2 cursor-pointer" @click="loadProject(proj.code)">
-                    <div class="flex items-center gap-2">
-                        <span class="bg-yellow-400 text-black text-xs font-black px-1.5 py-0.5 rounded">#{{ proj.code }}</span>
-                        <div class="font-bold text-base text-white truncate">{{ proj.name || '未命名工程' }}</div>
+            <div v-for="proj in projectList" :key="proj.code" class="bg-black border border-gray-700 p-4 rounded mb-4 flex justify-between items-center shadow-lg">
+                <div class="flex-1 mr-3 cursor-pointer" @click="loadProject(proj.code)">
+                    <div class="flex items-center gap-3">
+                        <span class="bg-yellow-400 text-black text-sm font-black px-2 py-1 rounded">#{{ proj.code }}</span>
+                        <div class="font-bold text-lg text-white truncate">{{ proj.name || '未命名工程' }}</div>
                     </div>
-                    <div class="text-xs text-gray-400 mt-1">日期: {{ proj.date }} | 記錄點: {{ proj.pinCount }} 個</div>
+                    <div class="text-sm text-gray-400 mt-2">日期: {{ proj.date }} | 記錄點: {{ proj.pinCount }} 個</div>
                 </div>
                 <div class="flex gap-2 shrink-0">
-                    <button @click="loadProject(proj.code)" class="bg-gray-700 text-white px-3 py-1.5 rounded text-xs font-bold">開啟</button>
-                    <button @click="deleteProject(proj.code)" class="bg-red-900 text-white px-3 py-1.5 rounded text-xs font-bold border border-red-700">刪除</button>
+                    <button @click="loadProject(proj.code)" class="bg-gray-700 text-white px-4 py-2 rounded text-sm font-bold">開啟</button>
+                    <button @click="deleteProject(proj.code)" class="bg-red-900 text-white px-4 py-2 rounded text-sm font-bold border border-red-700">刪除</button>
                 </div>
             </div>
         </main>
 
         <!-- 第 2 級：平面圖打釘定位 -->
         <main v-show="currentView === 'plan'" class="flex-1 min-h-0 bg-gray-900 flex flex-col overflow-hidden">
-            <div class="w-full bg-black border-b border-gray-700 p-2 flex gap-2 items-center shrink-0">
-                <span class="text-xs font-bold text-yellow-400">工程碼: {{ project.code }}</span>
-                <input type="text" v-model="project.name" @blur="saveProjectMeta" placeholder="輸入工程單位名稱" class="flex-1 bg-gray-800 text-white border border-gray-600 text-sm px-2 py-1 rounded font-bold focus:outline-none">
-                <span class="text-xs font-bold text-gray-400">{{ project.date }}</span>
+            <div class="w-full bg-black border-b border-gray-700 p-3 flex gap-2 items-center shrink-0">
+                <span class="text-sm font-bold text-yellow-400">工程碼: {{ project.code }}</span>
+                <input type="text" v-model="project.name" @blur="saveProjectMeta" placeholder="輸入工程單位名稱" class="flex-1 bg-gray-800 text-white border border-gray-600 text-base px-3 py-2 rounded font-bold focus:outline-none">
+                <span class="text-sm font-bold text-gray-400">{{ project.date }}</span>
             </div>
 
             <div v-if="!planImage" class="flex-1 flex items-center justify-center p-4">
-                <label class="bg-white text-black px-6 py-3 rounded text-sm font-bold cursor-pointer inline-block border-2 border-black active:bg-gray-200">
+                <label class="bg-white text-black px-8 py-4 rounded text-base font-bold cursor-pointer inline-block border-2 border-black active:bg-gray-200">
                     拍照 / 匯入平面圖
                     <input type="file" accept="image/*" class="hidden" @change="e => handleImageUpload(e, 'plan')">
                 </label>
@@ -159,13 +163,13 @@
                          class="max-w-full max-h-[78dvh] object-contain block border border-gray-700 cursor-crosshair">
                     
                     <div v-for="(pin, index) in pins" :key="pin.id" 
-                         class="absolute w-8 h-8 -ml-4 -mt-8 flex flex-col items-center justify-center cursor-pointer pointer-events-auto"
+                         class="absolute w-10 h-10 -ml-5 -mt-10 flex flex-col items-center justify-center cursor-pointer pointer-events-auto"
                          :style="{ left: pin.x + '%', top: pin.y + '%' }"
                          @click.stop="openPin(pin)">
-                        <div class="bg-red-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow">
+                        <div class="bg-red-600 text-white text-sm font-bold w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow">
                             {{ index + 1 }}
                         </div>
-                        <div class="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-red-600 -mt-[2px]"></div>
+                        <div class="w-0 h-0 border-l-[8px] border-r-[8px] border-t-[10px] border-l-transparent border-r-transparent border-t-red-600 -mt-[2px]"></div>
                     </div>
                 </div>
             </div>
@@ -174,23 +178,23 @@
         <!-- 第 3 級：相片標註畫板 -->
         <main v-show="currentView === 'photo'" ref="workspace" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col items-center justify-center">
             
-            <!-- ★ 升級：雙向返回 / 再做按鈕列 -->
-            <div v-if="activePin && activePin.photo" class="absolute top-2 z-20 flex gap-1 bg-black/85 backdrop-blur p-1 rounded border border-gray-700 shadow-lg items-center">
-                <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-white text-black' : 'bg-transparent text-white'" class="px-3 py-1.5 text-xs font-bold rounded">拉線度尺</button>
-                <button @click="drawMode = 'freehand'" :class="drawMode === 'freehand' ? 'bg-white text-black' : 'bg-transparent text-white'" class="px-3 py-1.5 text-xs font-bold rounded">自由塗鴉</button>
+            <!-- 畫布工具列：按鈕放大 -->
+            <div v-if="activePin && activePin.photo" class="absolute top-2 z-20 flex gap-1.5 bg-black/85 backdrop-blur p-1.5 rounded-lg border border-gray-700 shadow-lg items-center">
+                <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-white text-black' : 'bg-transparent text-white'" class="px-4 py-2 text-sm font-bold rounded">拉線度尺</button>
+                <button @click="drawMode = 'freehand'" :class="drawMode === 'freehand' ? 'bg-white text-black' : 'bg-transparent text-white'" class="px-4 py-2 text-sm font-bold rounded">自由塗鴉</button>
                 
-                <div class="flex gap-1 ml-1 border-l border-gray-600 pl-1.5">
-                    <button @click.stop="undoLastAction" :class="hasUndoItems ? 'bg-yellow-500 active:bg-yellow-600 text-black' : 'bg-gray-700 text-gray-500 cursor-not-allowed'" class="px-2.5 py-1.5 text-xs font-bold rounded shadow transition-colors">
+                <div class="flex gap-1.5 ml-1 border-l border-gray-600 pl-2">
+                    <button @click.stop="undoLastAction" :class="hasUndoItems ? 'bg-yellow-500 active:bg-yellow-600 text-black' : 'bg-gray-700 text-gray-500 cursor-not-allowed'" class="px-3 py-2 text-sm font-bold rounded shadow transition-colors">
                         返回
                     </button>
-                    <button @click.stop="redoAction" :class="hasRedoItems ? 'bg-blue-500 active:bg-blue-600 text-white' : 'bg-gray-700 text-gray-500 cursor-not-allowed'" class="px-2.5 py-1.5 text-xs font-bold rounded shadow transition-colors">
+                    <button @click.stop="redoAction" :class="hasRedoItems ? 'bg-blue-500 active:bg-blue-600 text-white' : 'bg-gray-700 text-gray-500 cursor-not-allowed'" class="px-3 py-2 text-sm font-bold rounded shadow transition-colors">
                         再做
                     </button>
                 </div>
             </div>
 
             <div v-if="activePin && !activePin.photo" class="flex-1 flex items-center justify-center p-4">
-                <label class="bg-white text-black px-6 py-3 rounded text-sm font-bold cursor-pointer inline-block border-2 border-black active:bg-gray-200">
+                <label class="bg-white text-black px-8 py-4 rounded text-base font-bold cursor-pointer inline-block border-2 border-black active:bg-gray-200">
                     拍攝現場相片
                     <input type="file" accept="image/*" class="hidden" @change="e => handleImageUpload(e, 'photo')">
                 </label>
@@ -237,62 +241,58 @@
 
         <!-- 彈窗：輸入 6 位數工程碼加入 -->
         <div v-if="showJoinModal" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-            <div class="bg-gray-900 border border-gray-700 w-full max-w-xs rounded-lg p-4 text-white shadow-2xl">
-                <h3 class="text-base font-bold text-yellow-400 mb-1">🔑 輸入 6 位數工程碼</h3>
-                <p class="text-xs text-gray-400 mb-3">輸入其他手機畫面頂部的 6 位數字即可直接同步：</p>
+            <div class="bg-gray-900 border border-gray-700 w-full max-w-sm rounded-lg p-5 text-white shadow-2xl">
+                <h3 class="text-lg font-bold text-yellow-400 mb-2">🔑 輸入 6 位數工程碼</h3>
+                <p class="text-sm text-gray-400 mb-4">輸入其他手機畫面頂部的 6 位數字即可直接同步：</p>
                 <input type="text" 
                        inputmode="numeric" 
                        pattern="[0-9]*" 
                        maxlength="6" 
                        v-model="inputJoinCode" 
                        placeholder="例如: 849201" 
-                       class="w-full bg-black border-2 border-yellow-500 rounded p-2 text-center text-2xl font-mono font-bold tracking-widest text-white mb-4 focus:outline-none">
-                <div class="flex gap-2">
-                    <button @click="showJoinModal = false" class="flex-1 bg-gray-800 text-white font-bold py-2 rounded text-xs">取消</button>
-                    <button @click="joinProjectByCode" class="flex-1 bg-yellow-500 active:bg-yellow-600 text-black font-bold py-2 rounded text-xs">立即連通</button>
+                       class="w-full bg-black border-2 border-yellow-500 rounded p-3 text-center text-3xl font-mono font-bold tracking-widest text-white mb-5 focus:outline-none">
+                <div class="flex gap-3">
+                    <button @click="showJoinModal = false" class="flex-1 bg-gray-800 text-white font-bold py-3 rounded text-sm">取消</button>
+                    <button @click="joinProjectByCode" class="flex-1 bg-yellow-500 active:bg-yellow-600 text-black font-bold py-3 rounded text-sm">立即連通</button>
                 </div>
             </div>
         </div>
 
-        <!-- 遮罩背景 (稍微調暗) -->
         <div v-if="showBottomSheet && activeMarker" 
              class="fixed inset-0 bg-black/60 z-40 backdrop-blur-[2px]" 
              @click="closeBottomSheet"></div>
 
-        <!-- ★ 升級 UI：居中偏上舒適區彈窗 (告別置底，打字框置頂第一行) -->
+        <!-- ★ UI 極致放大適配版：寬度拉到 96vw，居中偏上，自動換行 -->
         <div v-if="showBottomSheet && activeMarker" 
-             class="fixed left-1/2 top-[12dvh] -translate-x-1/2 w-[94vw] max-w-sm bg-white text-black border-2 border-black rounded-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[70dvh]">
+             class="fixed left-1/2 top-[10dvh] -translate-x-1/2 w-[96vw] max-w-md bg-white text-black border-2 border-black rounded-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[75dvh]">
             
             <!-- 卡片頂部功能列 -->
-            <div class="p-2 bg-gray-900 text-white flex justify-between items-center border-b border-gray-700 shrink-0">
-                <span class="font-bold text-xs text-yellow-400">📍 標註設定</span>
+            <div class="p-3 bg-gray-900 text-white flex justify-between items-center border-b border-gray-700 shrink-0">
+                <span class="font-bold text-sm text-yellow-400">📍 標註設定</span>
                 <div class="flex gap-2">
-                    <button @click="deleteMarker" class="bg-red-700 active:bg-red-800 text-white font-bold px-3 py-1 rounded text-xs border border-red-500">
+                    <button @click="deleteMarker" class="bg-red-700 active:bg-red-800 text-white font-bold px-4 py-2 rounded text-sm border border-red-500">
                         刪除
                     </button>
-                    <button @click="closeBottomSheet" class="bg-green-600 active:bg-green-700 text-white font-bold px-4 py-1 rounded text-xs border border-green-400 shadow">完成</button>
+                    <button @click="closeBottomSheet" class="bg-green-600 active:bg-green-700 text-white font-bold px-5 py-2 rounded text-sm border border-green-400 shadow">完成</button>
                 </div>
             </div>
 
-            <!-- ★ 最就手：將輸入框抽到最頂部固定，一點即打 -->
-            <div class="p-2 bg-gray-200 border-b border-gray-300 shrink-0 shadow-sm z-10">
-                <!-- 尺寸模式 -->
+            <!-- ★ 輸入框置頂 -->
+            <div class="p-3 bg-gray-200 border-b border-gray-300 shrink-0 shadow-sm z-10">
                 <div v-if="!['stamp', 'window', 'door', 'beam', 'column'].includes(activeMarker.type)" class="flex items-stretch gap-2">
-                    <input type="text" v-model="activeMarker.data.name" @input="updateMarkerSize(activeMarker)" class="w-20 border-2 border-black p-1.5 text-sm font-bold bg-white focus:outline-none rounded text-center" placeholder="名稱">
-                    <span class="font-bold self-center text-lg">:</span>
-                    <input type="number" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1.5 px-2 text-lg font-bold bg-white text-black focus:outline-none rounded" placeholder="數值">
+                    <input type="text" v-model="activeMarker.data.name" @input="updateMarkerSize(activeMarker)" class="w-24 border-2 border-black p-2 text-base font-bold bg-white focus:outline-none rounded text-center" placeholder="名稱">
+                    <span class="font-bold self-center text-xl">:</span>
+                    <input type="number" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-2 px-3 text-xl font-bold bg-white text-black focus:outline-none rounded" placeholder="輸入數值...">
                 </div>
-                <!-- 印章模式 -->
                 <div v-else-if="activeMarker.type === 'stamp'" class="flex items-stretch gap-2">
-                    <span class="text-xs font-bold text-purple-700 bg-purple-100 px-2 border border-purple-300 rounded flex items-center whitespace-nowrap">自由印</span>
-                    <input type="text" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1.5 px-2 text-base font-bold bg-white text-black focus:outline-none rounded" placeholder="自訂文字...">
+                    <span class="text-sm font-bold text-purple-700 bg-purple-100 px-3 border border-purple-300 rounded flex items-center whitespace-nowrap">自由印</span>
+                    <input type="text" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-2 px-3 text-lg font-bold bg-white text-black focus:outline-none rounded" placeholder="自訂文字...">
                 </div>
-                <!-- 門窗樑柱提示 -->
-                <div v-else class="text-center text-xs font-bold text-gray-500 py-1">請在下方填寫詳細長寬高</div>
+                <div v-else class="text-center text-sm font-bold text-gray-500 py-1">請在下方填寫詳細尺寸</div>
             </div>
 
             <!-- 分類頁籤 -->
-            <div class="p-1 border-b border-gray-200 flex gap-1 overflow-x-auto bg-gray-100 shrink-0">
+            <div class="p-2 border-b border-gray-200 flex gap-2 overflow-x-auto bg-gray-100 shrink-0">
                 <button @click="activeMarker.type = 'general'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'general' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">尺寸</button>
                 <button @click="activeMarker.type = 'stamp'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'stamp' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">印章</button>
                 <button @click="activeMarker.type = 'door'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'door' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">門洞</button>
@@ -301,39 +301,39 @@
                 <button @click="activeMarker.type = 'column'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'column' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">柱</button>
             </div>
             
-            <!-- 下方純快捷按鈕區 (把輸入框移走後，這裡只剩點擊按鈕) -->
-            <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable">
-                <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2">
-                    <div class="flex items-center gap-1 flex-wrap">
-                        <span class="text-[11px] font-bold text-red-700 bg-red-100 px-1 border border-red-300 rounded">瑕疵打拆</span>
-                        <button v-for="stamp in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-red-600 text-red-700 font-bold px-2 py-1">{{ stamp }}</button>
+            <!-- ★ 自動換行的大按鈕區 (gap-2) -->
+            <div class="p-3 overflow-y-auto bg-white flex-1 touch-scrollable">
+                <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-3">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-xs font-bold text-red-700 bg-red-100 px-2 py-1 border border-red-300 rounded">瑕疵打拆</span>
+                        <button v-for="stamp in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-red-600 text-red-700">{{ stamp }}</button>
                     </div>
-                    <div class="flex items-center gap-1 flex-wrap">
-                        <span class="text-[11px] font-bold text-yellow-800 bg-yellow-100 px-1 border border-yellow-300 rounded">水電收口</span>
-                        <button v-for="stamp in ['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-yellow-600 text-yellow-900 font-bold px-2 py-1">{{ stamp }}</button>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-xs font-bold text-yellow-800 bg-yellow-100 px-2 py-1 border border-yellow-300 rounded">水電收口</span>
+                        <button v-for="stamp in ['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-yellow-600 text-yellow-900">{{ stamp }}</button>
                     </div>
-                    <div class="flex items-center gap-1 flex-wrap">
-                        <span class="text-[11px] font-bold text-blue-700 bg-blue-100 px-1 border border-blue-300 rounded">動線結構</span>
-                        <button v-for="stamp in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-blue-600 text-blue-800 font-bold px-2 py-1">{{ stamp }}</button>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-xs font-bold text-blue-700 bg-blue-100 px-2 py-1 border border-blue-300 rounded">動線結構</span>
+                        <button v-for="stamp in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-blue-600 text-blue-800">{{ stamp }}</button>
                     </div>
                 </div>
 
                 <div v-else-if="['window', 'door', 'beam', 'column'].includes(activeMarker.type)">
-                    <div class="grid grid-cols-3 gap-2">
+                    <div class="grid grid-cols-3 gap-3">
                         <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
-                            <label class="text-xs font-bold text-gray-700 bg-gray-200 px-1 py-0.5 text-center">{{ field.label }}</label>
-                            <input type="number" v-model="activeMarker.data[field.key]" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="w-full border-2 border-black p-1 text-base font-bold bg-white text-black text-center focus:outline-none rounded">
+                            <label class="text-sm font-bold text-gray-700 bg-gray-200 px-2 py-1 text-center">{{ field.label }}</label>
+                            <input type="number" v-model="activeMarker.data[field.key]" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="w-full border-2 border-black p-2 text-lg font-bold bg-white text-black text-center focus:outline-none rounded">
                         </div>
                     </div>
                 </div>
 
-                <div v-else class="flex flex-col gap-2">
-                    <div class="flex gap-1 overflow-x-auto pb-1">
-                        <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎</span>
+                <div v-else class="flex flex-col gap-3">
+                    <div class="flex gap-2 overflow-x-auto pb-2">
+                        <span class="text-sm font-bold bg-gray-200 px-2 py-1.5 rounded shrink-0 flex items-center">基礎</span>
                         <button v-for="w in ['高','闊','深','厚','總高','總深','腰墨','牆厚','留位']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
                     </div>
-                    <div class="flex gap-1 overflow-x-auto pb-1">
-                        <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">水電</span>
+                    <div class="flex gap-2 overflow-x-auto pb-2">
+                        <span class="text-sm font-bold bg-gray-200 px-2 py-1.5 rounded shrink-0 flex items-center">水電</span>
                         <button v-for="w in ['制中','制邊-牆','制底-地','喉邊-牆','喉底-地']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
                     </div>
                 </div>
@@ -341,8 +341,8 @@
         </div>
 
         <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center text-white font-bold">
-            <div class="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-3"></div>
-            <p class="text-base">{{ processingText }}</p>
+            <div class="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p class="text-lg">{{ processingText }}</p>
         </div>
     </div>
 
@@ -466,7 +466,6 @@
                 const markerOrigin = ref({ x: 0, y: 0 });
                 const isDraggingMarker = ref(false);
 
-                // ★ 雙向狀態判斷
                 const hasUndoItems = computed(() => {
                     return activePin.value && activePin.value.historyStack && activePin.value.historyStack.length > 0;
                 });
@@ -567,7 +566,6 @@
                     const drawDist = Math.hypot(endPos.x - startPos.value.x, endPos.y - startPos.value.y);
 
                     if (!activePin.value.historyStack) activePin.value.historyStack = [];
-                    // ★ 時空防護機制：畫了新東西，立刻清空「再做」垃圾桶
                     activePin.value.redoStack = []; 
 
                     if (drawDist < 12) {
@@ -603,7 +601,6 @@
                     saveActivePin();
                 };
 
-                // ★ 撤銷 (Undo) 改造：完整打包物件丟入重做池
                 const undoLastAction = () => {
                     if (!activePin.value || !activePin.value.historyStack || activePin.value.historyStack.length === 0) return;
                     if (!activePin.value.redoStack) activePin.value.redoStack = [];
@@ -628,7 +625,6 @@
                     saveActivePin();
                 };
 
-                // ★ 新增：重做 (Redo) 機制
                 const redoAction = () => {
                     if (!activePin.value || !activePin.value.redoStack || activePin.value.redoStack.length === 0) return;
                     if (!activePin.value.historyStack) activePin.value.historyStack = [];
@@ -675,7 +671,6 @@
                         activePin.value.historyStack = activePin.value.historyStack.filter(h => h.markerId !== mId);
                     }
                     
-                    // 手動刪除也是改變時空，清空重做池
                     activePin.value.redoStack = []; 
 
                     showBottomSheet.value = false;
@@ -749,7 +744,7 @@
                         lines: [], 
                         paths: [], 
                         historyStack: [],
-                        redoStack: [], // 初始化附帶重做池
+                        redoStack: [],
                         updatedAt: Date.now()
                     };
                     pins.value.push(newPin);
@@ -899,7 +894,7 @@
                                 lines: activePin.value.lines || [],
                                 paths: activePin.value.paths || [],
                                 historyStack: activePin.value.historyStack || [],
-                                redoStack: activePin.value.redoStack || [], // 一併推上雲端備份
+                                redoStack: activePin.value.redoStack || [],
                                 updatedAt: now
                             };
 
