@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>度尺寶 Pro - 獨立解耦防撞版</title>
+    <title>度尺寶 Pro - 終極防撞與返回系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -94,7 +94,6 @@
                     新建工程
                 </button>
 
-                <!-- 主動拉取雲端最新進度 (智慧合併) -->
                 <button v-if="['plan', 'photo'].includes(currentView)" @click="pullLatestFromCloud" class="bg-purple-600 active:bg-purple-800 text-white px-2 py-1 rounded text-xs font-bold border border-purple-400 shadow">
                     🔄 更新圖紙
                 </button>
@@ -103,17 +102,17 @@
                     匯出 PDF
                 </button>
                 <button v-if="currentView === 'plan'" @click="backToProjects" class="bg-gray-800 active:bg-gray-700 px-2 py-1 rounded text-xs font-bold border border-gray-600">
-                    工程目錄
+                    目錄
                 </button>
 
                 <button v-if="currentView === 'photo' && activePin.photo" @click="exportSingleImage" class="bg-green-700 active:bg-green-800 text-white px-2 py-1 rounded text-xs font-bold border border-green-500">
-                    下載相片
+                    下載
                 </button>
                 <button v-if="currentView === 'photo'" @click="handleDeletePin" :class="deleteConfirm ? 'bg-red-600 border-red-400' : 'bg-red-900 border-red-700'" class="text-white px-2 py-1 rounded text-xs font-bold border">
-                    {{ deleteConfirm ? '確認刪除?' : '刪除釘位' }}
+                    {{ deleteConfirm ? '確認刪除?' : '刪釘位' }}
                 </button>
                 <button v-if="currentView === 'photo'" @click="currentView = 'plan'" class="bg-gray-800 active:bg-gray-700 px-2 py-1 rounded text-xs font-bold border border-gray-600">
-                    回平面圖
+                    返回
                 </button>
             </div>
         </header>
@@ -175,12 +174,19 @@
         <!-- 第 3 級：相片標註畫板 -->
         <main v-show="currentView === 'photo'" ref="workspace" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col items-center justify-center">
             
-            <div v-if="activePin && activePin.photo" class="absolute top-2 z-20 flex gap-1 bg-black/85 backdrop-blur p-1 rounded border border-gray-700 shadow-lg">
-                <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-white text-black' : 'bg-black text-white'" class="px-3 py-1 text-xs font-bold rounded">拉線度尺</button>
-                <button @click="drawMode = 'freehand'" :class="drawMode === 'freehand' ? 'bg-white text-black' : 'bg-black text-white'" class="px-3 py-1 text-xs font-bold rounded">自由塗鴉</button>
-                <button v-if="hasUndoItems" @click.stop="undoLastAction" class="bg-yellow-500 active:bg-yellow-600 text-black px-2.5 py-1 text-xs font-bold rounded shadow ml-1">
-                    復原
-                </button>
+            <!-- ★ 升級：雙向返回 / 再做按鈕列 -->
+            <div v-if="activePin && activePin.photo" class="absolute top-2 z-20 flex gap-1 bg-black/85 backdrop-blur p-1 rounded border border-gray-700 shadow-lg items-center">
+                <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-white text-black' : 'bg-transparent text-white'" class="px-3 py-1.5 text-xs font-bold rounded">拉線度尺</button>
+                <button @click="drawMode = 'freehand'" :class="drawMode === 'freehand' ? 'bg-white text-black' : 'bg-transparent text-white'" class="px-3 py-1.5 text-xs font-bold rounded">自由塗鴉</button>
+                
+                <div class="flex gap-1 ml-1 border-l border-gray-600 pl-1.5">
+                    <button @click.stop="undoLastAction" :class="hasUndoItems ? 'bg-yellow-500 active:bg-yellow-600 text-black' : 'bg-gray-700 text-gray-500 cursor-not-allowed'" class="px-2.5 py-1.5 text-xs font-bold rounded shadow transition-colors">
+                        返回
+                    </button>
+                    <button @click.stop="redoAction" :class="hasRedoItems ? 'bg-blue-500 active:bg-blue-600 text-white' : 'bg-gray-700 text-gray-500 cursor-not-allowed'" class="px-2.5 py-1.5 text-xs font-bold rounded shadow transition-colors">
+                        再做
+                    </button>
+                </div>
             </div>
 
             <div v-if="activePin && !activePin.photo" class="flex-1 flex items-center justify-center p-4">
@@ -248,30 +254,45 @@
             </div>
         </div>
 
-        <!-- 遮罩背景 -->
+        <!-- 遮罩背景 (稍微調暗) -->
         <div v-if="showBottomSheet && activeMarker" 
              class="fixed inset-0 bg-black/60 z-40 backdrop-blur-[2px]" 
              @click="closeBottomSheet"></div>
 
-        <!-- ★ 改造：居中偏下拇指舒適區彈窗 (打字框置頂第一行) -->
+        <!-- ★ 升級 UI：居中偏上舒適區彈窗 (告別置底，打字框置頂第一行) -->
         <div v-if="showBottomSheet && activeMarker" 
-             class="fixed left-1/2 -translate-x-1/2 bottom-8 w-[92vw] max-w-sm bg-white text-black border-2 border-black rounded-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[75dvh]">
+             class="fixed left-1/2 top-[12dvh] -translate-x-1/2 w-[94vw] max-w-sm bg-white text-black border-2 border-black rounded-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[70dvh]">
             
             <!-- 卡片頂部功能列 -->
-            <div class="p-2.5 bg-gray-900 text-white flex justify-between items-center border-b border-gray-700 shrink-0">
+            <div class="p-2 bg-gray-900 text-white flex justify-between items-center border-b border-gray-700 shrink-0">
                 <span class="font-bold text-xs text-yellow-400">📍 標註設定</span>
-                <div class="flex gap-1.5">
-                    <button @click="deleteMarker" class="bg-red-700 active:bg-red-800 text-white font-bold px-2.5 py-1 rounded text-xs border border-red-500">
-                        {{ activeMarker.lineId ? '刪尺寸與線' : '刪除標籤' }}
+                <div class="flex gap-2">
+                    <button @click="deleteMarker" class="bg-red-700 active:bg-red-800 text-white font-bold px-3 py-1 rounded text-xs border border-red-500">
+                        刪除
                     </button>
-                    <button @click="closeBottomSheet" class="bg-green-600 active:bg-green-700 text-white font-bold px-3 py-1 rounded text-xs border border-green-400 shadow">
-                        完成
-                    </button>
+                    <button @click="closeBottomSheet" class="bg-green-600 active:bg-green-700 text-white font-bold px-4 py-1 rounded text-xs border border-green-400 shadow">完成</button>
                 </div>
             </div>
 
+            <!-- ★ 最就手：將輸入框抽到最頂部固定，一點即打 -->
+            <div class="p-2 bg-gray-200 border-b border-gray-300 shrink-0 shadow-sm z-10">
+                <!-- 尺寸模式 -->
+                <div v-if="!['stamp', 'window', 'door', 'beam', 'column'].includes(activeMarker.type)" class="flex items-stretch gap-2">
+                    <input type="text" v-model="activeMarker.data.name" @input="updateMarkerSize(activeMarker)" class="w-20 border-2 border-black p-1.5 text-sm font-bold bg-white focus:outline-none rounded text-center" placeholder="名稱">
+                    <span class="font-bold self-center text-lg">:</span>
+                    <input type="number" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1.5 px-2 text-lg font-bold bg-white text-black focus:outline-none rounded" placeholder="數值">
+                </div>
+                <!-- 印章模式 -->
+                <div v-else-if="activeMarker.type === 'stamp'" class="flex items-stretch gap-2">
+                    <span class="text-xs font-bold text-purple-700 bg-purple-100 px-2 border border-purple-300 rounded flex items-center whitespace-nowrap">自由印</span>
+                    <input type="text" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1.5 px-2 text-base font-bold bg-white text-black focus:outline-none rounded" placeholder="自訂文字...">
+                </div>
+                <!-- 門窗樑柱提示 -->
+                <div v-else class="text-center text-xs font-bold text-gray-500 py-1">請在下方填寫詳細長寬高</div>
+            </div>
+
             <!-- 分類頁籤 -->
-            <div class="p-1.5 border-b border-gray-200 flex gap-1 overflow-x-auto bg-gray-100 shrink-0">
+            <div class="p-1 border-b border-gray-200 flex gap-1 overflow-x-auto bg-gray-100 shrink-0">
                 <button @click="activeMarker.type = 'general'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'general' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">尺寸</button>
                 <button @click="activeMarker.type = 'stamp'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'stamp' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">印章</button>
                 <button @click="activeMarker.type = 'door'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'door' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">門洞</button>
@@ -280,83 +301,40 @@
                 <button @click="activeMarker.type = 'column'; updateMarkerSize(activeMarker)" :class="activeMarker.type === 'column' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">柱</button>
             </div>
             
-            <div class="p-3 overflow-y-auto bg-white flex-1 touch-scrollable">
-                
-                <!-- 【模式 A：印章模式】打字框置頂第一行 -->
-                <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2.5">
-                    <!-- 第一行：自由打字框 -->
-                    <div class="flex items-stretch gap-1.5 bg-purple-50 p-1.5 rounded-lg border border-purple-200">
-                        <input type="text" 
-                               v-model="activeMarker.data.val" 
-                               @input="updateMarkerSize(activeMarker)" 
-                               @keyup.enter="closeBottomSheet" 
-                               class="flex-1 border-2 border-black p-1.5 px-2 text-base font-bold bg-white text-black focus:outline-none rounded" 
-                               placeholder="自訂文字印章...">
-                        <button @click="closeBottomSheet" class="bg-black text-white font-bold px-3 rounded text-sm active:bg-gray-800 shrink-0">
-                            確定
-                        </button>
+            <!-- 下方純快捷按鈕區 (把輸入框移走後，這裡只剩點擊按鈕) -->
+            <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable">
+                <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2">
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <span class="text-[11px] font-bold text-red-700 bg-red-100 px-1 border border-red-300 rounded">瑕疵打拆</span>
+                        <button v-for="stamp in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-red-600 text-red-700 font-bold px-2 py-1">{{ stamp }}</button>
                     </div>
-
-                    <!-- 快捷電印章 -->
-                    <div class="flex flex-col gap-1">
-                        <span class="text-[11px] font-bold text-yellow-800">水電常用</span>
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                            <button v-for="stamp in ['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border-yellow-500 text-yellow-950 bg-yellow-50 font-bold px-2 py-1">{{ stamp }}</button>
-                        </div>
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <span class="text-[11px] font-bold text-yellow-800 bg-yellow-100 px-1 border border-yellow-300 rounded">水電收口</span>
+                        <button v-for="stamp in ['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-yellow-600 text-yellow-900 font-bold px-2 py-1">{{ stamp }}</button>
                     </div>
-
-                    <!-- 瑕疵打拆 -->
-                    <div class="flex flex-col gap-1">
-                        <span class="text-[11px] font-bold text-red-700">瑕疵打拆</span>
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                            <button v-for="stamp in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border-red-500 text-red-700 bg-red-50 font-bold px-2 py-1">{{ stamp }}</button>
-                        </div>
-                    </div>
-                    
-                    <!-- 動線結構 -->
-                    <div class="flex flex-col gap-1">
-                        <span class="text-[11px] font-bold text-blue-700">動線結構</span>
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                            <button v-for="stamp in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border-blue-500 text-blue-800 bg-blue-50 font-bold px-2 py-1">{{ stamp }}</button>
-                        </div>
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <span class="text-[11px] font-bold text-blue-700 bg-blue-100 px-1 border border-blue-300 rounded">動線結構</span>
+                        <button v-for="stamp in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-blue-600 text-blue-800 font-bold px-2 py-1">{{ stamp }}</button>
                     </div>
                 </div>
 
-                <!-- 【模式 B：門窗結構模式】 -->
                 <div v-else-if="['window', 'door', 'beam', 'column'].includes(activeMarker.type)">
                     <div class="grid grid-cols-3 gap-2">
                         <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
-                            <label class="text-xs font-bold text-gray-700 bg-gray-100 px-1 py-0.5 rounded-t text-center">{{ field.label }}</label>
-                            <input type="number" v-model="activeMarker.data[field.key]" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="w-full border-2 border-black p-1 text-base font-bold bg-white text-black text-center focus:outline-none rounded-b">
+                            <label class="text-xs font-bold text-gray-700 bg-gray-200 px-1 py-0.5 text-center">{{ field.label }}</label>
+                            <input type="number" v-model="activeMarker.data[field.key]" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="w-full border-2 border-black p-1 text-base font-bold bg-white text-black text-center focus:outline-none rounded">
                         </div>
                     </div>
-                    <button @click="closeBottomSheet" class="w-full mt-3 bg-black text-white font-bold py-2 rounded text-sm active:bg-gray-800">完成</button>
                 </div>
 
-                <!-- 【模式 C：常規尺寸模式】打字框置頂第一行 -->
-                <div v-else class="flex flex-col gap-2.5">
-                    <!-- 第一行：大字體數值輸入框 -->
-                    <div class="flex items-stretch gap-1.5 bg-gray-50 p-1.5 rounded-lg border border-gray-300">
-                        <input type="text" v-model="activeMarker.data.name" @input="updateMarkerSize(activeMarker)" class="w-20 border-2 border-black p-1 text-base font-bold bg-white focus:outline-none rounded text-center" placeholder="名稱">
-                        <span class="font-bold self-center text-lg">:</span>
-                        <input type="number" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1 px-2 text-xl font-bold bg-white text-black focus:outline-none rounded" placeholder="數值">
-                        <button @click="closeBottomSheet" class="bg-black text-white font-bold px-3 rounded text-sm active:bg-gray-800 shrink-0">確定</button>
+                <div v-else class="flex flex-col gap-2">
+                    <div class="flex gap-1 overflow-x-auto pb-1">
+                        <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎</span>
+                        <button v-for="w in ['高','闊','深','厚','總高','總深','腰墨','牆厚','留位']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
                     </div>
-
-                    <!-- 基礎尺寸快捷按鈕 -->
-                    <div class="flex flex-col gap-1">
-                        <span class="text-[11px] font-bold text-gray-600">基礎尺寸</span>
-                        <div class="flex gap-1.5 overflow-x-auto pb-1">
-                            <button v-for="w in ['高','闊','深','厚','總高','總深','腰墨','牆厚','留位']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
-                        </div>
-                    </div>
-
-                    <!-- 水電位置快捷按鈕 -->
-                    <div class="flex flex-col gap-1">
-                        <span class="text-[11px] font-bold text-gray-600">水電點位</span>
-                        <div class="flex gap-1.5 overflow-x-auto pb-1">
-                            <button v-for="w in ['制中','制邊-牆','制底-地','喉邊-牆','喉底-地']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
-                        </div>
+                    <div class="flex gap-1 overflow-x-auto pb-1">
+                        <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">水電</span>
+                        <button v-for="w in ['制中','制邊-牆','制底-地','喉邊-牆','喉底-地']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
                     </div>
                 </div>
             </div>
@@ -488,8 +466,12 @@
                 const markerOrigin = ref({ x: 0, y: 0 });
                 const isDraggingMarker = ref(false);
 
+                // ★ 雙向狀態判斷
                 const hasUndoItems = computed(() => {
                     return activePin.value && activePin.value.historyStack && activePin.value.historyStack.length > 0;
+                });
+                const hasRedoItems = computed(() => {
+                    return activePin.value && activePin.value.redoStack && activePin.value.redoStack.length > 0;
                 });
 
                 const getCoords = (e) => {
@@ -585,6 +567,8 @@
                     const drawDist = Math.hypot(endPos.x - startPos.value.x, endPos.y - startPos.value.y);
 
                     if (!activePin.value.historyStack) activePin.value.historyStack = [];
+                    // ★ 時空防護機制：畫了新東西，立刻清空「再做」垃圾桶
+                    activePin.value.redoStack = []; 
 
                     if (drawDist < 12) {
                         currentLine.value = null; currentPath.value = null;
@@ -619,17 +603,61 @@
                     saveActivePin();
                 };
 
+                // ★ 撤銷 (Undo) 改造：完整打包物件丟入重做池
                 const undoLastAction = () => {
                     if (!activePin.value || !activePin.value.historyStack || activePin.value.historyStack.length === 0) return;
+                    if (!activePin.value.redoStack) activePin.value.redoStack = [];
+
                     const action = activePin.value.historyStack.pop();
+                    let undoneData = { type: action.type };
+
                     if (action.type === 'line_marker') {
-                        activePin.value.lines = (activePin.value.lines || []).filter(l => l.id !== action.lineId);
-                        activePin.value.markers = (activePin.value.markers || []).filter(m => m.id !== action.markerId);
+                        const lineIdx = (activePin.value.lines || []).findIndex(l => l.id === action.lineId);
+                        const markerIdx = (activePin.value.markers || []).findIndex(m => m.id === action.markerId);
+                        if (lineIdx !== -1) undoneData.line = activePin.value.lines.splice(lineIdx, 1)[0];
+                        if (markerIdx !== -1) undoneData.marker = activePin.value.markers.splice(markerIdx, 1)[0];
                     } else if (action.type === 'marker') {
-                        activePin.value.markers = (activePin.value.markers || []).filter(m => m.id !== action.markerId);
+                        const markerIdx = (activePin.value.markers || []).findIndex(m => m.id === action.markerId);
+                        if (markerIdx !== -1) undoneData.marker = activePin.value.markers.splice(markerIdx, 1)[0];
                     } else if (action.type === 'freehand') {
-                        activePin.value.paths = (activePin.value.paths || []).filter(p => p.id !== action.pathId);
+                        const pathIdx = (activePin.value.paths || []).findIndex(p => p.id === action.pathId);
+                        if (pathIdx !== -1) undoneData.path = activePin.value.paths.splice(pathIdx, 1)[0];
                     }
+
+                    activePin.value.redoStack.push(undoneData);
+                    saveActivePin();
+                };
+
+                // ★ 新增：重做 (Redo) 機制
+                const redoAction = () => {
+                    if (!activePin.value || !activePin.value.redoStack || activePin.value.redoStack.length === 0) return;
+                    if (!activePin.value.historyStack) activePin.value.historyStack = [];
+
+                    const undoneData = activePin.value.redoStack.pop();
+                    const action = { type: undoneData.type };
+
+                    if (undoneData.type === 'line_marker') {
+                        if (undoneData.line) {
+                            activePin.value.lines.push(undoneData.line);
+                            action.lineId = undoneData.line.id;
+                        }
+                        if (undoneData.marker) {
+                            activePin.value.markers.push(undoneData.marker);
+                            action.markerId = undoneData.marker.id;
+                        }
+                    } else if (undoneData.type === 'marker') {
+                        if (undoneData.marker) {
+                            activePin.value.markers.push(undoneData.marker);
+                            action.markerId = undoneData.marker.id;
+                        }
+                    } else if (undoneData.type === 'freehand') {
+                        if (undoneData.path) {
+                            activePin.value.paths.push(undoneData.path);
+                            action.pathId = undoneData.path.id;
+                        }
+                    }
+
+                    activePin.value.historyStack.push(action);
                     saveActivePin();
                 };
 
@@ -646,6 +674,9 @@
                     if (activePin.value.historyStack) {
                         activePin.value.historyStack = activePin.value.historyStack.filter(h => h.markerId !== mId);
                     }
+                    
+                    // 手動刪除也是改變時空，清空重做池
+                    activePin.value.redoStack = []; 
 
                     showBottomSheet.value = false;
                     saveActivePin();
@@ -690,6 +721,8 @@
                         if (!activePin.value.lines) activePin.value.lines = [];
                         if (!activePin.value.paths) activePin.value.paths = [];
                         if (!activePin.value.historyStack) activePin.value.historyStack = [];
+                        if (!activePin.value.redoStack) activePin.value.redoStack = [];
+                        
                         nextTick(() => {
                             updateWorkspaceSize();
                             syncSvgViewBox();
@@ -716,6 +749,7 @@
                         lines: [], 
                         paths: [], 
                         historyStack: [],
+                        redoStack: [], // 初始化附帶重做池
                         updatedAt: Date.now()
                     };
                     pins.value.push(newPin);
@@ -812,7 +846,6 @@
                 })[t] || [];
                 const getFieldLabel = (t, k) => { const f = getTagFields(t).find(i => i.key === k); return f ? f.label : k; };
 
-                // ★ 母工程專屬存檔 (只存名稱、日期、平面圖，絕對不帶 pinList，消滅整包覆蓋)
                 const saveProjectMeta = async () => {
                     if (!project.code) return;
                     const now = Date.now();
@@ -841,19 +874,16 @@
                     }
                 };
 
-                // ★ 釘位獨立儲存 (只寫入單個釘位，即使斷線重連也絕不覆蓋別人的釘位)
                 const saveActivePin = async () => {
                     if (!project.code || !activePin.value) return;
                     const now = Date.now();
                     activePin.value.updatedAt = now;
 
-                    // 本機更新
                     const d = await localforage.getItem('proj_' + project.code) || {};
                     d.pins = JSON.parse(JSON.stringify(pins.value));
                     d.updatedAt = now;
                     await localforage.setItem('proj_' + project.code, d);
 
-                    // 雲端獨立文檔寫入
                     if (db && auth && auth.currentUser) {
                         cloudSyncState.value = 'syncing';
                         try {
@@ -869,6 +899,7 @@
                                 lines: activePin.value.lines || [],
                                 paths: activePin.value.paths || [],
                                 historyStack: activePin.value.historyStack || [],
+                                redoStack: activePin.value.redoStack || [], // 一併推上雲端備份
                                 updatedAt: now
                             };
 
@@ -928,22 +959,23 @@
                     isProcessing.value = false;
                 };
 
-                // ★ 雙向智慧合併載入 (Smart Merge：雙機各自新增的釘位自動融合，絕不抹除)
                 const loadProject = async (code) => {
                     code = String(code);
                     
-                    // 1. 本地快取秒開防白屏
                     const d = await localforage.getItem('proj_' + code);
                     if (d) {
                         project.code = d.code;
                         project.name = d.name;
                         project.date = d.date;
                         planImage.value = d.planImage;
-                        pins.value = d.pins || [];
+                        pins.value = (d.pins || []).map(p => ({
+                            ...p, 
+                            historyStack: p.historyStack || [],
+                            redoStack: p.redoStack || []
+                        }));
                         currentView.value = 'plan';
                     }
 
-                    // 2. 雲端真理融合
                     if (db && auth && auth.currentUser) {
                         try {
                             cloudSyncState.value = 'syncing';
@@ -955,7 +987,6 @@
                                 project.date = pd.date;
                                 if (pd.planImage) planImage.value = pd.planImage;
 
-                                // 抓取雲端所有獨立釘位文檔
                                 const pinsSnap = await db.collection('site_projects').doc(code).collection('pins').get();
                                 const cloudPinsMap = new Map();
                                 pinsSnap.forEach(pDoc => {
@@ -963,7 +994,6 @@
                                     cloudPinsMap.set(p.id, p);
                                 });
 
-                                // 智慧融合：保留本地尚未上傳的新增釘位，同時拉入雲端最新成果
                                 const merged = [];
                                 const seenIds = new Set();
 
@@ -971,29 +1001,25 @@
                                     seenIds.add(lp.id);
                                     if (cloudPinsMap.has(lp.id)) {
                                         const cp = cloudPinsMap.get(lp.id);
-                                        // 誰的時間戳新就用誰
                                         if ((cp.updatedAt || 0) >= (lp.updatedAt || 0)) {
-                                            merged.push(cp);
+                                            merged.push({...cp, historyStack: cp.historyStack||[], redoStack: cp.redoStack||[]});
                                         } else {
                                             merged.push(lp);
                                         }
                                     } else {
-                                        // 本機離線新增的釘位 -> 完整保留！
                                         merged.push(lp);
                                     }
                                 }
 
-                                // 雲端有而本機沒有的釘位 -> 自動納入！
                                 cloudPinsMap.forEach((cp, cid) => {
                                     if (!seenIds.has(cid)) {
-                                        merged.push(cp);
+                                        merged.push({...cp, historyStack: cp.historyStack||[], redoStack: cp.redoStack||[]});
                                     }
                                 });
 
                                 pins.value = merged.sort((a, b) => a.id - b.id);
                                 currentView.value = 'plan';
 
-                                // 僅更新本地快取，絕對不執行全盤反向覆蓋
                                 await localforage.setItem('proj_' + code, { 
                                     code: project.code, 
                                     name: project.name, 
@@ -1249,8 +1275,8 @@
                     currentView, projectList, project, planImage, pins, activePin, drawMode,
                     showBottomSheet, activeMarker, deleteConfirm, isProcessing, processingText,
                     cloudStatusText, cloudStatusClass, showJoinModal, inputJoinCode, joinProjectByCode, pullLatestFromCloud,
-                    workspace, svgCanvas, wrapperStyle, currentLine, currentPath, hasUndoItems,
-                    handleImageUpload, handlePlanImageClick, openPin, handleDeletePin, undoLastAction,
+                    workspace, svgCanvas, wrapperStyle, currentLine, currentPath, hasUndoItems, hasRedoItems,
+                    handleImageUpload, handlePlanImageClick, openPin, handleDeletePin, undoLastAction, redoAction,
                     handleTouchStart, handleTouchMove, handleTouchEnd, startDrag,
                     openBottomSheet, closeBottomSheet, deleteMarker, applyStamp, updateMarkerSize, getStampColor, getMarkerLines,
                     createNewProject, loadProject, deleteProject, backToProjects, saveProjectMeta, saveActivePin,
