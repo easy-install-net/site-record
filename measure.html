@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>度尺寶 Pro - 專屬小鍵盤 3數值版 (修復黑屏)</title>
+    <title>度尺寶 Pro - 透明拉線 3色塗鴉版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -67,7 +67,7 @@
             pointer-events: none;
         }
         
-        /* 隱藏原生游標，因為用緊自訂鍵盤 */
+        /* 隱藏原生游標 */
         .hide-caret { caret-color: transparent; }
     </style>
 </head>
@@ -80,11 +80,9 @@
                 <span :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold shrink-0">
                     {{ cloudStatusText }}
                 </span>
-                
                 <span v-if="project.code && currentView !== 'projects'" class="bg-yellow-400 text-black text-xs font-black px-1.5 py-0.5 rounded tracking-wider shrink-0">
                     #{{ project.code }}
                 </span>
-
                 <h1 class="text-sm font-bold truncate">
                     <span v-if="currentView === 'projects'">工程目錄</span>
                     <span v-else-if="currentView === 'plan'">{{ project.name || '未命名' }}</span>
@@ -147,20 +145,15 @@
                 <input type="text" v-model="project.name" @blur="saveProjectMeta" placeholder="輸入工程單位名稱" class="flex-1 bg-gray-800 text-white border border-gray-600 text-sm px-2 py-1.5 rounded font-bold focus:outline-none">
                 <span class="text-xs font-bold text-gray-400">{{ project.date }}</span>
             </div>
-
             <div v-if="!planImage" class="flex-1 flex items-center justify-center p-4">
                 <label class="bg-white text-black px-6 py-3 rounded text-sm font-bold cursor-pointer inline-block border-2 border-black active:bg-gray-200">
                     拍照 / 匯入平面圖
                     <input type="file" accept="image/*" class="hidden" @change="e => handleImageUpload(e, 'plan')">
                 </label>
             </div>
-            
             <div v-else class="flex-1 min-h-0 relative overflow-auto p-2 flex items-center justify-center touch-scrollable">
                 <div class="relative inline-block max-w-full max-h-full">
-                    <img :src="planImage" 
-                         @click="handlePlanImageClick"
-                         class="max-w-full max-h-[78dvh] object-contain block border border-gray-700 cursor-crosshair">
-                    
+                    <img :src="planImage" @click="handlePlanImageClick" class="max-w-full max-h-[78dvh] object-contain block border border-gray-700 cursor-crosshair">
                     <div v-for="(pin, index) in pins" :key="pin.id" 
                          class="absolute w-10 h-10 -ml-5 -mt-10 flex flex-col items-center justify-center cursor-pointer pointer-events-auto"
                          :style="{ left: pin.x + '%', top: pin.y + '%' }"
@@ -179,7 +172,16 @@
             
             <div v-if="activePin && activePin.photo" class="absolute top-2 z-20 flex gap-1 bg-black/85 backdrop-blur p-1 rounded-lg border border-gray-700 shadow-lg items-center">
                 <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-white text-black' : 'bg-transparent text-white'" class="px-3 py-1.5 text-xs font-bold rounded">拉線度尺</button>
-                <button @click="drawMode = 'freehand'" :class="drawMode === 'freehand' ? 'bg-white text-black' : 'bg-transparent text-white'" class="px-3 py-1.5 text-xs font-bold rounded">自由塗鴉</button>
+                
+                <!-- ★ 新增：塗鴉模式與三色選擇器 -->
+                <div class="flex items-center gap-1 border-l border-gray-600 pl-1.5 ml-1">
+                    <button @click="drawMode = 'freehand'" :class="drawMode === 'freehand' ? 'bg-white text-black' : 'bg-transparent text-white'" class="px-3 py-1.5 text-xs font-bold rounded">自由塗鴉</button>
+                    <div v-if="drawMode === 'freehand'" class="flex gap-1.5 ml-1">
+                        <button @click.stop="freehandColor = '#3b82f6'" :class="freehandColor === '#3b82f6' ? 'ring-2 ring-white scale-110' : ''" class="w-5 h-5 rounded-full bg-blue-500 transition-all shadow"></button>
+                        <button @click.stop="freehandColor = '#eab308'" :class="freehandColor === '#eab308' ? 'ring-2 ring-white scale-110' : ''" class="w-5 h-5 rounded-full bg-yellow-500 transition-all shadow"></button>
+                        <button @click.stop="freehandColor = '#22c55e'" :class="freehandColor === '#22c55e' ? 'ring-2 ring-white scale-110' : ''" class="w-5 h-5 rounded-full bg-green-500 transition-all shadow"></button>
+                    </div>
+                </div>
                 
                 <div class="flex gap-1 ml-1 border-l border-gray-600 pl-1.5">
                     <button @click.stop="undoLastAction" :class="hasUndoItems ? 'bg-yellow-500 active:bg-yellow-600 text-black' : 'bg-gray-700 text-gray-500 cursor-not-allowed'" class="px-2.5 py-1.5 text-xs font-bold rounded shadow transition-colors">
@@ -198,10 +200,7 @@
                 </label>
             </div>
 
-            <div v-else-if="activePin && activePin.photo" 
-                 :style="wrapperStyle" 
-                 class="select-none touch-none relative">
-                
+            <div v-else-if="activePin && activePin.photo" :style="wrapperStyle" class="select-none touch-none relative">
                 <img :src="activePin.photo" class="w-full h-full block pointer-events-none select-none object-fill">
 
                 <!-- 頂層全透明 SVG 畫板 -->
@@ -211,23 +210,22 @@
                      @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd"
                      @mousedown="handleTouchStart" @mousemove="handleTouchMove" @mouseup="handleTouchEnd">
                     
-                    <path v-for="path in (activePin.paths || [])" :key="path.id" :d="path.d" stroke="#ff0044" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-                    <line v-for="line in (activePin.lines || [])" :key="line.id" :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2" stroke="#ff0044" stroke-width="5" stroke-linecap="round" />
+                    <!-- ★ 拉線改為透明 (transparent)，不阻擋相片視線 -->
+                    <line v-for="line in (activePin.lines || [])" :key="line.id" :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2" stroke="transparent" stroke-width="5" stroke-linecap="round" />
+                    <!-- 拉線過程中的瞄準虛線 (極淡的白色，放手即消失) -->
+                    <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-dasharray="4" />
 
-                    <path v-if="currentPath" :d="currentPath" stroke="#ff0044" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-                    <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" stroke="#ff0044" stroke-width="5" stroke-dasharray="8" />
+                    <!-- ★ 自由塗鴉，套用選擇的顏色 -->
+                    <path v-for="path in (activePin.paths || [])" :key="path.id" :d="path.d" :stroke="path.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                    <path v-if="currentPath" :d="currentPath" :stroke="freehandColor" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 
                     <g v-for="marker in activePin.markers" :key="marker.id"
                        :transform="`translate(${marker.x}, ${marker.y})`"
                        class="cursor-move"
                        @touchstart.stop.prevent="e => startDrag(marker, e)"
                        @mousedown.stop.prevent="e => startDrag(marker, e)">
-                        
                         <rect :x="-marker.w/2" :y="-marker.h/2" :width="marker.w" :height="marker.h" fill="transparent" />
-
-                        <text text-anchor="middle" dominant-baseline="central"
-                              :fill="getStampColor(marker)"
-                              class="stamp-text">
+                        <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(marker)" class="stamp-text">
                             <tspan v-for="(line, idx) in getMarkerLines(marker)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(marker).length > 1 ? '-0.6em' : '0') : '1.2em'">
                                 {{ line }}
                             </tspan>
@@ -242,13 +240,7 @@
             <div class="bg-gray-900 border border-gray-700 w-full max-w-sm rounded-lg p-5 text-white shadow-2xl">
                 <h3 class="text-base font-bold text-yellow-400 mb-2">🔑 輸入 6 位數工程碼</h3>
                 <p class="text-xs text-gray-400 mb-4">輸入其他手機畫面頂部的 6 位數字即可直接同步：</p>
-                <input type="text" 
-                       inputmode="numeric" 
-                       pattern="[0-9]*" 
-                       maxlength="6" 
-                       v-model="inputJoinCode" 
-                       placeholder="例如: 849201" 
-                       class="w-full bg-black border-2 border-yellow-500 rounded p-3 text-center text-3xl font-mono font-bold tracking-widest text-white mb-5 focus:outline-none">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" v-model="inputJoinCode" placeholder="例如: 849201" class="w-full bg-black border-2 border-yellow-500 rounded p-3 text-center text-3xl font-mono font-bold tracking-widest text-white mb-5 focus:outline-none">
                 <div class="flex gap-2">
                     <button @click="showJoinModal = false" class="flex-1 bg-gray-800 text-white font-bold py-2.5 rounded text-sm">取消</button>
                     <button @click="joinProjectByCode" class="flex-1 bg-yellow-500 active:bg-yellow-600 text-black font-bold py-2.5 rounded text-sm">立即連通</button>
@@ -256,55 +248,45 @@
             </div>
         </div>
 
-        <div v-if="showBottomSheet && activeMarker" 
-             class="fixed inset-0 bg-black/60 z-40 backdrop-blur-[2px]" 
-             @click="closeBottomSheet"></div>
+        <div v-if="showBottomSheet && activeMarker" class="fixed inset-0 bg-black/60 z-40 backdrop-blur-[2px]" @click="closeBottomSheet"></div>
 
-        <!-- ★ UI 智能小鍵盤版彈窗：居中偏上，自動防遮擋 -->
-        <div v-if="showBottomSheet && activeMarker" 
-             class="fixed left-1/2 top-[5dvh] -translate-x-1/2 w-[96vw] max-w-md bg-white text-black border-2 border-black rounded-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[90dvh]">
+        <!-- ★ UI 智能小鍵盤版彈窗 -->
+        <div v-if="showBottomSheet && activeMarker" class="fixed left-1/2 top-[5dvh] -translate-x-1/2 w-[96vw] max-w-md bg-white text-black border-2 border-black rounded-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[90dvh]">
             
-            <!-- 卡片頂部功能列 -->
             <div class="p-2 bg-gray-900 text-white flex justify-between items-center border-b border-gray-700 shrink-0">
                 <span class="font-bold text-xs text-yellow-400">📍 標註設定</span>
                 <div class="flex gap-1.5">
-                    <button @click="deleteMarker" class="bg-red-700 active:bg-red-800 text-white font-bold px-3 py-1 rounded text-xs border border-red-500">
-                        刪除
-                    </button>
-                    <!-- 點擊完成直接關閉 -->
+                    <button @click="deleteMarker" class="bg-red-700 active:bg-red-800 text-white font-bold px-3 py-1 rounded text-xs border border-red-500">刪除</button>
                     <button @click="closeBottomSheet" class="bg-green-600 active:bg-green-700 text-white font-bold px-4 py-1 rounded text-xs border border-green-400 shadow">完成</button>
                 </div>
             </div>
 
-            <!-- ★ 輸入框置頂區：強制 5字位寬度 (w-16)， readonly 防系統鍵盤 -->
+            <!-- ★ 輸入框置頂區：強制 5字位寬度，加入 w, h, d 預設顯示 -->
             <div class="p-2 bg-gray-200 border-b border-gray-300 shrink-0 shadow-sm z-10">
                 <div v-if="!['stamp', 'window', 'door', 'beam', 'column'].includes(activeMarker.type)" class="flex items-center justify-center gap-1.5">
                     
-                    <!-- 名稱可以自由輸入，保留原生鍵盤，但通常只點按鈕 -->
-                    <input type="text" v-model="activeMarker.data.name" @input="updateMarkerSize(activeMarker)" @focus="focusedInput = 'name'" class="w-20 border-2 border-gray-400 p-1.5 text-sm font-bold bg-white focus:outline-none rounded text-center" placeholder="名稱">
+                    <input type="text" v-model="activeMarker.data.name" @input="updateMarkerSize(activeMarker)" @focus="focusedInput = 'name'" class="w-16 border-2 border-gray-400 p-1 text-sm font-bold bg-white focus:outline-none rounded text-center" placeholder="名稱">
                     <span class="font-bold self-center text-lg">:</span>
                     
-                    <!-- 智能 3 數值模式 (留位, 冷氣, 電箱, 避) -->
+                    <!-- 智能 3 數值模式 (0w x 0h x 0d) -->
                     <template v-if="['留位', '冷氣', '電箱', '避'].includes(activeMarker.data.name)">
-                        <input type="text" readonly :value="activeMarker.data.val" @click="setFocus('val')" :class="focusedInput === 'val' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="w-16 hide-caret border-2 p-1.5 text-base font-bold text-black focus:outline-none rounded text-center cursor-pointer" placeholder="數值">
-                        <span class="font-bold text-sm text-gray-500">x</span>
-                        <input type="text" readonly :value="activeMarker.data.val2" @click="setFocus('val2')" :class="focusedInput === 'val2' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="w-16 hide-caret border-2 p-1.5 text-base font-bold text-black focus:outline-none rounded text-center cursor-pointer" placeholder="數值">
-                        <span class="font-bold text-sm text-gray-500">x</span>
-                        <input type="text" readonly :value="activeMarker.data.val3" @click="setFocus('val3')" :class="focusedInput === 'val3' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="w-16 hide-caret border-2 p-1.5 text-base font-bold text-black focus:outline-none rounded text-center cursor-pointer" placeholder="數值">
+                        <input type="text" readonly :value="activeMarker.data.val" @click="setFocus('val')" :class="focusedInput === 'val' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="w-[52px] hide-caret border-2 p-1 text-sm font-bold text-black focus:outline-none rounded text-center cursor-pointer" placeholder="0w">
+                        <span class="font-bold text-xs text-gray-500">x</span>
+                        <input type="text" readonly :value="activeMarker.data.val2" @click="setFocus('val2')" :class="focusedInput === 'val2' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="w-[52px] hide-caret border-2 p-1 text-sm font-bold text-black focus:outline-none rounded text-center cursor-pointer" placeholder="0h">
+                        <span class="font-bold text-xs text-gray-500">x</span>
+                        <input type="text" readonly :value="activeMarker.data.val3" @click="setFocus('val3')" :class="focusedInput === 'val3' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="w-[52px] hide-caret border-2 p-1 text-sm font-bold text-black focus:outline-none rounded text-center cursor-pointer" placeholder="0d">
                     </template>
                     
                     <!-- 單數值模式 -->
                     <template v-else>
-                        <input type="text" readonly :value="activeMarker.data.val" @click="setFocus('val')" :class="focusedInput === 'val' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="flex-1 hide-caret border-2 p-1.5 px-3 text-lg font-bold text-black focus:outline-none rounded cursor-pointer" placeholder="點擊以輸入數值...">
+                        <input type="text" readonly :value="activeMarker.data.val" @click="setFocus('val')" :class="focusedInput === 'val' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="flex-1 hide-caret border-2 p-1 px-3 text-base font-bold text-black focus:outline-none rounded cursor-pointer" placeholder="點擊以輸入數值...">
                     </template>
                 </div>
                 
                 <div v-else-if="activeMarker.type === 'stamp'" class="flex items-stretch gap-1.5">
                     <span class="text-xs font-bold text-purple-700 bg-purple-100 px-2 border border-purple-300 rounded flex items-center whitespace-nowrap">自由印</span>
-                    <!-- 自由印必須用原生鍵盤打字 -->
                     <input type="text" v-model="activeMarker.data.val" @focus="focusedInput = 'stamp_val'" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-gray-400 p-1.5 px-2 text-sm font-bold bg-white text-black focus:outline-none rounded" placeholder="自訂文字...">
                 </div>
-                
                 <div v-else class="text-center text-xs font-bold text-gray-500 py-1">請在下方填寫詳細尺寸</div>
             </div>
 
@@ -344,24 +326,19 @@
                     </div>
                 </div>
 
-                <!-- ★ 基礎與水電 (強制作上下各 2 行顯示) -->
                 <div v-else class="flex flex-col gap-2">
-                    <!-- 基礎 1 -->
                     <div class="flex gap-1.5 overflow-x-auto">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎1</span>
                         <button v-for="w in ['高','闊','深','厚','總高']" :key="w" @click="applyTag(w)" class="micro-btn">{{ w }}</button>
                     </div>
-                    <!-- 基礎 2 -->
                     <div class="flex gap-1.5 overflow-x-auto">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎2</span>
                         <button v-for="w in ['總深','腰墨','牆厚','留位','避']" :key="w" @click="applyTag(w)" class="micro-btn">{{ w }}</button>
                     </div>
-                    <!-- 水電 1 -->
                     <div class="flex gap-1.5 overflow-x-auto">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">水電1</span>
                         <button v-for="w in ['制中','制邊-牆','制底-地','冷氣']" :key="w" @click="applyTag(w)" class="micro-btn">{{ w }}</button>
                     </div>
-                    <!-- 水電 2 -->
                     <div class="flex gap-1.5 overflow-x-auto">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">水電2</span>
                         <button v-for="w in ['喉邊-牆','喉底-地','地腳線','電箱']" :key="w" @click="applyTag(w)" class="micro-btn">{{ w }}</button>
@@ -369,12 +346,12 @@
                 </div>
             </div>
 
-            <!-- ★ 頁面專屬九宮格小鍵盤 -->
-            <div v-if="showCustomKeypad" class="bg-gray-200 p-2 pt-3 border-t border-gray-300 grid grid-cols-3 gap-2 shrink-0 pb-6">
-                <button v-for="n in [1,2,3,4,5,6,7,8,9]" :key="n" @click.stop="handleKeypad(String(n))" class="bg-white border border-gray-300 rounded shadow-sm text-2xl font-bold py-3 active:bg-gray-300">{{ n }}</button>
-                <button @click.stop="handleKeypad('DEL')" class="bg-red-100 border border-red-300 text-red-700 rounded shadow-sm text-lg font-bold py-3 active:bg-red-200">⌫ 刪除</button>
-                <button @click.stop="handleKeypad('0')" class="bg-white border border-gray-300 rounded shadow-sm text-2xl font-bold py-3 active:bg-gray-300">0</button>
-                <button @click.stop="handleKeypad('ENTER')" class="bg-blue-600 border border-blue-700 text-white rounded shadow-sm text-xl font-bold py-3 active:bg-blue-800">確定 ✔</button>
+            <!-- ★ 瘦身版九宮格小鍵盤 (縮減 padding 與字體) -->
+            <div v-if="showCustomKeypad" class="bg-gray-200 p-1.5 border-t border-gray-300 grid grid-cols-3 gap-1.5 shrink-0 pb-4">
+                <button v-for="n in [1,2,3,4,5,6,7,8,9]" :key="n" @click.stop="handleKeypad(String(n))" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-1.5 active:bg-gray-300">{{ n }}</button>
+                <button @click.stop="handleKeypad('DEL')" class="bg-red-100 border border-red-300 text-red-700 rounded shadow-sm text-base font-bold py-1.5 active:bg-red-200">⌫ 刪</button>
+                <button @click.stop="handleKeypad('0')" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-1.5 active:bg-gray-300">0</button>
+                <button @click.stop="handleKeypad('ENTER')" class="bg-blue-600 border border-blue-700 text-white rounded shadow-sm text-lg font-bold py-1.5 active:bg-blue-800">確定 ✔</button>
             </div>
         </div>
 
@@ -422,6 +399,9 @@
                 const showJoinModal = ref(false);
                 const inputJoinCode = ref('');
 
+                // ★ 新增：塗鴉三色切換
+                const freehandColor = ref('#3b82f6'); // 預設藍色
+
                 const cloudSyncState = ref('connecting');
                 const cloudStatusText = computed(() => {
                     if (cloudSyncState.value === 'connecting') return '☁️ 連線中...';
@@ -442,11 +422,9 @@
                 const isProcessing = ref(false);
                 const processingText = ref('');
 
-                // ★ 智能對焦狀態
                 const focusedInput = ref('val'); 
                 const showCustomKeypad = computed(() => {
                     if (!showBottomSheet.value || !activeMarker.value) return false;
-                    // 如果點擊名稱輸入框，或處於自由印模式，就隱藏小鍵盤，交俾原生鍵盤
                     return focusedInput.value !== 'name' && focusedInput.value !== 'stamp_val' && activeMarker.value.type !== 'stamp';
                 });
 
@@ -598,7 +576,6 @@
                     if (!activePin.value.historyStack) activePin.value.historyStack = [];
                     activePin.value.redoStack = []; 
 
-                    // ★ 新增標記時，確保帶有 val3 屬性
                     const createData = () => ({ val: '', val2: '', val3: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '' });
 
                     if (drawDist < 12) {
@@ -625,7 +602,8 @@
                             currentLine.value = null;
                         } else if (drawMode.value === 'freehand' && currentPath.value) {
                             const pathId = Date.now();
-                            activePin.value.paths.push({ id: pathId, d: currentPath.value });
+                            // ★ 儲存塗鴉時連同顏色一齊儲存
+                            activePin.value.paths.push({ id: pathId, d: currentPath.value, color: freehandColor.value });
                             activePin.value.historyStack.push({ type: 'freehand', pathId });
                             currentPath.value = null;
                         }
@@ -671,7 +649,6 @@
                     activePin.value.historyStack.push(action); saveActivePin();
                 };
 
-                // ★ 這裡補回丟失的 handleDeletePin，修復刪除釘位的報錯
                 const handleDeletePin = async () => {
                     if (deleteConfirm.value) {
                         const delId = activePin.value.id;
@@ -700,7 +677,6 @@
                     showBottomSheet.value = false; saveActivePin();
                 };
 
-                // ★ 這裡補回丟失的 openPin，修復打開釘位的崩潰報錯！
                 const openPin = (pin) => { 
                     activePin.value = pin; 
                     currentView.value = 'photo'; 
@@ -712,7 +688,6 @@
                     });
                 };
 
-                // ★ 開啟彈窗時，自動判斷邊一格要發藍光 (Focus)
                 const openBottomSheet = (marker) => { 
                     activeMarker.value = marker; 
                     if (marker.type === 'stamp') focusedInput.value = 'stamp_val';
@@ -729,22 +704,18 @@
                     focusedInput.value = field;
                 };
 
-                // ★ 頁面專用數字小鍵盤核心邏輯
                 const handleKeypad = (key) => {
                     if (!activeMarker.value || !focusedInput.value) return;
-                    
                     let currentVal = String(activeMarker.value.data[focusedInput.value] || '');
                     
                     if (key === 'DEL') {
                         activeMarker.value.data[focusedInput.value] = currentVal.slice(0, -1);
                     } else if (key === 'ENTER') {
-                        // 智能跳格判斷
                         const isMulti = ['留位', '冷氣', '電箱', '避'].includes(activeMarker.value.data.name);
-                        
                         if (isMulti && activeMarker.value.type === 'general') {
                             if (focusedInput.value === 'val') focusedInput.value = 'val2';
                             else if (focusedInput.value === 'val2') focusedInput.value = 'val3';
-                            else closeBottomSheet(); // 打完第三格，自動關閉
+                            else closeBottomSheet();
                         } else if (['window', 'door', 'beam', 'column'].includes(activeMarker.value.type)) {
                             const fields = getTagFields(activeMarker.value.type);
                             const idx = fields.findIndex(f => f.key === focusedInput.value);
@@ -754,7 +725,6 @@
                             closeBottomSheet();
                         }
                     } else {
-                        // 限制最多只能輸入 5 位數字，防止逼爆格仔
                         if (currentVal.length < 5) {
                             activeMarker.value.data[focusedInput.value] = currentVal + key;
                         }
@@ -765,8 +735,6 @@
                 const applyTag = (name) => {
                     if (!activeMarker.value) return;
                     activeMarker.value.data.name = name;
-                    
-                    // 如果揀中 3數值 模式，自動 Focus 返第一格
                     if (['留位', '冷氣', '電箱', '避'].includes(name)) {
                         focusedInput.value = 'val';
                     } else {
@@ -803,7 +771,7 @@
                     return '#ffffff';
                 };
 
-                // ★ 智能 3 數值結合印出
+                // ★ 加入 w, h, d 後綴
                 const getMarkerLines = (marker) => {
                     if (['window', 'door', 'beam', 'column'].includes(marker.type)) {
                         const lines = [getTagFields(marker.type)[0] ? getTagName(marker.type) : ''];
@@ -818,12 +786,11 @@
                     
                     const label = marker.data.name ? `${marker.data.name}: ` : '';
                     if (['留位', '冷氣', '電箱', '避'].includes(marker.data.name)) {
-                        let parts = [];
-                        if (marker.data.val) parts.push(marker.data.val);
-                        if (marker.data.val2) parts.push(marker.data.val2);
-                        if (marker.data.val3) parts.push(marker.data.val3);
-                        let valStr = parts.length > 0 ? parts.join(' x ') : '?';
-                        return [`${label}${valStr}`];
+                        // 當有輸入數字時才加上後綴
+                        let v1 = marker.data.val ? marker.data.val + 'w' : '0w';
+                        let v2 = marker.data.val2 ? marker.data.val2 + 'h' : '0h';
+                        let v3 = marker.data.val3 ? marker.data.val3 + 'd' : '0d';
+                        return [`${label}${v1} x ${v2} x ${v3}`];
                     }
                     return [`${label}${marker.data.val || '?'}`];
                 };
@@ -990,9 +957,14 @@
                                 ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0, 0, w, 70); ctx.fillStyle = '#fff'; ctx.font = 'bold 30px sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
                                 ctx.fillText(`📍 ${project.name || '未命名'} | ${pin.name} | ${project.date}`, 20, 35);
                             }
-                            ctx.strokeStyle = '#ff0044'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                            
+                            // 隱藏拉線
+                            ctx.strokeStyle = 'transparent'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
                             if (pin.lines) { pin.lines.forEach(l => { ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }); }
-                            if (pin.paths) { pin.paths.forEach(p => { const path = new Path2D(p.d); ctx.stroke(path); }); }
+                            
+                            // 塗鴉保留自己顏色
+                            if (pin.paths) { pin.paths.forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; const path = new Path2D(p.d); ctx.stroke(path); }); }
+                            
                             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                             if (pin.markers) {
                                 pin.markers.forEach(m => {
@@ -1069,7 +1041,7 @@
                 };
 
                 return {
-                    currentView, projectList, project, planImage, pins, activePin, drawMode,
+                    currentView, projectList, project, planImage, pins, activePin, drawMode, freehandColor,
                     showBottomSheet, activeMarker, deleteConfirm, isProcessing, processingText,
                     cloudStatusText, cloudStatusClass, showJoinModal, inputJoinCode, joinProjectByCode, pullLatestFromCloud,
                     workspace, svgCanvas, wrapperStyle, currentLine, currentPath, hasUndoItems, hasRedoItems,
