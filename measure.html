@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>度尺寶 Pro - 6位數工程碼同步版</title>
+    <title>度尺寶 Pro - 主動防覆蓋同步版</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 換用極速 Cloudflare CDN，根治香港流動網絡 unpkg 逾時導致黑屏 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -93,6 +92,11 @@
                 </button>
                 <button v-if="currentView === 'projects'" @click="createNewProject" class="bg-blue-600 active:bg-blue-800 text-white px-2.5 py-1 rounded text-xs font-bold border border-blue-400">
                     新建工程
+                </button>
+
+                <!-- ★ 新增：主動拉取雲端最新進度按鈕 (杜絕覆蓋，主控權交給使用者) -->
+                <button v-if="['plan', 'photo'].includes(currentView)" @click="pullLatestFromCloud" class="bg-purple-600 active:bg-purple-800 text-white px-2 py-1 rounded text-xs font-bold border border-purple-400 shadow">
+                    🔄 更新圖紙
                 </button>
 
                 <button v-if="currentView === 'plan' && pins.length > 0" @click="exportPdfReport" class="bg-blue-600 active:bg-blue-800 text-white px-2 py-1 rounded text-xs font-bold border border-blue-400">
@@ -225,7 +229,7 @@
             </div>
         </main>
 
-        <!-- 彈窗：輸入 6 位數工程碼加入 (徹底修復點擊失靈與鍵盤彈出問題) -->
+        <!-- 彈窗：輸入 6 位數工程碼加入 -->
         <div v-if="showJoinModal" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
             <div class="bg-gray-900 border border-gray-700 w-full max-w-xs rounded-lg p-4 text-white shadow-2xl">
                 <h3 class="text-base font-bold text-yellow-400 mb-1">🔑 輸入 6 位數工程碼</h3>
@@ -278,7 +282,6 @@
                         <button v-for="stamp in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-red-600 text-red-700 font-bold px-2 py-1">{{ stamp }}</button>
                     </div>
                     
-                    <!-- 水電收口更新陣列 -->
                     <div class="flex items-center gap-1 flex-wrap">
                         <span class="text-[11px] font-bold text-yellow-800 bg-yellow-100 px-1 border border-yellow-300 rounded">水電收口</span>
                         <button v-for="stamp in ['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-yellow-600 text-yellow-900 font-bold px-2 py-1">{{ stamp }}</button>
@@ -289,7 +292,6 @@
                         <button v-for="stamp in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border border-blue-600 text-blue-800 font-bold px-2 py-1">{{ stamp }}</button>
                     </div>
 
-                    <!-- 自由打字印章 -->
                     <div class="flex items-stretch gap-2 mt-1 pt-2 border-t border-gray-200">
                         <span class="text-[11px] font-bold text-purple-700 bg-purple-100 px-1 border border-purple-300 rounded flex items-center whitespace-nowrap">自由印</span>
                         <input type="text" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeBottomSheet" class="flex-1 border-2 border-black p-1 px-2 text-base font-bold bg-white text-black focus:outline-none rounded" placeholder="自訂印章內容...">
@@ -308,7 +310,6 @@
                 </div>
 
                 <div v-else class="flex flex-col gap-2">
-                    <!-- 基礎尺寸更新陣列 -->
                     <div class="flex gap-1 overflow-x-auto pb-1">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎</span>
                         <button v-for="w in ['高','闊','深','厚','總高','總深','腰墨','牆厚','留位']" :key="w" @click="activeMarker.data.name = w; updateMarkerSize(activeMarker)" class="micro-btn">{{ w }}</button>
@@ -371,14 +372,13 @@
                 const showJoinModal = ref(false);
                 const inputJoinCode = ref('');
 
-                let realtimePinsUnsub = null;
-
                 const cloudSyncState = ref('connecting');
+                // ★ 狀態文字優化，符合手動同步邏輯
                 const cloudStatusText = computed(() => {
                     if (cloudSyncState.value === 'connecting') return '☁️ 連線中...';
-                    if (cloudSyncState.value === 'syncing') return '☁️ 廣播中...';
+                    if (cloudSyncState.value === 'syncing') return '☁️ 儲存中...';
                     if (cloudSyncState.value === 'error') return '☁️ 離線模式';
-                    return '☁️ 雲端同步';
+                    return '☁️ 雲端已儲存';
                 });
                 const cloudStatusClass = computed(() => {
                     if (cloudSyncState.value === 'connecting' || cloudSyncState.value === 'syncing') return 'bg-yellow-800 text-yellow-200 border border-yellow-600';
@@ -539,7 +539,7 @@
                             draggedMarker.value.y = markerOrigin.value.y;
                             openBottomSheet(draggedMarker.value);
                         } else {
-                            saveCurrentProject();
+                            saveCurrentProject(); // 這是真實動作，允許存檔
                         }
                         draggedMarker.value = null;
                         isDraggingMarker.value = false;
@@ -583,7 +583,7 @@
                             currentPath.value = null;
                         }
                     }
-                    saveCurrentProject();
+                    saveCurrentProject(); // 真實動作放手後，發出存檔
                 };
 
                 const undoLastAction = () => {
@@ -597,7 +597,7 @@
                     } else if (action.type === 'freehand') {
                         activePin.value.paths = (activePin.value.paths || []).filter(p => p.id !== action.pathId);
                     }
-                    saveCurrentProject();
+                    saveCurrentProject(); // 撤銷亦屬於修改，允許存檔
                 };
 
                 const deleteMarker = () => {
@@ -615,7 +615,7 @@
                     }
 
                     showBottomSheet.value = false;
-                    saveCurrentProject();
+                    saveCurrentProject(); // 刪除亦屬於修改，允許存檔
                 };
 
                 const compressImage = (file) => {
@@ -684,7 +684,7 @@
                         historyStack: [] 
                     };
                     pins.value.push(newPin);
-                    saveCurrentProject();
+                    saveCurrentProject(); // 打釘是修改，允許存檔
                     openPin(newPin);
                 };
 
@@ -723,7 +723,11 @@
                 };
 
                 const openBottomSheet = (marker) => { activeMarker.value = marker; showBottomSheet.value = true; };
-                const closeBottomSheet = () => { showBottomSheet.value = false; saveCurrentProject(); };
+                
+                const closeBottomSheet = () => { 
+                    showBottomSheet.value = false; 
+                    saveCurrentProject(); // 關閉抽屜通常代表修改完畢，發出存檔
+                };
 
                 const applyStamp = (txt) => {
                     if (activeMarker.value) {
@@ -773,6 +777,7 @@
                 })[t] || [];
                 const getFieldLabel = (t, k) => { const f = getTagFields(t).find(i => i.key === k); return f ? f.label : k; };
 
+                // ★ 主動推播函式 (此函式只會在發生「實質修改」時被呼叫)
                 const saveCurrentProject = async () => {
                     if (!project.code) return;
                     const now = Date.now();
@@ -798,7 +803,7 @@
                                 date: project.date || '',
                                 planImage: planImage.value || null,
                                 pinList: pins.value.map(p => ({ id: p.id, name: p.name, x: p.x, y: p.y })),
-                                updatedAt: now
+                                updatedAt: now // 實質修改，打上最新時間戳
                             }, { merge: true });
 
                             if (activePin.value && activePin.value.photo) {
@@ -825,34 +830,6 @@
                     }
                 };
 
-                const attachRealtimeSync = (code) => {
-                    if (realtimePinsUnsub) realtimePinsUnsub();
-                    if (!db || !code) return;
-
-                    realtimePinsUnsub = db.collection('site_projects').doc(code).collection('pins')
-                        .onSnapshot((snapshot) => {
-                            if (isDrawing.value || isDraggingMarker.value) return;
-                            
-                            snapshot.docChanges().forEach((change) => {
-                                const pinData = change.doc.data();
-                                if (change.type === 'added' || change.type === 'modified') {
-                                    const idx = pins.value.findIndex(p => p.id === pinData.id);
-                                    if (idx !== -1) {
-                                        if ((pinData.updatedAt || 0) > (pins.value[idx].updatedAt || 0)) {
-                                            Object.assign(pins.value[idx], pinData);
-                                        }
-                                    } else {
-                                        pins.value.push(pinData);
-                                    }
-                                } else if (change.type === 'removed') {
-                                    pins.value = pins.value.filter(p => p.id !== pinData.id);
-                                }
-                            });
-                        }, (err) => {
-                            console.log("Realtime unsub error:", err);
-                        });
-                };
-
                 const createNewProject = () => {
                     const newCode = Math.floor(100000 + Math.random() * 900000).toString();
                     project.code = newCode;
@@ -861,11 +838,9 @@
                     planImage.value = null;
                     pins.value = [];
                     currentView.value = 'plan';
-                    saveCurrentProject();
-                    attachRealtimeSync(newCode);
+                    saveCurrentProject(); // 建立新工程屬於修改，允許存檔
                 };
 
-                // ★ 徹底修復：按鈕失靈問題（安全轉換字串，杜絕 trim is not a function 崩潰）
                 const joinProjectByCode = async () => {
                     const code = String(inputJoinCode.value || '').trim();
                     if (!code || code.length !== 6) {
@@ -891,9 +866,19 @@
                     isProcessing.value = false;
                 };
 
-                // ★ 連通載入防護：完整還原平面釘位與相片資料，杜絕空白覆蓋
+                // ★ 新增：主動拉取最新資料 (由右上角「更新圖紙」按鈕觸發)
+                const pullLatestFromCloud = async () => {
+                    if (!project.code) return;
+                    isProcessing.value = true;
+                    processingText.value = '正在拉取雲端最新進度...';
+                    await loadProject(project.code);
+                    isProcessing.value = false;
+                };
+
+                // ★ 徹底修復：安全載入雲端資料 (強制覆蓋本地，且絕不觸發假存檔上傳)
                 const loadProject = async (code) => {
                     code = String(code);
+                    // 1. 本地快取預覽防白屏
                     const d = await localforage.getItem('proj_' + code);
                     if (d) {
                         project.code = d.code;
@@ -904,8 +889,10 @@
                         currentView.value = 'plan';
                     }
 
+                    // 2. 雲端真理強制覆蓋
                     if (db && auth && auth.currentUser) {
                         try {
+                            cloudSyncState.value = 'syncing';
                             const projDoc = await db.collection('site_projects').doc(code).get();
                             if (projDoc.exists) {
                                 const pd = projDoc.data();
@@ -921,17 +908,27 @@
                                 if (fullPins.length > 0) {
                                     pins.value = fullPins.sort((a, b) => a.id - b.id);
                                 } else if (pd.pinList && pd.pinList.length > 0 && pins.value.length === 0) {
-                                    // 若釘位尚未拍照，安全補齊基礎釘位資料
                                     pins.value = pd.pinList.map(p => ({
                                         id: p.id, name: p.name, x: p.x, y: p.y,
                                         photo: null, photoW: 1200, photoH: 900, markers: [], lines: [], paths: [], historyStack: []
                                     }));
                                 }
                                 currentView.value = 'plan';
-                                attachRealtimeSync(code);
+                                
+                                // 【關鍵防護】：只更新本地快取，絕對不可呼叫 saveCurrentProject() 回灌雲端！
+                                await localforage.setItem('proj_' + code, { 
+                                    code: project.code, 
+                                    name: project.name, 
+                                    date: project.date, 
+                                    planImage: planImage.value, 
+                                    pins: JSON.parse(JSON.stringify(pins.value)),
+                                    updatedAt: pd.updatedAt || Date.now() // 保留雲端時間戳，不造假
+                                });
+                                cloudSyncState.value = 'ready';
                             }
                         } catch (e) {
                             console.log("Cloud load bypass:", e);
+                            cloudSyncState.value = 'error';
                         }
                     }
                 };
@@ -961,8 +958,7 @@
                 };
 
                 const backToProjects = () => {
-                    if (realtimePinsUnsub) realtimePinsUnsub();
-                    saveCurrentProject();
+                    // 【關鍵防護】：拔除 saveCurrentProject()，退出畫面不准產生假存檔上傳
                     loadProjectList();
                     currentView.value = 'projects';
                 };
@@ -1175,7 +1171,7 @@
                 return {
                     currentView, projectList, project, planImage, pins, activePin, drawMode,
                     showBottomSheet, activeMarker, deleteConfirm, isProcessing, processingText,
-                    cloudStatusText, cloudStatusClass, showJoinModal, inputJoinCode, joinProjectByCode,
+                    cloudStatusText, cloudStatusClass, showJoinModal, inputJoinCode, joinProjectByCode, pullLatestFromCloud,
                     workspace, svgCanvas, wrapperStyle, currentLine, currentPath, hasUndoItems,
                     handleImageUpload, handlePlanImageClick, openPin, handleDeletePin, undoLastAction,
                     handleTouchStart, handleTouchMove, handleTouchEnd, startDrag,
