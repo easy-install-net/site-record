@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>度尺寶 Pro - 透明拉線 3色塗鴉版</title>
+    <title>度尺寶 Pro - 4列鍵盤 智能箭頭版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -92,16 +92,16 @@
             
             <div class="flex gap-1.5 items-center shrink-0">
                 <button v-if="currentView === 'projects'" @click="showJoinModal = true" class="bg-yellow-600 active:bg-yellow-700 text-black px-2.5 py-1.5 rounded text-xs font-bold border border-yellow-400">
-                    🔑 輸入工程碼
+                    🔑 組合
                 </button>
                 <button v-if="currentView === 'projects'" @click="createNewProject" class="bg-blue-600 active:bg-blue-800 text-white px-2.5 py-1.5 rounded text-xs font-bold border border-blue-400">
                     新建工程
                 </button>
                 <button v-if="['plan', 'photo'].includes(currentView)" @click="pullLatestFromCloud" class="bg-purple-600 active:bg-purple-800 text-white px-2.5 py-1 rounded text-xs font-bold border border-purple-400 shadow">
-                    🔄 更新圖紙
+                    🔄 更新
                 </button>
                 <button v-if="currentView === 'plan' && pins.length > 0" @click="exportPdfReport" class="bg-blue-600 active:bg-blue-800 text-white px-2.5 py-1 rounded text-xs font-bold border border-blue-400">
-                    匯出 PDF
+                    PDF
                 </button>
                 <button v-if="currentView === 'plan'" @click="backToProjects" class="bg-gray-800 active:bg-gray-700 px-2.5 py-1 rounded text-xs font-bold border border-gray-600">
                     目錄
@@ -110,7 +110,7 @@
                     下載
                 </button>
                 <button v-if="currentView === 'photo'" @click="handleDeletePin" :class="deleteConfirm ? 'bg-red-600 border-red-400' : 'bg-red-900 border-red-700'" class="text-white px-2.5 py-1 rounded text-xs font-bold border">
-                    {{ deleteConfirm ? '確認刪除?' : '刪釘位' }}
+                    {{ deleteConfirm ? '確認?' : '刪除' }}
                 </button>
                 <button v-if="currentView === 'photo'" @click="currentView = 'plan'" class="bg-gray-800 active:bg-gray-700 px-2.5 py-1 rounded text-xs font-bold border border-gray-600">
                     返回
@@ -170,26 +170,33 @@
         <!-- 第 3 級：相片標註畫板 -->
         <main v-show="currentView === 'photo'" ref="workspace" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col items-center justify-center">
             
-            <div v-if="activePin && activePin.photo" class="absolute top-2 z-20 flex gap-1 bg-black/85 backdrop-blur p-1 rounded-lg border border-gray-700 shadow-lg items-center">
-                <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-white text-black' : 'bg-transparent text-white'" class="px-3 py-1.5 text-xs font-bold rounded">拉線度尺</button>
+            <!-- ★ 升級版工具列：加入箭頭與對應顏色選擇器 -->
+            <div v-if="activePin && activePin.photo" class="absolute top-2 w-[96vw] max-w-lg z-20 flex flex-wrap gap-1 bg-black/85 backdrop-blur p-1.5 rounded-lg border border-gray-700 shadow-lg items-center justify-between">
                 
-                <!-- ★ 新增：塗鴉模式與三色選擇器 -->
-                <div class="flex items-center gap-1 border-l border-gray-600 pl-1.5 ml-1">
-                    <button @click="drawMode = 'freehand'" :class="drawMode === 'freehand' ? 'bg-white text-black' : 'bg-transparent text-white'" class="px-3 py-1.5 text-xs font-bold rounded">自由塗鴉</button>
-                    <div v-if="drawMode === 'freehand'" class="flex gap-1.5 ml-1">
-                        <button @click.stop="freehandColor = '#3b82f6'" :class="freehandColor === '#3b82f6' ? 'ring-2 ring-white scale-110' : ''" class="w-5 h-5 rounded-full bg-blue-500 transition-all shadow"></button>
-                        <button @click.stop="freehandColor = '#eab308'" :class="freehandColor === '#eab308' ? 'ring-2 ring-white scale-110' : ''" class="w-5 h-5 rounded-full bg-yellow-500 transition-all shadow"></button>
-                        <button @click.stop="freehandColor = '#22c55e'" :class="freehandColor === '#22c55e' ? 'ring-2 ring-white scale-110' : ''" class="w-5 h-5 rounded-full bg-green-500 transition-all shadow"></button>
-                    </div>
+                <div class="flex gap-1">
+                    <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-white text-black' : 'bg-gray-800 text-white'" class="px-2.5 py-1.5 text-xs font-bold rounded">📏 度尺</button>
+                    <button @click="drawMode = 'arrow-single'" :class="drawMode === 'arrow-single' ? 'bg-white text-black' : 'bg-gray-800 text-white'" class="px-2.5 py-1.5 text-xs font-bold rounded">➡️ 單箭</button>
+                    <button @click="drawMode = 'arrow-double'" :class="drawMode === 'arrow-double' ? 'bg-white text-black' : 'bg-gray-800 text-white'" class="px-2.5 py-1.5 text-xs font-bold rounded">↔️ 雙箭</button>
+                    <button @click="drawMode = 'freehand'" :class="drawMode === 'freehand' ? 'bg-white text-black' : 'bg-gray-800 text-white'" class="px-2.5 py-1.5 text-xs font-bold rounded">🖌️ 塗鴉</button>
+                </div>
+
+                <!-- 顏色選擇 (箭頭) -->
+                <div v-if="drawMode.startsWith('arrow')" class="flex gap-1.5">
+                    <button @click.stop="arrowColor = 'gray'" :class="arrowColor === 'gray' ? 'ring-2 ring-white scale-110' : ''" class="w-5 h-5 rounded-full bg-gray-400 transition-all shadow"></button>
+                    <button @click.stop="arrowColor = 'white'" :class="arrowColor === 'white' ? 'ring-2 ring-blue-500 scale-110' : ''" class="w-5 h-5 rounded-full bg-white transition-all shadow"></button>
+                    <button @click.stop="arrowColor = 'red'" :class="arrowColor === 'red' ? 'ring-2 ring-white scale-110' : ''" class="w-5 h-5 rounded-full bg-red-500 transition-all shadow"></button>
+                </div>
+
+                <!-- 顏色選擇 (塗鴉) -->
+                <div v-if="drawMode === 'freehand'" class="flex gap-1.5">
+                    <button @click.stop="freehandColor = '#3b82f6'" :class="freehandColor === '#3b82f6' ? 'ring-2 ring-white scale-110' : ''" class="w-5 h-5 rounded-full bg-blue-500 transition-all shadow"></button>
+                    <button @click.stop="freehandColor = '#eab308'" :class="freehandColor === '#eab308' ? 'ring-2 ring-white scale-110' : ''" class="w-5 h-5 rounded-full bg-yellow-500 transition-all shadow"></button>
+                    <button @click.stop="freehandColor = '#22c55e'" :class="freehandColor === '#22c55e' ? 'ring-2 ring-white scale-110' : ''" class="w-5 h-5 rounded-full bg-green-500 transition-all shadow"></button>
                 </div>
                 
-                <div class="flex gap-1 ml-1 border-l border-gray-600 pl-1.5">
-                    <button @click.stop="undoLastAction" :class="hasUndoItems ? 'bg-yellow-500 active:bg-yellow-600 text-black' : 'bg-gray-700 text-gray-500 cursor-not-allowed'" class="px-2.5 py-1.5 text-xs font-bold rounded shadow transition-colors">
-                        返回
-                    </button>
-                    <button @click.stop="redoAction" :class="hasRedoItems ? 'bg-blue-500 active:bg-blue-600 text-white' : 'bg-gray-700 text-gray-500 cursor-not-allowed'" class="px-2.5 py-1.5 text-xs font-bold rounded shadow transition-colors">
-                        再做
-                    </button>
+                <div class="flex gap-1 border-l border-gray-600 pl-1.5">
+                    <button @click.stop="undoLastAction" :class="hasUndoItems ? 'bg-yellow-500 active:bg-yellow-600 text-black' : 'bg-gray-700 text-gray-500 cursor-not-allowed'" class="px-2 py-1 text-sm font-bold rounded shadow transition-colors">↶</button>
+                    <button @click.stop="redoAction" :class="hasRedoItems ? 'bg-blue-500 active:bg-blue-600 text-white' : 'bg-gray-700 text-gray-500 cursor-not-allowed'" class="px-2 py-1 text-sm font-bold rounded shadow transition-colors">↷</button>
                 </div>
             </div>
 
@@ -210,12 +217,33 @@
                      @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd"
                      @mousedown="handleTouchStart" @mousemove="handleTouchMove" @mouseup="handleTouchEnd">
                     
-                    <!-- ★ 拉線改為透明 (transparent)，不阻擋相片視線 -->
-                    <line v-for="line in (activePin.lines || [])" :key="line.id" :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2" stroke="transparent" stroke-width="5" stroke-linecap="round" />
-                    <!-- 拉線過程中的瞄準虛線 (極淡的白色，放手即消失) -->
-                    <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-dasharray="4" />
+                    <defs>
+                        <!-- 定義箭頭樣式 -->
+                        <marker id="arrow-end-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#9ca3af" /></marker>
+                        <marker id="arrow-start-gray" markerWidth="10" markerHeight="10" refX="2" refY="5" orient="auto"><path d="M 10 1 L 0 5 L 10 9 z" fill="#9ca3af" /></marker>
+                        
+                        <marker id="arrow-end-white" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" /></marker>
+                        <marker id="arrow-start-white" markerWidth="10" markerHeight="10" refX="2" refY="5" orient="auto"><path d="M 10 1 L 0 5 L 10 9 z" fill="#ffffff" /></marker>
 
-                    <!-- ★ 自由塗鴉，套用選擇的顏色 -->
+                        <marker id="arrow-end-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" /></marker>
+                        <marker id="arrow-start-red" markerWidth="10" markerHeight="10" refX="2" refY="5" orient="auto"><path d="M 10 1 L 0 5 L 10 9 z" fill="#ef4444" /></marker>
+                    </defs>
+
+                    <!-- ★ 渲染拉線與箭頭 -->
+                    <line v-for="line in (activePin.lines || [])" :key="line.id" 
+                          :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2" 
+                          :stroke="line.type === 'measure' || !line.type ? 'rgba(255, 0, 68, 0.4)' : (line.color === 'gray' ? '#9ca3af' : line.color === 'white' ? '#ffffff' : '#ef4444')" 
+                          :stroke-width="line.type === 'measure' || !line.type ? 5 : 4" 
+                          stroke-linecap="round"
+                          :marker-end="(line.type === 'arrow-single' || line.type === 'arrow-double') ? `url(#arrow-end-${line.color})` : null"
+                          :marker-start="line.type === 'arrow-double' ? `url(#arrow-start-${line.color})` : null" />
+
+                    <!-- ★ 繪畫過程中的虛線預覽 -->
+                    <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" 
+                          :stroke="drawMode.startsWith('arrow') ? (arrowColor === 'gray' ? '#9ca3af' : arrowColor === 'white' ? '#ffffff' : '#ef4444') : '#ff0044'" 
+                          :stroke-width="3" stroke-dasharray="6" />
+
+                    <!-- 自由塗鴉 -->
                     <path v-for="path in (activePin.paths || [])" :key="path.id" :d="path.d" :stroke="path.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                     <path v-if="currentPath" :d="currentPath" :stroke="freehandColor" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 
@@ -250,7 +278,7 @@
 
         <div v-if="showBottomSheet && activeMarker" class="fixed inset-0 bg-black/60 z-40 backdrop-blur-[2px]" @click="closeBottomSheet"></div>
 
-        <!-- ★ UI 智能小鍵盤版彈窗 -->
+        <!-- UI 智能小鍵盤版彈窗 -->
         <div v-if="showBottomSheet && activeMarker" class="fixed left-1/2 top-[5dvh] -translate-x-1/2 w-[96vw] max-w-md bg-white text-black border-2 border-black rounded-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[90dvh]">
             
             <div class="p-2 bg-gray-900 text-white flex justify-between items-center border-b border-gray-700 shrink-0">
@@ -261,14 +289,14 @@
                 </div>
             </div>
 
-            <!-- ★ 輸入框置頂區：強制 5字位寬度，加入 w, h, d 預設顯示 -->
+            <!-- 輸入框置頂區：強制 5字位寬度，加入 w, h, d 預設顯示 -->
             <div class="p-2 bg-gray-200 border-b border-gray-300 shrink-0 shadow-sm z-10">
                 <div v-if="!['stamp', 'window', 'door', 'beam', 'column'].includes(activeMarker.type)" class="flex items-center justify-center gap-1.5">
                     
                     <input type="text" v-model="activeMarker.data.name" @input="updateMarkerSize(activeMarker)" @focus="focusedInput = 'name'" class="w-16 border-2 border-gray-400 p-1 text-sm font-bold bg-white focus:outline-none rounded text-center" placeholder="名稱">
                     <span class="font-bold self-center text-lg">:</span>
                     
-                    <!-- 智能 3 數值模式 (0w x 0h x 0d) -->
+                    <!-- 智能 3 數值模式 -->
                     <template v-if="['留位', '冷氣', '電箱', '避'].includes(activeMarker.data.name)">
                         <input type="text" readonly :value="activeMarker.data.val" @click="setFocus('val')" :class="focusedInput === 'val' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="w-[52px] hide-caret border-2 p-1 text-sm font-bold text-black focus:outline-none rounded text-center cursor-pointer" placeholder="0w">
                         <span class="font-bold text-xs text-gray-500">x</span>
@@ -277,6 +305,13 @@
                         <input type="text" readonly :value="activeMarker.data.val3" @click="setFocus('val3')" :class="focusedInput === 'val3' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="w-[52px] hide-caret border-2 p-1 text-sm font-bold text-black focus:outline-none rounded text-center cursor-pointer" placeholder="0d">
                     </template>
                     
+                    <!-- 智能 2 數值模式 (地腳線 h x d, 包喉 w x d) -->
+                    <template v-else-if="['地腳線', '包喉'].includes(activeMarker.data.name)">
+                        <input type="text" readonly :value="activeMarker.data.val" @click="setFocus('val')" :class="focusedInput === 'val' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="w-16 hide-caret border-2 p-1 text-sm font-bold text-black focus:outline-none rounded text-center cursor-pointer" :placeholder="activeMarker.data.name === '地腳線' ? '0h' : '0w'">
+                        <span class="font-bold text-xs text-gray-500">x</span>
+                        <input type="text" readonly :value="activeMarker.data.val2" @click="setFocus('val2')" :class="focusedInput === 'val2' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="w-16 hide-caret border-2 p-1 text-sm font-bold text-black focus:outline-none rounded text-center cursor-pointer" placeholder="0d">
+                    </template>
+
                     <!-- 單數值模式 -->
                     <template v-else>
                         <input type="text" readonly :value="activeMarker.data.val" @click="setFocus('val')" :class="focusedInput === 'val' ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-400' : 'border-gray-400 bg-white'" class="flex-1 hide-caret border-2 p-1 px-3 text-base font-bold text-black focus:outline-none rounded cursor-pointer" placeholder="點擊以輸入數值...">
@@ -300,7 +335,7 @@
                 <button @click="activeMarker.type = 'column'; updateMarkerSize(activeMarker); setFocus('w')" :class="activeMarker.type === 'column' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn">柱</button>
             </div>
             
-            <!-- 選項區 -->
+            <!-- 選項區 (完美對齊你提供的分類清單) -->
             <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[160px]">
                 <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2">
                     <div class="flex items-center gap-1.5 flex-wrap">
@@ -329,29 +364,40 @@
                 <div v-else class="flex flex-col gap-2">
                     <div class="flex gap-1.5 overflow-x-auto">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎1</span>
-                        <button v-for="w in ['高','闊','深','厚','總高']" :key="w" @click="applyTag(w)" class="micro-btn">{{ w }}</button>
+                        <button v-for="w in ['高','闊','深','厚','總闊','總高','總深']" :key="w" @click="applyTag(w)" class="micro-btn">{{ w }}</button>
                     </div>
                     <div class="flex gap-1.5 overflow-x-auto">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">基礎2</span>
-                        <button v-for="w in ['總深','腰墨','牆厚','留位','避']" :key="w" @click="applyTag(w)" class="micro-btn">{{ w }}</button>
+                        <!-- 加入了包喉 -->
+                        <button v-for="w in ['凸','腰墨','牆厚','留位','避','地腳線','包喉']" :key="w" @click="applyTag(w)" class="micro-btn">{{ w }}</button>
                     </div>
                     <div class="flex gap-1.5 overflow-x-auto">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">水電1</span>
-                        <button v-for="w in ['制中','制邊-牆','制底-地','冷氣']" :key="w" @click="applyTag(w)" class="micro-btn">{{ w }}</button>
+                        <button v-for="w in ['制中-地','制中-牆','制底-地','制邊-牆']" :key="w" @click="applyTag(w)" class="micro-btn">{{ w }}</button>
                     </div>
                     <div class="flex gap-1.5 overflow-x-auto">
                         <span class="text-xs font-bold bg-gray-200 px-1.5 py-1 rounded shrink-0 flex items-center">水電2</span>
-                        <button v-for="w in ['喉邊-牆','喉底-地','地腳線','電箱']" :key="w" @click="applyTag(w)" class="micro-btn">{{ w }}</button>
+                        <button v-for="w in ['喉邊-牆','喉底-地','電箱','冷氣']" :key="w" @click="applyTag(w)" class="micro-btn">{{ w }}</button>
                     </div>
                 </div>
             </div>
 
-            <!-- ★ 瘦身版九宮格小鍵盤 (縮減 padding 與字體) -->
-            <div v-if="showCustomKeypad" class="bg-gray-200 p-1.5 border-t border-gray-300 grid grid-cols-3 gap-1.5 shrink-0 pb-4">
-                <button v-for="n in [1,2,3,4,5,6,7,8,9]" :key="n" @click.stop="handleKeypad(String(n))" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-1.5 active:bg-gray-300">{{ n }}</button>
-                <button @click.stop="handleKeypad('DEL')" class="bg-red-100 border border-red-300 text-red-700 rounded shadow-sm text-base font-bold py-1.5 active:bg-red-200">⌫ 刪</button>
-                <button @click.stop="handleKeypad('0')" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-1.5 active:bg-gray-300">0</button>
-                <button @click.stop="handleKeypad('ENTER')" class="bg-blue-600 border border-blue-700 text-white rounded shadow-sm text-lg font-bold py-1.5 active:bg-blue-800">確定 ✔</button>
+            <!-- ★ 極致慳位 4列x3行 小鍵盤 -->
+            <div v-if="showCustomKeypad" class="bg-gray-200 p-1.5 border-t border-gray-300 grid grid-cols-4 gap-1.5 shrink-0 pb-4">
+                <button @click.stop="handleKeypad('1')" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-2 active:bg-gray-300">1</button>
+                <button @click.stop="handleKeypad('2')" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-2 active:bg-gray-300">2</button>
+                <button @click.stop="handleKeypad('3')" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-2 active:bg-gray-300">3</button>
+                <button @click.stop="handleKeypad('DEL')" class="bg-red-100 border border-red-300 text-red-700 rounded shadow-sm text-xl font-bold py-2 active:bg-red-200">⌫</button>
+
+                <button @click.stop="handleKeypad('4')" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-2 active:bg-gray-300">4</button>
+                <button @click.stop="handleKeypad('5')" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-2 active:bg-gray-300">5</button>
+                <button @click.stop="handleKeypad('6')" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-2 active:bg-gray-300">6</button>
+                <button @click.stop="handleKeypad('0')" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-2 active:bg-gray-300">0</button>
+
+                <button @click.stop="handleKeypad('7')" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-2 active:bg-gray-300">7</button>
+                <button @click.stop="handleKeypad('8')" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-2 active:bg-gray-300">8</button>
+                <button @click.stop="handleKeypad('9')" class="bg-white border border-gray-300 rounded shadow-sm text-xl font-bold py-2 active:bg-gray-300">9</button>
+                <button @click.stop="handleKeypad('ENTER')" class="bg-blue-600 border border-blue-700 text-white rounded shadow-sm text-base font-bold py-2 active:bg-blue-800">確定</button>
             </div>
         </div>
 
@@ -399,8 +445,9 @@
                 const showJoinModal = ref(false);
                 const inputJoinCode = ref('');
 
-                // ★ 新增：塗鴉三色切換
-                const freehandColor = ref('#3b82f6'); // 預設藍色
+                // ★ 顏色選擇狀態
+                const arrowColor = ref('red');       // 箭頭預設紅色
+                const freehandColor = ref('#3b82f6'); // 塗鴉預設藍色
 
                 const cloudSyncState = ref('connecting');
                 const cloudStatusText = computed(() => {
@@ -526,7 +573,7 @@
                     isDrawing.value = true;
                     startPos.value = getCoords(e);
 
-                    if (drawMode.value === 'line') {
+                    if (drawMode.value === 'line' || drawMode.value.startsWith('arrow')) {
                         currentLine.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y };
                     } else {
                         tempPoints = [[startPos.value.x, startPos.value.y]];
@@ -546,7 +593,7 @@
                     } else if (isDrawing.value) {
                         e.preventDefault();
                         const p = getCoords(e);
-                        if (drawMode.value === 'line') {
+                        if (drawMode.value === 'line' || drawMode.value.startsWith('arrow')) {
                             currentLine.value.x2 = p.x; currentLine.value.y2 = p.y;
                         } else {
                             tempPoints.push([p.x, p.y]);
@@ -587,9 +634,18 @@
                         activePin.value.historyStack.push({ type: 'marker', markerId });
                         openBottomSheet(newMarker);
                     } else {
-                        if (drawMode.value === 'line' && currentLine.value) {
+                        // ★ 處理畫完線 / 箭頭的邏輯
+                        if ((drawMode.value === 'line' || drawMode.value.startsWith('arrow')) && currentLine.value) {
                             const lineId = Date.now();
-                            activePin.value.lines.push({ ...currentLine.value, id: lineId });
+                            const typeStr = drawMode.value === 'line' ? 'measure' : drawMode.value; // 'measure', 'arrow-single', 'arrow-double'
+                            
+                            activePin.value.lines.push({ 
+                                ...currentLine.value, 
+                                id: lineId,
+                                type: typeStr,
+                                color: drawMode.value.startsWith('arrow') ? arrowColor.value : null
+                            });
+                            
                             const midX = Math.round((currentLine.value.x1 + currentLine.value.x2) / 2);
                             const midY = Math.round((currentLine.value.y1 + currentLine.value.y2) / 2);
                             
@@ -602,7 +658,6 @@
                             currentLine.value = null;
                         } else if (drawMode.value === 'freehand' && currentPath.value) {
                             const pathId = Date.now();
-                            // ★ 儲存塗鴉時連同顏色一齊儲存
                             activePin.value.paths.push({ id: pathId, d: currentPath.value, color: freehandColor.value });
                             activePin.value.historyStack.push({ type: 'freehand', pathId });
                             currentPath.value = null;
@@ -704,6 +759,7 @@
                     focusedInput.value = field;
                 };
 
+                // ★ 更新小鍵盤邏輯，支援 2格(包喉/地腳線) 及 3格
                 const handleKeypad = (key) => {
                     if (!activeMarker.value || !focusedInput.value) return;
                     let currentVal = String(activeMarker.value.data[focusedInput.value] || '');
@@ -711,10 +767,15 @@
                     if (key === 'DEL') {
                         activeMarker.value.data[focusedInput.value] = currentVal.slice(0, -1);
                     } else if (key === 'ENTER') {
-                        const isMulti = ['留位', '冷氣', '電箱', '避'].includes(activeMarker.value.data.name);
-                        if (isMulti && activeMarker.value.type === 'general') {
+                        const isMulti3 = ['留位', '冷氣', '電箱', '避'].includes(activeMarker.value.data.name);
+                        const isMulti2 = ['地腳線', '包喉'].includes(activeMarker.value.data.name);
+
+                        if (isMulti3 && activeMarker.value.type === 'general') {
                             if (focusedInput.value === 'val') focusedInput.value = 'val2';
                             else if (focusedInput.value === 'val2') focusedInput.value = 'val3';
+                            else closeBottomSheet();
+                        } else if (isMulti2 && activeMarker.value.type === 'general') {
+                            if (focusedInput.value === 'val') focusedInput.value = 'val2';
                             else closeBottomSheet();
                         } else if (['window', 'door', 'beam', 'column'].includes(activeMarker.value.type)) {
                             const fields = getTagFields(activeMarker.value.type);
@@ -735,7 +796,8 @@
                 const applyTag = (name) => {
                     if (!activeMarker.value) return;
                     activeMarker.value.data.name = name;
-                    if (['留位', '冷氣', '電箱', '避'].includes(name)) {
+                    
+                    if (['留位', '冷氣', '電箱', '避', '地腳線', '包喉'].includes(name)) {
                         focusedInput.value = 'val';
                     } else {
                         focusedInput.value = 'val';
@@ -771,7 +833,7 @@
                     return '#ffffff';
                 };
 
-                // ★ 加入 w, h, d 後綴
+                // ★ 加入 2 格與 3 格的 w/h/d 後綴判斷
                 const getMarkerLines = (marker) => {
                     if (['window', 'door', 'beam', 'column'].includes(marker.type)) {
                         const lines = [getTagFields(marker.type)[0] ? getTagName(marker.type) : ''];
@@ -785,13 +847,27 @@
                     if (marker.type === 'stamp') return [marker.data.val || '未定'];
                     
                     const label = marker.data.name ? `${marker.data.name}: ` : '';
-                    if (['留位', '冷氣', '電箱', '避'].includes(marker.data.name)) {
-                        // 當有輸入數字時才加上後綴
+                    
+                    const isMulti3 = ['留位', '冷氣', '電箱', '避'].includes(marker.data.name);
+                    const isMulti2 = ['地腳線', '包喉'].includes(marker.data.name);
+
+                    if (isMulti3) {
                         let v1 = marker.data.val ? marker.data.val + 'w' : '0w';
                         let v2 = marker.data.val2 ? marker.data.val2 + 'h' : '0h';
                         let v3 = marker.data.val3 ? marker.data.val3 + 'd' : '0d';
                         return [`${label}${v1} x ${v2} x ${v3}`];
+                    } else if (isMulti2) {
+                        if (marker.data.name === '地腳線') {
+                            let v1 = marker.data.val ? marker.data.val + 'h' : '0h';
+                            let v2 = marker.data.val2 ? marker.data.val2 + 'd' : '0d';
+                            return [`${label}${v1} x ${v2}`];
+                        } else { // 包喉
+                            let v1 = marker.data.val ? marker.data.val + 'w' : '0w';
+                            let v2 = marker.data.val2 ? marker.data.val2 + 'd' : '0d';
+                            return [`${label}${v1} x ${v2}`];
+                        }
                     }
+                    
                     return [`${label}${marker.data.val || '?'}`];
                 };
 
@@ -947,6 +1023,7 @@
                     if (auth) { auth.onAuthStateChanged((user) => { if (user) cloudSyncState.value = 'ready'; else auth.signInAnonymously().catch(err => { cloudSyncState.value = 'error'; }); }); }
                 });
 
+                // ★ 更新匯出功能，支援箭頭頭尾繪製
                 const renderPinCanvas = (pin, isForPdf = false) => {
                     return new Promise((resolve) => {
                         const img = new Image(); img.src = pin.photo;
@@ -958,12 +1035,33 @@
                                 ctx.fillText(`📍 ${project.name || '未命名'} | ${pin.name} | ${project.date}`, 20, 35);
                             }
                             
-                            // 隱藏拉線
-                            ctx.strokeStyle = 'transparent'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-                            if (pin.lines) { pin.lines.forEach(l => { ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }); }
+                            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                            if (pin.lines) { 
+                                pin.lines.forEach(l => { 
+                                    if (l.type === 'arrow-single' || l.type === 'arrow-double') {
+                                        const hexColor = l.color === 'gray' ? '#9ca3af' : (l.color === 'white' ? '#ffffff' : '#ef4444');
+                                        ctx.strokeStyle = hexColor;
+                                        ctx.lineWidth = 4;
+                                        ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
+                                        
+                                        const angle = Math.atan2(l.y2 - l.y1, l.x2 - l.x1);
+                                        // 畫箭頭 尾
+                                        ctx.save(); ctx.fillStyle = hexColor; ctx.translate(l.x2, l.y2); ctx.rotate(angle);
+                                        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-14, 7); ctx.lineTo(-14, -7); ctx.closePath(); ctx.fill(); ctx.restore();
+                                        // 畫箭頭 頭 (雙箭)
+                                        if (l.type === 'arrow-double') {
+                                            ctx.save(); ctx.fillStyle = hexColor; ctx.translate(l.x1, l.y1); ctx.rotate(angle + Math.PI);
+                                            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-14, 7); ctx.lineTo(-14, -7); ctx.closePath(); ctx.fill(); ctx.restore();
+                                        }
+                                    } else {
+                                        ctx.strokeStyle = 'rgba(255, 0, 68, 0.4)'; 
+                                        ctx.lineWidth = 5; 
+                                        ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); 
+                                    }
+                                }); 
+                            }
                             
-                            // 塗鴉保留自己顏色
-                            if (pin.paths) { pin.paths.forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; const path = new Path2D(p.d); ctx.stroke(path); }); }
+                            if (pin.paths) { pin.paths.forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 6; const path = new Path2D(p.d); ctx.stroke(path); }); }
                             
                             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                             if (pin.markers) {
@@ -1041,7 +1139,7 @@
                 };
 
                 return {
-                    currentView, projectList, project, planImage, pins, activePin, drawMode, freehandColor,
+                    currentView, projectList, project, planImage, pins, activePin, drawMode, freehandColor, arrowColor,
                     showBottomSheet, activeMarker, deleteConfirm, isProcessing, processingText,
                     cloudStatusText, cloudStatusClass, showJoinModal, inputJoinCode, joinProjectByCode, pullLatestFromCloud,
                     workspace, svgCanvas, wrapperStyle, currentLine, currentPath, hasUndoItems, hasRedoItems,
