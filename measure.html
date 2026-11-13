@@ -177,15 +177,12 @@
                     </div>
                 </div>
 
-                <!-- 畫布右上角：當前模式提示與磁吸狀態 -->
+                <!-- 畫布右上角：當前模式提示 -->
                 <div class="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end pointer-events-none">
                     <div v-if="drawMode === 'browse'" class="bg-emerald-500 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow opacity-85">👆 睇圖防觸</div>
                     <div v-else-if="drawMode === 'stamp'" class="bg-yellow-400 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow">🏷️ 點畫面蓋印</div>
                     <div v-else-if="drawMode === 'text'" class="bg-blue-500 text-white px-2 py-0.5 rounded-full text-[10px] font-black shadow">📝 點畫面打字</div>
                     <div v-else-if="drawMode === 'pin'" class="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px] font-black shadow">📍 點畫面落釘</div>
-                    <div v-if="snappedAxis" class="bg-cyan-500 text-black px-2 py-0.5 rounded-full text-[11px] font-black shadow">
-                        {{ snappedAxis === 'H' ? '— 水平對齊' : '｜ 垂直對齊' }}
-                    </div>
                 </div>
 
                 <!-- 縮放與繪圖主容器 -->
@@ -208,8 +205,8 @@
                                   :marker-end="line.type === 'arrow-single' ? `url(#arrow-end-${line.color})` : null" />
 
                             <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
-                                  :stroke="snappedAxis ? '#06b6d4' : (drawMode === 'arrow-single' ? (arrowColor === 'gray' ? '#9ca3af' : arrowColor === 'white' ? '#ffffff' : '#ef4444') : '#ff0044')"
-                                  stroke-width="4" :stroke-dasharray="snappedAxis ? '' : '6'" />
+                                  :stroke="drawMode === 'arrow-single' ? (arrowColor === 'gray' ? '#9ca3af' : arrowColor === 'white' ? '#ffffff' : '#ef4444') : '#ff0044'"
+                                  stroke-width="4" stroke-dasharray="6" />
 
                             <path v-for="path in (activeCanvas.paths || [])" :key="path.id" :d="path.d" :stroke="path.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                             <path v-if="currentPath" :d="currentPath" :stroke="freehandColor" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
@@ -481,7 +478,6 @@
                 };
 
                 const drawMode = ref('browse');
-                const snappedAxis = ref('');
                 const showTopSheet = ref(false);
                 const showTopTextBar = ref(false);
                 const activeMarker = ref(null);
@@ -726,7 +722,7 @@
                 const onStageTouchStart = (e) => {
                     if (showTopSheet.value || showTopTextBar.value) return;
                     if (e.touches.length === 2) {
-                        isDrawing.value = false; isPanningBrowse = false; currentLine.value = null; currentPath.value = ''; draggedMarker.value = null; snappedAxis.value = '';
+                        isDrawing.value = false; isPanningBrowse = false; currentLine.value = null; currentPath.value = ''; draggedMarker.value = null;
                         const [t1, t2] = e.touches;
                         pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
                         pinchStartScale = zoomScale.value;
@@ -809,7 +805,6 @@
 
                 const beginStroke = (e) => {
                     isDrawing.value = true;
-                    snappedAxis.value = '';
                     startPos.value = getCoords(e);
                     if (drawMode.value === 'line' || drawMode.value === 'arrow-single') {
                         currentLine.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y };
@@ -831,15 +826,8 @@
                         e.preventDefault();
                         const p = getCoords(e);
                         if (drawMode.value === 'line' || drawMode.value === 'arrow-single') {
-                            let x2 = p.x, y2 = p.y;
-                            const dx = x2 - startPos.value.x, dy = y2 - startPos.value.y;
-                            if (Math.hypot(dx, dy) > 25) {
-                                const deg = Math.abs(Math.atan2(dy, dx) * 180 / Math.PI);
-                                if (deg < 7 || deg > 173) { y2 = startPos.value.y; snappedAxis.value = 'H'; }
-                                else if (Math.abs(deg - 90) < 7) { x2 = startPos.value.x; snappedAxis.value = 'V'; }
-                                else { snappedAxis.value = ''; }
-                            } else { snappedAxis.value = ''; }
-                            currentLine.value.x2 = x2; currentLine.value.y2 = y2;
+                            currentLine.value.x2 = p.x;
+                            currentLine.value.y2 = p.y;
                         } else if (drawMode.value === 'freehand') {
                             tempPoints.push([p.x, p.y]);
                             currentPath.value = `M ${tempPoints.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`;
@@ -848,7 +836,6 @@
                 };
 
                 const endStroke = (e) => {
-                    snappedAxis.value = '';
                     if (draggedMarker.value) {
                         if (!isDraggingMarker.value) {
                             draggedMarker.value.x = markerOrigin.value.x;
@@ -1147,7 +1134,6 @@
                     e.target.value = '';
                 };
 
-                // 寫入本地 ＋ 分流寫入 Firebase（釘選相片獨立存於 media 集合，徹底避免超過 1MB 上限）
                 const pushToCloud = async (throwOnError = false) => {
                     if (!db || !project.code) return;
                     cloudSyncState.value = 'syncing';
@@ -1203,7 +1189,6 @@
                     pushToCloud(false);
                 };
 
-                // 按 updatedAt 智能合併兩部裝置嘅頁面與釘選
                 const mergePagesSmart = (localList, cloudList, deletedSet, orderList) => {
                     const localMap = new Map(localList.map(p => [p.id, p]));
                     const cloudMap = new Map(cloudList.map(p => [p.id, p]));
@@ -1217,11 +1202,9 @@
                         if (!lp) { result.push(cp); return; }
                         if (!cp) { result.push(lp); return; }
 
-                        // 合併頁面本體（較新者勝）
                         const base = (cp.updatedAt || 0) > (lp.updatedAt || 0) ? { ...cp } : { ...lp };
                         if (!base.photo) base.photo = lp.photo || cp.photo || null;
 
-                        // 合併頁內釘選（較新者勝）
                         const lPins = new Map((lp.pins || []).map(x => [String(x.id), x]));
                         const cPins = new Map((cp.pins || []).map(x => [String(x.id), x]));
                         const allPinIds = new Set([...lPins.keys(), ...cPins.keys()]);
@@ -1281,7 +1264,6 @@
                                 cloudPages.push(pgData);
                             });
                         } else if (pd.planImage) {
-                            // 兼容更早期舊版格式
                             const oldPinsSnap = await projRef.collection('pins').get();
                             const oldPins = [];
                             oldPinsSnap.forEach(doc => {
@@ -1322,7 +1304,6 @@
                     }
                 };
 
-                // 真正雙向同步：先拉取合併（唔蓋走對方新資料），再將最新合併結果推送上雲端
                 const syncNow = async () => {
                     if (!project.code) return;
                     isProcessing.value = true;
@@ -1619,7 +1600,7 @@
                     currentView, projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas,
                     showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList,
                     arrowColor, freehandColor, cloudStatusText, cloudStatusClass, toastMsg,
-                    drawMode, snappedAxis, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText,
+                    drawMode, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText,
                     focusedInput, topTextInputRef,
                     stageRef, svgCanvas, wrapperStyle, zoomScale, zoomTransformStyle, resetZoom,
                     currentLine, currentPath, hasUndoItems, hasRedoItems,
