@@ -41,9 +41,7 @@
 <body class="text-gray-100 font-sans antialiased">
     <div id="app" v-cloak class="fixed inset-0 w-full h-full flex flex-col overflow-hidden">
 
-        <!-- ======================= -->
         <!-- 頂部固定控制台 (防鍵盤頂走) -->
-        <!-- ======================= -->
         <div class="shrink-0 flex flex-col z-30">
             <!-- 第 1 行：導航與工程名 -->
             <header class="h-10 bg-black text-white px-2 border-b border-zinc-800 flex justify-between items-center gap-1">
@@ -64,7 +62,7 @@
                 </div>
             </header>
 
-            <!-- 第 2 行：工具列 (正中對齊，單手拇指最順手) -->
+            <!-- 第 2 行：工具列 (正中對齊) -->
             <div v-if="currentView === 'proj'" class="h-11 bg-zinc-900 border-b border-zinc-700 px-1 flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
                 <div class="flex items-center gap-1 shrink-0 justify-center">
                     <button @click="setMode('browse')" :class="drawMode === 'browse' ? 'bg-emerald-500 text-black' : 'bg-zinc-800 text-zinc-300'" class="px-2 py-1.5 text-xs font-bold rounded">睇圖</button>
@@ -80,7 +78,7 @@
                     <button @click="redoAction" :class="hasRedoItems ? 'bg-blue-500 text-white' : 'bg-zinc-800 text-zinc-600'" class="px-2 py-1 text-sm font-bold rounded">↷</button>
                 </div>
             </div>
-            
+
             <!-- 塗鴉/箭頭 顏色選擇器 -->
             <div v-if="currentView === 'proj' && (drawMode === 'arrow-single' || drawMode === 'freehand')" class="h-8 bg-zinc-950 border-b border-zinc-800 px-2 flex items-center justify-center gap-2">
                 <span class="text-[10px] text-zinc-400 font-bold">顏色:</span>
@@ -98,9 +96,7 @@
             </div>
         </div>
 
-        <!-- ======================= -->
         <!-- 主視圖 1：工程目錄 -->
-        <!-- ======================= -->
         <main v-show="currentView === 'dir'" class="flex-1 min-h-0 bg-zinc-950 p-3 overflow-y-auto touch-scrollable">
             <div v-if="projectList.length === 0" class="text-center text-zinc-500 mt-20 text-sm font-bold">
                 暫無工程，點右上「+新建」或「🔑組合」連通。
@@ -120,11 +116,9 @@
             </div>
         </main>
 
-        <!-- ======================= -->
         <!-- 主視圖 2：工作區畫布 -->
-        <!-- ======================= -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col">
-            
+
             <!-- 未載入圖片時 -->
             <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                 <div v-if="activePin" class="text-yellow-400 font-bold text-sm mb-2">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
@@ -145,7 +139,7 @@
             <div v-else ref="stageRef" class="flex-1 min-h-0 relative overflow-hidden flex items-center justify-center zoom-stage"
                  @touchstart="onStageTouchStart" @touchmove="onStageTouchMove" @touchend="onStageTouchEnd"
                  @mousedown="onStageMouseDown" @mousemove="onStageMouseMove" @mouseup="onStageMouseUp">
-                
+
                 <!-- 畫布左上角：頁面導航膠囊 -->
                 <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
                     <div v-if="!activePin" class="bg-black/80 backdrop-blur border border-zinc-700 rounded-full flex items-center px-1 py-1 shadow">
@@ -178,10 +172,13 @@
                     </div>
                 </div>
 
-                <!-- 畫布右上角：當前工具提示與磁吸狀態 -->
+                <!-- 畫布右上角：當前模式提示與磁吸狀態 -->
                 <div class="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end pointer-events-none">
-                    <div v-if="drawMode === 'browse'" class="bg-emerald-500 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow opacity-80">👆 睇圖防觸模式</div>
-                    <div v-if="snappedAxis" class="bg-cyan-500 text-black px-2 py-0.5 rounded-full text-[11px] font-black shadow transition-all">
+                    <div v-if="drawMode === 'browse'" class="bg-emerald-500 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow opacity-85">👆 睇圖防觸</div>
+                    <div v-else-if="drawMode === 'stamp'" class="bg-yellow-400 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow">🏷️ 點畫面蓋印</div>
+                    <div v-else-if="drawMode === 'text'" class="bg-blue-500 text-white px-2 py-0.5 rounded-full text-[10px] font-black shadow">📝 點畫面打字</div>
+                    <div v-else-if="drawMode === 'pin'" class="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px] font-black shadow">📍 點畫面落釘</div>
+                    <div v-if="snappedAxis" class="bg-cyan-500 text-black px-2 py-0.5 rounded-full text-[11px] font-black shadow">
                         {{ snappedAxis === 'H' ? '— 水平對齊' : '｜ 垂直對齊' }}
                     </div>
                 </div>
@@ -241,27 +238,22 @@
                     </div>
                 </div>
 
-                <!-- 縮放還原掣 (置於右下角) -->
+                <!-- 縮放還原掣 -->
                 <button v-if="zoomScale > 1.05" @click.stop="resetZoom" class="absolute bottom-4 right-3 bg-black/85 text-yellow-400 border border-yellow-500 px-3 py-1 rounded-full text-xs font-bold z-20 shadow" @touchstart.stop @mousedown.stop>
                     {{ Math.round(zoomScale * 100) }}% 還原
                 </button>
             </div>
         </main>
 
-        <!-- ======================= -->
-        <!-- 獨立置頂【文字】輸入條 (絕對唔怕系統鍵盤遮擋) -->
-        <!-- ======================= -->
-        <div v-if="showTopTextBar && activeMarker" class="absolute top-0 left-0 w-full bg-white text-black border-b-4 border-blue-600 z-[60] shadow-2xl flex items-center gap-2 p-2 px-3" @touchstart.stop @mousedown.stop>
-            <span class="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-1 rounded whitespace-nowrap">自由打字</span>
-            <input ref="topTextInputRef" type="text" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeTopTextBar" class="flex-1 bg-zinc-100 border border-zinc-300 p-2 text-base font-bold rounded focus:outline-none focus:border-blue-500 focus:bg-white" placeholder="輸入文字/數字...">
+        <!-- 獨立置頂【文字】輸入條 (貼實螢幕最頂端，絕對唔怕系統鍵盤遮擋) -->
+        <div v-if="showTopTextBar && activeMarker" class="fixed top-0 left-0 w-full bg-white text-black border-b-4 border-blue-600 z-[60] shadow-2xl flex items-center gap-2 p-2 px-3" @touchstart.stop @mousedown.stop>
+            <span class="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-1 rounded whitespace-nowrap">文字</span>
+            <input ref="topTextInputRef" type="text" v-model="activeMarker.data.val" @input="updateMarkerSize(activeMarker)" @keyup.enter="closeTopTextBar" class="flex-1 min-w-0 bg-zinc-100 border border-zinc-300 p-2 text-base font-bold rounded focus:outline-none focus:border-blue-500 focus:bg-white" placeholder="輸入文字或語音...">
             <button @click="deleteMarkerTop" class="bg-red-100 text-red-600 border border-red-300 px-3 py-2 rounded text-sm font-bold shrink-0">刪除</button>
             <button @click="closeTopTextBar" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold shrink-0 shadow-md">確定</button>
         </div>
 
-        <!-- ======================= -->
-        <!-- 全局彈窗 -->
-        <!-- ======================= -->
-        
+        <!-- 新增頁面彈窗 -->
         <div v-if="showAddPageModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showAddPageModal = false">
             <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-4 flex flex-col gap-2.5 text-white shadow-2xl">
                 <div class="text-sm font-bold text-center text-yellow-400 mb-1">新增工程頁面</div>
@@ -275,6 +267,7 @@
             </div>
         </div>
 
+        <!-- 快速選擇空間印章 -->
         <div v-if="showSpaceModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showSpaceModal = false">
             <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-4 text-white shadow-2xl">
                 <div class="text-sm font-bold text-yellow-400 mb-2.5">🏠 標記本頁空間</div>
@@ -289,7 +282,8 @@
             </div>
         </div>
 
-        <div v-if="showJoinModal" class="fixed inset-0 bg-black/75 z-50 flex items-start justify-center p-4 pt-[15vh]" @click.self="showJoinModal = false">
+        <!-- 輸入 6 位數工程碼 (貼頂避開數字鍵盤) -->
+        <div v-if="showJoinModal" class="fixed inset-0 bg-black/75 z-50 flex items-start justify-center p-4 pt-[12vh]" @click.self="showJoinModal = false">
             <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-4 text-white">
                 <h3 class="text-sm font-bold text-yellow-400 mb-2">🔑 輸入 6 位數工程碼</h3>
                 <input type="text" inputmode="numeric" maxlength="6" v-model="inputJoinCode" placeholder="849201" class="w-full bg-black border-2 border-yellow-500 rounded-lg p-2.5 text-center text-2xl font-mono font-bold tracking-widest text-white mb-4 focus:outline-none">
@@ -300,21 +294,20 @@
             </div>
         </div>
 
-        <!-- ======================= -->
-        <!-- 頂置標註設定抽屜 (度尺/印章專用，避開系統鍵盤) -->
-        <!-- ======================= -->
+        <!-- 頂置標註設定抽屜 (度尺 / 純一撳印章專用，完全避開系統鍵盤) -->
         <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/40 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
         <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-black border-b-2 border-black rounded-b-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[85dvh]" @touchstart.stop @mousedown.stop>
             <div class="px-3 py-2 bg-zinc-900 text-white flex justify-between items-center shrink-0">
-                <span class="font-bold text-xs text-yellow-400">📍 {{ activeMarker.type === 'stamp' ? '選擇印章' : '標註設定' }}</span>
+                <span class="font-bold text-xs text-yellow-400">📍 {{ activeMarker.type === 'stamp' ? '一撳蓋印章' : '度尺設定' }}</span>
                 <div class="flex gap-2">
                     <button @click="deleteMarkerTop" class="bg-red-700 text-white font-bold px-3 py-1 rounded text-xs">刪除</button>
                     <button @click="closeTopSheet" class="bg-emerald-600 text-white font-bold px-4 py-1 rounded text-xs">完成</button>
                 </div>
             </div>
 
+            <!-- 尺寸數值輸入欄 (印章模式不顯示，防止觸發系統鍵盤) -->
             <div v-if="activeMarker.type !== 'stamp'" class="p-2 bg-zinc-200 border-b border-zinc-300 shrink-0">
-                <div class="flex items-center justify-center gap-1.5">
+                <div v-if="!['window', 'door', 'beam', 'column'].includes(activeMarker.type)" class="flex items-center justify-center gap-1.5">
                     <input type="text" v-model="activeMarker.data.name" @input="updateMarkerSize(activeMarker)" @focus="focusedInput = 'name'" class="w-16 border-2 border-zinc-400 p-1.5 text-sm font-bold bg-white rounded text-center" placeholder="名稱">
                     <span class="font-bold text-base">:</span>
 
@@ -334,10 +327,11 @@
                         <input type="text" readonly :value="activeMarker.data.val" @click="setFocus('val')" :class="focusedInput === 'val' ? 'border-blue-600 bg-blue-50' : 'border-zinc-400 bg-white'" class="flex-1 hide-caret min-w-0 border-2 p-1.5 px-3 text-sm font-bold rounded cursor-pointer" placeholder="點擊下方數字...">
                     </template>
                 </div>
+                <div v-else class="text-center text-xs font-bold text-zinc-600 py-1">請在下方填寫詳細尺寸</div>
             </div>
 
-            <!-- 分類頁籤 -->
-            <div class="p-2 border-b border-zinc-200 flex gap-1.5 overflow-x-auto no-scrollbar bg-zinc-100 shrink-0">
+            <!-- 分類頁籤 (度尺模式顯示) -->
+            <div v-if="activeMarker.type !== 'stamp'" class="p-2 border-b border-zinc-200 flex gap-1.5 overflow-x-auto no-scrollbar bg-zinc-100 shrink-0">
                 <button @click="switchMarkerType('general', 'val')" :class="activeMarker.type === 'general' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn py-1 px-3">尺寸</button>
                 <button @click="switchMarkerType('door', 'w_in')" :class="activeMarker.type === 'door' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn py-1 px-3">門洞</button>
                 <button @click="switchMarkerType('window', 'w_in')" :class="activeMarker.type === 'window' ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn py-1 px-3">窗</button>
@@ -346,8 +340,9 @@
             </div>
 
             <!-- 選項區 -->
-            <div class="p-3 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[220px]">
-                <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2">
+            <div class="p-3 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[260px]">
+                <!-- 純印章選單 (一撳即印即關，零鍵盤干擾) -->
+                <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2.5">
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <span class="text-[11px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">打拆</span>
                         <button v-for="stamp in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="stamp" @click="applyStamp(stamp)" class="micro-btn border-red-500 text-red-700">{{ stamp }}</button>
@@ -366,6 +361,7 @@
                     </div>
                 </div>
 
+                <!-- 門窗樑柱 -->
                 <div v-else-if="['window', 'door', 'beam', 'column'].includes(activeMarker.type)" class="grid grid-cols-3 gap-2">
                     <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
                         <label class="text-xs font-bold text-zinc-700 bg-zinc-200 px-1 py-1 text-center rounded-t">{{ field.label }}</label>
@@ -373,6 +369,7 @@
                     </div>
                 </div>
 
+                <!-- 常用度尺標籤 -->
                 <div v-else class="flex flex-col gap-2">
                     <div class="flex gap-1.5 overflow-x-auto no-scrollbar">
                         <span class="text-xs font-bold bg-zinc-200 px-2 py-1 rounded shrink-0 flex items-center">基礎1</span>
@@ -393,7 +390,7 @@
                 </div>
             </div>
 
-            <!-- 4列智能小鍵盤 (印章模式時隱藏) -->
+            <!-- 4列智能小鍵盤 -->
             <div v-if="activeMarker.type !== 'stamp'" class="bg-zinc-200 p-2 border-t border-zinc-300 grid grid-cols-4 gap-1.5 shrink-0 pb-4">
                 <button @click.stop="handleKeypad('1')" class="bg-white border border-zinc-300 rounded shadow-sm text-xl font-bold py-2 active:bg-zinc-300">1</button>
                 <button @click.stop="handleKeypad('2')" class="bg-white border border-zinc-300 rounded shadow-sm text-xl font-bold py-2 active:bg-zinc-300">2</button>
@@ -477,7 +474,7 @@
                 };
 
                 const drawMode = ref('browse');
-                const snappedAxis = ref(''); 
+                const snappedAxis = ref('');
                 const showTopSheet = ref(false);
                 const showTopTextBar = ref(false);
                 const activeMarker = ref(null);
@@ -579,6 +576,7 @@
                     activeCanvas.value.photo = renderSketchDataUrl(w, h, hasGrid);
                     activeCanvas.value.w = w; activeCanvas.value.h = h;
                     activeCanvas.value.isSketch = true; activeCanvas.value.hasGrid = hasGrid;
+                    drawMode.value = 'browse';
                     resetZoom();
                     nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
                     saveAll();
@@ -610,9 +608,9 @@
                     resetZoom();
                     nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
                 };
-                
-                const prevPage = () => { if(activePageIndex.value > 0) switchPage(activePageIndex.value - 1); };
-                const nextPage = () => { if(activePageIndex.value < pages.value.length - 1) switchPage(activePageIndex.value + 1); };
+
+                const prevPage = () => { if (activePageIndex.value > 0) switchPage(activePageIndex.value - 1); };
+                const nextPage = () => { if (activePageIndex.value < pages.value.length - 1) switchPage(activePageIndex.value + 1); };
 
                 const deleteCurrentPage = () => {
                     if (pages.value.length <= 1) return;
@@ -688,17 +686,13 @@
                     updateMarkerSize(newMarker);
                     c.markers.push(newMarker);
                     c.historyStack.push({ type: 'marker', markerId });
-                    
-                    if (forceType === 'stamp') {
-                        showTopSheet.value = true;
-                        activeMarker.value = newMarker;
-                    } else if (forceType === 'text') {
+                    activeMarker.value = newMarker;
+
+                    if (forceType === 'text') {
                         showTopTextBar.value = true;
-                        activeMarker.value = newMarker;
                         nextTick(() => topTextInputRef.value?.focus());
                     } else {
                         showTopSheet.value = true;
-                        activeMarker.value = newMarker;
                     }
                     saveAll();
                 };
@@ -963,6 +957,7 @@
                     c.redoStack = [];
                     showTopSheet.value = false;
                     showTopTextBar.value = false;
+                    activeMarker.value = null;
                     saveAll();
                 };
 
@@ -982,6 +977,10 @@
                 };
 
                 const closeTopSheet = () => {
+                    if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) {
+                        deleteMarkerTop();
+                        return;
+                    }
                     showTopSheet.value = false;
                     saveAll();
                 };
@@ -1468,7 +1467,7 @@
                     showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList,
                     arrowColor, freehandColor, cloudStatusText, cloudStatusClass,
                     drawMode, snappedAxis, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText,
-                    focusedInput, allowTextOnVal, valTextInput, stampInputRef, topTextInputRef, showCustomKeypad,
+                    focusedInput, topTextInputRef,
                     stageRef, svgCanvas, wrapperStyle, zoomScale, zoomTransformStyle, resetZoom,
                     currentLine, currentPath, hasUndoItems, hasRedoItems,
                     createNewProject, loadProject, deleteProject, backToProjects, copyProjectCode, joinProjectByCode,
@@ -1476,8 +1475,8 @@
                     setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload,
                     startDrag, onStageTouchStart, onStageTouchMove, onStageTouchEnd,
                     onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
-                    setMode, deleteMarkerTop, switchMarkerType, toggleTextKeyboard, closeTopSheet, closeTopTextBar, setFocus, handleKeypad,
-                    applyTag, applyStamp, getStampColor, getMarkerLines, getTagFields, exportSingleImage, exportPdfReport
+                    setMode, deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, setFocus, handleKeypad,
+                    applyTag, applyStamp, updateMarkerSize, getStampColor, getMarkerLines, getTagFields, exportSingleImage, exportPdfReport
                 };
             }
         }).mount('#app');
