@@ -4,12 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#09090b">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v4.0</title>
+    <title>度尺寶 Pro v4.2 (即時自動同步版)</title>
     <link rel="manifest" href="./manifest.json">
-    <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Check_green_icon.svg/200px-Check_green_icon.svg.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
@@ -138,7 +137,6 @@
                 </div>
                 <div class="flex gap-1.5 shrink-0">
                     <button @click="loadProject(proj.code)" class="bg-zinc-700 text-white px-2.5 py-1.5 rounded text-xs font-bold">開啟</button>
-                    <!-- 齒輪管理按鈕 -->
                     <button @click="openManageMenu(proj)" class="bg-zinc-800 border border-zinc-600 text-zinc-300 px-2 py-1.5 rounded text-xs font-bold">⚙️管理</button>
                 </div>
             </div>
@@ -258,8 +256,6 @@
                 </button>
             </div>
         </main>
-
-        <!-- 所有彈出視窗與模態框 -->
 
         <!-- ⚙️ 管理目錄選單 Modal -->
         <div v-if="showManageModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showManageModal = false">
@@ -525,6 +521,7 @@
             setup() {
                 const authorName = ref('');
                 const hasUnsavedCloudChanges = ref(false);
+                let unsubscribeRealtime = null; // 即時同步監聽器指標
 
                 const currentView = ref('dir');
                 const projectList = ref([]);
@@ -555,12 +552,12 @@
                 const toastMsg = ref('');
                 const showToast = (msg) => {
                     toastMsg.value = msg;
-                    setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 2400);
+                    setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 2600);
                 };
 
                 const lastCloudError = ref('');
                 const cloudSyncState = ref('ready');
-                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️已存' }[cloudSyncState.value] || '☁️已存'));
+                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️即時連通' }[cloudSyncState.value] || '☁️即時連通'));
                 const cloudStatusClass = computed(() => {
                     if (cloudSyncState.value === 'syncing') return 'bg-yellow-900 text-yellow-200';
                     if (cloudSyncState.value === 'error') return 'bg-zinc-800 text-zinc-400';
@@ -578,7 +575,7 @@
 
                 const showCloudDetail = () => {
                     if (cloudSyncState.value === 'error' && lastCloudError.value) alert('離線原因：' + lastCloudError.value);
-                    else showToast('v4.0 本地與雲端連線正常');
+                    else showToast('v4.2 即時自動同步監聽中');
                 };
 
                 const trySilentAuth = async () => {
@@ -1057,19 +1054,16 @@
                     nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); }); saveAll(); e.target.value = '';
                 };
 
-              const saveAll = async () => {
+                // 已修復 DataCloneError：徹底剝除 Vue 3 Proxy 外殼
+                const saveAll = async () => {
                     const code = String(project.code || '').trim(); if (!code) return;
                     const now = Date.now();
-                    
-                    // 1. 徹底剝除 pages 的 Vue Proxy 外殼
                     const rawPages = JSON.parse(JSON.stringify(pages.value || []));
                     const cleanPages = rawPages.map(pg => {
                         delete pg.historyStack; delete pg.redoStack; 
                         (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); 
                         return pg;
                     });
-                    
-                    // 2. 徹底剝除 deletedPageIds 的 Vue Proxy 外殼（解決 DataCloneError 的關鍵）
                     const cleanDeletedIds = JSON.parse(JSON.stringify(project.deletedPageIds || []));
                     
                     await localforage.setItem('proj_' + code, {
@@ -1083,8 +1077,6 @@
                         lastModifiedBy: String(project.lastModifiedBy || authorName.value || '')
                     });
                 };
-
-                
 
                 const mergePagesSmart = (localList, cloudList, deletedSet, orderList) => {
                     const localMap = new Map(localList.map(p => [p.id, p])); const cloudMap = new Map(cloudList.map(p => [p.id, p]));
@@ -1166,7 +1158,40 @@
                         hasUnsavedCloudChanges.value = false;
                         await saveAll();
                         lastCloudError.value = ''; cloudSyncState.value = 'ready';
+                        nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
                     } catch (e) { lastCloudError.value = formatSyncError(e); cloudSyncState.value = 'error'; if (throwOnError) throw new Error(lastCloudError.value); }
+                };
+
+                // 新增：即時雲端監聽器 (A機一上傳，B機自動合併更新)
+                const startRealtimeListener = (code) => {
+                    stopRealtimeListener();
+                    if (!db || !code) return;
+                    
+                    unsubscribeRealtime = db.collection('site_projects').doc(String(code))
+                        .onSnapshot(async (doc) => {
+                            if (!doc.exists || currentView.value !== 'proj') return;
+                            const pd = doc.data();
+                            const cloudUpdatedAt = pd.updatedAt || 0;
+                            
+                            // 若雲端時間戳記比本機最後同步時間還新，代表有同事剛剛按了上傳
+                            if (cloudUpdatedAt > (project.lastSyncAt || 0) + 1500) {
+                                // 防干擾保護：若本機師傅正在畫線或正在輸入文字，等他完成後再同步
+                                if (isDrawing.value || showTopSheet.value || showTopTextBar.value) return;
+                                
+                                await pullAndMergeFromCloud(code, false, true);
+                                const editor = pd.lastModifiedBy ? `[${pd.lastModifiedBy}]` : '同事';
+                                showToast(`🔄 已自動同步 ${editor} 的最新進度`);
+                            }
+                        }, (err) => {
+                            console.warn('即時監聽暫時中斷:', err);
+                        });
+                };
+
+                const stopRealtimeListener = () => {
+                    if (unsubscribeRealtime) {
+                        unsubscribeRealtime();
+                        unsubscribeRealtime = null;
+                    }
                 };
 
                 const pushToCloud = async (throwOnError = false) => {
@@ -1183,7 +1208,10 @@
                         const dirtyPages = JSON.parse(JSON.stringify(dirtyPagesRaw)).map(pg => {
                             delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg;
                         });
-                        const myPageIds = pages.value.map(p => p.id); const myDeletedIds = project.deletedPageIds || [];
+                        const myPageIds = pages.value.map(p => p.id); const myDeletedIds = JSON.parse(JSON.stringify(project.deletedPageIds || []));
+
+                        // 先將 lastSyncAt 設為 now，避免自己的 onSnapshot 誤判為別人的更新
+                        project.lastSyncAt = now;
 
                         await withRetry(() => withTimeout(projRef.set({
                             code, name: project.name || '', date: project.date || '',
@@ -1204,7 +1232,7 @@
                             await withRetry(() => withTimeout(projRef.collection('pages').doc(pg.id).set({ ...restPage, hasPhoto: !!pagePhoto, pins: pinsMeta }, { merge: true })));
                         }
 
-                        lastCloudError.value = ''; cloudSyncState.value = 'ready'; project.lastSyncAt = now;
+                        lastCloudError.value = ''; cloudSyncState.value = 'ready';
                         hasUnsavedCloudChanges.value = false;
                         await saveAll();
                     } catch (e) {
@@ -1213,7 +1241,6 @@
                     }
                 };
 
-                // 時光機：建立雲端備份 (只存標記資料，捨去圖片以節省空間，還原時借用媒體庫)
                 const createCloudBackup = async (projCode) => {
                     if (!db || !navigator.onLine) return;
                     const localData = await localforage.getItem('proj_' + projCode); if(!localData) return;
@@ -1235,16 +1262,10 @@
                     if (!project.code) return;
                     isProcessing.value = true; processingText.value = '正在智能合併並上傳...';
                     try {
-                        // 1. 偷偷載入最新進度合併 (Auto-Merge)
                         await pullAndMergeFromCloud(project.code, false, true);
-                        
-                        // 2. 推送至雲端
                         await pushToCloud(true);
-                        
-                        // 3. 建立後備檔 (最近5份)
                         await createCloudBackup(project.code);
-
-                        showToast('✅ 成功推送到雲端並建立備份');
+                        showToast('✅ 成功推送到雲端並通知其他設備');
                     } catch (err) { alert('上傳失敗：\n' + (err.message || '請檢查網路連線')); }
                     isProcessing.value = false;
                 };
@@ -1254,7 +1275,6 @@
                     isProcessing.value = true; processingText.value = '正在從雲端載入最新進度...';
                     try {
                         await pullAndMergeFromCloud(project.code, true, true);
-                        nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
                         showToast('✅ 已成功合併雲端最新資料');
                     } catch (err) { alert('載入失敗：\n' + (err.message || '請檢查網路連線')); }
                     isProcessing.value = false;
@@ -1267,6 +1287,7 @@
                     project.deletedPageIds = []; project.lastSyncAt = 0; project.lastModifiedBy = authorName.value;
                     pages.value = [makeEmptyPage()]; activePageIndex.value = 0; activePin.value = null;
                     hasUnsavedCloudChanges.value = true; currentView.value = 'proj'; await saveAll();
+                    startRealtimeListener(project.code);
                 };
 
                 const copyProjectCode = () => { navigator.clipboard?.writeText(project.code); showToast('已複製工程碼：#' + project.code); };
@@ -1298,9 +1319,11 @@
                     await pullAndMergeFromCloud(code, false, true);
                     if (!pages.value.length) pages.value = [makeEmptyPage()];
                     drawMode.value = 'browse'; nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
+                    
+                    // 啟動全自動即時監聽
+                    startRealtimeListener(code);
                 };
 
-                // 管理中心選單功能
                 const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
                 
                 const renameProject = async () => {
@@ -1351,7 +1374,6 @@
                         const newCode = Math.floor(100000 + Math.random() * 900000).toString();
                         bData.code = newCode; bData.name = (bData.name || '工程') + ' (還原檔)'; bData.lastSyncAt = 0;
                         
-                        // 重新補回本機圖片
                         const currentLocal = await localforage.getItem('proj_' + manageProj.value.code);
                         if (currentLocal) {
                             const photoMap = new Map();
@@ -1366,7 +1388,6 @@
                     isProcessing.value = false;
                 };
 
-                // 雲端工程庫 (純文字延遲載入)
                 const openCloudBrowser = async () => {
                     if (!db || !navigator.onLine) return alert('請檢查網路連線。');
                     isProcessing.value = true; processingText.value = '正在讀取雲端目錄...';
@@ -1400,11 +1421,12 @@
                 };
 
                 const backToProjects = async () => { 
-                        hasUnsavedCloudChanges.value = false;
-                        await saveAll(); 
-                        await loadProjectList(); 
-                        currentView.value = 'dir'; 
-                    };
+                    stopRealtimeListener(); // 離開工程時關閉即時監聽以節省流量
+                    hasUnsavedCloudChanges.value = false;
+                    await saveAll(); 
+                    await loadProjectList(); 
+                    currentView.value = 'dir'; 
+                };
 
                 const checkAuthorName = async () => {
                     let name = await localforage.getItem('measure_author_name');
