@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v6.7</title>
+    <title>度尺寶 Pro v6.8</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -76,7 +76,7 @@
                 </div>
             </header>
 
-            <!-- 編輯工具列 (已移除文字工具) -->
+            <!-- 編輯工具列 (已移除獨立文字工具) -->
             <div v-if="currentView === 'proj'" class="h-11 bg-zinc-900 border-b border-zinc-700 px-1 flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
                 <div class="flex items-center gap-1 shrink-0">
                     <button v-for="m in [{id:'browse',l:'睇圖',c:'bg-emerald-500 text-black'},{id:'line',l:'度尺'},{id:'arrow-single',l:'單箭'},{id:'freehand',l:'塗鴉'},{id:'stamp',l:'印章'}]"
@@ -152,7 +152,6 @@
                     <button @click="copyCode(project.code)" class="bg-zinc-800 border border-zinc-700 px-2.5 py-1 rounded text-xs font-bold text-zinc-300 shrink-0">複製碼</button>
                 </div>
 
-                <!-- 雙欄並排總覽網格 -->
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     <div v-for="(pg, idx) in pages" :key="pg.id" class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-lg flex flex-col justify-between">
                         <div class="bg-zinc-800/90 px-2 py-1.5 border-b border-zinc-700 flex flex-col gap-1">
@@ -168,9 +167,8 @@
                             </div>
                         </div>
 
-                        <!-- 貼合比例的純 CSS 網格圖 -->
-                        <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''} (最後改: ${pg.author || project.lastModifiedBy || '未知'})`)" class="flex-1 bg-zinc-950/70 p-2 cursor-pointer active:bg-zinc-800 flex flex-col justify-center">
-                            <div class="relative shadow rounded overflow-hidden w-full" :style="{ aspectRatio: `${pg.w || 1200} / ${pg.h || 900}` }">
+                        <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''} (最後改: ${pg.author || project.lastModifiedBy || '未知'})`)" class="flex-1 bg-zinc-950/70 p-2 cursor-pointer active:bg-zinc-800 flex flex-col justify-center items-center overflow-hidden">
+                            <div class="relative shadow rounded" :style="getGridThumbStyle(pg)">
                                 <img :src="pg.photo" class="absolute inset-0 w-full h-full object-fill pointer-events-none select-none">
                                 <svg :viewBox="`0 0 ${pg.w || 1200} ${pg.h || 900}`" class="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
                                     <line v-for="l in (pg.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 5 : 6" stroke-linecap="round" />
@@ -263,7 +261,7 @@
             </div>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器 (統一按比例縮放層修正) -->
+        <!-- 唯讀全螢幕大圖檢視器 (徹底解決比例與跑位問題) -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col">
             <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-3 flex justify-between items-center shrink-0 z-10">
                 <span class="text-xs font-bold text-yellow-400 truncate pr-2">👁️ {{ fullScreenTitle }}</span>
@@ -272,7 +270,7 @@
                     <button @click="fullScreenItem = null" class="bg-zinc-700 text-white px-3 py-1 rounded text-xs font-bold">✕ 關閉</button>
                 </div>
             </div>
-            <!-- 加入 touch-none 避免預設滾動 -->
+            
             <div ref="fsStageRef" class="flex-1 min-h-0 relative overflow-hidden bg-black touch-none"
                  @touchstart="e => handleZoomTouchStart(e, fsZoom, fsStageRef, true)"
                  @touchmove="e => handleZoomTouchMove(e, fsZoom, fsStageRef)"
@@ -281,21 +279,24 @@
                  @mousemove="e => handleZoomMouseMove(e, fsZoom)"
                  @mouseup="() => handleZoomMouseUp(fsZoom)">
                 
-                <!-- 絕對置中縮放層，鎖死圖框邊界 -->
-                <div class="absolute inset-0 flex items-center justify-center" :style="{ transform: `translate(${fsZoom.x}px, ${fsZoom.y}px) scale(${fsZoom.scale})`, transformOrigin: '0 0' }">
-                    <div :style="fsWrapperStyle" class="relative shadow-2xl bg-zinc-900 select-none shrink-0">
-                        <img :src="fullScreenItem.photo" class="absolute inset-0 w-full h-full object-fill pointer-events-none select-none">
-                        <svg :viewBox="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" class="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
-                            <line v-for="l in (fullScreenItem.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 5 : 6" stroke-linecap="round" />
-                            <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
-                            <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
-                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
-                                    <tspan v-for="(line, lIdx) in getMarkerLines(m)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
-                                </text>
-                            </g>
-                        </svg>
-                        <div v-for="(pin, pIdx) in (fullScreenItem.pins || [])" :key="pin.id" class="absolute w-8 h-8 -ml-4 -mt-8 flex flex-col items-center justify-center pointer-events-none" :style="{ left: pin.x + '%', top: pin.y + '%' }">
-                            <div class="bg-red-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow">{{ pIdx + 1 }}</div>
+                <!-- 縮放層與強制 aspect-ratio 容器，捨棄 JS 計算尺寸 -->
+                <div class="absolute inset-0 flex items-center justify-center p-1">
+                    <div :style="{ transform: `translate(${fsZoom.x}px, ${fsZoom.y}px) scale(${fsZoom.scale})`, transformOrigin: 'center' }" class="flex items-center justify-center w-full h-full">
+                        <div class="relative shadow-2xl bg-zinc-900 shrink-0" 
+                             :style="{ aspectRatio: `${fullScreenItem.w || 1200} / ${fullScreenItem.h || 900}`, maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto' }">
+                            <img :src="fullScreenItem.photo" class="absolute inset-0 w-full h-full object-fill pointer-events-none select-none">
+                            <svg :viewBox="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" class="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+                                <line v-for="l in (fullScreenItem.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 5 : 6" stroke-linecap="round" />
+                                <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
+                                <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
+                                    <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
+                                        <tspan v-for="(line, lIdx) in getMarkerLines(m)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
+                                    </text>
+                                </g>
+                            </svg>
+                            <div v-for="(pin, pIdx) in (fullScreenItem.pins || [])" :key="pin.id" class="absolute w-8 h-8 -ml-4 -mt-8 flex flex-col items-center justify-center pointer-events-none" :style="{ left: pin.x + '%', top: pin.y + '%' }">
+                                <div class="bg-red-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow">{{ pIdx + 1 }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -304,7 +305,7 @@
             </div>
         </div>
 
-        <!-- 3. 畫布編輯視圖 -->
+        <!-- 3. 畫布編輯視圖 (徹底解決比例與跑位問題) -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col">
             <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                 <div v-if="activePin" class="text-yellow-400 font-bold text-sm mb-1">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
@@ -318,12 +319,10 @@
                 <button v-if="activePin" @click="exitPinSubPage" class="mt-4 text-zinc-400 text-xs font-bold">‹ 取消並返回主頁</button>
             </div>
 
-            <!-- 加入 touch-none 避免預設滾動 -->
             <div v-else ref="stageRef" class="flex-1 min-h-0 relative overflow-hidden bg-black touch-none"
                  @touchstart="onStageTouchStart" @touchmove="onStageTouchMove" @touchend="onStageTouchEnd"
                  @mousedown="onStageMouseDown" @mousemove="onStageMouseMove" @mouseup="onStageMouseUp">
 
-                <!-- 浮動控制層：z-20 蓋在圖層上面 -->
                 <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
                     <div v-if="!activePin" class="bg-black/80 backdrop-blur border border-zinc-700 rounded-full flex items-center px-1 py-1 shadow">
                         <button @click="prevPage" class="px-2 py-0.5 text-zinc-300 font-bold text-xs" :class="{ 'opacity-30': activePageIndex === 0 }">◀</button>
@@ -357,40 +356,42 @@
                     <div v-else-if="drawMode === 'pin'" class="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px] font-black shadow">📍 點畫面落釘</div>
                 </div>
 
-                <!-- 絕對置中縮放層，鎖死圖框邊界 -->
-                <div class="absolute inset-0 flex items-center justify-center" :style="{ transform: `translate(${editZoom.x}px, ${editZoom.y}px) scale(${editZoom.scale})`, transformOrigin: '0 0' }">
-                    <div :style="wrapperStyle" class="relative shadow-2xl bg-zinc-900 select-none shrink-0">
-                        <img :src="activeCanvas.photo" class="absolute inset-0 w-full h-full object-fill pointer-events-none select-none">
-                        <svg ref="svgCanvas" class="absolute inset-0 w-full h-full select-none" preserveAspectRatio="none">
-                            <defs>
-                                <marker id="arrow-end-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#9ca3af" /></marker>
-                                <marker id="arrow-end-white" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" /></marker>
-                                <marker id="arrow-end-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" /></marker>
-                            </defs>
-                            <line v-for="l in (activeCanvas.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
-                                  :stroke="getLineStroke(l, 0.55)" :stroke-width="l.type === 'arrow-single' ? 4 : 5" stroke-linecap="round"
-                                  :marker-end="l.type === 'arrow-single' ? `url(#arrow-end-${l.color})` : null" />
-                            <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
-                                  :stroke="drawMode === 'arrow-single' ? getLineStroke({type:'arrow-single', color:arrowColor}) : '#ff0044'"
-                                  stroke-width="4" stroke-dasharray="6" />
-                            <path v-for="p in (activeCanvas.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-                            <path v-if="currentPath" :d="currentPath" :stroke="freehandColor" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-                            <g v-for="m in (activeCanvas.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`" class="cursor-move"
-                               @touchstart.stop="e => startDrag(m, e)" @mousedown.stop="e => startDrag(m, e)">
-                                <rect :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" fill="transparent" />
-                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
-                                    <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
-                                </text>
-                            </g>
-                        </svg>
-                        <template v-if="!activePin">
-                            <div v-for="(pin, index) in (activePage?.pins || [])" :key="pin.id"
-                                 class="absolute w-9 h-9 -ml-[18px] -mt-9 flex flex-col items-center justify-center cursor-pointer z-10"
-                                 :style="{ left: pin.x + '%', top: pin.y + '%' }" @touchstart.stop @mousedown.stop @click.stop="openPinSubPage(pin, index)">
-                                <div class="bg-red-600 text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center border-2 border-white shadow">{{ index + 1 }}</div>
-                                <div class="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-red-600 -mt-[1px]"></div>
-                            </div>
-                        </template>
+                <div class="absolute inset-0 flex items-center justify-center p-1">
+                    <div :style="{ transform: `translate(${editZoom.x}px, ${editZoom.y}px) scale(${editZoom.scale})`, transformOrigin: 'center' }" class="flex items-center justify-center w-full h-full">
+                        <div class="relative shadow-2xl bg-zinc-900 select-none shrink-0"
+                             :style="{ aspectRatio: `${activeCanvas.w || 1200} / ${activeCanvas.h || 900}`, maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto' }">
+                            <img :src="activeCanvas.photo" class="absolute inset-0 w-full h-full object-fill pointer-events-none select-none">
+                            <svg ref="svgCanvas" class="absolute inset-0 w-full h-full select-none" preserveAspectRatio="none">
+                                <defs>
+                                    <marker id="arrow-end-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#9ca3af" /></marker>
+                                    <marker id="arrow-end-white" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" /></marker>
+                                    <marker id="arrow-end-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" /></marker>
+                                </defs>
+                                <line v-for="l in (activeCanvas.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
+                                      :stroke="getLineStroke(l, 0.55)" :stroke-width="l.type === 'arrow-single' ? 4 : 5" stroke-linecap="round"
+                                      :marker-end="l.type === 'arrow-single' ? `url(#arrow-end-${l.color})` : null" />
+                                <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
+                                      :stroke="drawMode === 'arrow-single' ? getLineStroke({type:'arrow-single', color:arrowColor}) : '#ff0044'"
+                                      stroke-width="4" stroke-dasharray="6" />
+                                <path v-for="p in (activeCanvas.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                <path v-if="currentPath" :d="currentPath" :stroke="freehandColor" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                <g v-for="m in (activeCanvas.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`" class="cursor-move"
+                                   @touchstart.stop="e => startDrag(m, e)" @mousedown.stop="e => startDrag(m, e)">
+                                    <rect :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" fill="transparent" />
+                                    <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
+                                        <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
+                                    </text>
+                                </g>
+                            </svg>
+                            <template v-if="!activePin">
+                                <div v-for="(pin, index) in (activePage?.pins || [])" :key="pin.id"
+                                     class="absolute w-9 h-9 -ml-[18px] -mt-9 flex flex-col items-center justify-center cursor-pointer z-10"
+                                     :style="{ left: pin.x + '%', top: pin.y + '%' }" @touchstart.stop @mousedown.stop @click.stop="openPinSubPage(pin, index)">
+                                    <div class="bg-red-600 text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center border-2 border-white shadow">{{ index + 1 }}</div>
+                                    <div class="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-red-600 -mt-[1px]"></div>
+                                </div>
+                            </template>
+                        </div>
                     </div>
                 </div>
                 
@@ -444,6 +445,69 @@
             </div>
         </div>
 
+        <!-- ⚙️ 管理目錄選單 Modal -->
+        <div v-if="showManageModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showManageModal = false">
+            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-0 flex flex-col text-white shadow-2xl overflow-hidden">
+                <div class="bg-zinc-800 p-3 text-center border-b border-zinc-700">
+                    <div class="text-sm font-bold text-yellow-400">管理工程 #{{ manageProj.code }}</div>
+                    <div class="text-[11px] text-zinc-400 mt-1 truncate">{{ manageProj.name || '未命名工程' }}</div>
+                </div>
+                <div class="flex flex-col">
+                    <button @click="renameProject" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">✏️ 重新命名</button>
+                    <button @click="copyCode(manageProj.code)" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">🔗 複製工程碼</button>
+                    <button @click="duplicateProject" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">👯‍♂️ 複製為新檔 (不影響原圖)</button>
+                    <button @click="openBackupList" class="p-4 text-sm font-bold text-left text-blue-400 hover:bg-zinc-800 border-b border-zinc-800">⏳ 歷史備份與還原 (時光機)</button>
+                    <button @click="deleteProject(manageProj.code)" class="p-4 text-sm font-bold text-left text-red-500 hover:bg-red-950">🗑️ 刪除此工程 (連同雲端照片)</button>
+                </div>
+                <button @click="showManageModal = false" class="p-3 text-xs font-bold text-zinc-500 bg-black text-center">取消關閉</button>
+            </div>
+        </div>
+
+        <!-- ☁️ 雲端工程庫清單 Modal -->
+        <div v-if="showCloudBrowser" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" @click.self="showCloudBrowser = false">
+            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-md rounded-xl p-4 flex flex-col text-white shadow-2xl max-h-[82vh]">
+                <div class="flex justify-between items-center border-b border-zinc-700 pb-2.5 mb-3">
+                    <h3 class="text-sm font-bold text-blue-400">☁️ 雲端工程庫</h3>
+                    <button @click="cleanCloudGarbage" class="bg-red-950 border border-red-700 text-red-200 px-2.5 py-1 rounded text-[11px] font-bold active:bg-red-800">
+                        🧹 清理殘留垃圾
+                    </button>
+                </div>
+                <div class="overflow-y-auto flex-1 touch-scrollable no-scrollbar">
+                    <div v-if="!cloudProjectList.length" class="text-center text-zinc-500 py-10 text-xs">無雲端紀錄...</div>
+                    <div v-for="cp in cloudProjectList" :key="cp.code" class="bg-zinc-800 rounded p-3 mb-2 flex justify-between items-center">
+                        <div class="min-w-0 flex-1 pr-2">
+                            <div class="flex items-center gap-1">
+                                <span class="bg-yellow-500 text-black px-1 rounded text-[10px] font-bold">#{{ cp.code }}</span>
+                                <span class="text-sm font-bold truncate">{{ cp.name || '未命名工程' }}</span>
+                            </div>
+                            <div class="text-[10px] text-zinc-400 mt-1">更新: {{ new Date(cp.updatedAt).toLocaleString() }}</div>
+                            <div v-if="cp.lastModifiedBy" class="text-[10px] text-blue-300">✍️ 由 {{ cp.lastModifiedBy }} 修改</div>
+                        </div>
+                        <button @click="downloadFromCloudBrowser(cp.code)" class="bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold shrink-0">⬇️載入</button>
+                    </div>
+                </div>
+                <button @click="showCloudBrowser = false" class="mt-4 w-full bg-zinc-800 py-2 rounded text-xs font-bold">關閉</button>
+            </div>
+        </div>
+
+        <!-- ⏳ 時光機備份清單 Modal -->
+        <div v-if="showBackupListModal" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" @click.self="showBackupListModal = false">
+            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-sm rounded-xl p-4 flex flex-col text-white shadow-2xl">
+                <h3 class="text-sm font-bold text-blue-400 mb-4 border-b border-zinc-700 pb-2">⏳ 雲端備份時光機 (#{{ manageProj.code }})</h3>
+                <div class="overflow-y-auto touch-scrollable max-h-[50vh]">
+                    <div v-if="!backupList.length" class="text-center text-zinc-500 py-10 text-xs">尚未建立備份 (上傳時會自動建立)</div>
+                    <div v-for="bk in backupList" :key="bk.id" class="bg-zinc-800 border border-zinc-700 rounded p-3 mb-2 flex justify-between items-center">
+                        <div>
+                            <div class="text-xs font-bold text-yellow-400">{{ new Date(bk.timestamp).toLocaleString() }}</div>
+                            <div class="text-[10px] text-zinc-400 mt-1">✍️ 備份者: {{ bk.author || '未知' }}</div>
+                        </div>
+                        <button @click="restoreBackup(bk.id)" class="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold">⏳還原</button>
+                    </div>
+                </div>
+                <button @click="showBackupListModal = false" class="mt-4 w-full bg-zinc-800 py-2 rounded text-xs font-bold">關閉</button>
+            </div>
+        </div>
+
         <!-- 文字輸入條 (加印章備註用) -->
         <div v-if="showTopTextBar && activeMarker" class="fixed top-0 left-0 w-full bg-white text-black border-b-4 border-blue-600 z-[60] shadow-2xl flex items-center gap-2 p-2 px-3" @touchstart.stop @mousedown.stop>
             <span class="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-1 rounded whitespace-nowrap">備註</span>
@@ -452,7 +516,34 @@
             <button @click="closeTopTextBar" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold shrink-0 shadow-md">確定</button>
         </div>
 
-        <!-- 度尺與印章輸入面板 (v6.7 徹底分家版) -->
+        <!-- 空間標記 Modal -->
+        <div v-if="showSpaceModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showSpaceModal = false">
+            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-4 text-white shadow-2xl">
+                <div class="text-sm font-bold text-yellow-400 mb-2.5">🏠 標記本頁空間</div>
+                <div class="flex flex-wrap gap-1.5 mb-4">
+                    <button v-for="sp in spaceList" :key="sp" @click="setPageSpace(sp)" :class="activeCanvas?.space === sp ? 'bg-yellow-400 text-black' : 'bg-zinc-800 text-zinc-200'" class="px-2.5 py-1.5 rounded-lg text-xs font-bold">{{ sp }}</button>
+                    <button @click="addCustomSpace" class="bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold">+自訂</button>
+                </div>
+                <div class="flex gap-2">
+                    <button v-if="activeCanvas?.space" @click="setPageSpace('')" class="flex-1 bg-red-900 text-white py-2 rounded-lg text-xs font-bold">清除標記</button>
+                    <button @click="showSpaceModal = false" class="flex-1 bg-zinc-800 text-white py-2 rounded-lg text-xs font-bold">關閉</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 輸入工程碼 Modal -->
+        <div v-if="showJoinModal" class="fixed inset-0 bg-black/75 z-50 flex items-start justify-center p-4 pt-[12vh]" @click.self="showJoinModal = false">
+            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-4 text-white">
+                <h3 class="text-sm font-bold text-yellow-400 mb-2">🔑 輸入 6 位數工程碼</h3>
+                <input type="text" inputmode="numeric" maxlength="6" v-model="inputJoinCode" placeholder="849201" class="w-full bg-black border-2 border-yellow-500 rounded-lg p-2.5 text-center text-2xl font-mono font-bold tracking-widest text-white mb-4 focus:outline-none">
+                <div class="flex gap-2">
+                    <button @click="showJoinModal = false" class="flex-1 bg-zinc-800 text-white font-bold py-2.5 rounded-lg text-xs">取消</button>
+                    <button @click="joinProjectByCode" class="flex-1 bg-yellow-500 text-black font-bold py-2.5 rounded-lg text-xs">連通</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 度尺與印章輸入面板 (v6.8 徹底分家與緊湊版排版) -->
         <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/40 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
         <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-black border-b-2 border-black rounded-b-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[85dvh]" @touchstart.stop @mousedown.stop>
             <div class="px-3 py-2 bg-zinc-900 text-white flex justify-between items-center shrink-0">
@@ -480,7 +571,7 @@
             <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[300px]">
                 <!-- 【印章面板】 -->
                 <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2.5">
-                    <button @click="promptCustomStamp" class="w-full bg-blue-50 border border-blue-200 text-blue-700 py-1.5 rounded-lg text-xs font-bold mb-1 shadow-sm">➕ 新增自訂字眼</button>
+                    <button @click="promptCustomStamp" class="w-full bg-blue-50 border border-blue-200 text-blue-700 py-1.5 rounded-lg text-xs font-bold mb-1 shadow-sm">➕ 新增自訂印章</button>
                     
                     <div v-if="customStamps.length" class="flex items-center gap-1.5 flex-wrap">
                         <span class="text-[10px] font-bold text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded">自訂</span>
@@ -605,7 +696,7 @@
                 const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
                 const lastCloudError = ref(''), cloudSyncState = ref('ready');
-                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.7連通' }[cloudSyncState.value] || '☁️v6.7連通'));
+                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.8連通' }[cloudSyncState.value] || '☁️v6.8連通'));
                 const cloudStatusClass = computed(() => cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' : cloudSyncState.value === 'error' ? 'bg-zinc-800 text-zinc-400' : 'bg-emerald-950 text-emerald-300 border border-emerald-700');
 
                 const customStamps = ref([]);
@@ -622,7 +713,7 @@
                     return msg || '連線異常';
                 };
 
-                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.7 終極排版實裝運作中');
+                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.8 跑位修復與終極版排版運作中');
                 const trySilentAuth = async () => { if (auth && !auth.currentUser) try { await withTimeout(auth.signInAnonymously(), 8000); } catch (e) {} };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -682,25 +773,7 @@
                 const resetZoomState = (z) => { z.scale = 1; z.x = 0; z.y = 0; };
 
                 const stageRef = ref(null), fsStageRef = ref(null), svgCanvas = ref(null);
-                const wsW = ref(window.innerWidth || 360), wsH = ref((window.innerHeight || 600) - 85);
-                const fsWsW = ref(window.innerWidth || 360), fsWsH = ref((window.innerHeight || 600) - 44);
 
-                const updateWorkspaceSize = () => {
-                    if (stageRef.value) { const r = stageRef.value.getBoundingClientRect(); if (r.width > 20 && r.height > 20) { wsW.value = r.width; wsH.value = r.height; } }
-                    if (fsStageRef.value) { const r = fsStageRef.value.getBoundingClientRect(); if (r.width > 20 && r.height > 20) { fsWsW.value = r.width; fsWsH.value = r.height; } }
-                    if (svgCanvas.value && activeCanvas.value) svgCanvas.value.setAttribute('viewBox', `0 0 ${activeCanvas.value.w || 1200} ${activeCanvas.value.h || 900}`);
-                };
-
-                const calcFitStyle = (item, maxW, maxH) => {
-                    if (!item?.photo) return { display: 'none' };
-                    const ratio = (item.w || 1200) / (item.h || 900);
-                    let w = maxW, h = maxW / ratio;
-                    if (h > maxH) { h = maxH; w = maxH * ratio; }
-                    return { width: `${Math.floor(w)}px`, height: `${Math.floor(h)}px`, position: 'relative' };
-                };
-
-                const wrapperStyle = computed(() => calcFitStyle(activeCanvas.value, Math.max(50, wsW.value - 4), Math.max(50, wsH.value - 4)));
-                const fsWrapperStyle = computed(() => calcFitStyle(fullScreenItem.value, Math.max(50, fsWsW.value - 8), Math.max(50, fsWsH.value - 8)));
                 const getGridThumbStyle = (pg) => {
                     return {
                         aspectRatio: `${pg.w || 1200} / ${pg.h || 900}`,
@@ -752,9 +825,14 @@
                 const handleZoomMouseMove = (e, z) => { if (z.isPanning) { z.x = z.panOrigin.x + (e.clientX - z.panClient.x); z.y = z.panOrigin.y + (e.clientY - z.panClient.y); } };
                 const handleZoomMouseUp = (z) => { z.isPanning = false; };
 
-                const openFullScreenPreview = (item, title) => { fullScreenItem.value = item; fullScreenTitle.value = title; resetZoomState(fsZoom); nextTick(updateWorkspaceSize); };
-                const enterEditMode = (pageIdx = 0) => { activePageIndex.value = pageIdx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; resetZoomState(editZoom); nextTick(updateWorkspaceSize); };
-                const switchToPreview = async () => { await saveAll(); activePin.value = null; previewTab.value = 'pages'; currentView.value = 'preview'; nextTick(updateWorkspaceSize); };
+                const openFullScreenPreview = (item, title) => { 
+                    fullScreenItem.value = item; 
+                    fullScreenTitle.value = title; 
+                    resetZoomState(fsZoom); 
+                };
+                
+                const enterEditMode = (pageIdx = 0) => { activePageIndex.value = pageIdx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; resetZoomState(editZoom); };
+                const switchToPreview = async () => { await saveAll(); activePin.value = null; previewTab.value = 'pages'; currentView.value = 'preview'; };
 
                 const mergeableGroups = computed(() => {
                     const map = new Map();
@@ -854,7 +932,7 @@
                 const initSketchOnCurrent = (hasGrid) => {
                     if (!activeCanvas.value) return;
                     Object.assign(activeCanvas.value, { photo: renderSketchDataUrl(1200, 1500, hasGrid), w: 1200, h: 1500, isSketch: true, hasGrid });
-                    touchDirty(); drawMode.value = 'browse'; resetZoomState(editZoom); nextTick(updateWorkspaceSize); saveAll();
+                    touchDirty(); drawMode.value = 'browse'; resetZoomState(editZoom); saveAll();
                 };
 
                 const addNewSketchPage = (hasGrid) => {
@@ -863,7 +941,7 @@
                     pages.value.push(newPg);
                     activePageIndex.value = pages.value.length - 1;
                     dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
-                    drawMode.value = 'browse'; resetZoomState(editZoom); nextTick(updateWorkspaceSize); saveAll();
+                    drawMode.value = 'browse'; resetZoomState(editZoom); saveAll();
                 };
 
                 const duplicateCurrentPage = (keepAnnotations = false) => {
@@ -876,7 +954,7 @@
                     pages.value.push(newPg);
                     activePageIndex.value = pages.value.length - 1;
                     dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
-                    drawMode.value = 'browse'; resetZoomState(editZoom); nextTick(updateWorkspaceSize); saveAll();
+                    drawMode.value = 'browse'; resetZoomState(editZoom); saveAll();
                     showToast(keepAnnotations ? `📑 已複製整頁為 P${pages.value.length}` : `📄 已複製純淨底圖為 P${pages.value.length}`);
                 };
 
@@ -888,7 +966,7 @@
                     touchDirty(); saveAll();
                 };
 
-                const switchPage = (idx) => { activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; resetZoomState(editZoom); nextTick(updateWorkspaceSize); };
+                const switchPage = (idx) => { activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; resetZoomState(editZoom); };
                 const prevPage = () => { if (activePageIndex.value > 0) switchPage(activePageIndex.value - 1); };
                 const nextPage = () => { if (activePageIndex.value < pages.value.length - 1) switchPage(activePageIndex.value + 1); };
 
@@ -914,10 +992,10 @@
                     Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || activePage.value?.space || '' });
                     if (pin.isSketch && !pin.photo) pin.photo = renderSketchDataUrl(pin.w, pin.h, !!pin.hasGrid);
                     activePin.value = pin; activePinIndex.value = idx; deletePinConfirm.value = false;
-                    drawMode.value = 'browse'; resetZoomState(editZoom); nextTick(updateWorkspaceSize);
+                    drawMode.value = 'browse'; resetZoomState(editZoom);
                 };
 
-                const exitPinSubPage = () => { activePin.value = null; drawMode.value = 'browse'; resetZoomState(editZoom); nextTick(updateWorkspaceSize); };
+                const exitPinSubPage = () => { activePin.value = null; drawMode.value = 'browse'; resetZoomState(editZoom); };
 
                 const deleteActivePin = () => {
                     if (!deletePinConfirm.value) { deletePinConfirm.value = true; setTimeout(() => { deletePinConfirm.value = false; }, 3000); return; }
@@ -969,7 +1047,7 @@
                         touchDirty();
                         showToast('✅ 已套用底圖庫照片');
                     }
-                    drawMode.value = 'browse'; resetZoomState(editZoom); nextTick(updateWorkspaceSize); saveAll();
+                    drawMode.value = 'browse'; resetZoomState(editZoom); saveAll();
                 };
 
                 const deleteFromPhotoPool = async (item) => {
@@ -1212,7 +1290,7 @@
                         Object.assign(activeCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false });
                         touchDirty();
                     }
-                    drawMode.value = 'browse'; resetZoomState(editZoom); nextTick(updateWorkspaceSize); saveAll(); e.target.value = '';
+                    drawMode.value = 'browse'; resetZoomState(editZoom); saveAll(); e.target.value = '';
                 };
 
                 const saveAll = async () => {
@@ -1272,7 +1350,7 @@
                         project.lastSyncAt = Date.now();
                         if (dirtyPageIds.size === 0) hasUnsavedCloudChanges.value = false;
                         await saveAll();
-                        lastCloudError.value = ''; cloudSyncState.value = 'ready'; nextTick(updateWorkspaceSize);
+                        lastCloudError.value = ''; cloudSyncState.value = 'ready';
                     } catch (e) { lastCloudError.value = formatSyncError(e); cloudSyncState.value = 'error'; if (throwOnError) throw new Error(lastCloudError.value); }
                 };
 
@@ -1393,7 +1471,7 @@
                     currentView.value = openAsPreview ? 'preview' : 'proj'; hasUnsavedCloudChanges.value = false;
                     await pullAndMergeFromCloud(code, false);
                     if (!pages.value.length) pages.value = [makeEmptyPage()];
-                    drawMode.value = 'browse'; nextTick(updateWorkspaceSize); startRealtimeListener(code);
+                    drawMode.value = 'browse'; startRealtimeListener(code);
                 };
 
                 const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
@@ -1569,9 +1647,6 @@
                 onMounted(async () => {
                     await loadCustomStamps();
                     await checkAuthorName(); await loadProjectList();
-                    updateWorkspaceSize();
-                    window.addEventListener('resize', updateWorkspaceSize);
-                    window.addEventListener('orientationchange', () => setTimeout(updateWorkspaceSize, 150));
                     window.addEventListener('online', () => { cloudSyncState.value = 'ready'; lastCloudError.value = ''; });
                     window.addEventListener('offline', () => { cloudSyncState.value = 'error'; lastCloudError.value = formatSyncError(new Error('offline')); });
                     trySilentAuth();
@@ -1688,7 +1763,7 @@
                     arrowColor, freehandColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg,
                     customStamps, promptCustomStamp,
                     drawMode, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText, focusedInput, topTextInputRef,
-                    stageRef, fsStageRef, svgCanvas, wrapperStyle, fsWrapperStyle,
+                    stageRef, fsStageRef, svgCanvas,
                     currentLine, currentPath, hasUndoItems, hasRedoItems,
                     createNewProject, loadProject, deleteProject, backToProjects, copyCode, joinProjectByCode,
                     saveAll, downloadNow, uploadNow, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, deleteActivePin,
