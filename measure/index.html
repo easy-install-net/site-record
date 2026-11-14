@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v6.2</title>
+    <title>度尺寶 Pro v6.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -152,7 +152,6 @@
                     <button @click="copyCode(project.code)" class="bg-zinc-800 border border-zinc-700 px-2.5 py-1 rounded text-xs font-bold text-zinc-300 shrink-0">複製碼</button>
                 </div>
 
-                <!-- 雙欄並排總覽網格 -->
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     <div v-for="(pg, idx) in pages" :key="pg.id" class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-lg flex flex-col justify-between">
                         <div class="bg-zinc-800/90 px-2 py-1.5 border-b border-zinc-700 flex flex-col gap-1">
@@ -447,16 +446,21 @@
                     <button @click="copyCode(manageProj.code)" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">🔗 複製工程碼</button>
                     <button @click="duplicateProject" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">👯‍♂️ 複製為新檔 (不影響原圖)</button>
                     <button @click="openBackupList" class="p-4 text-sm font-bold text-left text-blue-400 hover:bg-zinc-800 border-b border-zinc-800">⏳ 歷史備份與還原 (時光機)</button>
-                    <button @click="deleteProject(manageProj.code)" class="p-4 text-sm font-bold text-left text-red-500 hover:bg-red-950">🗑️ 刪除此工程</button>
+                    <button @click="deleteProject(manageProj.code)" class="p-4 text-sm font-bold text-left text-red-500 hover:bg-red-950">🗑️ 刪除此工程 (連同雲端照片)</button>
                 </div>
                 <button @click="showManageModal = false" class="p-3 text-xs font-bold text-zinc-500 bg-black text-center">取消關閉</button>
             </div>
         </div>
 
-        <!-- ☁️ 雲端工程庫清單 Modal -->
+        <!-- ☁️ 雲端工程庫清單 Modal (含一鍵清理雲端殘留垃圾) -->
         <div v-if="showCloudBrowser" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" @click.self="showCloudBrowser = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-md rounded-xl p-4 flex flex-col text-white shadow-2xl max-h-[80vh]">
-                <h3 class="text-sm font-bold text-blue-400 mb-4 border-b border-zinc-700 pb-2">☁️ 雲端工程庫</h3>
+            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-md rounded-xl p-4 flex flex-col text-white shadow-2xl max-h-[82vh]">
+                <div class="flex justify-between items-center border-b border-zinc-700 pb-2.5 mb-3">
+                    <h3 class="text-sm font-bold text-blue-400">☁️ 雲端工程庫</h3>
+                    <button @click="cleanCloudGarbage" class="bg-red-950 border border-red-700 text-red-200 px-2.5 py-1 rounded text-[11px] font-bold active:bg-red-800">
+                        🧹 清理殘留垃圾
+                    </button>
+                </div>
                 <div class="overflow-y-auto flex-1 touch-scrollable no-scrollbar">
                     <div v-if="!cloudProjectList.length" class="text-center text-zinc-500 py-10 text-xs">無雲端紀錄...</div>
                     <div v-for="cp in cloudProjectList" :key="cp.code" class="bg-zinc-800 rounded p-3 mb-2 flex justify-between items-center">
@@ -674,7 +678,7 @@
                 const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
                 const lastCloudError = ref(''), cloudSyncState = ref('ready');
-                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.2連通' }[cloudSyncState.value] || '☁️v6.2連通'));
+                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.3連通' }[cloudSyncState.value] || '☁️v6.3連通'));
                 const cloudStatusClass = computed(() => cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' : cloudSyncState.value === 'error' ? 'bg-zinc-800 text-zinc-400' : 'bg-emerald-950 text-emerald-300 border border-emerald-700');
 
                 const formatSyncError = (err) => {
@@ -686,7 +690,7 @@
                     return msg || '連線異常';
                 };
 
-                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.2 多頁PDF匯出與即時同步運作中');
+                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.3 徹底刪檔與雲端垃圾清理運作中');
                 const trySilentAuth = async () => { if (auth && !auth.currentUser) try { await withTimeout(auth.signInAnonymously(), 8000); } catch (e) {} };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -1485,11 +1489,64 @@
                     await localforage.setItem('proj_' + newCode, d); showManageModal.value = false; await loadProjectList(); showToast('✅ 已複製為新工程 #' + newCode);
                 };
 
+                // 批次清除子集合輔助函數
+                const deleteSubcol = async (projRef, sub) => {
+                    const snap = await projRef.collection(sub).get();
+                    for (let i = 0; i < snap.docs.length; i += 400) {
+                        const batch = db.batch();
+                        snap.docs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+                        await batch.commit();
+                    }
+                    return snap.size;
+                };
+
+                // 刪除整份工程時，同步徹底清除底下 pages / media / backups，不留雲端垃圾
                 const deleteProject = async (code) => {
                     if (prompt('⚠️ 警告：刪除整份工程無法復原！\n請輸入 "dd" 確認刪除此工程：')?.trim().toLowerCase() !== 'dd') return;
-                    await localforage.removeItem('proj_' + code); if (db) db.collection('site_projects').doc(String(code)).delete().catch(() => {});
-                    showManageModal.value = false; await loadProjectList();
-                    showToast('🗑️ 已刪除工程 #' + code);
+                    isProcessing.value = true; processingText.value = '正在徹底刪除工程與雲端照片...';
+                    try {
+                        await localforage.removeItem('proj_' + code);
+                        if (db && navigator.onLine) {
+                            await trySilentAuth();
+                            const projRef = db.collection('site_projects').doc(String(code));
+                            await Promise.all([deleteSubcol(projRef, 'pages'), deleteSubcol(projRef, 'media'), deleteSubcol(projRef, 'backups')]);
+                            await projRef.delete();
+                        }
+                        showManageModal.value = false; await loadProjectList();
+                        showToast('🗑️ 已徹底刪除工程及所有雲端照片');
+                    } catch (e) {
+                        alert('雲端清理異常：' + formatSyncError(e));
+                    }
+                    isProcessing.value = false;
+                };
+
+                // 一鍵掃描並清除過去已刪除工程殘留在雲端的孤兒資料
+                const cleanCloudGarbage = async () => {
+                    if (!db || !navigator.onLine) return alert('請檢查網路連線。');
+                    if (!confirm('🧹 掃描並徹底清除「已刪除工程」殘留在雲端的照片、頁面與備份垃圾？\n（現存工程的資料完全不會受影響）')) return;
+                    isProcessing.value = true; processingText.value = '正在掃描並清理雲端殘留垃圾...';
+                    try {
+                        await trySilentAuth();
+                        const activeSnap = await withTimeout(db.collection('site_projects').get(), 20000);
+                        const activeIds = new Set();
+                        activeSnap.forEach(d => activeIds.add(d.id));
+
+                        let removed = 0;
+                        for (const sub of ['media', 'pages', 'backups']) {
+                            const snap = await withTimeout(db.collectionGroup(sub).get(), 25000);
+                            const orphans = snap.docs.filter(d => d.ref.parent?.parent && !activeIds.has(d.ref.parent.parent.id));
+                            for (let i = 0; i < orphans.length; i += 400) {
+                                const batch = db.batch();
+                                orphans.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+                                await batch.commit();
+                                removed += orphans.slice(i, i + 400).length;
+                            }
+                        }
+                        showToast(removed > 0 ? `🧹 已徹底清理 ${removed} 筆雲端殘留垃圾！` : '✨ 雲端非常乾淨，沒有殘留垃圾');
+                    } catch (e) {
+                        alert('清理失敗：' + formatSyncError(e));
+                    }
+                    isProcessing.value = false;
                 };
 
                 const openBackupList = async () => {
@@ -1617,7 +1674,6 @@
                     };
                 });
 
-                // 輸出 PDF（支援每頁 1 張 或 每頁 4 張，完全不含 BOM）
                 const exportPdfReport = async (perPage = 1) => {
                     showPdfModal.value = false;
                     isProcessing.value = true;
@@ -1696,7 +1752,7 @@
                     projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas,
                     showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges,
                     showManageModal, manageProj, openManageMenu, renameProject, duplicateProject,
-                    showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser,
+                    showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
                     showBackupListModal, backupList, openBackupList, restoreBackup,
                     arrowColor, freehandColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg,
                     drawMode, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText, focusedInput, topTextInputRef,
