@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v6.5</title>
+    <title>度尺寶 Pro v6.7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -30,7 +30,7 @@
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .zoom-stage { touch-action: none !important; }
         .micro-btn {
-            padding: 4px 7px; font-size: 13px; font-weight: 700; line-height: 1.2;
+            padding: 5px 8px; font-size: 13px; font-weight: 700; line-height: 1.2;
             border: 1px solid #d1d5db; border-radius: 6px; white-space: nowrap;
             background: #f3f4f6; color: #111827;
         }
@@ -76,10 +76,10 @@
                 </div>
             </header>
 
-            <!-- 編輯工具列 -->
+            <!-- 編輯工具列 (已移除文字工具) -->
             <div v-if="currentView === 'proj'" class="h-11 bg-zinc-900 border-b border-zinc-700 px-1 flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
                 <div class="flex items-center gap-1 shrink-0">
-                    <button v-for="m in [{id:'browse',l:'睇圖',c:'bg-emerald-500 text-black'},{id:'line',l:'度尺'},{id:'arrow-single',l:'單箭'},{id:'freehand',l:'塗鴉'},{id:'stamp',l:'印章'},{id:'text',l:'文字'}]"
+                    <button v-for="m in [{id:'browse',l:'睇圖',c:'bg-emerald-500 text-black'},{id:'line',l:'度尺'},{id:'arrow-single',l:'單箭'},{id:'freehand',l:'塗鴉'},{id:'stamp',l:'印章'}]"
                             :key="m.id" @click="drawMode = m.id"
                             :class="drawMode === m.id ? (m.c || 'bg-white text-black') : 'bg-zinc-800 text-zinc-300'"
                             class="px-2 py-1.5 text-xs font-bold rounded">{{ m.l }}</button>
@@ -263,7 +263,7 @@
             </div>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器 (置中鎖死修正版) -->
+        <!-- 唯讀全螢幕大圖檢視器 (統一按比例縮放層修正) -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col">
             <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-3 flex justify-between items-center shrink-0 z-10">
                 <span class="text-xs font-bold text-yellow-400 truncate pr-2">👁️ {{ fullScreenTitle }}</span>
@@ -304,7 +304,7 @@
             </div>
         </div>
 
-        <!-- 3. 畫布編輯視圖 (置中鎖死修正版) -->
+        <!-- 3. 畫布編輯視圖 -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col">
             <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                 <div v-if="activePin" class="text-yellow-400 font-bold text-sm mb-1">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
@@ -444,105 +444,15 @@
             </div>
         </div>
 
-        <!-- ⚙️ 管理目錄選單 Modal -->
-        <div v-if="showManageModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showManageModal = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-0 flex flex-col text-white shadow-2xl overflow-hidden">
-                <div class="bg-zinc-800 p-3 text-center border-b border-zinc-700">
-                    <div class="text-sm font-bold text-yellow-400">管理工程 #{{ manageProj.code }}</div>
-                    <div class="text-[11px] text-zinc-400 mt-1 truncate">{{ manageProj.name || '未命名工程' }}</div>
-                </div>
-                <div class="flex flex-col">
-                    <button @click="renameProject" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">✏️ 重新命名</button>
-                    <button @click="copyCode(manageProj.code)" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">🔗 複製工程碼</button>
-                    <button @click="duplicateProject" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">👯‍♂️ 複製為新檔 (不影響原圖)</button>
-                    <button @click="openBackupList" class="p-4 text-sm font-bold text-left text-blue-400 hover:bg-zinc-800 border-b border-zinc-800">⏳ 歷史備份與還原 (時光機)</button>
-                    <button @click="deleteProject(manageProj.code)" class="p-4 text-sm font-bold text-left text-red-500 hover:bg-red-950">🗑️ 刪除此工程 (連同雲端照片)</button>
-                </div>
-                <button @click="showManageModal = false" class="p-3 text-xs font-bold text-zinc-500 bg-black text-center">取消關閉</button>
-            </div>
-        </div>
-
-        <!-- ☁️ 雲端工程庫清單 Modal -->
-        <div v-if="showCloudBrowser" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" @click.self="showCloudBrowser = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-md rounded-xl p-4 flex flex-col text-white shadow-2xl max-h-[80vh]">
-                <div class="flex justify-between items-center border-b border-zinc-700 pb-2.5 mb-3">
-                    <h3 class="text-sm font-bold text-blue-400">☁️ 雲端工程庫</h3>
-                    <button @click="cleanCloudGarbage" class="bg-red-950 border border-red-700 text-red-200 px-2.5 py-1 rounded text-[11px] font-bold active:bg-red-800">
-                        🧹 清理殘留垃圾
-                    </button>
-                </div>
-                <div class="overflow-y-auto flex-1 touch-scrollable no-scrollbar">
-                    <div v-if="!cloudProjectList.length" class="text-center text-zinc-500 py-10 text-xs">無雲端紀錄...</div>
-                    <div v-for="cp in cloudProjectList" :key="cp.code" class="bg-zinc-800 rounded p-3 mb-2 flex justify-between items-center">
-                        <div class="min-w-0 flex-1 pr-2">
-                            <div class="flex items-center gap-1">
-                                <span class="bg-yellow-500 text-black px-1 rounded text-[10px] font-bold">#{{ cp.code }}</span>
-                                <span class="text-sm font-bold truncate">{{ cp.name || '未命名工程' }}</span>
-                            </div>
-                            <div class="text-[10px] text-zinc-400 mt-1">更新: {{ new Date(cp.updatedAt).toLocaleString() }}</div>
-                            <div v-if="cp.lastModifiedBy" class="text-[10px] text-blue-300">✍️ 由 {{ cp.lastModifiedBy }} 修改</div>
-                        </div>
-                        <button @click="downloadFromCloudBrowser(cp.code)" class="bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold shrink-0">⬇️載入</button>
-                    </div>
-                </div>
-                <button @click="showCloudBrowser = false" class="mt-4 w-full bg-zinc-800 py-2 rounded text-xs font-bold">關閉</button>
-            </div>
-        </div>
-
-        <!-- ⏳ 時光機備份清單 Modal -->
-        <div v-if="showBackupListModal" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" @click.self="showBackupListModal = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-sm rounded-xl p-4 flex flex-col text-white shadow-2xl">
-                <h3 class="text-sm font-bold text-blue-400 mb-4 border-b border-zinc-700 pb-2">⏳ 雲端備份時光機 (#{{ manageProj.code }})</h3>
-                <div class="overflow-y-auto touch-scrollable max-h-[50vh]">
-                    <div v-if="!backupList.length" class="text-center text-zinc-500 py-10 text-xs">尚未建立備份 (上傳時會自動建立)</div>
-                    <div v-for="bk in backupList" :key="bk.id" class="bg-zinc-800 border border-zinc-700 rounded p-3 mb-2 flex justify-between items-center">
-                        <div>
-                            <div class="text-xs font-bold text-yellow-400">{{ new Date(bk.timestamp).toLocaleString() }}</div>
-                            <div class="text-[10px] text-zinc-400 mt-1">✍️ 備份者: {{ bk.author || '未知' }}</div>
-                        </div>
-                        <button @click="restoreBackup(bk.id)" class="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold">⏳還原</button>
-                    </div>
-                </div>
-                <button @click="showBackupListModal = false" class="mt-4 w-full bg-zinc-800 py-2 rounded text-xs font-bold">關閉</button>
-            </div>
-        </div>
-
-        <!-- 文字輸入條 -->
+        <!-- 文字輸入條 (加印章備註用) -->
         <div v-if="showTopTextBar && activeMarker" class="fixed top-0 left-0 w-full bg-white text-black border-b-4 border-blue-600 z-[60] shadow-2xl flex items-center gap-2 p-2 px-3" @touchstart.stop @mousedown.stop>
-            <span class="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-1 rounded whitespace-nowrap">文字</span>
+            <span class="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-1 rounded whitespace-nowrap">備註</span>
             <input ref="topTextInputRef" type="text" v-model="activeMarker.data.val" @input="onMarkerTextInput" @keyup.enter="closeTopTextBar" class="flex-1 min-w-0 bg-zinc-100 border border-zinc-300 p-2 text-base font-bold rounded focus:outline-none focus:border-blue-500 focus:bg-white" placeholder="輸入文字或語音...">
             <button @click="deleteMarkerTop" class="bg-red-100 text-red-600 border border-red-300 px-3 py-2 rounded text-sm font-bold shrink-0">刪除</button>
             <button @click="closeTopTextBar" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold shrink-0 shadow-md">確定</button>
         </div>
 
-        <!-- 空間標記 Modal -->
-        <div v-if="showSpaceModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showSpaceModal = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-4 text-white shadow-2xl">
-                <div class="text-sm font-bold text-yellow-400 mb-2.5">🏠 標記本頁空間</div>
-                <div class="flex flex-wrap gap-1.5 mb-4">
-                    <button v-for="sp in spaceList" :key="sp" @click="setPageSpace(sp)" :class="activeCanvas?.space === sp ? 'bg-yellow-400 text-black' : 'bg-zinc-800 text-zinc-200'" class="px-2.5 py-1.5 rounded-lg text-xs font-bold">{{ sp }}</button>
-                    <button @click="addCustomSpace" class="bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold">+自訂</button>
-                </div>
-                <div class="flex gap-2">
-                    <button v-if="activeCanvas?.space" @click="setPageSpace('')" class="flex-1 bg-red-900 text-white py-2 rounded-lg text-xs font-bold">清除標記</button>
-                    <button @click="showSpaceModal = false" class="flex-1 bg-zinc-800 text-white py-2 rounded-lg text-xs font-bold">關閉</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- 輸入工程碼 Modal -->
-        <div v-if="showJoinModal" class="fixed inset-0 bg-black/75 z-50 flex items-start justify-center p-4 pt-[12vh]" @click.self="showJoinModal = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-4 text-white">
-                <h3 class="text-sm font-bold text-yellow-400 mb-2">🔑 輸入 6 位數工程碼</h3>
-                <input type="text" inputmode="numeric" maxlength="6" v-model="inputJoinCode" placeholder="849201" class="w-full bg-black border-2 border-yellow-500 rounded-lg p-2.5 text-center text-2xl font-mono font-bold tracking-widest text-white mb-4 focus:outline-none">
-                <div class="flex gap-2">
-                    <button @click="showJoinModal = false" class="flex-1 bg-zinc-800 text-white font-bold py-2.5 rounded-lg text-xs">取消</button>
-                    <button @click="joinProjectByCode" class="flex-1 bg-yellow-500 text-black font-bold py-2.5 rounded-lg text-xs">連通</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- 度尺與印章輸入面板 -->
+        <!-- 度尺與印章輸入面板 (v6.7 徹底分家版) -->
         <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/40 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
         <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-black border-b-2 border-black rounded-b-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[85dvh]" @touchstart.stop @mousedown.stop>
             <div class="px-3 py-2 bg-zinc-900 text-white flex justify-between items-center shrink-0">
@@ -553,72 +463,79 @@
                 </div>
             </div>
 
-            <div v-if="activeMarker.type !== 'stamp'" class="p-2 bg-zinc-200 border-b border-zinc-300 shrink-0">
-                <div v-if="!['window', 'door', 'beam', 'column'].includes(activeMarker.type)" class="flex items-center justify-center gap-1.5">
-                    <input type="text" v-model="activeMarker.data.name" @input="onMarkerTextInput" @focus="focusedInput = 'name'" class="w-16 border-2 border-zinc-400 p-1.5 text-sm font-bold bg-white rounded text-center" placeholder="名稱">
+            <!-- 【度尺面板】專屬頂部輸入區 -->
+            <div v-if="activeMarker.type !== 'stamp'" class="p-1.5 bg-zinc-200 border-b border-zinc-300 shrink-0">
+                <div v-if="['general', 'door', 'window', 'beam', 'column'].includes(activeMarker.type)" class="flex items-center justify-center gap-1.5">
+                    <!-- 左側標籤名，約5字闊 -->
+                    <input type="text" v-model="activeMarker.data.name" @input="onMarkerTextInput" @focus="focusedInput = 'name'" class="w-[5.5em] border-2 border-zinc-400 p-1 text-sm font-bold bg-white rounded text-center" placeholder="標籤">
                     <span class="font-bold text-base">:</span>
-                    <template v-if="['留位', '冷氣', '電箱', '避'].includes(activeMarker.data.name)">
-                        <input type="text" readonly :value="activeMarker.data.val" @click="focusedInput = 'val'" :class="focusedInput === 'val' ? 'border-blue-600 bg-blue-50' : 'border-zinc-400 bg-white'" class="w-[50px] hide-caret border-2 p-1.5 text-sm font-bold rounded text-center cursor-pointer" placeholder="0w">
-                        <span class="text-xs text-zinc-500">x</span>
-                        <input type="text" readonly :value="activeMarker.data.val2" @click="focusedInput = 'val2'" :class="focusedInput === 'val2' ? 'border-blue-600 bg-blue-50' : 'border-zinc-400 bg-white'" class="w-[50px] hide-caret border-2 p-1.5 text-sm font-bold rounded text-center cursor-pointer" placeholder="0h">
-                        <span class="text-xs text-zinc-500">x</span>
-                        <input type="text" readonly :value="activeMarker.data.val3" @click="focusedInput = 'val3'" :class="focusedInput === 'val3' ? 'border-blue-600 bg-blue-50' : 'border-zinc-400 bg-white'" class="w-[50px] hide-caret border-2 p-1.5 text-sm font-bold rounded text-center cursor-pointer" placeholder="0d">
-                    </template>
-                    <template v-else-if="['地腳線', '包喉'].includes(activeMarker.data.name)">
-                        <input type="text" readonly :value="activeMarker.data.val" @click="focusedInput = 'val'" :class="focusedInput === 'val' ? 'border-blue-600 bg-blue-50' : 'border-zinc-400 bg-white'" class="w-16 hide-caret border-2 p-1.5 text-sm font-bold rounded text-center cursor-pointer" :placeholder="activeMarker.data.name === '地腳線' ? '0h' : '0w'">
-                        <span class="text-xs text-zinc-500">x</span>
-                        <input type="text" readonly :value="activeMarker.data.val2" @click="focusedInput = 'val2'" :class="focusedInput === 'val2' ? 'border-blue-600 bg-blue-50' : 'border-zinc-400 bg-white'" class="w-16 hide-caret border-2 p-1.5 text-sm font-bold rounded text-center cursor-pointer" placeholder="0d">
-                    </template>
-                    <template v-else>
-                        <input type="text" readonly :value="activeMarker.data.val" @click="focusedInput = 'val'" :class="focusedInput === 'val' ? 'border-blue-600 bg-blue-50' : 'border-zinc-400 bg-white'" class="flex-1 hide-caret min-w-0 border-2 p-1.5 px-3 text-sm font-bold rounded cursor-pointer" placeholder="點擊下方數字...">
-                    </template>
+                    <input type="text" readonly :value="activeMarker.data[focusedInput === 'name' ? 'val' : focusedInput]" @click="focusedInput = (focusedInput === 'name' ? 'val' : focusedInput)" class="flex-1 hide-caret min-w-0 border-2 border-blue-600 bg-blue-50 p-1 px-2 text-sm font-bold rounded cursor-pointer" placeholder="點擊下方數字...">
                 </div>
-                <div v-else class="text-center text-xs font-bold text-zinc-600 py-1">請在下方填寫詳細尺寸</div>
             </div>
 
-            <div v-if="activeMarker.type !== 'stamp'" class="p-2 border-b border-zinc-200 flex gap-1.5 overflow-x-auto no-scrollbar bg-zinc-100 shrink-0">
+            <div v-if="activeMarker.type !== 'stamp'" class="p-1.5 border-b border-zinc-200 flex gap-1.5 overflow-x-auto no-scrollbar bg-zinc-100 shrink-0">
                 <button v-for="t in [{id:'general',l:'尺寸',f:'val'},{id:'door',l:'門洞',f:'w_in'},{id:'window',l:'窗',f:'w_in'},{id:'beam',l:'樑',f:'w'},{id:'column',l:'柱',f:'w'}]" :key="t.id" @click="switchMarkerType(t.id, t.f)" :class="activeMarker.type === t.id ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn py-1 px-3">{{ t.l }}</button>
             </div>
 
-            <div class="p-3 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[260px]">
+            <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[300px]">
+                <!-- 【印章面板】 -->
                 <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2.5">
+                    <button @click="promptCustomStamp" class="w-full bg-blue-50 border border-blue-200 text-blue-700 py-1.5 rounded-lg text-xs font-bold mb-1 shadow-sm">➕ 新增自訂字眼</button>
+                    
+                    <div v-if="customStamps.length" class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[10px] font-bold text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded">自訂</span>
+                        <button v-for="s in customStamps" :key="s" @click="applyStamp(s)" class="micro-btn border-zinc-400 text-zinc-800">{{ s }}</button>
+                    </div>
+
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[11px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">打拆</span>
-                        <button v-for="s in ['需清拆', '牆身斜', '牆體不平整', '局部凸出']" :key="s" @click="applyStamp(s)" class="micro-btn border-red-500 text-red-700">{{ s }}</button>
+                        <span class="text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">泥水</span>
+                        <button v-for="s in ['需清拆', '牆身斜', '牆體不平', '空鼓', '滲水', '局部凸出']" :key="s" @click="applyStamp(s)" class="micro-btn border-red-500 text-red-700">{{ s }}</button>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[11px] font-bold text-yellow-800 bg-yellow-100 px-1.5 py-0.5 rounded">水電</span>
-                        <button v-for="s in ['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線']" :key="s" @click="applyStamp(s)" class="micro-btn border-yellow-600 text-yellow-900">{{ s }}</button>
+                        <span class="text-[10px] font-bold text-yellow-800 bg-yellow-100 px-1.5 py-0.5 rounded">水電</span>
+                        <button v-for="s in ['開關', '單蘇', '孖蘇', '燈曲', '數據', '燈線']" :key="s" @click="applyStamp(s)" class="micro-btn border-yellow-600 text-yellow-900">{{ s }}</button>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[11px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">結構</span>
-                        <button v-for="s in ['留通道', '開門方向', '可保留', '待確認', '實地台']" :key="s" @click="applyStamp(s)" class="micro-btn border-blue-600 text-blue-800">{{ s }}</button>
+                        <span class="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">結構</span>
+                        <button v-for="s in ['留通道', '開門方向', '可保留', '實地台']" :key="s" @click="applyStamp(s)" class="micro-btn border-blue-600 text-blue-800">{{ s }}</button>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[11px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">空間</span>
+                        <span class="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">木工</span>
+                        <button v-for="s in ['要收口', '見光', '開背板', '生口位', '避窗簾盒', '留散熱', '要分件']" :key="s" @click="applyStamp(s)" class="micro-btn border-amber-600 text-amber-900">{{ s }}</button>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">空間</span>
                         <button v-for="sp in spaceList" :key="sp" @click="applyStamp(sp)" class="micro-btn border-purple-500 text-purple-800">{{ sp }}</button>
                     </div>
                 </div>
 
-                <div v-else-if="['window', 'door', 'beam', 'column'].includes(activeMarker.type)" class="grid grid-cols-3 gap-2">
+                <!-- 【度尺面板 - 網格與分類】 -->
+                <div v-else-if="['window', 'door'].includes(activeMarker.type)" class="grid grid-cols-3 gap-1.5">
                     <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
-                        <label class="text-xs font-bold text-zinc-700 bg-zinc-200 px-1 py-1 text-center rounded-t">{{ field.label }}</label>
-                        <input type="text" readonly :value="activeMarker.data[field.key]" @click="focusedInput = field.key" :class="focusedInput === field.key ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-500' : 'border-zinc-400 bg-white'" class="w-full hide-caret border-2 p-1.5 text-base font-bold text-center rounded-b cursor-pointer">
+                        <label class="text-[10px] font-bold text-zinc-700 bg-zinc-200 px-1 py-0.5 text-center rounded-t">{{ field.label }}</label>
+                        <input type="text" readonly :value="activeMarker.data[field.key]" @click="focusedInput = field.key" :class="focusedInput === field.key ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-500' : 'border-zinc-300 bg-white'" class="w-full hide-caret border p-1 text-sm font-bold text-center rounded-b cursor-pointer">
+                    </div>
+                </div>
+                <div v-else-if="['beam', 'column'].includes(activeMarker.type)" class="grid grid-cols-2 gap-1.5">
+                    <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
+                        <label class="text-[10px] font-bold text-zinc-700 bg-zinc-200 px-1 py-0.5 text-center rounded-t">{{ field.label }}</label>
+                        <input type="text" readonly :value="activeMarker.data[field.key]" @click="focusedInput = field.key" :class="focusedInput === field.key ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-500' : 'border-zinc-300 bg-white'" class="w-full hide-caret border p-1 text-sm font-bold text-center rounded-b cursor-pointer">
                     </div>
                 </div>
 
-                <div v-else class="flex flex-col gap-2">
-                    <div v-for="row in [{t:'基礎1',items:['高','闊','深','厚','總闊','總高','總深']},{t:'基礎2',items:['凸','腰墨','牆厚','留位','避','地腳線','包喉']},{t:'水電1',items:['制中-地','制中-牆','制底-地','制邊-牆']},{t:'水電2',items:['喉邊-牆','喉底-地','電箱','冷氣']}]" :key="row.t" class="flex gap-1.5 overflow-x-auto no-scrollbar">
-                        <span class="text-xs font-bold bg-zinc-200 px-2 py-1 rounded shrink-0 flex items-center">{{ row.t }}</span>
-                        <button v-for="w in row.items" :key="w" @click="applyTag(w)" class="micro-btn py-1">{{ w }}</button>
+                <div v-else class="flex flex-col gap-1.5">
+                    <div v-for="row in [{t:'基礎',items:['高','闊','深','厚','總闊','總高','總深']},{t:'水電',items:['制中-地','制底-地','制中-牆','制邊-牆']},{t:'預留',items:['冷氣','電箱','留位','避','凸','地腳線','包喉']},{t:'預位',items:['假天花','喉底-地','喉邊-牆']}]" :key="row.t" class="flex gap-1 overflow-x-auto no-scrollbar">
+                        <span class="text-[10px] font-bold bg-zinc-200 px-1.5 py-0.5 rounded shrink-0 flex items-center">{{ row.t }}</span>
+                        <button v-for="w in row.items" :key="w" @click="applyTag(w)" class="micro-btn py-0.5 px-2 text-xs">{{ w }}</button>
                     </div>
                 </div>
             </div>
 
-            <div v-if="activeMarker.type !== 'stamp'" class="bg-zinc-200 p-2 border-t border-zinc-300 grid grid-cols-4 gap-1.5 shrink-0 pb-4">
+            <!-- 【縮小版 123 數字鍵盤】只在度尺面板顯示 -->
+            <div v-if="activeMarker.type !== 'stamp'" class="bg-zinc-200 p-1.5 border-t border-zinc-300 grid grid-cols-4 gap-1 shrink-0 pb-3">
                 <button v-for="k in ['1','2','3','DEL','4','5','6','0','7','8','9','ENTER']" :key="k" @click.stop="handleKeypad(k)"
-                        :class="k === 'DEL' ? 'bg-red-100 border-red-300 text-red-700 text-xl' : k === 'ENTER' ? 'bg-blue-600 text-white text-base' : 'bg-white border-zinc-300 active:bg-zinc-300 text-xl'"
-                        class="border rounded shadow-sm font-bold py-2">{{ k === 'DEL' ? '⌫' : k === 'ENTER' ? '確定' : k }}</button>
+                        :class="k === 'DEL' ? 'bg-red-100 border-red-300 text-red-700 text-lg' : k === 'ENTER' ? 'bg-blue-600 text-white text-sm' : 'bg-white border-zinc-300 active:bg-zinc-300 text-lg'"
+                        class="border rounded shadow-sm font-bold py-1">{{ k === 'DEL' ? '⌫' : k === 'ENTER' ? '確定' : k }}</button>
             </div>
         </div>
 
@@ -680,7 +597,7 @@
                 const activeCanvas = computed(() => activePin.value || activePage.value);
 
                 const showJoinModal = ref(false), inputJoinCode = ref(''), showAddPageModal = ref(false), showSpaceModal = ref(false), showMergeModal = ref(false), showPdfModal = ref(false);
-                const spaceList = ref(['主人房', '睡房一', '睡房二', '睡房三', '客廳', '飯廳', '廚房', '客廁', '套廁', '儲物室', '玄關', '露台']);
+                const spaceList = ref(['主人房', '睡房一', '睡房二', '客廳', '飯廳', '廚房', '客廁', '套廁', '儲物室', '玄關', '露台']);
                 const showManageModal = ref(false), manageProj = ref({}), showCloudBrowser = ref(false), cloudProjectList = ref([]), showBackupListModal = ref(false), backupList = ref([]);
                 const showPhotoPoolModal = ref(false), photoPoolList = ref([]), photoPoolTarget = ref('newPage');
 
@@ -688,8 +605,13 @@
                 const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
                 const lastCloudError = ref(''), cloudSyncState = ref('ready');
-                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.5連通' }[cloudSyncState.value] || '☁️v6.5連通'));
+                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.7連通' }[cloudSyncState.value] || '☁️v6.7連通'));
                 const cloudStatusClass = computed(() => cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' : cloudSyncState.value === 'error' ? 'bg-zinc-800 text-zinc-400' : 'bg-emerald-950 text-emerald-300 border border-emerald-700');
+
+                const customStamps = ref([]);
+                const loadCustomStamps = async () => { const saved = await localforage.getItem('custom_stamps'); if (saved) customStamps.value = saved; };
+                const saveCustomStamp = async (txt) => { const t = txt.trim(); if (t && !customStamps.value.includes(t)) { customStamps.value.push(t); await localforage.setItem('custom_stamps', customStamps.value); } };
+                const promptCustomStamp = () => { const txt = prompt('輸入自訂印章字眼：'); if (txt?.trim()) { saveCustomStamp(txt); applyStamp(txt.trim()); } };
 
                 const formatSyncError = (err) => {
                     const msg = String(err?.message || err || '');
@@ -700,7 +622,7 @@
                     return msg || '連線異常';
                 };
 
-                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.5 置中鎖死修復版運作中');
+                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.7 終極排版實裝運作中');
                 const trySilentAuth = async () => { if (auth && !auth.currentUser) try { await withTimeout(auth.signInAnonymously(), 8000); } catch (e) {} };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -762,10 +684,8 @@
                 const stageRef = ref(null), fsStageRef = ref(null), svgCanvas = ref(null);
                 const wsW = ref(window.innerWidth || 360), wsH = ref((window.innerHeight || 600) - 85);
                 const fsWsW = ref(window.innerWidth || 360), fsWsH = ref((window.innerHeight || 600) - 44);
-                const winW = ref(window.innerWidth || 360);
 
                 const updateWorkspaceSize = () => {
-                    winW.value = window.innerWidth || 360;
                     if (stageRef.value) { const r = stageRef.value.getBoundingClientRect(); if (r.width > 20 && r.height > 20) { wsW.value = r.width; wsH.value = r.height; } }
                     if (fsStageRef.value) { const r = fsStageRef.value.getBoundingClientRect(); if (r.width > 20 && r.height > 20) { fsWsW.value = r.width; fsWsH.value = r.height; } }
                     if (svgCanvas.value && activeCanvas.value) svgCanvas.value.setAttribute('viewBox', `0 0 ${activeCanvas.value.w || 1200} ${activeCanvas.value.h || 900}`);
@@ -1070,7 +990,7 @@
                     const c = activeCanvas.value; if (!c) return;
                     c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                     const markerId = Date.now();
-                    const newMarker = { id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType, data: { val: '', val2: '', val3: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '' } };
+                    const newMarker = { id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType, data: { val: '', val2: '', val3: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' } };
                     updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
                     touchDirty(); activeMarker.value = newMarker;
                     if (forceType === 'text') { showTopTextBar.value = true; nextTick(() => topTextInputRef.value?.focus()); } else showTopSheet.value = true;
@@ -1128,8 +1048,8 @@
                         if (!isDraggingMarker.value) {
                             draggedMarker.value.x = markerOrigin.value.x; draggedMarker.value.y = markerOrigin.value.y;
                             activeMarker.value = draggedMarker.value;
-                            if (draggedMarker.value.type === 'text') { showTopTextBar.value = true; nextTick(() => topTextInputRef.value?.focus()); }
-                            else { showTopSheet.value = true; if (draggedMarker.value.type !== 'stamp') focusedInput.value = 'val'; }
+                            if (draggedMarker.value.type === 'text' || draggedMarker.value.type === 'stamp') { showTopTextBar.value = true; nextTick(() => topTextInputRef.value?.focus()); }
+                            else { showTopSheet.value = true; focusedInput.value = 'val'; }
                         } else { touchDirty(); saveAll(); }
                         draggedMarker.value = null; isDraggingMarker.value = false; return;
                     }
@@ -1152,7 +1072,7 @@
                         const c = activeCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                         const lineId = Date.now(), markerId = lineId + 1;
                         c.lines.push({ ...currentLine.value, id: lineId, type: drawMode.value === 'line' ? 'measure' : 'arrow-single', color: drawMode.value === 'arrow-single' ? arrowColor.value : null });
-                        const newMarker = { id: markerId, lineId, x: Math.round((currentLine.value.x1 + currentLine.value.x2) / 2), y: Math.round((currentLine.value.y1 + currentLine.value.y2) / 2), w: 140, h: 56, type: 'general', data: { val: '', val2: '', val3: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '' } };
+                        const newMarker = { id: markerId, lineId, x: Math.round((currentLine.value.x1 + currentLine.value.x2) / 2), y: Math.round((currentLine.value.y1 + currentLine.value.y2) / 2), w: 140, h: 56, type: 'general', data: { val: '', val2: '', val3: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' } };
                         updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
                         touchDirty(); activeMarker.value = newMarker; focusedInput.value = 'val'; showTopSheet.value = true; currentLine.value = null;
                     } else if (drawMode.value === 'freehand' && currentPath.value) {
@@ -1209,21 +1129,18 @@
                 };
 
                 const switchMarkerType = (t, focusKey) => { ensureMarkerBranched(); activeMarker.value.type = t; focusedInput.value = focusKey; updateMarkerSize(activeMarker.value); touchDirty(); };
-                const closeTopTextBar = () => { if (activeMarker.value?.type === 'text' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
+                const closeTopTextBar = () => { if ((activeMarker.value?.type === 'text' || activeMarker.value?.type === 'stamp') && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
                 const closeTopSheet = () => { if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopSheet.value = false; saveAll(); };
 
                 const handleKeypad = (key) => {
                     if (!activeMarker.value || !focusedInput.value) return;
                     ensureMarkerBranched();
+                    if (focusedInput.value === 'name') focusedInput.value = 'val';
                     const cur = String(activeMarker.value.data[focusedInput.value] || '');
                     if (key === 'DEL') { activeMarker.value.data[focusedInput.value] = cur.slice(0, -1); touchDirty(); }
                     else if (key === 'ENTER') {
-                        const nm = activeMarker.value.data.name, tp = activeMarker.value.type;
-                        if (['留位', '冷氣', '電箱', '避'].includes(nm) && tp === 'general') {
-                            if (focusedInput.value === 'val') focusedInput.value = 'val2'; else if (focusedInput.value === 'val2') focusedInput.value = 'val3'; else closeTopSheet();
-                        } else if (['地腳線', '包喉'].includes(nm) && tp === 'general') {
-                            focusedInput.value === 'val' ? (focusedInput.value = 'val2') : closeTopSheet();
-                        } else if (['window', 'door', 'beam', 'column'].includes(tp)) {
+                        const tp = activeMarker.value.type;
+                        if (['window', 'door', 'beam', 'column'].includes(tp)) {
                             const f = getTagFields(tp), idx = f.findIndex(x => x.key === focusedInput.value);
                             idx >= 0 && idx < f.length - 1 ? (focusedInput.value = f[idx + 1].key) : closeTopSheet();
                         } else closeTopSheet();
@@ -1242,14 +1159,20 @@
                 const getStampColor = (m) => {
                     if (m.type !== 'stamp') return '#ffffff';
                     const v = m.data.val;
-                    if (['需清拆', '牆身斜', '牆體不平整', '局部凸出'].includes(v)) return '#ff453a';
-                    if (['開關', '單蘇', '單框', '孖蘇', '燈曲', '數據', '槽', '燈線', '地腳線'].includes(v)) return '#ffd60a';
-                    if (['留通道', '開門方向'].includes(v)) return '#0a84ff';
-                    if (['可保留', '實地台'].includes(v)) return '#30d158';
-                    return spaceList.value.includes(v) ? '#fde047' : '#ffffff';
+                    if (['需清拆', '牆身斜', '牆體不平', '空鼓', '滲水', '局部凸出'].includes(v)) return '#ef4444'; // Red
+                    if (['開關', '單蘇', '孖蘇', '燈曲', '數據', '燈線'].includes(v)) return '#eab308'; // Yellow
+                    if (['留通道', '開門方向', '可保留', '實地台'].includes(v)) return '#3b82f6'; // Blue
+                    if (['要收口', '見光', '開背板', '生口位', '避窗簾盒', '留散熱', '要分件'].includes(v)) return '#d97706'; // Amber/Wood
+                    if (customStamps.value.includes(v)) return '#52525b'; // Gray for custom
+                    return spaceList.value.includes(v) ? '#a855f7' : '#ffffff'; // Purple for space
                 };
 
-                const getTagFields = (t) => ({ door: [{ key: 'w_in', label: '闊' }, { key: 'h_in', label: '高' }, { key: 't', label: '牆厚' }], window: [{ key: 'w_in', label: '內闊' }, { key: 'h_in', label: '內高' }, { key: 'd_in', label: '內深' }], beam: [{ key: 'w', label: '樑闊' }, { key: 'd', label: '樑深' }, { key: 'h', label: '底高' }], column: [{ key: 'w', label: '柱闊' }, { key: 'd', label: '柱深' }, { key: 'h', label: '柱高' }] }[t] || []);
+                const getTagFields = (t) => ({ 
+                    door: [{ key: 'w_in', label: '門闊' }, { key: 'h_in', label: '門高' }, { key: 't', label: '牆厚' }, { key: 't_frame', label: '門框厚' }, { key: 'h_top', label: '頂到天花' }, { key: 'w_side', label: '邊到牆' }], 
+                    window: [{ key: 'w_in', label: '內闊' }, { key: 'h_in', label: '內高' }, { key: 'd_in', label: '內深' }, { key: 'h_bottom', label: '面到地' }, { key: 't_stone', label: '窗石厚' }, { key: 'd_stone', label: '窗石凸' }], 
+                    beam: [{ key: 'w', label: '樑闊' }, { key: 'd', label: '樑深' }, { key: 'h_bottom', label: '底到地' }, { key: 'w_side', label: '樑邊到牆' }], 
+                    column: [{ key: 'w', label: '柱闊' }, { key: 'd', label: '柱深' }, { key: 'h_top', label: '柱高' }, { key: 'd_out', label: '柱凸出' }] 
+                }[t] || []);
 
                 const getMarkerLines = (m) => {
                     if (['window', 'door', 'beam', 'column'].includes(m.type)) {
@@ -1258,9 +1181,6 @@
                     }
                     if (m.type === 'stamp' || m.type === 'text') return [m.data.val || ''];
                     const lbl = m.data.name ? `${m.data.name}: ` : '';
-                    if (['留位', '冷氣', '電箱', '避'].includes(m.data.name)) return [`${lbl}${m.data.val || '0'}w x ${m.data.val2 || '0'}h x ${m.data.val3 || '0'}d`];
-                    if (m.data.name === '地腳線') return [`${lbl}${m.data.val || '0'}h x ${m.data.val2 || '0'}d`];
-                    if (m.data.name === '包喉') return [`${lbl}${m.data.val || '0'}w x ${m.data.val2 || '0'}d`];
                     return [`${lbl}${m.data.val || ''}`];
                 };
 
@@ -1647,6 +1567,7 @@
                 const changeAuthorName = async () => { const name = prompt('👤 更新設備稱呼：', authorName.value); if (name) { authorName.value = name.trim(); await localforage.setItem('measure_author_name', authorName.value); } };
 
                 onMounted(async () => {
+                    await loadCustomStamps();
                     await checkAuthorName(); await loadProjectList();
                     updateWorkspaceSize();
                     window.addEventListener('resize', updateWorkspaceSize);
@@ -1765,6 +1686,7 @@
                     showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
                     showBackupListModal, backupList, openBackupList, restoreBackup,
                     arrowColor, freehandColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg,
+                    customStamps, promptCustomStamp,
                     drawMode, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText, focusedInput, topTextInputRef,
                     stageRef, fsStageRef, svgCanvas, wrapperStyle, fsWrapperStyle,
                     currentLine, currentPath, hasUndoItems, hasRedoItems,
