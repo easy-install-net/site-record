@@ -3,7 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#09090b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
     <title>度尺寶 Pro</title>
+    <!-- 動態生成 Manifest (PWA) -->
+    <link id="dynamic-manifest" rel="manifest" href="">
+    <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Check_green_icon.svg/200px-Check_green_icon.svg.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -11,6 +19,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    
     <style>
         [v-cloak] { display: none !important; }
         * { box-sizing: border-box; touch-action: manipulation !important; }
@@ -18,6 +27,9 @@
             position: fixed; inset: 0; width: 100%; height: 100dvh; margin: 0; padding: 0;
             overflow: hidden; background: #09090b; -webkit-tap-highlight-color: transparent;
             -webkit-user-select: none; user-select: none; overscroll-behavior: none;
+            /* 避開 iPhone 瀏海與動態島 */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
         }
         input, select, textarea { font-size: 16px !important; -webkit-user-select: text; user-select: text; }
         .touch-scrollable { touch-action: pan-y !important; -webkit-overflow-scrolling: touch; }
@@ -104,7 +116,8 @@
         <!-- 主視圖 1：工程目錄 -->
         <main v-show="currentView === 'dir'" class="flex-1 min-h-0 bg-zinc-950 p-3 overflow-y-auto touch-scrollable">
             <div v-if="projectList.length === 0" class="text-center text-zinc-500 mt-20 text-sm font-bold">
-                暫無工程，點右上「+新建」或「🔑組合」連通。
+                暫無工程，點右上「+新建」或「🔑組合」連通。<br><br>
+                <span class="text-xs text-zinc-600">(支援地庫無網離線操作)</span>
             </div>
             <div v-for="proj in projectList" :key="proj.code" class="bg-zinc-900 border border-zinc-800 p-3 rounded-lg mb-2.5 flex justify-between items-center shadow-lg">
                 <div class="flex-1 mr-2 cursor-pointer min-w-0" @click="loadProject(proj.code)">
@@ -407,6 +420,46 @@
             <p class="text-sm">{{ processingText }}</p>
         </div>
     </div>
+
+    <!-- 動態生成 Service Worker 與 Manifest (一鍵 PWA) -->
+    <script>
+        const manifestData = {
+            "name": "度尺寶 Pro",
+            "short_name": "度尺寶",
+            "start_url": "./measure.html",
+            "display": "standalone",
+            "background_color": "#09090b",
+            "theme_color": "#09090b",
+            "icons": [{ "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Check_green_icon.svg/200px-Check_green_icon.svg.png", "sizes": "200x200", "type": "image/png" }]
+        };
+        const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/json' });
+        document.getElementById('dynamic-manifest').href = URL.createObjectURL(manifestBlob);
+
+        const swCode = `
+            const CACHE_NAME = 'measure-pro-v1';
+            const ASSETS = [
+                './measure.html',
+                'https://cdn.tailwindcss.com',
+                'https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+                'https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js',
+                'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js',
+                'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js'
+            ];
+            self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())));
+            self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+            self.addEventListener('fetch', e => {
+                if (e.request.url.includes('firestore') || e.request.url.includes('identitytoolkit')) return;
+                e.respondWith(caches.match(e.request).then(res => res || fetch(e.request).then(fetchRes => caches.open(CACHE_NAME).then(c => { c.put(e.request, fetchRes.clone()); return fetchRes; }))).catch(() => caches.match('./measure.html')));
+            });
+        `;
+        const swBlob = new Blob([swCode], { type: 'application/javascript' });
+        const swUrl = URL.createObjectURL(swBlob);
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register(swUrl).then(() => console.log('Offline PWA Ready')).catch(err => console.log('SW Error', err));
+        }
+    </script>
 
     <script>
         const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
