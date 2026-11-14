@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v6.12</title>
+    <title>度尺寶 Pro v6.13</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -75,7 +75,7 @@
                 </div>
             </header>
 
-            <!-- 編輯工具列 (穩定排版，預留安全高度防跳動) -->
+            <!-- 編輯工具列 -->
             <div v-if="currentView === 'proj'" class="flex flex-col bg-zinc-900 border-b border-zinc-700 shrink-0">
                 <div class="h-11 px-1 flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
                     <div class="flex items-center gap-1 shrink-0">
@@ -91,7 +91,6 @@
                     </div>
                 </div>
 
-                <!-- 固定顏色列高度，防止切換工具時擠壓縮放畫布 -->
                 <div class="h-8 bg-zinc-950 flex items-center justify-center gap-2 transition-opacity duration-200" :class="{'opacity-100': drawMode === 'arrow-single' || drawMode === 'freehand', 'opacity-0 pointer-events-none': drawMode !== 'arrow-single' && drawMode !== 'freehand'}">
                     <span class="text-[10px] text-zinc-400 font-bold">顏色:</span>
                     <template v-if="drawMode === 'arrow-single'">
@@ -171,7 +170,6 @@
                         <!-- 穩定預覽縮圖，確保比例正常顯示 -->
                         <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''} (最後改: ${pg.author || project.lastModifiedBy || '未知'})`)" class="flex-1 bg-zinc-950/70 p-2 cursor-pointer active:bg-zinc-800 flex flex-col justify-center items-center overflow-hidden">
                             <div class="relative shadow rounded bg-zinc-800 w-full overflow-hidden flex items-center justify-center">
-                                <!-- 利用等比縮放框強制約束內容，防止高度塌陷或過度拉伸 -->
                                 <div class="relative w-full" :style="{ aspectRatio: `${pg.w || 1200} / ${pg.h || 900}` }">
                                     <img :src="pg.photo" class="absolute inset-0 w-full h-full object-contain pointer-events-none select-none bg-white">
                                     <svg :viewBox="`0 0 ${pg.w || 1200} ${pg.h || 900}`" class="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="xMidYMid meet">
@@ -266,7 +264,7 @@
             </div>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器 (零縮放平移、絕對置中) -->
+        <!-- 唯讀全螢幕大圖檢視器 (絕對置中) -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col">
             <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-3 flex justify-between items-center shrink-0 z-10">
                 <span class="text-xs font-bold text-yellow-400 truncate pr-2">👁️ {{ fullScreenTitle }}</span>
@@ -276,7 +274,6 @@
             </div>
             
             <div ref="fsStageRef" class="flex-1 min-h-0 relative overflow-hidden bg-zinc-950 flex items-center justify-center p-3 touch-none">
-                <!-- 移除了拖曳層，純粹顯示置中最大化 -->
                 <div :style="fsWrapperStyle" class="relative shadow-[0_0_20px_rgba(0,0,0,0.5)] bg-zinc-900 border border-zinc-700 shrink-0 pointer-events-none">
                     <img :src="fullScreenItem.photo" class="absolute inset-0 w-full h-full object-fill bg-white">
                     <svg :viewBox="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" class="absolute inset-0 w-full h-full" preserveAspectRatio="none">
@@ -295,7 +292,7 @@
             </div>
         </div>
 
-        <!-- 3. 畫布編輯視圖 (零縮放平移、絕對置中對位) -->
+        <!-- 3. 畫布編輯視圖 (絕對置中對位) -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 relative bg-zinc-950 overflow-hidden flex flex-col">
             <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                 <div v-if="activePin" class="text-yellow-400 font-bold text-sm mb-1">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
@@ -527,7 +524,7 @@
             </div>
         </div>
 
-        <!-- 度尺與印章輸入面板 (徹底分家與緊湊版排版) -->
+        <!-- 度尺與印章輸入面板 -->
         <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/40 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
         <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-black border-b-2 border-black rounded-b-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[85dvh]" @touchstart.stop @mousedown.stop>
             <div class="px-3 py-2 bg-zinc-900 text-white flex justify-between items-center shrink-0">
@@ -679,7 +676,7 @@
                 const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
                 const lastCloudError = ref(''), cloudSyncState = ref('ready');
-                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.12連通' }[cloudSyncState.value] || '☁️v6.12連通'));
+                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.13連通' }[cloudSyncState.value] || '☁️v6.13連通'));
                 const cloudStatusClass = computed(() => cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' : cloudSyncState.value === 'error' ? 'bg-zinc-800 text-zinc-400' : 'bg-emerald-950 text-emerald-300 border border-emerald-700');
 
                 const customStamps = ref([]);
@@ -696,7 +693,7 @@
                     return msg || '連線異常';
                 };
 
-                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.12 零縮放極速乾淨版運作中');
+                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.13 零縮放極速乾淨版運作中');
                 const trySilentAuth = async () => { if (auth && !auth.currentUser) try { await withTimeout(auth.signInAnonymously(), 8000); } catch (e) {} };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -782,7 +779,7 @@
                 const calcFitStyle = (item, maxW, maxH) => {
                     if (!item?.photo) return { display: 'none' };
                     const iw = item.w || 1200, ih = item.h || 900;
-                    const safeW = maxW - 24, safeH = maxH - 24; 
+                    const safeW = Math.max(10, maxW - 24), safeH = Math.max(10, maxH - 24); 
                     const s = Math.min(safeW / iw, safeH / ih);
                     return { width: `${Math.floor(iw * s)}px`, height: `${Math.floor(ih * s)}px` };
                 };
@@ -1733,7 +1730,6 @@
 
                 return {
                     currentView, previewTab, fullScreenItem, fullScreenTitle, bomSummary, getGridThumbStyle, getLineStroke,
-                    editZoom, fsZoom, resetZoomState, handleZoomTouchStart, handleZoomTouchMove, handleZoomTouchEnd, handleZoomMouseDown, handleZoomMouseMove, handleZoomMouseUp,
                     openFullScreenPreview, enterEditMode, switchToPreview, duplicateCurrentPage,
                     showMergeModal, mergeableGroups, mergePageGroup, showPdfModal,
                     showPhotoPoolModal, photoPoolList, photoPoolTarget, openPhotoPool, selectFromPhotoPool, deleteFromPhotoPool,
