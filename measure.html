@@ -8,8 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
     <title>度尺寶 Pro</title>
-    <!-- 動態生成 Manifest (PWA) -->
-    <link id="dynamic-manifest" rel="manifest" href="">
+    <link rel="manifest" href="./measure-manifest.json">
     <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Check_green_icon.svg/200px-Check_green_icon.svg.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -19,7 +18,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    
+
     <style>
         [v-cloak] { display: none !important; }
         * { box-sizing: border-box; touch-action: manipulation !important; }
@@ -27,7 +26,6 @@
             position: fixed; inset: 0; width: 100%; height: 100dvh; margin: 0; padding: 0;
             overflow: hidden; background: #09090b; -webkit-tap-highlight-color: transparent;
             -webkit-user-select: none; user-select: none; overscroll-behavior: none;
-            /* 避開 iPhone 瀏海與動態島 */
             padding-top: env(safe-area-inset-top);
             padding-bottom: env(safe-area-inset-bottom);
         }
@@ -59,7 +57,7 @@
             <header class="h-10 bg-black text-white px-2 border-b border-zinc-800 flex justify-between items-center gap-1">
                 <div class="flex items-center gap-1 min-w-0 flex-1">
                     <button v-if="currentView === 'proj'" @click="backToProjects" class="bg-zinc-800 px-2 py-1 rounded text-xs font-bold shrink-0">‹目錄</button>
-                    <span :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0">{{ cloudStatusText }}</span>
+                    <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer">{{ cloudStatusText }}</span>
                     <span v-if="currentView === 'proj' && project.code" @click="copyProjectCode" class="bg-yellow-400 text-black text-[11px] font-black px-1.5 py-0.5 rounded shrink-0 cursor-pointer">#{{ project.code }}</span>
                     <span v-if="currentView === 'dir'" class="text-sm font-bold truncate">工程目錄</span>
                     <input v-else v-model="project.name" @blur="saveAll" placeholder="輸入工程名稱..." class="bg-transparent text-white text-xs font-bold min-w-0 flex-1 truncate focus:bg-zinc-900 focus:px-1.5 rounded focus:outline-none">
@@ -421,47 +419,11 @@
         </div>
     </div>
 
-    <!-- 動態生成 Service Worker 與 Manifest (一鍵 PWA) -->
     <script>
-        const manifestData = {
-            "name": "度尺寶 Pro",
-            "short_name": "度尺寶",
-            "start_url": "./measure.html",
-            "display": "standalone",
-            "background_color": "#09090b",
-            "theme_color": "#09090b",
-            "icons": [{ "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Check_green_icon.svg/200px-Check_green_icon.svg.png", "sizes": "200x200", "type": "image/png" }]
-        };
-        const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/json' });
-        document.getElementById('dynamic-manifest').href = URL.createObjectURL(manifestBlob);
-
-        const swCode = `
-            const CACHE_NAME = 'measure-pro-v1';
-            const ASSETS = [
-                './measure.html',
-                'https://cdn.tailwindcss.com',
-                'https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js',
-                'https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js',
-                'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-                'https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js',
-                'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js',
-                'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js'
-            ];
-            self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())));
-            self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
-            self.addEventListener('fetch', e => {
-                if (e.request.url.includes('firestore') || e.request.url.includes('identitytoolkit')) return;
-                e.respondWith(caches.match(e.request).then(res => res || fetch(e.request).then(fetchRes => caches.open(CACHE_NAME).then(c => { c.put(e.request, fetchRes.clone()); return fetchRes; }))).catch(() => caches.match('./measure.html')));
-            });
-        `;
-        const swBlob = new Blob([swCode], { type: 'application/javascript' });
-        const swUrl = URL.createObjectURL(swBlob);
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register(swUrl).then(() => console.log('Offline PWA Ready')).catch(err => console.log('SW Error', err));
+            navigator.serviceWorker.register('./measure-sw.js').catch(() => {});
         }
-    </script>
 
-    <script>
         const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
         localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
@@ -511,6 +473,7 @@
                     setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 2400);
                 };
 
+                const lastCloudError = ref('');
                 const cloudSyncState = ref('ready');
                 const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️已存' }[cloudSyncState.value] || '☁️已存'));
                 const cloudStatusClass = computed(() => {
@@ -518,6 +481,25 @@
                     if (cloudSyncState.value === 'error') return 'bg-zinc-800 text-zinc-400';
                     return 'bg-emerald-950 text-emerald-300 border border-emerald-700';
                 });
+
+                const formatSyncError = (err) => {
+                    const msg = String(err?.message || err || '');
+                    if (msg.includes('permission') || msg.includes('PERMISSION_DENIED') || err?.code === 'permission-denied') {
+                        return 'Firebase 讀寫權限被拒（請到 Firebase Console ➔ Firestore ➔ Rules 確認未過期，並設為 allow read, write: if true;）';
+                    }
+                    if (msg.includes('offline') || msg.includes('Failed to get document')) {
+                        return '目前無網路連線，資料已安全儲存在手機，有訊號時再按同步即可。';
+                    }
+                    return msg || '連線異常';
+                };
+
+                const showCloudDetail = () => {
+                    if (cloudSyncState.value === 'error' && lastCloudError.value) {
+                        alert('離線原因：' + lastCloudError.value);
+                    } else {
+                        showToast('本地與雲端狀態正常');
+                    }
+                };
 
                 const trySilentAuth = async () => {
                     if (!auth || auth.currentUser) return;
@@ -681,6 +663,7 @@
                     saveAll();
                     if (db && project.code) {
                         db.collection('site_projects').doc(project.code).collection('pages').doc(delId).delete().catch(() => {});
+                        db.collection('site_projects').doc(project.code).collection('media').doc('page_' + delId).delete().catch(() => {});
                     }
                 };
 
@@ -717,7 +700,7 @@
                     exitPinSubPage();
                     saveAll();
                     if (db && project.code) {
-                        db.collection('site_projects').doc(project.code).collection('media').doc(id).delete().catch(() => {});
+                        db.collection('site_projects').doc(project.code).collection('media').doc(String(id)).delete().catch(() => {});
                     }
                 };
 
@@ -1210,20 +1193,26 @@
                         }, { merge: true });
 
                         for (const pg of cleanPages) {
+                            const { photo: pagePhoto, pins, ...restPage } = pg;
+                            if (pagePhoto) {
+                                await projRef.collection('media').doc('page_' + pg.id).set({ photo: pagePhoto, updatedAt: pg.updatedAt || now }, { merge: true });
+                            }
                             const pinsMeta = [];
-                            for (const pin of (pg.pins || [])) {
-                                const { photo, ...restPin } = pin;
-                                pinsMeta.push({ ...restPin, hasPhoto: !!photo });
-                                if (photo) {
-                                    await projRef.collection('media').doc(String(pin.id)).set({ photo, updatedAt: pin.updatedAt || now }, { merge: true });
+                            for (const pin of (pins || [])) {
+                                const { photo: pinPhoto, ...restPin } = pin;
+                                pinsMeta.push({ ...restPin, hasPhoto: !!pinPhoto });
+                                if (pinPhoto) {
+                                    await projRef.collection('media').doc(String(pin.id)).set({ photo: pinPhoto, updatedAt: pin.updatedAt || now }, { merge: true });
                                 }
                             }
-                            await projRef.collection('pages').doc(pg.id).set({ ...pg, pins: pinsMeta }, { merge: true });
+                            await projRef.collection('pages').doc(pg.id).set({ ...restPage, hasPhoto: !!pagePhoto, pins: pinsMeta }, { merge: true });
                         }
+                        lastCloudError.value = '';
                         cloudSyncState.value = 'ready';
                     } catch (e) {
+                        lastCloudError.value = formatSyncError(e);
                         cloudSyncState.value = 'error';
-                        if (throwOnError) throw e;
+                        if (throwOnError) throw new Error(lastCloudError.value);
                     }
                 };
 
@@ -1283,7 +1272,7 @@
                     return result;
                 };
 
-                const pullAndMergeFromCloud = async (code, throwOnError = false) => {
+                const pullAndMergeFromCloud = async (code, throwOnError = false, allowNotFound = true) => {
                     if (!db) throw new Error('雲端資料庫未初始化');
                     cloudSyncState.value = 'syncing';
                     try {
@@ -1295,7 +1284,13 @@
                             projRef.collection('media').get()
                         ]);
 
-                        if (!projDoc.exists) throw new Error('雲端找不到工程碼 #' + code);
+                        if (!projDoc.exists) {
+                            if (!allowNotFound) throw new Error('雲端找不到工程碼 #' + code);
+                            lastCloudError.value = '';
+                            cloudSyncState.value = 'ready';
+                            return;
+                        }
+
                         const pd = projDoc.data();
                         if (pd.name) project.name = pd.name;
                         if (pd.date) project.date = pd.date;
@@ -1309,7 +1304,9 @@
                         let cloudPages = [];
                         if (!pagesSnap.empty) {
                             pagesSnap.forEach(doc => {
-                                const pgData = makeEmptyPage(doc.data());
+                                const rawPg = doc.data();
+                                const pgData = makeEmptyPage(rawPg);
+                                pgData.photo = mediaMap.get('page_' + pgData.id) || rawPg.photo || null;
                                 pgData.pins = (pgData.pins || []).map(pin => ({
                                     ...pin,
                                     photo: mediaMap.get(String(pin.id)) || pin.photo || null
@@ -1350,10 +1347,12 @@
                             code: project.code, name: project.name, date: project.date,
                             pages: cleanPages, deletedPageIds: project.deletedPageIds, updatedAt: Date.now()
                         });
+                        lastCloudError.value = '';
                         cloudSyncState.value = 'ready';
                     } catch (e) {
+                        lastCloudError.value = formatSyncError(e);
                         cloudSyncState.value = 'error';
-                        if (throwOnError) throw e;
+                        if (throwOnError) throw new Error(lastCloudError.value);
                     }
                 };
 
@@ -1362,12 +1361,12 @@
                     isProcessing.value = true;
                     processingText.value = '正在雙向同步...';
                     try {
-                        await pullAndMergeFromCloud(project.code, true);
+                        await pullAndMergeFromCloud(project.code, true, true);
                         await pushToCloud(true);
                         nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
                         showToast('✅ 雲端同步成功');
                     } catch (err) {
-                        alert('同步失敗：' + (err.message || '請檢查網路或 Firebase 權限'));
+                        alert('同步失敗：\n' + (err.message || '請檢查網路或 Firebase 權限'));
                     }
                     isProcessing.value = false;
                 };
@@ -1395,12 +1394,12 @@
                         if (!db) throw new Error('資料庫未連線');
                         await trySilentAuth();
                         const doc = await db.collection('site_projects').doc(code).get();
-                        if (!doc.exists) { alert('雲端找不到工程碼 #' + code + '（請確認另一部機已連線儲存）'); isProcessing.value = false; return; }
+                        if (!doc.exists) { alert('雲端找不到工程碼 #' + code + '（請確認另一部機已按同步）'); isProcessing.value = false; return; }
                         showJoinModal.value = false; inputJoinCode.value = '';
                         await loadProject(code);
                         showToast('✅ 已連通工程 #' + code);
                     } catch (err) {
-                        alert('連線失敗：' + err.message);
+                        alert('連線失敗：\n' + formatSyncError(err));
                     }
                     isProcessing.value = false;
                 };
@@ -1425,7 +1424,7 @@
                         }
                     }
                     activePageIndex.value = 0; activePin.value = null; currentView.value = 'proj';
-                    await pullAndMergeFromCloud(code, false);
+                    await pullAndMergeFromCloud(code, false, true);
                     if (!pages.value.length) pages.value = [makeEmptyPage()];
                     drawMode.value = 'browse';
                     nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
@@ -1652,7 +1651,7 @@
                 return {
                     currentView, projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas,
                     showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList,
-                    arrowColor, freehandColor, cloudStatusText, cloudStatusClass, toastMsg,
+                    arrowColor, freehandColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg,
                     drawMode, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText,
                     focusedInput, topTextInputRef,
                     stageRef, svgCanvas, wrapperStyle, zoomScale, zoomTransformStyle, resetZoom,
