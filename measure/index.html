@@ -1057,20 +1057,34 @@
                     nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); }); saveAll(); e.target.value = '';
                 };
 
-                const saveAll = async () => {
+              const saveAll = async () => {
                     const code = String(project.code || '').trim(); if (!code) return;
                     const now = Date.now();
-                    const cleanPages = JSON.parse(JSON.stringify(pages.value)).map(pg => {
-                        delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg;
+                    
+                    // 1. 徹底剝除 pages 的 Vue Proxy 外殼
+                    const rawPages = JSON.parse(JSON.stringify(pages.value || []));
+                    const cleanPages = rawPages.map(pg => {
+                        delete pg.historyStack; delete pg.redoStack; 
+                        (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); 
+                        return pg;
                     });
                     
+                    // 2. 徹底剝除 deletedPageIds 的 Vue Proxy 外殼（解決 DataCloneError 的關鍵）
+                    const cleanDeletedIds = JSON.parse(JSON.stringify(project.deletedPageIds || []));
+                    
                     await localforage.setItem('proj_' + code, {
-                        code, name: project.name || '', date: project.date || '',
-                        pages: cleanPages, deletedPageIds: project.deletedPageIds || [], 
-                        updatedAt: now, lastSyncAt: project.lastSyncAt || 0,
-                        lastModifiedBy: project.lastModifiedBy || authorName.value
+                        code, 
+                        name: String(project.name || ''), 
+                        date: String(project.date || ''),
+                        pages: cleanPages, 
+                        deletedPageIds: cleanDeletedIds, 
+                        updatedAt: now, 
+                        lastSyncAt: Number(project.lastSyncAt || 0),
+                        lastModifiedBy: String(project.lastModifiedBy || authorName.value || '')
                     });
                 };
+
+                
 
                 const mergePagesSmart = (localList, cloudList, deletedSet, orderList) => {
                     const localMap = new Map(localList.map(p => [p.id, p])); const cloudMap = new Map(cloudList.map(p => [p.id, p]));
@@ -1386,11 +1400,11 @@
                 };
 
                 const backToProjects = async () => { 
-                    if (hasUnsavedCloudChanges.value) {
-                        if (!confirm('⚠️ 您有最新的改動尚未上傳至雲端，確定要離開嗎？\n（本機已自動保留進度，不怕遺失）')) return;
-                    }
-                    await saveAll(); await loadProjectList(); currentView.value = 'dir'; 
-                };
+                        hasUnsavedCloudChanges.value = false;
+                        await saveAll(); 
+                        await loadProjectList(); 
+                        currentView.value = 'dir'; 
+                    };
 
                 const checkAuthorName = async () => {
                     let name = await localforage.getItem('measure_author_name');
