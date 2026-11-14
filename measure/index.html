@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v6.9</title>
+    <title>度尺寶 Pro v6.10</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -76,10 +76,10 @@
                 </div>
             </header>
 
-            <!-- 編輯工具列 (已移除獨立文字工具) -->
+            <!-- 編輯工具列 (順序：睇圖 單箭 塗鴉 度尺 印章 落釘) -->
             <div v-if="currentView === 'proj'" class="h-11 bg-zinc-900 border-b border-zinc-700 px-1 flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
                 <div class="flex items-center gap-1 shrink-0">
-                    <button v-for="m in [{id:'browse',l:'睇圖',c:'bg-emerald-500 text-black'},{id:'line',l:'度尺'},{id:'arrow-single',l:'單箭'},{id:'freehand',l:'塗鴉'},{id:'stamp',l:'印章'}]"
+                    <button v-for="m in [{id:'browse',l:'睇圖',c:'bg-emerald-500 text-black'},{id:'arrow-single',l:'單箭'},{id:'freehand',l:'塗鴉'},{id:'line',l:'度尺'},{id:'stamp',l:'印章'}]"
                             :key="m.id" @click="drawMode = m.id"
                             :class="drawMode === m.id ? (m.c || 'bg-white text-black') : 'bg-zinc-800 text-zinc-300'"
                             class="px-2 py-1.5 text-xs font-bold rounded">{{ m.l }}</button>
@@ -261,7 +261,7 @@
             </div>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器 (徹底修復比例與黑畫面跑位) -->
+        <!-- 唯讀全螢幕大圖檢視器 -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col">
             <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-3 flex justify-between items-center shrink-0 z-10">
                 <span class="text-xs font-bold text-yellow-400 truncate pr-2">👁️ {{ fullScreenTitle }}</span>
@@ -279,11 +279,8 @@
                  @mousemove="e => handleZoomMouseMove(e, fsZoom)"
                  @mouseup="() => handleZoomMouseUp(fsZoom)">
                 
-                <!-- 綁死左上角原點，配合 JS 數學運算，保證平移與縮放精準 -->
                 <div class="absolute inset-0 origin-top-left flex items-center justify-center pointer-events-none" 
-                     :style="{ transform: `translate(${fsZoom.x}px, ${fsZoom.y}px) scale(${fsZoom.scale})` }">
-                    
-                    <!-- 依賴 JS 精準計算的 wrapperStyle 保證不崩塌黑畫面 -->
+                     :style="{ transform: `translate(${fsZoom.x}px, ${fsZoom.y}px) scale(${fsZoom.scale})`, transformOrigin: '0 0' }">
                     <div :style="fsWrapperStyle" class="relative shadow-2xl bg-zinc-900 select-none shrink-0 pointer-events-auto">
                         <img :src="fullScreenItem.photo" class="absolute inset-0 w-full h-full object-fill pointer-events-none select-none">
                         <svg :viewBox="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" class="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
@@ -304,7 +301,7 @@
             </div>
         </div>
 
-        <!-- 3. 畫布編輯視圖 (徹底修復比例與黑畫面跑位) -->
+        <!-- 3. 畫布編輯視圖 -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col">
             <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                 <div v-if="activePin" class="text-yellow-400 font-bold text-sm mb-1">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
@@ -355,14 +352,11 @@
                     <div v-else-if="drawMode === 'pin'" class="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px] font-black shadow">📍 點畫面落釘</div>
                 </div>
 
-                <!-- 綁死左上角原點，配合 JS 數學運算，保證平移與縮放精準 -->
                 <div class="absolute inset-0 origin-top-left flex items-center justify-center pointer-events-none" 
-                     :style="{ transform: `translate(${editZoom.x}px, ${editZoom.y}px) scale(${editZoom.scale})` }">
-                    
-                    <!-- 依賴 JS 精準計算的 wrapperStyle 保證不崩塌黑畫面 -->
+                     :style="{ transform: `translate(${editZoom.x}px, ${editZoom.y}px) scale(${editZoom.scale})`, transformOrigin: '0 0' }">
                     <div :style="wrapperStyle" class="relative shadow-2xl bg-zinc-900 select-none shrink-0 pointer-events-auto">
                         <img :src="activeCanvas.photo" class="absolute inset-0 w-full h-full object-fill pointer-events-none select-none">
-                        <svg ref="svgCanvas" class="absolute inset-0 w-full h-full select-none" preserveAspectRatio="none">
+                        <svg ref="svgCanvas" :viewBox="`0 0 ${activeCanvas.w || 1200} ${activeCanvas.h || 900}`" class="absolute inset-0 w-full h-full select-none" preserveAspectRatio="none">
                             <defs>
                                 <marker id="arrow-end-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#9ca3af" /></marker>
                                 <marker id="arrow-end-white" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" /></marker>
@@ -636,7 +630,7 @@
     </div>
 
     <script>
-        const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
+        const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
         localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
         const firebaseConfig = {
@@ -695,7 +689,7 @@
                 const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
                 const lastCloudError = ref(''), cloudSyncState = ref('ready');
-                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.9連通' }[cloudSyncState.value] || '☁️v6.9連通'));
+                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.10連通' }[cloudSyncState.value] || '☁️v6.10連通'));
                 const cloudStatusClass = computed(() => cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' : cloudSyncState.value === 'error' ? 'bg-zinc-800 text-zinc-400' : 'bg-emerald-950 text-emerald-300 border border-emerald-700');
 
                 const customStamps = ref([]);
@@ -712,7 +706,7 @@
                     return msg || '連線異常';
                 };
 
-                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.9 黑屏與跑位終極修復運作中');
+                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.10 精準座標與新工具列運作中');
                 const trySilentAuth = async () => { if (auth && !auth.currentUser) try { await withTimeout(auth.signInAnonymously(), 8000); } catch (e) {} };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -780,13 +774,29 @@
                     if (fsStageRef.value) { const r = fsStageRef.value.getBoundingClientRect(); if (r.width > 20 && r.height > 20) { fsWsW.value = r.width; fsWsH.value = r.height; } }
                 };
 
-                // 重啟像素精準計算，確保圖層不會縮成 0x0
+                let stageObserver = null, fsStageObserver = null;
+                watch(stageRef, (el) => {
+                    if (stageObserver) { stageObserver.disconnect(); stageObserver = null; }
+                    if (el) {
+                        updateWorkspaceSize();
+                        stageObserver = new ResizeObserver(() => updateWorkspaceSize());
+                        stageObserver.observe(el);
+                    }
+                });
+                watch(fsStageRef, (el) => {
+                    if (fsStageObserver) { fsStageObserver.disconnect(); fsStageObserver = null; }
+                    if (el) {
+                        updateWorkspaceSize();
+                        fsStageObserver = new ResizeObserver(() => updateWorkspaceSize());
+                        fsStageObserver.observe(el);
+                    }
+                });
+
                 const calcFitStyle = (item, maxW, maxH) => {
                     if (!item?.photo) return { display: 'none' };
-                    const ratio = (item.w || 1200) / (item.h || 900);
-                    let w = maxW, h = maxW / ratio;
-                    if (h > maxH) { h = maxH; w = maxH * ratio; }
-                    return { width: `${Math.floor(w)}px`, height: `${Math.floor(h)}px` };
+                    const iw = item.w || 1200, ih = item.h || 900;
+                    const s = Math.min(maxW / iw, maxH / ih);
+                    return { width: `${Math.floor(iw * s)}px`, height: `${Math.floor(ih * s)}px` };
                 };
 
                 const wrapperStyle = computed(() => calcFitStyle(activeCanvas.value, Math.max(50, wsW.value - 4), Math.max(50, wsH.value - 4)));
@@ -1250,12 +1260,12 @@
                 const getStampColor = (m) => {
                     if (m.type !== 'stamp') return '#ffffff';
                     const v = m.data.val;
-                    if (['需清拆', '牆身斜', '牆體不平', '空鼓', '滲水', '局部凸出'].includes(v)) return '#ef4444'; // Red
-                    if (['開關', '單蘇', '孖蘇', '燈曲', '數據', '燈線'].includes(v)) return '#eab308'; // Yellow
-                    if (['留通道', '開門方向', '可保留', '實地台'].includes(v)) return '#3b82f6'; // Blue
-                    if (['要收口', '見光', '開背板', '生口位', '避窗簾盒', '留散熱', '要分件'].includes(v)) return '#d97706'; // Amber/Wood
-                    if (customStamps.value.includes(v)) return '#52525b'; // Gray for custom
-                    return spaceList.value.includes(v) ? '#a855f7' : '#ffffff'; // Purple for space
+                    if (['需清拆', '牆身斜', '牆體不平', '空鼓', '滲水', '局部凸出'].includes(v)) return '#ef4444';
+                    if (['開關', '單蘇', '孖蘇', '燈曲', '數據', '燈線'].includes(v)) return '#eab308';
+                    if (['留通道', '開門方向', '可保留', '實地台'].includes(v)) return '#3b82f6';
+                    if (['要收口', '見光', '開背板', '生口位', '避窗簾盒', '留散熱', '要分件'].includes(v)) return '#d97706';
+                    if (customStamps.value.includes(v)) return '#a1a1aa';
+                    return spaceList.value.includes(v) ? '#a855f7' : '#ffffff';
                 };
 
                 const getTagFields = (t) => ({ 
