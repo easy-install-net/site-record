@@ -7,9 +7,21 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v3.1</title>
-    <link rel="manifest" href="./manifest.json">
+    <title>度尺寶 Pro v3.2 (Debug)</title>
+    <link rel="manifest" href="./measure-manifest.json">
     <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Check_green_icon.svg/200px-Check_green_icon.svg.png">
+
+    <!-- 暴力殺死所有舊版離線引擎 -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(let registration of registrations) {
+                    registration.unregister();
+                    console.log('已強制解除舊版 Service Worker:', registration);
+                }
+            });
+        }
+    </script>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
@@ -50,16 +62,24 @@
 </head>
 <body class="text-gray-100 font-sans antialiased">
     <div id="app" v-cloak class="fixed inset-0 w-full h-full flex flex-col overflow-hidden">
+
+        <!-- 除錯訊息面板 (紅色底) -->
+        <div v-if="debugMessage" class="fixed top-20 left-4 right-4 bg-red-900 text-white p-3 rounded-lg z-[100] text-xs font-mono shadow-2xl border border-red-500 break-words max-h-40 overflow-y-auto" @click="debugMessage = ''">
+            <strong>系統報錯 (點擊關閉):</strong><br>{{ debugMessage }}
+        </div>
+
+        <!-- 頂部固定控制台 -->
         <div class="shrink-0 flex flex-col z-30">
             <header class="h-10 bg-black text-white px-2 border-b border-zinc-800 flex justify-between items-center gap-1">
                 <div class="flex items-center gap-1 min-w-0 flex-1">
                     <button v-if="currentView === 'proj'" @click="backToProjects" class="bg-zinc-800 px-2 py-1 rounded text-xs font-bold shrink-0">‹目錄</button>
                     <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer">{{ cloudStatusText }}</span>
-                    <span class="text-[9px] text-zinc-500 font-mono shrink-0">v3.1</span>
+                    <span class="text-[9px] text-yellow-500 font-mono shrink-0">v3.2</span>
                     <span v-if="currentView === 'proj' && project.code" @click="copyProjectCode" class="bg-yellow-400 text-black text-[11px] font-black px-1.5 py-0.5 rounded shrink-0 cursor-pointer">#{{ project.code }}</span>
                     <span v-if="currentView === 'dir'" class="text-sm font-bold truncate">工程目錄</span>
                     <input v-else v-model="project.name" @blur="saveAll" placeholder="輸入工程名稱..." class="bg-transparent text-white text-xs font-bold min-w-0 flex-1 truncate focus:bg-zinc-900 focus:px-1.5 rounded focus:outline-none">
                 </div>
+
                 <div class="flex gap-1 items-center shrink-0">
                     <button v-if="currentView === 'dir'" @click="showJoinModal = true" class="bg-yellow-500 text-black px-2.5 py-1 rounded text-xs font-bold">🔑組合</button>
                     <button v-if="currentView === 'dir'" @click="createNewProject" class="bg-blue-600 text-white px-2.5 py-1 rounded text-xs font-bold">+新建</button>
@@ -107,8 +127,7 @@
 
         <main v-show="currentView === 'dir'" class="flex-1 min-h-0 bg-zinc-950 p-3 overflow-y-auto touch-scrollable">
             <div v-if="projectList.length === 0" class="text-center text-zinc-500 mt-20 text-sm font-bold">
-                暫無工程，點右上「+新建」或「🔑組合」連通。<br><br>
-                <span class="text-xs text-zinc-600">(v3.1 支援地庫無網離線及流動網絡防超時)</span>
+                暫無工程，點右上「+新建」或「🔑組合」連通。
             </div>
             <div v-for="proj in projectList" :key="proj.code" class="bg-zinc-900 border border-zinc-800 p-3 rounded-lg mb-2.5 flex justify-between items-center shadow-lg">
                 <div class="flex-1 mr-2 cursor-pointer min-w-0" @click="loadProject(proj.code)">
@@ -157,6 +176,7 @@
                             <button @click="deleteCurrentPage" class="px-2 py-0.5 text-red-400 font-bold text-xs">刪頁</button>
                         </template>
                     </div>
+
                     <div v-else class="bg-red-950/90 border border-red-800 rounded-full flex items-center px-2 py-1 shadow">
                         <button @click="exitPinSubPage" class="text-white text-[11px] font-bold pr-2">‹ 返回 P{{ activePageIndex + 1 }}</button>
                         <div class="w-px h-3 bg-red-700 mx-1"></div>
@@ -164,6 +184,7 @@
                         <div class="w-px h-3 bg-red-700 mx-1"></div>
                         <button @click="deleteActivePin" :class="deletePinConfirm ? 'text-white bg-red-600 px-1 rounded' : 'text-red-300'" class="pl-1 text-[11px] font-bold">{{ deletePinConfirm ? '確認?' : '刪釘' }}</button>
                     </div>
+
                     <div class="flex items-center gap-1.5">
                         <button @click="showSpaceModal = true" class="bg-black/80 backdrop-blur text-yellow-400 border border-yellow-500/70 px-2.5 py-1 rounded-full text-xs font-black shadow">
                             🏠 {{ activeCanvas.space || '標記空間' }}
@@ -184,23 +205,28 @@
                 <div :style="zoomTransformStyle" class="flex items-center justify-center">
                     <div :style="wrapperStyle" class="select-none relative shadow-2xl bg-zinc-900">
                         <img :src="activeCanvas.photo" class="w-full h-full block pointer-events-none select-none object-fill">
+
                         <svg ref="svgCanvas" class="absolute inset-0 w-full h-full select-none" preserveAspectRatio="none">
                             <defs>
                                 <marker id="arrow-end-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#9ca3af" /></marker>
                                 <marker id="arrow-end-white" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" /></marker>
                                 <marker id="arrow-end-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" /></marker>
                             </defs>
+
                             <line v-for="line in (activeCanvas.lines || [])" :key="line.id"
                                   :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2"
                                   :stroke="line.type === 'measure' || !line.type ? 'rgba(255, 0, 68, 0.55)' : (line.color === 'gray' ? '#9ca3af' : line.color === 'white' ? '#ffffff' : '#ef4444')"
                                   :stroke-width="line.type === 'measure' || !line.type ? 5 : 4"
                                   stroke-linecap="round"
                                   :marker-end="line.type === 'arrow-single' ? `url(#arrow-end-${line.color})` : null" />
+
                             <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
                                   :stroke="drawMode === 'arrow-single' ? (arrowColor === 'gray' ? '#9ca3af' : arrowColor === 'white' ? '#ffffff' : '#ef4444') : '#ff0044'"
                                   stroke-width="4" stroke-dasharray="6" />
+
                             <path v-for="path in (activeCanvas.paths || [])" :key="path.id" :d="path.d" :stroke="path.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                             <path v-if="currentPath" :d="currentPath" :stroke="freehandColor" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+
                             <g v-for="marker in (activeCanvas.markers || [])" :key="marker.id"
                                :transform="`translate(${marker.x}, ${marker.y})`"
                                class="cursor-move"
@@ -214,6 +240,7 @@
                                 </text>
                             </g>
                         </svg>
+
                         <template v-if="!activePin">
                             <div v-for="(pin, index) in (activePage?.pins || [])" :key="pin.id"
                                  class="absolute w-9 h-9 -ml-[18px] -mt-9 flex flex-col items-center justify-center cursor-pointer z-10"
@@ -392,10 +419,6 @@
     </div>
 
     <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./manifest.json').catch(() => {});
-        }
-
         const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
         localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
@@ -410,6 +433,8 @@
         };
 
         let db = null, auth = null;
+        let initError = '';
+
         try {
             if (window.firebase) {
                 firebase.initializeApp(firebaseConfig);
@@ -419,8 +444,12 @@
                     ignoreUndefinedProperties: true
                 });
                 auth = firebase.auth();
+            } else {
+                initError = 'Firebase CDN 載入失敗 (請檢查網路)';
             }
-        } catch (e) {}
+        } catch (e) {
+            initError = 'Firebase 初始化錯誤: ' + e.message;
+        }
 
         const withTimeout = (promise, ms = 35000, msg = '流動網絡連線逾時，請移至訊號較佳位置重試') => {
             let timer;
@@ -465,12 +494,13 @@
                 const arrowColor = ref('red');
                 const freehandColor = ref('#3b82f6');
                 const toastMsg = ref('');
+                const debugMessage = ref(initError);
+
                 const showToast = (msg) => {
                     toastMsg.value = msg;
                     setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 2400);
                 };
 
-                const lastCloudError = ref('');
                 const cloudSyncState = ref('ready');
                 const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️已存' }[cloudSyncState.value] || '☁️已存'));
                 const cloudStatusClass = computed(() => {
@@ -493,16 +523,18 @@
                 };
 
                 const showCloudDetail = () => {
-                    if (cloudSyncState.value === 'error' && lastCloudError.value) {
-                        alert('離線原因：' + lastCloudError.value);
+                    if (cloudSyncState.value === 'error' && debugMessage.value) {
+                        alert('離線原因：\n' + debugMessage.value);
                     } else {
-                        showToast('v3.1 本地與雲端連線正常');
+                        showToast('v3.2 本地與雲端連線正常');
                     }
                 };
 
                 const trySilentAuth = async () => {
                     if (!auth || auth.currentUser) return;
-                    try { await withTimeout(auth.signInAnonymously(), 8000); } catch (e) {}
+                    try { await withTimeout(auth.signInAnonymously(), 8000); } catch (e) {
+                        console.log('Silent Auth skipped:', e.message);
+                    }
                 };
 
                 const touchDirty = () => {
@@ -1182,9 +1214,9 @@
                     const code = String(project.code || '').trim();
                     if (!db || !code) return;
                     if (!navigator.onLine) {
-                        lastCloudError.value = formatSyncError(new Error('offline'));
+                        debugMessage.value = formatSyncError(new Error('offline'));
                         cloudSyncState.value = 'error';
-                        if (throwOnError) throw new Error(lastCloudError.value);
+                        if (throwOnError) throw new Error(debugMessage.value);
                         return;
                     }
                     cloudSyncState.value = 'syncing';
@@ -1222,12 +1254,12 @@
                             }
                             await withRetry(() => withTimeout(projRef.collection('pages').doc(pg.id).set({ ...restPage, hasPhoto: !!pagePhoto, pins: pinsMeta }, { merge: true })));
                         }
-                        lastCloudError.value = '';
+                        debugMessage.value = '';
                         cloudSyncState.value = 'ready';
                     } catch (e) {
-                        lastCloudError.value = formatSyncError(e);
+                        debugMessage.value = formatSyncError(e);
                         cloudSyncState.value = 'error';
-                        if (throwOnError) throw new Error(lastCloudError.value);
+                        if (throwOnError) throw new Error(debugMessage.value);
                     }
                 };
 
@@ -1291,9 +1323,9 @@
                 const pullAndMergeFromCloud = async (code, throwOnError = false, allowNotFound = true) => {
                     code = String(code || '').trim();
                     if (!navigator.onLine) {
-                        lastCloudError.value = formatSyncError(new Error('offline'));
+                        debugMessage.value = formatSyncError(new Error('offline'));
                         cloudSyncState.value = 'error';
-                        if (throwOnError) throw new Error(lastCloudError.value);
+                        if (throwOnError) throw new Error(debugMessage.value);
                         return;
                     }
                     if (!db) throw new Error('雲端資料庫未初始化（請確認有網路後重新整理）');
@@ -1309,7 +1341,7 @@
 
                         if (!projDoc.exists) {
                             if (!allowNotFound) throw new Error('雲端找不到工程碼 #' + code);
-                            lastCloudError.value = '';
+                            debugMessage.value = '';
                             cloudSyncState.value = 'ready';
                             return;
                         }
@@ -1372,12 +1404,12 @@
                             code: project.code, name: project.name, date: project.date,
                             pages: cleanPages, deletedPageIds: project.deletedPageIds, updatedAt: Date.now()
                         });
-                        lastCloudError.value = '';
+                        debugMessage.value = '';
                         cloudSyncState.value = 'ready';
                     } catch (e) {
-                        lastCloudError.value = formatSyncError(e);
+                        debugMessage.value = formatSyncError(e);
                         cloudSyncState.value = 'error';
-                        if (throwOnError) throw new Error(lastCloudError.value);
+                        if (throwOnError) throw new Error(debugMessage.value);
                     }
                 };
 
@@ -1389,9 +1421,9 @@
                         await pullAndMergeFromCloud(project.code, true, true);
                         await pushToCloud(true);
                         nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
-                        showToast('✅ v3.1 雲端同步成功');
+                        showToast('✅ v3.2 同步成功');
                     } catch (err) {
-                        alert('同步失敗：\n' + (err.message || '請檢查網路連線'));
+                        // 錯誤已顯示在畫面上，無需原生 alert 打斷
                     }
                     isProcessing.value = false;
                 };
@@ -1489,7 +1521,7 @@
                     });
                     window.addEventListener('offline', () => {
                         cloudSyncState.value = 'error';
-                        lastCloudError.value = formatSyncError(new Error('offline'));
+                        debugMessage.value = formatSyncError(new Error('offline'));
                     });
                     trySilentAuth();
                 });
@@ -1683,7 +1715,7 @@
                 return {
                     currentView, projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas,
                     showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList,
-                    arrowColor, freehandColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg,
+                    arrowColor, freehandColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg, debugMessage,
                     drawMode, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText,
                     focusedInput, topTextInputRef,
                     stageRef, svgCanvas, wrapperStyle, zoomScale, zoomTransformStyle, resetZoom,
