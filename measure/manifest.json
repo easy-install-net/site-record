@@ -1,0 +1,17 @@
+{
+  "name": "度尺寶 Pro",
+  "short_name": "度尺寶",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Check_green_icon.svg/200px-Check_green_icon.svg.png",
+      "sizes": "200x200",
+      "type": "image/png"
+    }
+  ]
+}
