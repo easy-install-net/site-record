@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v6.4</title>
+    <title>度尺寶 Pro v6.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -168,10 +168,11 @@
                             </div>
                         </div>
 
-                        <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''} (最後改: ${pg.author || project.lastModifiedBy || '未知'})`)" class="flex-1 bg-zinc-950/70 flex items-center justify-center p-2 cursor-pointer active:bg-zinc-800">
-                            <div class="relative shadow rounded overflow-hidden mx-auto" :style="getGridThumbStyle(pg)">
-                                <img :src="pg.photo" style="width:100%;height:100%;object-fit:fill;display:block;" class="pointer-events-none select-none">
-                                <svg :viewBox="`0 0 ${pg.w || 1200} ${pg.h || 900}`" style="position:absolute;inset:0;width:100%;height:100%;" class="pointer-events-none" preserveAspectRatio="none">
+                        <!-- 貼合比例的純 CSS 網格圖 -->
+                        <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''} (最後改: ${pg.author || project.lastModifiedBy || '未知'})`)" class="flex-1 bg-zinc-950/70 p-2 cursor-pointer active:bg-zinc-800 flex flex-col justify-center">
+                            <div class="relative shadow rounded overflow-hidden w-full" :style="{ aspectRatio: `${pg.w || 1200} / ${pg.h || 900}` }">
+                                <img :src="pg.photo" class="absolute inset-0 w-full h-full object-fill pointer-events-none select-none">
+                                <svg :viewBox="`0 0 ${pg.w || 1200} ${pg.h || 900}`" class="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
                                     <line v-for="l in (pg.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 5 : 6" stroke-linecap="round" />
                                     <path v-for="p in (pg.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
                                     <g v-for="m in (pg.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
@@ -262,7 +263,7 @@
             </div>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器 (支援雙指精準縮放 + 單指自由拖曳) -->
+        <!-- 唯讀全螢幕大圖檢視器 (置中鎖死修正版) -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col">
             <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-3 flex justify-between items-center shrink-0 z-10">
                 <span class="text-xs font-bold text-yellow-400 truncate pr-2">👁️ {{ fullScreenTitle }}</span>
@@ -271,17 +272,20 @@
                     <button @click="fullScreenItem = null" class="bg-zinc-700 text-white px-3 py-1 rounded text-xs font-bold">✕ 關閉</button>
                 </div>
             </div>
-            <div ref="fsStageRef" class="flex-1 min-h-0 relative overflow-hidden zoom-stage bg-black"
+            <!-- 加入 touch-none 避免預設滾動 -->
+            <div ref="fsStageRef" class="flex-1 min-h-0 relative overflow-hidden bg-black touch-none"
                  @touchstart="e => handleZoomTouchStart(e, fsZoom, fsStageRef, true)"
                  @touchmove="e => handleZoomTouchMove(e, fsZoom, fsStageRef)"
                  @touchend="e => handleZoomTouchEnd(e, fsZoom)"
                  @mousedown="e => handleZoomMouseDown(e, fsZoom)"
                  @mousemove="e => handleZoomMouseMove(e, fsZoom)"
                  @mouseup="() => handleZoomMouseUp(fsZoom)">
-                <div :style="{ transform: `translate(${fsZoom.x}px, ${fsZoom.y}px) scale(${fsZoom.scale})`, transformOrigin: '0 0' }" class="w-full h-full flex items-center justify-center">
+                
+                <!-- 絕對置中縮放層，鎖死圖框邊界 -->
+                <div class="absolute inset-0 flex items-center justify-center" :style="{ transform: `translate(${fsZoom.x}px, ${fsZoom.y}px) scale(${fsZoom.scale})`, transformOrigin: '0 0' }">
                     <div :style="fsWrapperStyle" class="relative shadow-2xl bg-zinc-900 select-none shrink-0">
-                        <img :src="fullScreenItem.photo" style="width:100%;height:100%;object-fit:fill;display:block;" class="pointer-events-none select-none">
-                        <svg :viewBox="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" style="position:absolute;inset:0;width:100%;height:100%;" class="pointer-events-none" preserveAspectRatio="none">
+                        <img :src="fullScreenItem.photo" class="absolute inset-0 w-full h-full object-fill pointer-events-none select-none">
+                        <svg :viewBox="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" class="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
                             <line v-for="l in (fullScreenItem.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 5 : 6" stroke-linecap="round" />
                             <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
                             <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
@@ -295,11 +299,12 @@
                         </div>
                     </div>
                 </div>
-                <div class="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/75 text-zinc-300 text-[11px] px-3 py-1 rounded-full pointer-events-none whitespace-nowrap">✌️ 雙指縮放 ／ ☝️ 單指拖曳（唯讀防誤觸）</div>
+                
+                <div class="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/75 text-zinc-300 text-[11px] px-3 py-1 rounded-full pointer-events-none whitespace-nowrap">✌️ 雙指縮放 ／ ☝️ 單指拖曳</div>
             </div>
         </div>
 
-        <!-- 3. 畫布編輯視圖 -->
+        <!-- 3. 畫布編輯視圖 (置中鎖死修正版) -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col">
             <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                 <div v-if="activePin" class="text-yellow-400 font-bold text-sm mb-1">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
@@ -313,10 +318,12 @@
                 <button v-if="activePin" @click="exitPinSubPage" class="mt-4 text-zinc-400 text-xs font-bold">‹ 取消並返回主頁</button>
             </div>
 
-            <div v-else ref="stageRef" class="flex-1 min-h-0 relative overflow-hidden zoom-stage"
+            <!-- 加入 touch-none 避免預設滾動 -->
+            <div v-else ref="stageRef" class="flex-1 min-h-0 relative overflow-hidden bg-black touch-none"
                  @touchstart="onStageTouchStart" @touchmove="onStageTouchMove" @touchend="onStageTouchEnd"
                  @mousedown="onStageMouseDown" @mousemove="onStageMouseMove" @mouseup="onStageMouseUp">
 
+                <!-- 浮動控制層：z-20 蓋在圖層上面 -->
                 <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
                     <div v-if="!activePin" class="bg-black/80 backdrop-blur border border-zinc-700 rounded-full flex items-center px-1 py-1 shadow">
                         <button @click="prevPage" class="px-2 py-0.5 text-zinc-300 font-bold text-xs" :class="{ 'opacity-30': activePageIndex === 0 }">◀</button>
@@ -350,10 +357,11 @@
                     <div v-else-if="drawMode === 'pin'" class="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px] font-black shadow">📍 點畫面落釘</div>
                 </div>
 
-                <div :style="{ transform: `translate(${editZoom.x}px, ${editZoom.y}px) scale(${editZoom.scale})`, transformOrigin: '0 0' }" class="w-full h-full flex items-center justify-center">
-                    <div :style="wrapperStyle" class="select-none relative shadow-2xl bg-zinc-900 shrink-0">
-                        <img :src="activeCanvas.photo" style="width:100%;height:100%;object-fit:fill;display:block;" class="pointer-events-none select-none">
-                        <svg ref="svgCanvas" style="position:absolute;inset:0;width:100%;height:100%;" class="select-none" preserveAspectRatio="none">
+                <!-- 絕對置中縮放層，鎖死圖框邊界 -->
+                <div class="absolute inset-0 flex items-center justify-center" :style="{ transform: `translate(${editZoom.x}px, ${editZoom.y}px) scale(${editZoom.scale})`, transformOrigin: '0 0' }">
+                    <div :style="wrapperStyle" class="relative shadow-2xl bg-zinc-900 select-none shrink-0">
+                        <img :src="activeCanvas.photo" class="absolute inset-0 w-full h-full object-fill pointer-events-none select-none">
+                        <svg ref="svgCanvas" class="absolute inset-0 w-full h-full select-none" preserveAspectRatio="none">
                             <defs>
                                 <marker id="arrow-end-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#9ca3af" /></marker>
                                 <marker id="arrow-end-white" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" /></marker>
@@ -385,6 +393,7 @@
                         </template>
                     </div>
                 </div>
+                
                 <button v-if="editZoom.scale > 1.05" @click.stop="resetZoomState(editZoom)" class="absolute bottom-4 right-3 bg-black/85 text-yellow-400 border border-yellow-500 px-3 py-1 rounded-full text-xs font-bold z-20 shadow" @touchstart.stop @mousedown.stop>{{ Math.round(editZoom.scale * 100) }}% 還原</button>
             </div>
         </main>
@@ -455,7 +464,7 @@
 
         <!-- ☁️ 雲端工程庫清單 Modal -->
         <div v-if="showCloudBrowser" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" @click.self="showCloudBrowser = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-md rounded-xl p-4 flex flex-col text-white shadow-2xl max-h-[82vh]">
+            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-md rounded-xl p-4 flex flex-col text-white shadow-2xl max-h-[80vh]">
                 <div class="flex justify-between items-center border-b border-zinc-700 pb-2.5 mb-3">
                     <h3 class="text-sm font-bold text-blue-400">☁️ 雲端工程庫</h3>
                     <button @click="cleanCloudGarbage" class="bg-red-950 border border-red-700 text-red-200 px-2.5 py-1 rounded text-[11px] font-bold active:bg-red-800">
@@ -679,7 +688,7 @@
                 const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
                 const lastCloudError = ref(''), cloudSyncState = ref('ready');
-                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.4連通' }[cloudSyncState.value] || '☁️v6.4連通'));
+                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.5連通' }[cloudSyncState.value] || '☁️v6.5連通'));
                 const cloudStatusClass = computed(() => cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' : cloudSyncState.value === 'error' ? 'bg-zinc-800 text-zinc-400' : 'bg-emerald-950 text-emerald-300 border border-emerald-700');
 
                 const formatSyncError = (err) => {
@@ -691,7 +700,7 @@
                     return msg || '連線異常';
                 };
 
-                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.4 全圖預覽與即時同步運作中');
+                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.5 置中鎖死修復版運作中');
                 const trySilentAuth = async () => { if (auth && !auth.currentUser) try { await withTimeout(auth.signInAnonymously(), 8000); } catch (e) {} };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -753,8 +762,10 @@
                 const stageRef = ref(null), fsStageRef = ref(null), svgCanvas = ref(null);
                 const wsW = ref(window.innerWidth || 360), wsH = ref((window.innerHeight || 600) - 85);
                 const fsWsW = ref(window.innerWidth || 360), fsWsH = ref((window.innerHeight || 600) - 44);
+                const winW = ref(window.innerWidth || 360);
 
                 const updateWorkspaceSize = () => {
+                    winW.value = window.innerWidth || 360;
                     if (stageRef.value) { const r = stageRef.value.getBoundingClientRect(); if (r.width > 20 && r.height > 20) { wsW.value = r.width; wsH.value = r.height; } }
                     if (fsStageRef.value) { const r = fsStageRef.value.getBoundingClientRect(); if (r.width > 20 && r.height > 20) { fsWsW.value = r.width; fsWsH.value = r.height; } }
                     if (svgCanvas.value && activeCanvas.value) svgCanvas.value.setAttribute('viewBox', `0 0 ${activeCanvas.value.w || 1200} ${activeCanvas.value.h || 900}`);
@@ -771,14 +782,10 @@
                 const wrapperStyle = computed(() => calcFitStyle(activeCanvas.value, Math.max(50, wsW.value - 4), Math.max(50, wsH.value - 4)));
                 const fsWrapperStyle = computed(() => calcFitStyle(fullScreenItem.value, Math.max(50, fsWsW.value - 8), Math.max(50, fsWsH.value - 8)));
                 const getGridThumbStyle = (pg) => {
-                    const pw = pg.w || 1200, ph = pg.h || 900;
-                    const isLandscape = pw >= ph;
                     return {
-                        aspectRatio: `${pw} / ${ph}`,
-                        width: isLandscape ? '100%' : 'auto',
-                        height: isLandscape ? 'auto' : '185px',
-                        maxWidth: '100%',
-                        maxHeight: '200px'
+                        aspectRatio: `${pg.w || 1200} / ${pg.h || 900}`,
+                        width: '100%',
+                        height: 'auto'
                     };
                 };
                 const getLineStroke = (l, alpha = 0.55) => l.type === 'measure' || !l.type ? `rgba(255, 0, 68, ${alpha})` : (l.color === 'gray' ? '#9ca3af' : l.color === 'white' ? '#ffffff' : '#ef4444');
@@ -825,15 +832,7 @@
                 const handleZoomMouseMove = (e, z) => { if (z.isPanning) { z.x = z.panOrigin.x + (e.clientX - z.panClient.x); z.y = z.panOrigin.y + (e.clientY - z.panClient.y); } };
                 const handleZoomMouseUp = (z) => { z.isPanning = false; };
 
-                const openFullScreenPreview = (item, title) => {
-                    fullScreenItem.value = item;
-                    fullScreenTitle.value = title;
-                    resetZoomState(fsZoom);
-                    nextTick(() => {
-                        updateWorkspaceSize();
-                        setTimeout(updateWorkspaceSize, 60);
-                    });
-                };
+                const openFullScreenPreview = (item, title) => { fullScreenItem.value = item; fullScreenTitle.value = title; resetZoomState(fsZoom); nextTick(updateWorkspaceSize); };
                 const enterEditMode = (pageIdx = 0) => { activePageIndex.value = pageIdx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; resetZoomState(editZoom); nextTick(updateWorkspaceSize); };
                 const switchToPreview = async () => { await saveAll(); activePin.value = null; previewTab.value = 'pages'; currentView.value = 'preview'; nextTick(updateWorkspaceSize); };
 
