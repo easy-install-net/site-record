@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v6.13</title>
+    <title>度尺寶 Pro v7.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -17,14 +17,17 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <style>
         [v-cloak] { display: none !important; }
-        * { box-sizing: border-box; touch-action: manipulation !important; }
+        * { box-sizing: border-box; }
         html, body {
             position: fixed; inset: 0; width: 100%; height: 100dvh; margin: 0; padding: 0;
             overflow: hidden; background: #09090b; -webkit-tap-highlight-color: transparent;
             -webkit-user-select: none; user-select: none; overscroll-behavior: none;
+            touch-action: manipulation;
             padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
         }
+        button, a, label { touch-action: manipulation; }
         input, select, textarea { font-size: 16px !important; -webkit-user-select: text; user-select: text; }
+        .canvas-touch-lock { touch-action: none !important; }
         .touch-scrollable { touch-action: pan-y !important; -webkit-overflow-scrolling: touch; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -75,7 +78,7 @@
                 </div>
             </header>
 
-            <!-- 編輯工具列 -->
+            <!-- 編輯工具列 (固定高度不跳動，順序：睇圖 單箭 塗鴉 度尺 印章 落釘) -->
             <div v-if="currentView === 'proj'" class="flex flex-col bg-zinc-900 border-b border-zinc-700 shrink-0">
                 <div class="h-11 px-1 flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
                     <div class="flex items-center gap-1 shrink-0">
@@ -91,7 +94,8 @@
                     </div>
                 </div>
 
-                <div class="h-8 bg-zinc-950 flex items-center justify-center gap-2 transition-opacity duration-200" :class="{'opacity-100': drawMode === 'arrow-single' || drawMode === 'freehand', 'opacity-0 pointer-events-none': drawMode !== 'arrow-single' && drawMode !== 'freehand'}">
+                <!-- 顏色列 (固定佔位高度，切換工具畫布紋風不動) -->
+                <div class="h-8 bg-zinc-950 flex items-center justify-center gap-2" :class="(drawMode === 'arrow-single' || drawMode === 'freehand') ? 'opacity-100' : 'opacity-0 pointer-events-none'">
                     <span class="text-[10px] text-zinc-400 font-bold">顏色:</span>
                     <template v-if="drawMode === 'arrow-single'">
                         <button v-for="c in [{id:'gray',bg:'bg-gray-400'},{id:'white',bg:'bg-white'},{id:'red',bg:'bg-red-500'}]" :key="c.id" @click="arrowColor = c.id" :class="[c.bg, arrowColor === c.id ? 'ring-2 ring-blue-400 scale-110' : '']" class="w-4 h-4 rounded-full"></button>
@@ -130,7 +134,7 @@
             </div>
         </main>
 
-        <!-- 2. 全檔唯讀預覽總覽視圖 -->
+        <!-- 2. 全檔唯讀預覽總覽視圖 (Unified SVG 縮圖) -->
         <main v-show="currentView === 'preview'" class="flex-1 min-h-0 bg-zinc-950 flex flex-col overflow-hidden">
             <div class="bg-zinc-900 border-b border-zinc-800 px-3 py-2 flex items-center justify-between shrink-0 gap-1">
                 <div class="flex gap-1.5">
@@ -140,7 +144,7 @@
                 <button v-if="mergeableGroups.length" @click="showMergeModal = true" class="bg-purple-600 active:bg-purple-700 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow animate-pulse">
                     🔗 合併同底圖 ({{ mergeableGroups.length }})
                 </button>
-                <span v-else class="text-[10px] text-zinc-400">點圖放大</span>
+                <span v-else class="text-[10px] text-zinc-400">點圖睇全張大圖</span>
             </div>
 
             <div v-show="previewTab === 'pages'" class="flex-1 overflow-y-auto p-2.5 touch-scrollable space-y-3">
@@ -167,27 +171,26 @@
                             </div>
                         </div>
 
-                        <!-- 穩定預覽縮圖，確保比例正常顯示 -->
-                        <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''} (最後改: ${pg.author || project.lastModifiedBy || '未知'})`)" class="flex-1 bg-zinc-950/70 p-2 cursor-pointer active:bg-zinc-800 flex flex-col justify-center items-center overflow-hidden">
-                            <div class="relative shadow rounded bg-zinc-800 w-full overflow-hidden flex items-center justify-center">
-                                <div class="relative w-full" :style="{ aspectRatio: `${pg.w || 1200} / ${pg.h || 900}` }">
-                                    <img :src="pg.photo" class="absolute inset-0 w-full h-full object-contain pointer-events-none select-none bg-white">
-                                    <svg :viewBox="`0 0 ${pg.w || 1200} ${pg.h || 900}`" class="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="xMidYMid meet">
-                                        <line v-for="l in (pg.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 5 : 6" stroke-linecap="round" />
-                                        <path v-for="p in (pg.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
-                                        <g v-for="m in (pg.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
-                                            <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
-                                                <tspan v-for="(line, lIdx) in getMarkerLines(m)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
-                                            </text>
-                                        </g>
-                                    </svg>
-                                    <div v-for="(pin, pIdx) in (pg.pins || [])" :key="pin.id" class="absolute w-5 h-5 -ml-2.5 -mt-5 flex flex-col items-center justify-center pointer-events-none" :style="{ left: pin.x + '%', top: pin.y + '%' }">
-                                        <div class="bg-red-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white shadow">{{ pIdx + 1 }}</div>
-                                    </div>
-                                </div>
-                            </div>
+                        <!-- Unified SVG 縮圖：底圖與標註同處一個 SVG 空間，100% 完整顯示 -->
+                        <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''} (最後改: ${pg.author || project.lastModifiedBy || '未知'})`)" class="h-44 bg-zinc-950 p-1.5 cursor-pointer active:bg-zinc-800 flex items-center justify-center overflow-hidden">
+                            <svg :viewBox="`0 0 ${pg.w || 1200} ${pg.h || 900}`" preserveAspectRatio="xMidYMid meet" class="w-full h-full pointer-events-none select-none">
+                                <rect x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" fill="#ffffff" />
+                                <image :href="pg.photo" x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" preserveAspectRatio="none" />
+                                <rect x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" fill="none" stroke="#52525b" stroke-width="4" />
+                                <line v-for="l in (pg.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 5 : 6" stroke-linecap="round" />
+                                <path v-for="p in (pg.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
+                                <g v-for="m in (pg.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
+                                    <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
+                                        <tspan v-for="(line, lIdx) in getMarkerLines(m)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
+                                    </text>
+                                </g>
+                                <g v-for="(pin, pIdx) in (pg.pins || [])" :key="pin.id" :transform="`translate(${(pin.x / 100) * (pg.w || 1200)}, ${(pin.y / 100) * (pg.h || 900)})`">
+                                    <circle cx="0" cy="-22" r="20" fill="#dc2626" stroke="#ffffff" stroke-width="4" />
+                                    <text x="0" y="-21" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="22" font-weight="900">{{ pIdx + 1 }}</text>
+                                </g>
+                            </svg>
                         </div>
-                        <div v-else class="flex-1 min-h-[120px] flex items-center justify-center text-zinc-600 text-[11px]">空白未拍照</div>
+                        <div v-else class="h-44 flex items-center justify-center text-zinc-600 text-[11px]">空白未拍照</div>
 
                         <div class="bg-zinc-950 px-2 py-1.5 border-t border-zinc-800/80 flex items-center justify-between gap-1 flex-wrap">
                             <div v-if="pg.pins?.length" class="flex items-center gap-1 flex-wrap">
@@ -196,7 +199,7 @@
                                 </button>
                             </div>
                             <span v-else class="text-[10px] text-zinc-500">無落釘</span>
-                            <span v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`)" class="text-[10px] text-zinc-400 cursor-pointer">🔍放大</span>
+                            <span v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`)" class="text-[10px] text-zinc-400 cursor-pointer">🔍全圖</span>
                         </div>
                     </div>
                 </div>
@@ -264,35 +267,42 @@
             </div>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器 (絕對置中) -->
+        <!-- 唯讀全螢幕大圖檢視器 (Unified SVG：100% 完整顯示全圖，零對位偏差) -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col">
             <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-3 flex justify-between items-center shrink-0 z-10">
                 <span class="text-xs font-bold text-yellow-400 truncate pr-2">👁️ {{ fullScreenTitle }}</span>
-                <div class="flex items-center gap-2 shrink-0">
-                    <button @click="fullScreenItem = null" class="bg-zinc-700 text-white px-3 py-1 rounded text-xs font-bold shadow-lg">✕ 關閉</button>
-                </div>
+                <button @click="fullScreenItem = null" class="bg-zinc-700 text-white px-3 py-1 rounded text-xs font-bold shadow-lg shrink-0">✕ 關閉</button>
             </div>
             
-            <div ref="fsStageRef" class="flex-1 min-h-0 relative overflow-hidden bg-zinc-950 flex items-center justify-center p-3 touch-none">
-                <div :style="fsWrapperStyle" class="relative shadow-[0_0_20px_rgba(0,0,0,0.5)] bg-zinc-900 border border-zinc-700 shrink-0 pointer-events-none">
-                    <img :src="fullScreenItem.photo" class="absolute inset-0 w-full h-full object-fill bg-white">
-                    <svg :viewBox="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" class="absolute inset-0 w-full h-full" preserveAspectRatio="none">
-                        <line v-for="l in (fullScreenItem.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 5 : 6" stroke-linecap="round" />
-                        <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
-                        <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
-                            <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
-                                <tspan v-for="(line, lIdx) in getMarkerLines(m)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
-                            </text>
-                        </g>
-                    </svg>
-                    <div v-for="(pin, pIdx) in (fullScreenItem.pins || [])" :key="pin.id" class="absolute w-8 h-8 -ml-4 -mt-8 flex flex-col items-center justify-center" :style="{ left: pin.x + '%', top: pin.y + '%' }">
-                        <div class="bg-red-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow">{{ pIdx + 1 }}</div>
-                    </div>
-                </div>
+            <div class="flex-1 min-h-0 bg-zinc-950 p-3 flex items-center justify-center overflow-hidden">
+                <svg :viewBox="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" preserveAspectRatio="xMidYMid meet" class="w-full h-full select-none">
+                    <defs>
+                        <marker id="fs-arrow-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#9ca3af" /></marker>
+                        <marker id="fs-arrow-white" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" /></marker>
+                        <marker id="fs-arrow-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" /></marker>
+                    </defs>
+                    <rect x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" fill="#ffffff" />
+                    <image :href="fullScreenItem.photo" x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" preserveAspectRatio="none" />
+                    <rect x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" fill="none" stroke="#52525b" stroke-width="4" />
+                    <line v-for="l in (fullScreenItem.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
+                          :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 5 : 6" stroke-linecap="round"
+                          :marker-end="l.type === 'arrow-single' ? `url(#fs-arrow-${l.color})` : null" />
+                    <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
+                    <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
+                        <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
+                            <tspan v-for="(line, lIdx) in getMarkerLines(m)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
+                        </text>
+                    </g>
+                    <g v-for="(pin, pIdx) in (fullScreenItem.pins || [])" :key="pin.id" :transform="`translate(${(pin.x / 100) * (fullScreenItem.w || 1200)}, ${(pin.y / 100) * (fullScreenItem.h || 900)})`">
+                        <polygon points="-10,-10 10,-10 0,4" fill="#dc2626" />
+                        <circle cx="0" cy="-24" r="20" fill="#dc2626" stroke="#ffffff" stroke-width="3" />
+                        <text x="0" y="-23" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="20" font-weight="900">{{ pIdx + 1 }}</text>
+                    </g>
+                </svg>
             </div>
         </div>
 
-        <!-- 3. 畫布編輯視圖 (絕對置中對位) -->
+        <!-- 3. 畫布編輯視圖 (Unified Single-SVG Engine：零變形、100% 睇曬全圖、指邊打邊) -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 relative bg-zinc-950 overflow-hidden flex flex-col">
             <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                 <div v-if="activePin" class="text-yellow-400 font-bold text-sm mb-1">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
@@ -306,11 +316,8 @@
                 <button v-if="activePin" @click="exitPinSubPage" class="mt-4 text-zinc-400 text-xs font-bold">‹ 取消並返回主頁</button>
             </div>
 
-            <!-- 外圍容器：處理事件並確保置中排版 -->
-            <div v-else ref="stageRef" class="flex-1 min-h-0 relative overflow-hidden flex items-center justify-center p-3 touch-none"
-                 @touchstart="onStageTouchStart" @touchmove="onStageTouchMove" @touchend="onStageTouchEnd"
-                 @mousedown="onStageMouseDown" @mousemove="onStageMouseMove" @mouseup="onStageMouseUp">
-
+            <div v-else class="flex-1 min-h-0 relative overflow-hidden flex items-center justify-center p-2.5">
+                <!-- 左上分頁與空間控制 -->
                 <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
                     <div v-if="!activePin" class="bg-black/80 backdrop-blur border border-zinc-700 rounded-full flex items-center px-1 py-1 shadow">
                         <button @click="prevPage" class="px-2 py-0.5 text-zinc-300 font-bold text-xs" :class="{ 'opacity-30': activePageIndex === 0 }">◀</button>
@@ -337,46 +344,62 @@
                     </div>
                 </div>
 
+                <!-- 右上模式提示 -->
                 <div class="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end pointer-events-none">
-                    <div v-if="drawMode === 'browse'" class="bg-emerald-500 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow opacity-85">👆 睇圖防觸</div>
+                    <div v-if="drawMode === 'browse'" class="bg-emerald-500 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow opacity-85">👆 睇圖 / 拖字</div>
                     <div v-else-if="drawMode === 'stamp'" class="bg-yellow-400 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow">🏷️ 點畫面蓋印</div>
                     <div v-else-if="drawMode === 'pin'" class="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px] font-black shadow">📍 點畫面落釘</div>
                 </div>
 
-                <!-- 內部畫布：零變形、固定大小對準原圖 1:1 -->
-                <div :style="wrapperStyle" class="relative shadow-[0_0_20px_rgba(0,0,0,0.5)] bg-zinc-900 border border-zinc-700 select-none shrink-0 pointer-events-none">
-                    <img :src="activeCanvas.photo" class="absolute inset-0 w-full h-full object-fill pointer-events-none select-none bg-white">
-                    <svg ref="svgCanvas" :viewBox="`0 0 ${activeCanvas.w || 1200} ${activeCanvas.h || 900}`" class="absolute inset-0 w-full h-full select-none" preserveAspectRatio="none">
-                        <defs>
-                            <marker id="arrow-end-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#9ca3af" /></marker>
-                            <marker id="arrow-end-white" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" /></marker>
-                            <marker id="arrow-end-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" /></marker>
-                        </defs>
-                        <line v-for="l in (activeCanvas.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
-                              :stroke="getLineStroke(l, 0.55)" :stroke-width="l.type === 'arrow-single' ? 4 : 5" stroke-linecap="round"
-                              :marker-end="l.type === 'arrow-single' ? `url(#arrow-end-${l.color})` : null" />
-                        <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
-                              :stroke="drawMode === 'arrow-single' ? getLineStroke({type:'arrow-single', color:arrowColor}) : '#ff0044'"
-                              stroke-width="4" stroke-dasharray="6" />
-                        <path v-for="p in (activeCanvas.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-                        <path v-if="currentPath" :d="currentPath" :stroke="freehandColor" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-                        <g v-for="m in (activeCanvas.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`" class="cursor-move pointer-events-auto"
-                           @touchstart.stop="e => startDrag(m, e)" @mousedown.stop="e => startDrag(m, e)">
-                            <rect :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" fill="transparent" />
-                            <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
-                                <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
-                            </text>
-                        </g>
-                    </svg>
+                <!-- 單一整合 SVG 畫布：底圖、線條、印章、落釘 100% 鎖死同一個 viewBox -->
+                <svg ref="svgCanvas" :viewBox="`0 0 ${canvasW} ${canvasH}`" preserveAspectRatio="xMidYMid meet"
+                     class="w-full h-full select-none canvas-touch-lock"
+                     @touchstart="onStageTouchStart" @touchmove="onStageTouchMove" @touchend="onStageTouchEnd"
+                     @mousedown="onStageMouseDown" @mousemove="onStageMouseMove" @mouseup="onStageMouseUp">
+                    <defs>
+                        <marker id="arrow-end-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#9ca3af" /></marker>
+                        <marker id="arrow-end-white" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" /></marker>
+                        <marker id="arrow-end-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" /></marker>
+                    </defs>
+
+                    <!-- 白底 + 底圖 + 外框 -->
+                    <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="#ffffff" />
+                    <image :href="activeCanvas.photo" x="0" y="0" :width="canvasW" :height="canvasH" preserveAspectRatio="none" />
+                    <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="none" stroke="#52525b" stroke-width="4" />
+
+                    <!-- 度尺與單箭線條 -->
+                    <line v-for="l in (activeCanvas.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
+                          :stroke="getLineStroke(l, 0.55)" :stroke-width="l.type === 'arrow-single' ? 4 : 5" stroke-linecap="round"
+                          :marker-end="l.type === 'arrow-single' ? `url(#arrow-end-${l.color})` : null" />
+                    <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
+                          :stroke="drawMode === 'arrow-single' ? getLineStroke({type:'arrow-single', color:arrowColor}) : '#ff0044'"
+                          stroke-width="4" stroke-dasharray="6" />
+
+                    <!-- 塗鴉筆跡 -->
+                    <path v-for="p in (activeCanvas.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                    <path v-if="currentPath" :d="currentPath" :stroke="freehandColor" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+
+                    <!-- 印章與尺寸文字 (可拖曳與點擊編輯) -->
+                    <g v-for="m in (activeCanvas.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`" class="cursor-move"
+                       @touchstart.stop="e => startDrag(m, e)" @mousedown.stop="e => startDrag(m, e)">
+                        <rect :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" fill="transparent" />
+                        <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
+                            <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
+                        </text>
+                    </g>
+
+                    <!-- 落釘標記 (直接嵌入同一個 SVG 座標系，100% 精準對位) -->
                     <template v-if="!activePin">
-                        <div v-for="(pin, index) in (activePage?.pins || [])" :key="pin.id"
-                             class="absolute w-9 h-9 -ml-[18px] -mt-9 flex flex-col items-center justify-center cursor-pointer z-10 pointer-events-auto"
-                             :style="{ left: pin.x + '%', top: pin.y + '%' }" @touchstart.stop @mousedown.stop @click.stop="openPinSubPage(pin, index)">
-                            <div class="bg-red-600 text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center border-2 border-white shadow">{{ index + 1 }}</div>
-                            <div class="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-red-600 -mt-[1px]"></div>
-                        </div>
+                        <g v-for="(pin, index) in (activePage?.pins || [])" :key="pin.id"
+                           :transform="`translate(${(pin.x / 100) * canvasW}, ${(pin.y / 100) * canvasH})`"
+                           class="cursor-pointer"
+                           @touchstart.stop @mousedown.stop @click.stop="openPinSubPage(pin, index)">
+                            <polygon points="-11,-11 11,-11 0,5" fill="#dc2626" />
+                            <circle cx="0" cy="-26" r="22" fill="#dc2626" stroke="#ffffff" stroke-width="3.5" />
+                            <text x="0" y="-25" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="22" font-weight="900">{{ index + 1 }}</text>
+                        </g>
                     </template>
-                </div>
+                </svg>
             </div>
         </main>
 
@@ -524,7 +547,7 @@
             </div>
         </div>
 
-        <!-- 度尺與印章輸入面板 -->
+        <!-- 度尺與印章輸入面板 (徹底分家與緊湊版排版) -->
         <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/40 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
         <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-black border-b-2 border-black rounded-b-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[85dvh]" @touchstart.stop @mousedown.stop>
             <div class="px-3 py-2 bg-zinc-900 text-white flex justify-between items-center shrink-0">
@@ -617,7 +640,7 @@
     </div>
 
     <script>
-        const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
+        const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
         localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
         const firebaseConfig = {
@@ -666,6 +689,8 @@
                 const pages = ref([]), photoPool = ref([]), activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
                 const activePage = computed(() => pages.value[activePageIndex.value] || null);
                 const activeCanvas = computed(() => activePin.value || activePage.value);
+                const canvasW = computed(() => activeCanvas.value?.w || 1200);
+                const canvasH = computed(() => activeCanvas.value?.h || 900);
 
                 const showJoinModal = ref(false), inputJoinCode = ref(''), showAddPageModal = ref(false), showSpaceModal = ref(false), showMergeModal = ref(false), showPdfModal = ref(false);
                 const spaceList = ref(['主人房', '睡房一', '睡房二', '客廳', '飯廳', '廚房', '客廁', '套廁', '儲物室', '玄關', '露台']);
@@ -676,7 +701,7 @@
                 const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
                 const lastCloudError = ref(''), cloudSyncState = ref('ready');
-                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v6.13連通' }[cloudSyncState.value] || '☁️v6.13連通'));
+                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v7.0連通' }[cloudSyncState.value] || '☁️v7.0連通'));
                 const cloudStatusClass = computed(() => cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' : cloudSyncState.value === 'error' ? 'bg-zinc-800 text-zinc-400' : 'bg-emerald-950 text-emerald-300 border border-emerald-700');
 
                 const customStamps = ref([]);
@@ -693,7 +718,7 @@
                     return msg || '連線異常';
                 };
 
-                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v6.13 零縮放極速乾淨版運作中');
+                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v7.0 單一SVG精準對位引擎運作中');
                 const trySilentAuth = async () => { if (auth && !auth.currentUser) try { await withTimeout(auth.signInAnonymously(), 8000); } catch (e) {} };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -747,58 +772,13 @@
 
                 const drawMode = ref('browse'), showTopSheet = ref(false), showTopTextBar = ref(false), activeMarker = ref(null), deletePinConfirm = ref(false);
                 const isProcessing = ref(false), processingText = ref(''), focusedInput = ref('val'), topTextInputRef = ref(null);
+                const svgCanvas = ref(null);
 
-                const stageRef = ref(null), fsStageRef = ref(null), svgCanvas = ref(null);
-                const wsW = ref(window.innerWidth || 360), wsH = ref((window.innerHeight || 600) - 85);
-                const fsWsW = ref(window.innerWidth || 360), fsWsH = ref((window.innerHeight || 600) - 44);
-
-                const updateWorkspaceSize = () => {
-                    if (stageRef.value) { const r = stageRef.value.getBoundingClientRect(); if (r.width > 20 && r.height > 20) { wsW.value = r.width; wsH.value = r.height; } }
-                    if (fsStageRef.value) { const r = fsStageRef.value.getBoundingClientRect(); if (r.width > 20 && r.height > 20) { fsWsW.value = r.width; fsWsH.value = r.height; } }
-                };
-
-                let stageObserver = null, fsStageObserver = null;
-                watch(stageRef, (el) => {
-                    if (stageObserver) { stageObserver.disconnect(); stageObserver = null; }
-                    if (el) {
-                        updateWorkspaceSize();
-                        stageObserver = new ResizeObserver(() => updateWorkspaceSize());
-                        stageObserver.observe(el);
-                    }
-                });
-                watch(fsStageRef, (el) => {
-                    if (fsStageObserver) { fsStageObserver.disconnect(); fsStageObserver = null; }
-                    if (el) {
-                        updateWorkspaceSize();
-                        fsStageObserver = new ResizeObserver(() => updateWorkspaceSize());
-                        fsStageObserver.observe(el);
-                    }
-                });
-
-                // 核心修復：徹底零變形、預留足夠留白框，100% 絕對看曬全圖
-                const calcFitStyle = (item, maxW, maxH) => {
-                    if (!item?.photo) return { display: 'none' };
-                    const iw = item.w || 1200, ih = item.h || 900;
-                    const safeW = Math.max(10, maxW - 24), safeH = Math.max(10, maxH - 24); 
-                    const s = Math.min(safeW / iw, safeH / ih);
-                    return { width: `${Math.floor(iw * s)}px`, height: `${Math.floor(ih * s)}px` };
-                };
-
-                const wrapperStyle = computed(() => calcFitStyle(activeCanvas.value, wsW.value, wsH.value));
-                const fsWrapperStyle = computed(() => calcFitStyle(fullScreenItem.value, fsWsW.value, fsWsH.value));
-                
-                const getGridThumbStyle = (pg) => {
-                    return {
-                        aspectRatio: `${pg.w || 1200} / ${pg.h || 900}`,
-                        width: '100%',
-                        height: 'auto'
-                    };
-                };
                 const getLineStroke = (l, alpha = 0.55) => l.type === 'measure' || !l.type ? `rgba(255, 0, 68, ${alpha})` : (l.color === 'gray' ? '#9ca3af' : l.color === 'white' ? '#ffffff' : '#ef4444');
 
-                const openFullScreenPreview = (item, title) => { fullScreenItem.value = item; fullScreenTitle.value = title; nextTick(updateWorkspaceSize); };
-                const enterEditMode = (pageIdx = 0) => { activePageIndex.value = pageIdx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; nextTick(updateWorkspaceSize); };
-                const switchToPreview = async () => { await saveAll(); activePin.value = null; previewTab.value = 'pages'; currentView.value = 'preview'; nextTick(updateWorkspaceSize); };
+                const openFullScreenPreview = (item, title) => { fullScreenItem.value = item; fullScreenTitle.value = title; };
+                const enterEditMode = (pageIdx = 0) => { activePageIndex.value = pageIdx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; };
+                const switchToPreview = async () => { await saveAll(); activePin.value = null; previewTab.value = 'pages'; currentView.value = 'preview'; };
 
                 const mergeableGroups = computed(() => {
                     const map = new Map();
@@ -869,13 +849,33 @@
                 const hasUndoItems = computed(() => activeCanvas.value?.historyStack?.length > 0);
                 const hasRedoItems = computed(() => activeCanvas.value?.redoStack?.length > 0);
 
+                // 核心座標轉換：透過 SVG 原生 CTM 逆矩陣直接映射螢幕點擊至 viewBox 座標
                 const getCoords = (e) => {
                     const svg = svgCanvas.value;
                     if (!svg || !activeCanvas.value) return { x: 0, y: 0 };
                     const pt = e.touches?.[0] || e.changedTouches?.[0] || e;
+                    const pw = canvasW.value, ph = canvasH.value;
+                    try {
+                        const ctm = svg.getScreenCTM();
+                        if (ctm) {
+                            const svgPt = svg.createSVGPoint();
+                            svgPt.x = pt.clientX;
+                            svgPt.y = pt.clientY;
+                            const loc = svgPt.matrixTransform(ctm.inverse());
+                            return {
+                                x: Math.round(Math.max(0, Math.min(pw, loc.x))),
+                                y: Math.round(Math.max(0, Math.min(ph, loc.y)))
+                            };
+                        }
+                    } catch (err) {}
                     const rect = svg.getBoundingClientRect();
-                    const pw = activeCanvas.value.w || 1200, ph = activeCanvas.value.h || 900;
-                    return { x: Math.round(Math.max(0, Math.min(pw, ((pt.clientX - rect.left) / rect.width) * pw))), y: Math.round(Math.max(0, Math.min(ph, ((pt.clientY - rect.top) / rect.height) * ph))) };
+                    const scale = Math.min(rect.width / pw, rect.height / ph);
+                    const offsetX = (rect.width - pw * scale) / 2;
+                    const offsetY = (rect.height - ph * scale) / 2;
+                    return {
+                        x: Math.round(Math.max(0, Math.min(pw, (pt.clientX - rect.left - offsetX) / scale))),
+                        y: Math.round(Math.max(0, Math.min(ph, (pt.clientY - rect.top - offsetY) / scale)))
+                    };
                 };
 
                 const renderSketchDataUrl = (w, h, hasGrid) => {
@@ -898,7 +898,7 @@
                 const initSketchOnCurrent = (hasGrid) => {
                     if (!activeCanvas.value) return;
                     Object.assign(activeCanvas.value, { photo: renderSketchDataUrl(1200, 1500, hasGrid), w: 1200, h: 1500, isSketch: true, hasGrid });
-                    touchDirty(); drawMode.value = 'browse'; nextTick(updateWorkspaceSize); saveAll();
+                    touchDirty(); drawMode.value = 'browse'; saveAll();
                 };
 
                 const addNewSketchPage = (hasGrid) => {
@@ -907,7 +907,7 @@
                     pages.value.push(newPg);
                     activePageIndex.value = pages.value.length - 1;
                     dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
-                    drawMode.value = 'browse'; nextTick(updateWorkspaceSize); saveAll();
+                    drawMode.value = 'browse'; saveAll();
                 };
 
                 const duplicateCurrentPage = (keepAnnotations = false) => {
@@ -920,7 +920,7 @@
                     pages.value.push(newPg);
                     activePageIndex.value = pages.value.length - 1;
                     dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
-                    drawMode.value = 'browse'; nextTick(updateWorkspaceSize); saveAll();
+                    drawMode.value = 'browse'; saveAll();
                     showToast(keepAnnotations ? `📑 已複製整頁為 P${pages.value.length}` : `📄 已複製純淨底圖為 P${pages.value.length}`);
                 };
 
@@ -932,7 +932,7 @@
                     touchDirty(); saveAll();
                 };
 
-                const switchPage = (idx) => { activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; nextTick(updateWorkspaceSize); };
+                const switchPage = (idx) => { activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; };
                 const prevPage = () => { if (activePageIndex.value > 0) switchPage(activePageIndex.value - 1); };
                 const nextPage = () => { if (activePageIndex.value < pages.value.length - 1) switchPage(activePageIndex.value + 1); };
 
@@ -958,10 +958,10 @@
                     Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || activePage.value?.space || '' });
                     if (pin.isSketch && !pin.photo) pin.photo = renderSketchDataUrl(pin.w, pin.h, !!pin.hasGrid);
                     activePin.value = pin; activePinIndex.value = idx; deletePinConfirm.value = false;
-                    drawMode.value = 'browse'; nextTick(updateWorkspaceSize);
+                    drawMode.value = 'browse';
                 };
 
-                const exitPinSubPage = () => { activePin.value = null; drawMode.value = 'browse'; nextTick(updateWorkspaceSize); };
+                const exitPinSubPage = () => { activePin.value = null; drawMode.value = 'browse'; };
 
                 const deleteActivePin = () => {
                     if (!deletePinConfirm.value) { deletePinConfirm.value = true; setTimeout(() => { deletePinConfirm.value = false; }, 3000); return; }
@@ -1013,7 +1013,7 @@
                         touchDirty();
                         showToast('✅ 已套用底圖庫照片');
                     }
-                    drawMode.value = 'browse'; nextTick(updateWorkspaceSize); saveAll();
+                    drawMode.value = 'browse'; saveAll();
                 };
 
                 const deleteFromPhotoPool = async (item) => {
@@ -1034,17 +1034,15 @@
                     const c = activeCanvas.value; if (!c) return;
                     c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                     const markerId = Date.now();
-                    const newMarker = { id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType, data: { val: '', val2: '', val3: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' } };
+                    const newMarker = { id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType, data: { val: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' } };
                     updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
                     touchDirty(); activeMarker.value = newMarker;
                     if (forceType === 'stamp') showTopSheet.value = true; else { showTopTextBar.value = true; nextTick(() => topTextInputRef.value?.focus()); }
                     saveAll();
                 };
 
-                // 核心修復：修正拉字差值算法，指邊停邊不彈開
                 const startDrag = (marker, e) => { 
                     if (e.touches?.length > 1) return; 
-                    if (drawMode.value !== 'browse') return;
                     e.preventDefault(); e.stopPropagation();
                     draggedMarker.value = marker; 
                     const p = getCoords(e); 
@@ -1076,16 +1074,16 @@
                 const moveStroke = (e) => {
                     if (draggedMarker.value) {
                         e.preventDefault(); const p = getCoords(e);
-                        // 修正：計算偏移差值，不再吸附中心
                         const dx = p.x - dragOrigin.value.x;
                         const dy = p.y - dragOrigin.value.y;
-                        if (Math.hypot(dx, dy) > 4 || isDraggingMarker.value) {
+                        if (Math.hypot(dx, dy) > 5 || isDraggingMarker.value) {
                             if (!isDraggingMarker.value) {
                                 isDraggingMarker.value = true;
                                 if (autoBranchIfNeeded()) draggedMarker.value = (activeCanvas.value.markers || []).find(m => m.id === draggedMarker.value.id) || draggedMarker.value;
                             }
-                            draggedMarker.value.x = markerOrigin.value.x + dx;
-                            draggedMarker.value.y = markerOrigin.value.y + dy;
+                            const pw = canvasW.value, ph = canvasH.value;
+                            draggedMarker.value.x = Math.round(Math.max(0, Math.min(pw, markerOrigin.value.x + dx)));
+                            draggedMarker.value.y = Math.round(Math.max(0, Math.min(ph, markerOrigin.value.y + dy)));
                         }
                     } else if (isDrawing.value) {
                         e.preventDefault(); const p = getCoords(e);
@@ -1099,7 +1097,7 @@
                         if (!isDraggingMarker.value) {
                             draggedMarker.value.x = markerOrigin.value.x; draggedMarker.value.y = markerOrigin.value.y;
                             activeMarker.value = draggedMarker.value;
-                            if (draggedMarker.value.type === 'stamp') showTopTextBar.value = true;
+                            if (draggedMarker.value.type === 'stamp' || draggedMarker.value.type === 'text') showTopTextBar.value = true;
                             else { showTopSheet.value = true; focusedInput.value = 'val'; }
                             if (showTopTextBar.value) nextTick(() => topTextInputRef.value?.focus());
                         } else { touchDirty(); saveAll(); }
@@ -1117,14 +1115,14 @@
                         activePage.value.pins.push(newPin); touchDirty(); openPinSubPage(newPin, activePage.value.pins.length - 1); saveAll(); return;
                     }
 
-                    if (drawMode.value === 'stamp' && drawDist < 12) { currentLine.value = null; currentPath.value = ''; createPointMarker(endPos.x, endPos.y, drawMode.value); return; }
+                    if (drawMode.value === 'stamp' && drawDist < 14) { currentLine.value = null; currentPath.value = ''; createPointMarker(endPos.x, endPos.y, 'stamp'); return; }
 
                     if ((drawMode.value === 'line' || drawMode.value === 'arrow-single') && currentLine.value) {
                         autoBranchIfNeeded();
                         const c = activeCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                         const lineId = Date.now(), markerId = lineId + 1;
                         c.lines.push({ ...currentLine.value, id: lineId, type: drawMode.value === 'line' ? 'measure' : 'arrow-single', color: drawMode.value === 'arrow-single' ? arrowColor.value : null });
-                        const newMarker = { id: markerId, lineId, x: Math.round((currentLine.value.x1 + currentLine.value.x2) / 2), y: Math.round((currentLine.value.y1 + currentLine.value.y2) / 2), w: 140, h: 56, type: 'general', data: { val: '', val2: '', val3: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' } };
+                        const newMarker = { id: markerId, lineId, x: Math.round((currentLine.value.x1 + currentLine.value.x2) / 2), y: Math.round((currentLine.value.y1 + currentLine.value.y2) / 2), w: 140, h: 56, type: 'general', data: { val: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' } };
                         updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
                         touchDirty(); activeMarker.value = newMarker; focusedInput.value = 'val'; showTopSheet.value = true; currentLine.value = null;
                     } else if (drawMode.value === 'freehand' && currentPath.value) {
@@ -1181,7 +1179,7 @@
                 };
 
                 const switchMarkerType = (t, focusKey) => { ensureMarkerBranched(); activeMarker.value.type = t; focusedInput.value = focusKey; updateMarkerSize(activeMarker.value); touchDirty(); };
-                const closeTopTextBar = () => { if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
+                const closeTopTextBar = () => { if ((activeMarker.value?.type === 'stamp' || activeMarker.value?.type === 'text') && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
                 const closeTopSheet = () => { if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopSheet.value = false; saveAll(); };
 
                 const handleKeypad = (key) => {
@@ -1264,7 +1262,7 @@
                         Object.assign(activeCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false });
                         touchDirty();
                     }
-                    drawMode.value = 'browse'; nextTick(updateWorkspaceSize); saveAll(); e.target.value = '';
+                    drawMode.value = 'browse'; saveAll(); e.target.value = '';
                 };
 
                 const saveAll = async () => {
@@ -1324,7 +1322,7 @@
                         project.lastSyncAt = Date.now();
                         if (dirtyPageIds.size === 0) hasUnsavedCloudChanges.value = false;
                         await saveAll();
-                        lastCloudError.value = ''; cloudSyncState.value = 'ready'; nextTick(updateWorkspaceSize);
+                        lastCloudError.value = ''; cloudSyncState.value = 'ready';
                     } catch (e) { lastCloudError.value = formatSyncError(e); cloudSyncState.value = 'error'; if (throwOnError) throw new Error(lastCloudError.value); }
                 };
 
@@ -1416,7 +1414,6 @@
                     pages.value = [firstPg]; photoPool.value = []; activePageIndex.value = 0; activePin.value = null;
                     dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id);
                     hasUnsavedCloudChanges.value = true; currentView.value = 'proj'; await saveAll(); startRealtimeListener(project.code);
-                    nextTick(updateWorkspaceSize);
                 };
 
                 const copyCode = (code) => { navigator.clipboard?.writeText(code); showToast('已複製工程碼：#' + code); showManageModal.value = false; };
@@ -1447,7 +1444,6 @@
                     await pullAndMergeFromCloud(code, false);
                     if (!pages.value.length) pages.value = [makeEmptyPage()];
                     drawMode.value = 'browse'; startRealtimeListener(code);
-                    nextTick(updateWorkspaceSize);
                 };
 
                 const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
@@ -1623,12 +1619,9 @@
                 onMounted(async () => {
                     await loadCustomStamps();
                     await checkAuthorName(); await loadProjectList();
-                    window.addEventListener('resize', updateWorkspaceSize);
-                    window.addEventListener('orientationchange', () => setTimeout(updateWorkspaceSize, 150));
                     window.addEventListener('online', () => { cloudSyncState.value = 'ready'; lastCloudError.value = ''; });
                     window.addEventListener('offline', () => { cloudSyncState.value = 'error'; lastCloudError.value = formatSyncError(new Error('offline')); });
                     trySilentAuth();
-                    setTimeout(updateWorkspaceSize, 100);
                 });
 
                 const renderPdfPageImg = (canvasObj) => new Promise((resolve) => {
@@ -1729,11 +1722,11 @@
                 };
 
                 return {
-                    currentView, previewTab, fullScreenItem, fullScreenTitle, bomSummary, getGridThumbStyle, getLineStroke,
+                    currentView, previewTab, fullScreenItem, fullScreenTitle, bomSummary, getLineStroke,
                     openFullScreenPreview, enterEditMode, switchToPreview, duplicateCurrentPage,
                     showMergeModal, mergeableGroups, mergePageGroup, showPdfModal,
                     showPhotoPoolModal, photoPoolList, photoPoolTarget, openPhotoPool, selectFromPhotoPool, deleteFromPhotoPool,
-                    projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas,
+                    projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH,
                     showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges,
                     showManageModal, manageProj, openManageMenu, renameProject, duplicateProject,
                     showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
@@ -1741,8 +1734,7 @@
                     arrowColor, freehandColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg,
                     customStamps, promptCustomStamp,
                     drawMode, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText, focusedInput, topTextInputRef,
-                    stageRef, fsStageRef, svgCanvas, wrapperStyle, fsWrapperStyle,
-                    currentLine, currentPath, hasUndoItems, hasRedoItems,
+                    svgCanvas, currentLine, currentPath, hasUndoItems, hasRedoItems,
                     createNewProject, loadProject, deleteProject, backToProjects, copyCode, joinProjectByCode,
                     saveAll, downloadNow, uploadNow, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, deleteActivePin,
                     setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload,
