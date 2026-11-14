@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v3.1</title>
+    <title>度尺寶 Pro v4.0</title>
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Check_green_icon.svg/200px-Check_green_icon.svg.png">
 
@@ -50,27 +50,39 @@
 </head>
 <body class="text-gray-100 font-sans antialiased">
     <div id="app" v-cloak class="fixed inset-0 w-full h-full flex flex-col overflow-hidden">
+        
+        <!-- 頂部導航欄 (左右動線分離) -->
         <div class="shrink-0 flex flex-col z-30">
             <header class="h-10 bg-black text-white px-2 border-b border-zinc-800 flex justify-between items-center gap-1">
+                <!-- 左手邊：目錄與載入 -->
                 <div class="flex items-center gap-1 min-w-0 flex-1">
-                    <button v-if="currentView === 'proj'" @click="backToProjects" class="bg-zinc-800 px-2 py-1 rounded text-xs font-bold shrink-0">‹目錄</button>
-                    <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer">{{ cloudStatusText }}</span>
-                    <span class="text-[9px] text-zinc-500 font-mono shrink-0">v3.1</span>
-                    <span v-if="currentView === 'proj' && project.code" @click="copyProjectCode" class="bg-yellow-400 text-black text-[11px] font-black px-1.5 py-0.5 rounded shrink-0 cursor-pointer">#{{ project.code }}</span>
                     <span v-if="currentView === 'dir'" class="text-sm font-bold truncate">工程目錄</span>
-                    <input v-else v-model="project.name" @blur="saveAll" placeholder="輸入工程名稱..." class="bg-transparent text-white text-xs font-bold min-w-0 flex-1 truncate focus:bg-zinc-900 focus:px-1.5 rounded focus:outline-none">
+                    
+                    <button v-if="currentView === 'proj'" @click="backToProjects" class="bg-zinc-800 px-2 py-1 rounded text-xs font-bold shrink-0">‹目錄</button>
+                    <button v-if="currentView === 'proj'" @click="downloadNow" class="bg-blue-600 active:bg-blue-800 text-white px-2 py-1 rounded text-xs font-bold shrink-0">⬇️載入</button>
+                    
+                    <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer ml-1">{{ cloudStatusText }}</span>
+                    
+                    <input v-if="currentView === 'proj'" v-model="project.name" @blur="saveAll" placeholder="輸入工程名稱..." class="ml-1 bg-transparent text-white text-xs font-bold min-w-0 flex-1 truncate focus:bg-zinc-900 focus:px-1.5 rounded focus:outline-none">
                 </div>
+                
+                <!-- 右手邊：上傳與其他功能 -->
                 <div class="flex gap-1 items-center shrink-0">
-                    <button v-if="currentView === 'dir'" @click="showJoinModal = true" class="bg-yellow-500 text-black px-2.5 py-1 rounded text-xs font-bold">🔑組合</button>
-                    <button v-if="currentView === 'dir'" @click="createNewProject" class="bg-blue-600 text-white px-2.5 py-1 rounded text-xs font-bold">+新建</button>
+                    <button v-if="currentView === 'dir'" @click="openCloudBrowser" class="bg-zinc-800 text-blue-400 border border-blue-900 px-2 py-1 rounded text-xs font-bold">☁️雲端庫</button>
+                    <button v-if="currentView === 'dir'" @click="showJoinModal = true" class="bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold">🔑組合</button>
+                    <button v-if="currentView === 'dir'" @click="createNewProject" class="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">+新建</button>
                     
-                    <button v-if="currentView === 'proj'" @click="downloadNow" class="bg-blue-600 active:bg-blue-800 text-white px-2 py-1 rounded text-xs font-bold">⬇️載入</button>
-                    <button v-if="currentView === 'proj'" @click="uploadNow" class="bg-purple-600 active:bg-purple-800 text-white px-2 py-1 rounded text-xs font-bold">⬆️上傳</button>
-                    
+                    <!-- 發光防呆上傳按鈕 -->
+                    <button v-if="currentView === 'proj'" @click="uploadNow" 
+                            :class="hasUnsavedCloudChanges ? 'bg-purple-600 animate-pulse ring-2 ring-purple-400' : 'bg-zinc-700'" 
+                            class="text-white px-3 py-1 rounded text-xs font-bold transition-all shadow">
+                        ⬆️上傳
+                    </button>
                     <button v-if="currentView === 'proj' && pages.length" @click="exportPdfReport" class="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold">PDF</button>
                 </div>
             </header>
 
+            <!-- 工具列 -->
             <div v-if="currentView === 'proj'" class="h-11 bg-zinc-900 border-b border-zinc-700 px-1 flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
                 <div class="flex items-center gap-1 shrink-0 justify-center">
                     <button @click="setMode('browse')" :class="drawMode === 'browse' ? 'bg-emerald-500 text-black' : 'bg-zinc-800 text-zinc-300'" class="px-2 py-1.5 text-xs font-bold rounded">睇圖</button>
@@ -87,6 +99,7 @@
                 </div>
             </div>
 
+            <!-- 顏色列 -->
             <div v-if="currentView === 'proj' && (drawMode === 'arrow-single' || drawMode === 'freehand')" class="h-8 bg-zinc-950 border-b border-zinc-800 px-2 flex items-center justify-center gap-2">
                 <span class="text-[10px] text-zinc-400 font-bold">顏色:</span>
                 <template v-if="drawMode === 'arrow-single'">
@@ -107,12 +120,10 @@
             {{ toastMsg }}
         </div>
 
+        <!-- 外部目錄視圖 -->
         <main v-show="currentView === 'dir'" class="flex-1 min-h-0 bg-zinc-950 p-3 overflow-y-auto touch-scrollable">
             <div v-if="projectList.length === 0" class="text-center text-zinc-500 mt-20 text-sm font-bold">
-                暫無工程，點右上「+新建」或「🔑組合」連通。<br><br>
-                <button @click="restoreFromCloud" class="mt-4 bg-zinc-800 text-blue-400 border border-zinc-700 px-4 py-2 rounded-lg font-bold shadow-lg active:bg-zinc-700">
-                    ☁️ 從雲端尋回 / 載入所有工程
-                </button>
+                本機暫無工程。<br>點右上「+新建」或「☁️雲端庫」連通。
             </div>
             <div v-for="proj in projectList" :key="proj.code" class="bg-zinc-900 border border-zinc-800 p-3 rounded-lg mb-2.5 flex justify-between items-center shadow-lg">
                 <div class="flex-1 mr-2 cursor-pointer min-w-0" @click="loadProject(proj.code)">
@@ -120,15 +131,24 @@
                         <span class="bg-yellow-400 text-black text-xs font-black px-1.5 py-0.5 rounded shrink-0">#{{ proj.code }}</span>
                         <div class="font-bold text-sm text-white truncate">{{ proj.name || '未命名工程' }}</div>
                     </div>
-                    <div class="text-[11px] text-zinc-400 mt-1">{{ proj.date }} ｜ {{ proj.pageCount || 1 }} 頁 ｜ {{ proj.pinCount || 0 }} 釘</div>
+                    <div class="text-[10px] text-zinc-400 mt-1 flex flex-col gap-0.5">
+                        <span>{{ proj.date }} ｜ {{ proj.pageCount || 1 }} 頁 ｜ {{ proj.pinCount || 0 }} 釘</span>
+                        <span v-if="proj.lastModifiedBy" class="text-blue-300 font-bold">✍️ 最後由 [{{ proj.lastModifiedBy }}] 修改</span>
+                    </div>
                 </div>
                 <div class="flex gap-1.5 shrink-0">
-                    <button @click="loadProject(proj.code)" class="bg-zinc-700 text-white px-2.5 py-1 rounded text-xs font-bold">開啟</button>
-                    <button @click="deleteProject(proj.code)" class="bg-red-900/90 text-white px-2.5 py-1 rounded text-xs font-bold">刪除</button>
+                    <button @click="loadProject(proj.code)" class="bg-zinc-700 text-white px-2.5 py-1.5 rounded text-xs font-bold">開啟</button>
+                    <!-- 齒輪管理按鈕 -->
+                    <button @click="openManageMenu(proj)" class="bg-zinc-800 border border-zinc-600 text-zinc-300 px-2 py-1.5 rounded text-xs font-bold">⚙️管理</button>
                 </div>
+            </div>
+            
+            <div class="mt-8 text-center">
+                <button @click="changeAuthorName" class="text-xs text-zinc-500 underline">👤 目前設備稱呼: {{ authorName || '未設定' }}</button>
             </div>
         </main>
 
+        <!-- 畫布視圖 -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col">
             <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                 <div v-if="activePin" class="text-yellow-400 font-bold text-sm mb-2">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
@@ -238,6 +258,67 @@
                 </button>
             </div>
         </main>
+
+        <!-- 所有彈出視窗與模態框 -->
+
+        <!-- ⚙️ 管理目錄選單 Modal -->
+        <div v-if="showManageModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showManageModal = false">
+            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-0 flex flex-col text-white shadow-2xl overflow-hidden">
+                <div class="bg-zinc-800 p-3 text-center border-b border-zinc-700">
+                    <div class="text-sm font-bold text-yellow-400">管理工程 #{{ manageProj.code }}</div>
+                    <div class="text-[11px] text-zinc-400 mt-1 truncate">{{ manageProj.name || '未命名工程' }}</div>
+                </div>
+                <div class="flex flex-col">
+                    <button @click="renameProject" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">✏️ 重新命名</button>
+                    <button @click="copyCode(manageProj.code)" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">🔗 複製工程碼</button>
+                    <button @click="duplicateProject" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">👯‍♂️ 複製為新檔 (不影響原圖)</button>
+                    <button @click="openBackupList" class="p-4 text-sm font-bold text-left text-blue-400 hover:bg-zinc-800 border-b border-zinc-800">⏳ 歷史備份與還原 (時光機)</button>
+                    <button @click="deleteProject(manageProj.code)" class="p-4 text-sm font-bold text-left text-red-500 hover:bg-red-950">🗑️ 刪除此工程</button>
+                </div>
+                <button @click="showManageModal = false" class="p-3 text-xs font-bold text-zinc-500 bg-black text-center">取消關閉</button>
+            </div>
+        </div>
+
+        <!-- ☁️ 雲端工程庫清單 Modal -->
+        <div v-if="showCloudBrowser" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" @click.self="showCloudBrowser = false">
+            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-md rounded-xl p-4 flex flex-col text-white shadow-2xl max-h-[80vh]">
+                <h3 class="text-sm font-bold text-blue-400 mb-4 border-b border-zinc-700 pb-2">☁️ 雲端工程庫 (只顯示純文字目錄)</h3>
+                <div class="overflow-y-auto flex-1 touch-scrollable no-scrollbar">
+                    <div v-if="cloudProjectList.length === 0" class="text-center text-zinc-500 py-10 text-xs">正在讀取雲端目錄或無紀錄...</div>
+                    <div v-for="cp in cloudProjectList" :key="cp.code" class="bg-zinc-800 rounded p-3 mb-2 flex justify-between items-center">
+                        <div class="min-w-0 flex-1 pr-2">
+                            <div class="flex items-center gap-1">
+                                <span class="bg-yellow-500 text-black px-1 rounded text-[10px] font-bold">#{{ cp.code }}</span>
+                                <span class="text-sm font-bold truncate">{{ cp.name }}</span>
+                            </div>
+                            <div class="text-[10px] text-zinc-400 mt-1">最後更新: {{ new Date(cp.updatedAt).toLocaleString() }}</div>
+                            <div v-if="cp.lastModifiedBy" class="text-[10px] text-blue-300">✍️ 由 {{ cp.lastModifiedBy }} 修改</div>
+                        </div>
+                        <button @click="downloadFromCloudBrowser(cp.code)" class="bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold shrink-0">⬇️載入</button>
+                    </div>
+                </div>
+                <button @click="showCloudBrowser = false" class="mt-4 w-full bg-zinc-800 py-2 rounded text-xs font-bold">關閉</button>
+            </div>
+        </div>
+
+        <!-- ⏳ 時光機備份清單 Modal -->
+        <div v-if="showBackupListModal" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" @click.self="showBackupListModal = false">
+            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-sm rounded-xl p-4 flex flex-col text-white shadow-2xl">
+                <h3 class="text-sm font-bold text-blue-400 mb-4 border-b border-zinc-700 pb-2">⏳ 雲端備份時光機 <br><span class="text-xs text-zinc-400">#{{ manageProj.code }}</span></h3>
+                <div class="overflow-y-auto touch-scrollable max-h-[50vh]">
+                    <div v-if="backupList.length === 0" class="text-center text-zinc-500 py-10 text-xs">此工程尚未建立備份 (上傳時會自動建立)</div>
+                    <div v-for="bk in backupList" :key="bk.id" class="bg-zinc-800 border border-zinc-700 rounded p-3 mb-2 flex justify-between items-center">
+                        <div>
+                            <div class="text-xs font-bold text-yellow-400">{{ new Date(bk.timestamp).toLocaleString() }}</div>
+                            <div class="text-[10px] text-zinc-400 mt-1">✍️ 備份者: {{ bk.author || '未知' }}</div>
+                        </div>
+                        <button @click="restoreBackup(bk.id)" class="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold">⏳還原</button>
+                    </div>
+                </div>
+                <div class="text-[10px] text-zinc-500 mt-2 leading-tight">還原時會產生全新工程碼，不會覆蓋現有檔案，請安心操作。</div>
+                <button @click="showBackupListModal = false" class="mt-4 w-full bg-zinc-800 py-2 rounded text-xs font-bold">關閉</button>
+            </div>
+        </div>
 
         <div v-if="showTopTextBar && activeMarker" class="fixed top-0 left-0 w-full bg-white text-black border-b-4 border-blue-600 z-[60] shadow-2xl flex items-center gap-2 p-2 px-3" @touchstart.stop @mousedown.stop>
             <span class="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-1 rounded whitespace-nowrap">文字</span>
@@ -418,10 +499,7 @@
             if (window.firebase) {
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
-                db.settings({
-                    experimentalForceLongPolling: true,
-                    ignoreUndefinedProperties: true
-                });
+                db.settings({ experimentalForceLongPolling: true, ignoreUndefinedProperties: true });
                 auth = firebase.auth();
             }
         } catch (e) {}
@@ -437,21 +515,20 @@
         const withRetry = async (fn, retries = 2, delayMs = 800) => {
             let lastErr;
             for (let i = 0; i <= retries; i++) {
-                try {
-                    return await fn();
-                } catch (e) {
-                    lastErr = e;
-                    if (i < retries) await new Promise(r => setTimeout(r, delayMs * (i + 1)));
-                }
+                try { return await fn(); } 
+                catch (e) { lastErr = e; if (i < retries) await new Promise(r => setTimeout(r, delayMs * (i + 1))); }
             }
             throw lastErr;
         };
 
         createApp({
             setup() {
+                const authorName = ref('');
+                const hasUnsavedCloudChanges = ref(false);
+
                 const currentView = ref('dir');
                 const projectList = ref([]);
-                const project = reactive({ code: '', name: '', date: '', deletedPageIds: [], lastSyncAt: 0 });
+                const project = reactive({ code: '', name: '', date: '', deletedPageIds: [], lastSyncAt: 0, lastModifiedBy: '' });
                 const pages = ref([]);
                 const activePageIndex = ref(0);
                 const activePin = ref(null);
@@ -465,6 +542,13 @@
                 const showAddPageModal = ref(false);
                 const showSpaceModal = ref(false);
                 const spaceList = ref(['主人房', '睡房一', '睡房二', '睡房三', '客廳', '飯廳', '廚房', '客廁', '套廁', '儲物室', '玄關', '露台']);
+                
+                const showManageModal = ref(false);
+                const manageProj = ref({});
+                const showCloudBrowser = ref(false);
+                const cloudProjectList = ref([]);
+                const showBackupListModal = ref(false);
+                const backupList = ref([]);
 
                 const arrowColor = ref('red');
                 const freehandColor = ref('#3b82f6');
@@ -487,21 +571,14 @@
                     const msg = String(err?.message || err || '');
                     if (!navigator.onLine) return '手機目前處於離線狀態（無網路），資料已安全儲存在本機。';
                     if (!db) return 'Firebase 套件未載入（請確認有網路後重新整理）';
-                    if (msg.includes('permission') || msg.includes('PERMISSION_DENIED') || err?.code === 'permission-denied') {
-                        return 'Firebase 讀寫權限被拒（code: ' + (err?.code || 'denied') + '）';
-                    }
-                    if (msg.includes('offline') || msg.includes('Failed to get document') || msg.includes('network')) {
-                        return '流動網絡不穩，資料已儲存在手機，訊號穩定時再按同步即可。';
-                    }
+                    if (msg.includes('permission') || msg.includes('PERMISSION_DENIED') || err?.code === 'permission-denied') return 'Firebase 讀寫權限被拒';
+                    if (msg.includes('offline') || msg.includes('Failed to get document') || msg.includes('network')) return '流動網絡不穩，資料已儲存在手機，訊號穩定時再按同步即可。';
                     return msg || '連線異常';
                 };
 
                 const showCloudDetail = () => {
-                    if (cloudSyncState.value === 'error' && lastCloudError.value) {
-                        alert('離線原因：' + lastCloudError.value);
-                    } else {
-                        showToast('v3.1 本地與雲端連線正常');
-                    }
+                    if (cloudSyncState.value === 'error' && lastCloudError.value) alert('離線原因：' + lastCloudError.value);
+                    else showToast('v4.0 本地與雲端連線正常');
                 };
 
                 const trySilentAuth = async () => {
@@ -513,6 +590,7 @@
                     const now = Date.now();
                     if (activePin.value) activePin.value.updatedAt = now;
                     if (activePage.value) activePage.value.updatedAt = now;
+                    hasUnsavedCloudChanges.value = true;
                 };
 
                 const drawMode = ref('browse');
@@ -611,9 +689,7 @@
                         markers: [], lines: [], paths: [], pins: [], historyStack: [], redoStack: [], updatedAt: Date.now(),
                         ...overrides
                     };
-                    if (pg.isSketch && !pg.photo) {
-                        pg.photo = renderSketchDataUrl(pg.w || 1200, pg.h || 1500, !!pg.hasGrid);
-                    }
+                    if (pg.isSketch && !pg.photo) pg.photo = renderSketchDataUrl(pg.w || 1200, pg.h || 1500, !!pg.hasGrid);
                     return pg;
                 };
 
@@ -623,9 +699,7 @@
                     activeCanvas.value.photo = renderSketchDataUrl(w, h, hasGrid);
                     activeCanvas.value.w = w; activeCanvas.value.h = h;
                     activeCanvas.value.isSketch = true; activeCanvas.value.hasGrid = hasGrid;
-                    touchDirty();
-                    drawMode.value = 'browse';
-                    resetZoom();
+                    touchDirty(); drawMode.value = 'browse'; resetZoom();
                     nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
                     saveAll();
                 };
@@ -636,8 +710,8 @@
                     const pg = makeEmptyPage({ photo: renderSketchDataUrl(w, h, hasGrid), w, h, isSketch: true, hasGrid });
                     pages.value.push(pg);
                     activePageIndex.value = pages.value.length - 1;
-                    drawMode.value = 'browse';
-                    resetZoom();
+                    hasUnsavedCloudChanges.value = true;
+                    drawMode.value = 'browse'; resetZoom();
                     nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
                     saveAll();
                 };
@@ -646,15 +720,11 @@
                     if (!activeCanvas.value) return;
                     activeCanvas.value.hasGrid = !activeCanvas.value.hasGrid;
                     activeCanvas.value.photo = renderSketchDataUrl(activeCanvas.value.w || 1200, activeCanvas.value.h || 1500, activeCanvas.value.hasGrid);
-                    touchDirty();
-                    saveAll();
+                    touchDirty(); saveAll();
                 };
 
                 const switchPage = (idx) => {
-                    activePageIndex.value = idx;
-                    activePin.value = null;
-                    drawMode.value = 'browse';
-                    resetZoom();
+                    activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; resetZoom();
                     nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
                 };
 
@@ -663,12 +733,15 @@
 
                 const deleteCurrentPage = () => {
                     if (pages.value.length <= 1) return;
-                    if (!confirm(`確定刪除 P${activePageIndex.value + 1}？`)) return;
+                    const val = prompt(`⚠️ 刪除頁面無法復原！請輸入 "delete" 確認刪除 P${activePageIndex.value + 1}：`);
+                    if (val?.toLowerCase() !== 'delete') return;
+                    
                     const delId = activePage.value.id;
                     project.deletedPageIds ||= [];
                     if (!project.deletedPageIds.includes(delId)) project.deletedPageIds.push(delId);
                     pages.value.splice(activePageIndex.value, 1);
                     activePageIndex.value = Math.max(0, activePageIndex.value - 1);
+                    hasUnsavedCloudChanges.value = true;
                     saveAll();
                     if (db && project.code) {
                         db.collection('site_projects').doc(String(project.code)).collection('pages').doc(delId).delete().catch(() => {});
@@ -677,61 +750,34 @@
                 };
 
                 const openPinSubPage = (pin, idx) => {
-                    pin.markers ||= []; pin.lines ||= []; pin.paths ||= [];
-                    pin.historyStack ||= []; pin.redoStack ||= [];
+                    pin.markers ||= []; pin.lines ||= []; pin.paths ||= []; pin.historyStack ||= []; pin.redoStack ||= [];
                     pin.w ||= 1200; pin.h ||= 900;
                     pin.space = pin.space || activePage.value?.space || '';
-                    if (pin.isSketch && !pin.photo) {
-                        pin.photo = renderSketchDataUrl(pin.w, pin.h, !!pin.hasGrid);
-                    }
-                    activePin.value = pin;
-                    activePinIndex.value = idx;
-                    deletePinConfirm.value = false;
-                    drawMode.value = 'browse';
-                    resetZoom();
+                    if (pin.isSketch && !pin.photo) pin.photo = renderSketchDataUrl(pin.w, pin.h, !!pin.hasGrid);
+                    activePin.value = pin; activePinIndex.value = idx; deletePinConfirm.value = false;
+                    drawMode.value = 'browse'; resetZoom();
                     nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
                 };
 
-                const exitPinSubPage = () => {
-                    activePin.value = null;
-                    drawMode.value = 'browse';
-                    resetZoom();
-                    nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
-                };
+                const exitPinSubPage = () => { activePin.value = null; drawMode.value = 'browse'; resetZoom(); nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); }); };
 
                 const deleteActivePin = () => {
-                    if (!deletePinConfirm.value) {
-                        deletePinConfirm.value = true;
-                        setTimeout(() => { deletePinConfirm.value = false; }, 3000);
-                        return;
-                    }
+                    if (!deletePinConfirm.value) { deletePinConfirm.value = true; setTimeout(() => { deletePinConfirm.value = false; }, 3000); return; }
                     const id = activePin.value.id;
                     activePage.value.pins = activePage.value.pins.filter(p => p.id !== id);
                     activePage.value.updatedAt = Date.now();
-                    deletePinConfirm.value = false;
-                    exitPinSubPage();
-                    saveAll();
-                    if (db && project.code) {
-                        db.collection('site_projects').doc(String(project.code)).collection('media').doc(String(id)).delete().catch(() => {});
-                    }
+                    hasUnsavedCloudChanges.value = true;
+                    deletePinConfirm.value = false; exitPinSubPage(); saveAll();
+                    if (db && project.code) db.collection('site_projects').doc(String(project.code)).collection('media').doc(String(id)).delete().catch(() => {});
                 };
 
                 const setMode = (m) => { drawMode.value = m; };
 
-                const setPageSpace = (sp) => {
-                    if (activeCanvas.value) activeCanvas.value.space = sp;
-                    touchDirty();
-                    showSpaceModal.value = false;
-                    saveAll();
-                };
+                const setPageSpace = (sp) => { if (activeCanvas.value) activeCanvas.value.space = sp; touchDirty(); showSpaceModal.value = false; saveAll(); };
 
                 const addCustomSpace = () => {
                     const name = prompt('輸入空間名稱（例如：閣樓）');
-                    if (name?.trim()) {
-                        const s = name.trim();
-                        if (!spaceList.value.includes(s)) spaceList.value.push(s);
-                        setPageSpace(s);
-                    }
+                    if (name?.trim()) { const s = name.trim(); if (!spaceList.value.includes(s)) spaceList.value.push(s); setPageSpace(s); }
                 };
 
                 const createPointMarker = (x, y, forceType) => {
@@ -744,17 +790,10 @@
                         data: { val: '', val2: '', val3: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '' }
                     };
                     updateMarkerSize(newMarker);
-                    c.markers.push(newMarker);
-                    c.historyStack.push({ type: 'marker', markerId });
-                    touchDirty();
-                    activeMarker.value = newMarker;
-
-                    if (forceType === 'text') {
-                        showTopTextBar.value = true;
-                        nextTick(() => topTextInputRef.value?.focus());
-                    } else {
-                        showTopSheet.value = true;
-                    }
+                    c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
+                    touchDirty(); activeMarker.value = newMarker;
+                    if (forceType === 'text') { showTopTextBar.value = true; nextTick(() => topTextInputRef.value?.focus()); }
+                    else { showTopSheet.value = true; }
                     saveAll();
                 };
 
@@ -762,9 +801,7 @@
                     if (e.touches && e.touches.length > 1) return;
                     draggedMarker.value = marker;
                     const p = getCoords(e);
-                    dragOrigin.value = { x: p.x, y: p.y };
-                    markerOrigin.value = { x: marker.x, y: marker.y };
-                    isDraggingMarker.value = false;
+                    dragOrigin.value = { x: p.x, y: p.y }; markerOrigin.value = { x: marker.x, y: marker.y }; isDraggingMarker.value = false;
                 };
 
                 const onStageTouchStart = (e) => {
@@ -782,10 +819,7 @@
                     }
                     if (e.touches.length === 1 && Date.now() > pinchCooldown && !draggedMarker.value) {
                         if (drawMode.value === 'browse') {
-                            isPanningBrowse = true;
-                            panStartClient = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-                            panStartOrigin = { x: zoomPan.x, y: zoomPan.y };
-                            return;
+                            isPanningBrowse = true; panStartClient = { x: e.touches[0].clientX, y: e.touches[0].clientY }; panStartOrigin = { x: zoomPan.x, y: zoomPan.y }; return;
                         }
                         beginStroke(e);
                     }
@@ -793,208 +827,115 @@
 
                 const onStageTouchMove = (e) => {
                     if (e.touches.length === 2 && pinchStartDist > 0) {
-                        e.preventDefault();
-                        const [t1, t2] = e.touches;
+                        e.preventDefault(); const [t1, t2] = e.touches;
                         const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
                         const newScale = Math.max(1, Math.min(5, pinchStartScale * (dist / pinchStartDist)));
                         const rect = stageRef.value.getBoundingClientRect();
-                        const midX = (t1.clientX + t2.clientX) / 2 - rect.left;
-                        const midY = (t1.clientY + t2.clientY) / 2 - rect.top;
-                        zoomScale.value = newScale;
-                        zoomPan.x = midX - pinchContentPt.x * newScale;
-                        zoomPan.y = midY - pinchContentPt.y * newScale;
+                        const midX = (t1.clientX + t2.clientX) / 2 - rect.left; const midY = (t1.clientY + t2.clientY) / 2 - rect.top;
+                        zoomScale.value = newScale; zoomPan.x = midX - pinchContentPt.x * newScale; zoomPan.y = midY - pinchContentPt.y * newScale;
                         return;
                     }
                     if (e.touches.length === 1) {
-                        if (isPanningBrowse) {
-                            e.preventDefault();
-                            zoomPan.x = panStartOrigin.x + (e.touches[0].clientX - panStartClient.x);
-                            zoomPan.y = panStartOrigin.y + (e.touches[0].clientY - panStartClient.y);
-                            return;
-                        }
+                        if (isPanningBrowse) { e.preventDefault(); zoomPan.x = panStartOrigin.x + (e.touches[0].clientX - panStartClient.x); zoomPan.y = panStartOrigin.y + (e.touches[0].clientY - panStartClient.y); return; }
                         moveStroke(e);
                     }
                 };
 
                 const onStageTouchEnd = (e) => {
-                    if (e.touches.length < 2 && pinchStartDist > 0) {
-                        pinchStartDist = 0;
-                        pinchCooldown = Date.now() + 200;
-                        if (zoomScale.value <= 1.03) resetZoom();
-                    }
-                    if (e.touches.length === 0) {
-                        isPanningBrowse = false;
-                        endStroke(e);
-                    }
+                    if (e.touches.length < 2 && pinchStartDist > 0) { pinchStartDist = 0; pinchCooldown = Date.now() + 200; if (zoomScale.value <= 1.03) resetZoom(); }
+                    if (e.touches.length === 0) { isPanningBrowse = false; endStroke(e); }
                 };
 
                 const onStageMouseDown = (e) => {
                     if (showTopSheet.value || showTopTextBar.value || draggedMarker.value) return;
-                    if (drawMode.value === 'browse') {
-                        isPanningBrowse = true;
-                        panStartClient = { x: e.clientX, y: e.clientY };
-                        panStartOrigin = { x: zoomPan.x, y: zoomPan.y };
-                        return;
-                    }
+                    if (drawMode.value === 'browse') { isPanningBrowse = true; panStartClient = { x: e.clientX, y: e.clientY }; panStartOrigin = { x: zoomPan.x, y: zoomPan.y }; return; }
                     beginStroke(e);
                 };
                 const onStageMouseMove = (e) => {
-                    if (isPanningBrowse) {
-                        zoomPan.x = panStartOrigin.x + (e.clientX - panStartClient.x);
-                        zoomPan.y = panStartOrigin.y + (e.clientY - panStartClient.y);
-                        return;
-                    }
+                    if (isPanningBrowse) { zoomPan.x = panStartOrigin.x + (e.clientX - panStartClient.x); zoomPan.y = panStartOrigin.y + (e.clientY - panStartClient.y); return; }
                     moveStroke(e);
                 };
-                const onStageMouseUp = (e) => {
-                    if (isPanningBrowse) { isPanningBrowse = false; return; }
-                    endStroke(e);
-                };
+                const onStageMouseUp = (e) => { if (isPanningBrowse) { isPanningBrowse = false; return; } endStroke(e); };
 
                 const beginStroke = (e) => {
-                    isDrawing.value = true;
-                    startPos.value = getCoords(e);
-                    if (drawMode.value === 'line' || drawMode.value === 'arrow-single') {
-                        currentLine.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y };
-                    } else if (drawMode.value === 'freehand') {
-                        tempPoints = [[startPos.value.x, startPos.value.y]];
-                        currentPath.value = `M ${startPos.value.x} ${startPos.value.y}`;
-                    }
+                    isDrawing.value = true; startPos.value = getCoords(e);
+                    if (drawMode.value === 'line' || drawMode.value === 'arrow-single') currentLine.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y };
+                    else if (drawMode.value === 'freehand') { tempPoints = [[startPos.value.x, startPos.value.y]]; currentPath.value = `M ${startPos.value.x} ${startPos.value.y}`; }
                 };
 
                 const moveStroke = (e) => {
                     if (draggedMarker.value) {
-                        e.preventDefault();
-                        const p = getCoords(e);
-                        if (Math.hypot(p.x - dragOrigin.value.x, p.y - dragOrigin.value.y) > 6) {
-                            isDraggingMarker.value = true;
-                            draggedMarker.value.x = p.x; draggedMarker.value.y = p.y;
-                        }
+                        e.preventDefault(); const p = getCoords(e);
+                        if (Math.hypot(p.x - dragOrigin.value.x, p.y - dragOrigin.value.y) > 6) { isDraggingMarker.value = true; draggedMarker.value.x = p.x; draggedMarker.value.y = p.y; }
                     } else if (isDrawing.value) {
-                        e.preventDefault();
-                        const p = getCoords(e);
-                        if (drawMode.value === 'line' || drawMode.value === 'arrow-single') {
-                            currentLine.value.x2 = p.x;
-                            currentLine.value.y2 = p.y;
-                        } else if (drawMode.value === 'freehand') {
-                            tempPoints.push([p.x, p.y]);
-                            currentPath.value = `M ${tempPoints.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`;
-                        }
+                        e.preventDefault(); const p = getCoords(e);
+                        if (drawMode.value === 'line' || drawMode.value === 'arrow-single') { currentLine.value.x2 = p.x; currentLine.value.y2 = p.y; }
+                        else if (drawMode.value === 'freehand') { tempPoints.push([p.x, p.y]); currentPath.value = `M ${tempPoints.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`; }
                     }
                 };
 
                 const endStroke = (e) => {
                     if (draggedMarker.value) {
                         if (!isDraggingMarker.value) {
-                            draggedMarker.value.x = markerOrigin.value.x;
-                            draggedMarker.value.y = markerOrigin.value.y;
-                            if (draggedMarker.value.type === 'text') {
-                                showTopTextBar.value = true; activeMarker.value = draggedMarker.value;
-                                nextTick(() => topTextInputRef.value?.focus());
-                            } else {
-                                showTopSheet.value = true; activeMarker.value = draggedMarker.value;
-                                if (draggedMarker.value.type !== 'stamp') focusedInput.value = 'val';
-                            }
-                        } else {
-                            touchDirty();
-                            saveAll();
-                        }
-                        draggedMarker.value = null; isDraggingMarker.value = false;
-                        return;
+                            draggedMarker.value.x = markerOrigin.value.x; draggedMarker.value.y = markerOrigin.value.y;
+                            if (draggedMarker.value.type === 'text') { showTopTextBar.value = true; activeMarker.value = draggedMarker.value; nextTick(() => topTextInputRef.value?.focus()); }
+                            else { showTopSheet.value = true; activeMarker.value = draggedMarker.value; if (draggedMarker.value.type !== 'stamp') focusedInput.value = 'val'; }
+                        } else { touchDirty(); saveAll(); }
+                        draggedMarker.value = null; isDraggingMarker.value = false; return;
                     }
                     if (!isDrawing.value) return;
-                    isDrawing.value = false;
-                    const endPos = getCoords(e);
-                    const drawDist = Math.hypot(endPos.x - startPos.value.x, endPos.y - startPos.value.y);
+                    isDrawing.value = false; const endPos = getCoords(e); const drawDist = Math.hypot(endPos.x - startPos.value.x, endPos.y - startPos.value.y);
 
                     if (!activePin.value && drawMode.value === 'pin') {
                         currentLine.value = null; currentPath.value = '';
                         const pw = activePage.value.w || 1200, ph = activePage.value.h || 900;
                         activePage.value.pins ||= [];
                         const newPin = {
-                            id: 'pin_' + Date.now(), name: `位置 ${activePage.value.pins.length + 1}`,
-                            x: parseFloat(((endPos.x / pw) * 100).toFixed(2)), y: parseFloat(((endPos.y / ph) * 100).toFixed(2)),
-                            photo: null, w: 1200, h: 900, space: activePage.value.space || '',
-                            markers: [], lines: [], paths: [], historyStack: [], redoStack: [], updatedAt: Date.now()
+                            id: 'pin_' + Date.now(), name: `位置 ${activePage.value.pins.length + 1}`, x: parseFloat(((endPos.x / pw) * 100).toFixed(2)), y: parseFloat(((endPos.y / ph) * 100).toFixed(2)),
+                            photo: null, w: 1200, h: 900, space: activePage.value.space || '', markers: [], lines: [], paths: [], historyStack: [], redoStack: [], updatedAt: Date.now()
                         };
-                        activePage.value.pins.push(newPin);
-                        activePage.value.updatedAt = Date.now();
-                        openPinSubPage(newPin, activePage.value.pins.length - 1);
-                        saveAll();
-                        return;
+                        activePage.value.pins.push(newPin); activePage.value.updatedAt = Date.now();
+                        hasUnsavedCloudChanges.value = true;
+                        openPinSubPage(newPin, activePage.value.pins.length - 1); saveAll(); return;
                     }
 
                     const c = activeCanvas.value;
                     c.lines ||= []; c.markers ||= []; c.paths ||= []; c.historyStack ||= []; c.redoStack = [];
 
-                    if (drawMode.value === 'stamp' && drawDist < 12) {
-                        currentLine.value = null; currentPath.value = '';
-                        createPointMarker(endPos.x, endPos.y, 'stamp');
-                        return;
-                    }
-                    if (drawMode.value === 'text' && drawDist < 12) {
-                        currentLine.value = null; currentPath.value = '';
-                        createPointMarker(endPos.x, endPos.y, 'text');
-                        return;
-                    }
+                    if (drawMode.value === 'stamp' && drawDist < 12) { currentLine.value = null; currentPath.value = ''; createPointMarker(endPos.x, endPos.y, 'stamp'); return; }
+                    if (drawMode.value === 'text' && drawDist < 12) { currentLine.value = null; currentPath.value = ''; createPointMarker(endPos.x, endPos.y, 'text'); return; }
 
                     if ((drawMode.value === 'line' || drawMode.value === 'arrow-single') && currentLine.value) {
-                        const lineId = Date.now();
-                        const typeStr = drawMode.value === 'line' ? 'measure' : 'arrow-single';
+                        const lineId = Date.now(); const typeStr = drawMode.value === 'line' ? 'measure' : 'arrow-single';
                         c.lines.push({ ...currentLine.value, id: lineId, type: typeStr, color: drawMode.value === 'arrow-single' ? arrowColor.value : null });
-                        const midX = Math.round((currentLine.value.x1 + currentLine.value.x2) / 2);
-                        const midY = Math.round((currentLine.value.y1 + currentLine.value.y2) / 2);
+                        const midX = Math.round((currentLine.value.x1 + currentLine.value.x2) / 2); const midY = Math.round((currentLine.value.y1 + currentLine.value.y2) / 2);
                         const markerId = Date.now() + 1;
-                        const newMarker = {
-                            id: markerId, lineId, x: midX, y: midY, w: 140, h: 56, type: 'general',
-                            data: { val: '', val2: '', val3: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '' }
-                        };
-                        updateMarkerSize(newMarker);
-                        c.markers.push(newMarker);
-                        c.historyStack.push({ type: 'line_marker', lineId, markerId });
-                        touchDirty();
-                        activeMarker.value = newMarker;
-                        focusedInput.value = 'val';
-                        showTopSheet.value = true;
-                        currentLine.value = null;
+                        const newMarker = { id: markerId, lineId, x: midX, y: midY, w: 140, h: 56, type: 'general', data: { val: '', val2: '', val3: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '' } };
+                        updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
+                        touchDirty(); activeMarker.value = newMarker; focusedInput.value = 'val'; showTopSheet.value = true; currentLine.value = null;
                     } else if (drawMode.value === 'freehand' && currentPath.value) {
-                        const pathId = Date.now();
-                        c.paths.push({ id: pathId, d: currentPath.value, color: freehandColor.value });
-                        c.historyStack.push({ type: 'freehand', pathId });
-                        touchDirty();
-                        currentPath.value = '';
+                        const pathId = Date.now(); c.paths.push({ id: pathId, d: currentPath.value, color: freehandColor.value }); c.historyStack.push({ type: 'freehand', pathId }); touchDirty(); currentPath.value = '';
                     }
                     saveAll();
                 };
 
                 const undoLastAction = () => {
-                    const c = activeCanvas.value;
-                    if (!c?.historyStack?.length) return;
-                    c.redoStack ||= [];
-                    const action = c.historyStack.pop();
-                    const undone = { type: action.type };
+                    const c = activeCanvas.value; if (!c?.historyStack?.length) return; c.redoStack ||= [];
+                    const action = c.historyStack.pop(); const undone = { type: action.type };
                     if (action.type === 'line_marker') {
-                        const li = c.lines.findIndex(l => l.id === action.lineId);
-                        const mi = c.markers.findIndex(m => m.id === action.markerId);
-                        if (li !== -1) undone.line = c.lines.splice(li, 1)[0];
-                        if (mi !== -1) undone.marker = c.markers.splice(mi, 1)[0];
+                        const li = c.lines.findIndex(l => l.id === action.lineId); const mi = c.markers.findIndex(m => m.id === action.markerId);
+                        if (li !== -1) undone.line = c.lines.splice(li, 1)[0]; if (mi !== -1) undone.marker = c.markers.splice(mi, 1)[0];
                     } else if (action.type === 'marker') {
-                        const mi = c.markers.findIndex(m => m.id === action.markerId);
-                        if (mi !== -1) undone.marker = c.markers.splice(mi, 1)[0];
+                        const mi = c.markers.findIndex(m => m.id === action.markerId); if (mi !== -1) undone.marker = c.markers.splice(mi, 1)[0];
                     } else if (action.type === 'freehand') {
-                        const pi = c.paths.findIndex(p => p.id === action.pathId);
-                        if (pi !== -1) undone.path = c.paths.splice(pi, 1)[0];
+                        const pi = c.paths.findIndex(p => p.id === action.pathId); if (pi !== -1) undone.path = c.paths.splice(pi, 1)[0];
                     }
-                    c.redoStack.push(undone);
-                    touchDirty();
-                    saveAll();
+                    c.redoStack.push(undone); touchDirty(); saveAll();
                 };
 
                 const redoAction = () => {
-                    const c = activeCanvas.value;
-                    if (!c?.redoStack?.length) return;
-                    const undone = c.redoStack.pop();
-                    const action = { type: undone.type };
+                    const c = activeCanvas.value; if (!c?.redoStack?.length) return;
+                    const undone = c.redoStack.pop(); const action = { type: undone.type };
                     if (undone.type === 'line_marker') {
                         if (undone.line) { c.lines.push(undone.line); action.lineId = undone.line.id; }
                         if (undone.marker) { c.markers.push(undone.marker); action.markerId = undone.marker.id; }
@@ -1003,9 +944,7 @@
                     } else if (undone.type === 'freehand') {
                         if (undone.path) { c.paths.push(undone.path); action.pathId = undone.path.id; }
                     }
-                    c.historyStack.push(action);
-                    touchDirty();
-                    saveAll();
+                    c.historyStack.push(action); touchDirty(); saveAll();
                 };
 
                 const deleteMarkerTop = () => {
@@ -1014,39 +953,15 @@
                     if (lId) c.lines = (c.lines || []).filter(l => l.id !== lId);
                     c.markers = (c.markers || []).filter(m => m.id !== mId);
                     if (c.historyStack) c.historyStack = c.historyStack.filter(h => h.markerId !== mId);
-                    c.redoStack = [];
-                    touchDirty();
-                    showTopSheet.value = false;
-                    showTopTextBar.value = false;
-                    activeMarker.value = null;
-                    saveAll();
+                    c.redoStack = []; touchDirty();
+                    showTopSheet.value = false; showTopTextBar.value = false; activeMarker.value = null; saveAll();
                 };
 
-                const switchMarkerType = (t, focusKey) => {
-                    activeMarker.value.type = t;
-                    focusedInput.value = focusKey;
-                    updateMarkerSize(activeMarker.value);
-                };
+                const switchMarkerType = (t, focusKey) => { activeMarker.value.type = t; focusedInput.value = focusKey; updateMarkerSize(activeMarker.value); };
 
-                const closeTopTextBar = () => {
-                    if (activeMarker.value?.type === 'text' && !String(activeMarker.value.data.val || '').trim()) {
-                        deleteMarkerTop();
-                        return;
-                    }
-                    touchDirty();
-                    showTopTextBar.value = false;
-                    saveAll();
-                };
+                const closeTopTextBar = () => { if (activeMarker.value?.type === 'text' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } touchDirty(); showTopTextBar.value = false; saveAll(); };
 
-                const closeTopSheet = () => {
-                    if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) {
-                        deleteMarkerTop();
-                        return;
-                    }
-                    touchDirty();
-                    showTopSheet.value = false;
-                    saveAll();
-                };
+                const closeTopSheet = () => { if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } touchDirty(); showTopSheet.value = false; saveAll(); };
 
                 const setFocus = (field) => { focusedInput.value = field; };
 
@@ -1062,40 +977,22 @@
                             else if (focusedInput.value === 'val2') focusedInput.value = 'val3';
                             else closeTopSheet();
                         } else if (isMulti2 && activeMarker.value.type === 'general') {
-                            if (focusedInput.value === 'val') focusedInput.value = 'val2';
-                            else closeTopSheet();
+                            if (focusedInput.value === 'val') focusedInput.value = 'val2'; else closeTopSheet();
                         } else if (['window', 'door', 'beam', 'column'].includes(activeMarker.value.type)) {
-                            const fields = getTagFields(activeMarker.value.type);
-                            const idx = fields.findIndex(f => f.key === focusedInput.value);
-                            if (idx >= 0 && idx < fields.length - 1) focusedInput.value = fields[idx + 1].key;
-                            else closeTopSheet();
+                            const fields = getTagFields(activeMarker.value.type); const idx = fields.findIndex(f => f.key === focusedInput.value);
+                            if (idx >= 0 && idx < fields.length - 1) focusedInput.value = fields[idx + 1].key; else closeTopSheet();
                         } else closeTopSheet();
-                    } else if (currentVal.length < 6) {
-                        activeMarker.value.data[focusedInput.value] = currentVal + key;
-                    }
+                    } else if (currentVal.length < 6) { activeMarker.value.data[focusedInput.value] = currentVal + key; }
                     updateMarkerSize(activeMarker.value);
                 };
 
-                const applyTag = (name) => {
-                    if (!activeMarker.value) return;
-                    activeMarker.value.data.name = name;
-                    focusedInput.value = 'val';
-                    updateMarkerSize(activeMarker.value);
-                };
-
-                const applyStamp = (txt) => {
-                    if (!activeMarker.value) return;
-                    activeMarker.value.data.val = txt;
-                    updateMarkerSize(activeMarker.value);
-                    closeTopSheet();
-                };
+                const applyTag = (name) => { if (!activeMarker.value) return; activeMarker.value.data.name = name; focusedInput.value = 'val'; updateMarkerSize(activeMarker.value); };
+                const applyStamp = (txt) => { if (!activeMarker.value) return; activeMarker.value.data.val = txt; updateMarkerSize(activeMarker.value); closeTopSheet(); };
 
                 const updateMarkerSize = (marker) => {
-                    const lines = getMarkerLines(marker);
-                    let maxLen = 0;
+                    const lines = getMarkerLines(marker); let maxLen = 0;
                     lines.forEach(l => { if (l.length > maxLen) maxLen = l.length; });
-                    marker.w = Math.max(110, maxLen * 30 + 34);
-                    marker.h = Math.max(50, lines.length * 36 + 16);
+                    marker.w = Math.max(110, maxLen * 30 + 34); marker.h = Math.max(50, lines.length * 36 + 16);
                 };
 
                 const getStampColor = (marker) => {
@@ -1113,18 +1010,12 @@
                 const getMarkerLines = (marker) => {
                     if (['window', 'door', 'beam', 'column'].includes(marker.type)) {
                         const lines = [getTagName(marker.type)];
-                        for (const k in marker.data) {
-                            if (marker.data[k] && getFieldLabel(marker.type, k) !== k && !['val', 'val2', 'val3', 'name'].includes(k)) {
-                                lines.push(`${getFieldLabel(marker.type, k)}:${marker.data[k]}`);
-                            }
-                        }
+                        for (const k in marker.data) { if (marker.data[k] && getFieldLabel(marker.type, k) !== k && !['val', 'val2', 'val3', 'name'].includes(k)) lines.push(`${getFieldLabel(marker.type, k)}:${marker.data[k]}`); }
                         return lines;
                     }
                     if (marker.type === 'stamp' || marker.type === 'text') return [marker.data.val || ''];
                     const label = marker.data.name ? `${marker.data.name}: ` : '';
-                    if (['留位', '冷氣', '電箱', '避'].includes(marker.data.name)) {
-                        return [`${label}${marker.data.val || '0'}w x ${marker.data.val2 || '0'}h x ${marker.data.val3 || '0'}d`];
-                    }
+                    if (['留位', '冷氣', '電箱', '避'].includes(marker.data.name)) return [`${label}${marker.data.val || '0'}w x ${marker.data.val2 || '0'}h x ${marker.data.val3 || '0'}d`];
                     if (marker.data.name === '地腳線') return [`${label}${marker.data.val || '0'}h x ${marker.data.val2 || '0'}d`];
                     if (marker.data.name === '包喉') return [`${label}${marker.data.val || '0'}w x ${marker.data.val2 || '0'}d`];
                     return [`${label}${marker.data.val || ''}`];
@@ -1140,19 +1031,13 @@
                 const getFieldLabel = (t, k) => getTagFields(t).find(i => i.key === k)?.label || k;
 
                 const compressImage = (file) => new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.readAsDataURL(file);
+                    const reader = new FileReader(); reader.readAsDataURL(file);
                     reader.onload = (e) => {
-                        const img = new Image();
-                        img.src = e.target.result;
+                        const img = new Image(); img.src = e.target.result;
                         img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            const MAX = 1080;
+                            const canvas = document.createElement('canvas'); const MAX = 1080;
                             let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
-                            if (w > MAX || h > MAX) {
-                                if (w > h) { h = Math.round((h * MAX) / w); w = MAX; }
-                                else { w = Math.round((w * MAX) / h); h = MAX; }
-                            }
+                            if (w > MAX || h > MAX) { if (w > h) { h = Math.round((h * MAX) / w); w = MAX; } else { w = Math.round((w * MAX) / h); h = MAX; } }
                             canvas.width = w; canvas.height = h;
                             canvas.getContext('2d').drawImage(img, 0, 0, w, h);
                             resolve({ b64: canvas.toDataURL('image/jpeg', 0.6), w, h });
@@ -1161,115 +1046,39 @@
                 });
 
                 const handleImageUpload = async (e, asNewPage = false) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    showAddPageModal.value = false;
+                    const file = e.target.files[0]; if (!file) return; showAddPageModal.value = false;
                     const res = await compressImage(file);
                     if (asNewPage) {
-                        const pg = makeEmptyPage({ photo: res.b64, w: res.w, h: res.h });
-                        pages.value.push(pg);
-                        activePageIndex.value = pages.value.length - 1;
+                        const pg = makeEmptyPage({ photo: res.b64, w: res.w, h: res.h }); pages.value.push(pg); activePageIndex.value = pages.value.length - 1;
                     } else if (activeCanvas.value) {
-                        activeCanvas.value.photo = res.b64;
-                        activeCanvas.value.w = res.w; activeCanvas.value.h = res.h;
-                        activeCanvas.value.isSketch = false;
-                        touchDirty();
+                        activeCanvas.value.photo = res.b64; activeCanvas.value.w = res.w; activeCanvas.value.h = res.h; activeCanvas.value.isSketch = false;
                     }
-                    drawMode.value = 'browse';
-                    resetZoom();
-                    nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
-                    saveAll();
-                    e.target.value = '';
-                };
-
-                const pushToCloud = async (throwOnError = false) => {
-                    const code = String(project.code || '').trim();
-                    if (!db || !code) return;
-                    if (!navigator.onLine) {
-                        lastCloudError.value = formatSyncError(new Error('offline'));
-                        cloudSyncState.value = 'error';
-                        if (throwOnError) throw new Error(lastCloudError.value);
-                        return;
-                    }
-                    cloudSyncState.value = 'syncing';
-                    try {
-                        await trySilentAuth();
-                        const projRef = db.collection('site_projects').doc(code);
-                        const now = Date.now();
-                        const lastSync = project.lastSyncAt || 0; 
-                        const dirtyPagesRaw = pages.value.filter(pg => (pg.updatedAt || 0) > lastSync);
-                        const dirtyPages = JSON.parse(JSON.stringify(dirtyPagesRaw)).map(pg => {
-                            delete pg.historyStack; delete pg.redoStack;
-                            (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; });
-                            return pg;
-                        });
-                        const myPageIds = pages.value.map(p => p.id);
-                        const myDeletedIds = project.deletedPageIds || [];
-
-                        await withRetry(() => withTimeout(projRef.set({
-                            code,
-                            name: project.name || '',
-                            date: project.date || '',
-                            pageIds: firebase.firestore.FieldValue.arrayUnion(...myPageIds),
-                            deletedPageIds: myDeletedIds.length ? firebase.firestore.FieldValue.arrayUnion(...myDeletedIds) : [],
-                            updatedAt: now
-                        }, { merge: true })));
-
-                        for (const pg of dirtyPages) {
-                            const { photo: pagePhoto, pins, ...restPage } = pg;
-                            if (pagePhoto && !pg.isSketch) {
-                                await withRetry(() => withTimeout(projRef.collection('media').doc('page_' + pg.id).set({ photo: pagePhoto, updatedAt: pg.updatedAt || now }, { merge: true })));
-                            }
-                            const pinsMeta = [];
-                            for (const pin of (pins || [])) {
-                                const { photo: pinPhoto, ...restPin } = pin;
-                                pinsMeta.push({ ...restPin, hasPhoto: !!pinPhoto });
-                                if (pinPhoto && !pin.isSketch && (pin.updatedAt || 0) > lastSync) {
-                                    await withRetry(() => withTimeout(projRef.collection('media').doc(String(pin.id)).set({ photo: pinPhoto, updatedAt: pin.updatedAt || now }, { merge: true })));
-                                }
-                            }
-                            await withRetry(() => withTimeout(projRef.collection('pages').doc(pg.id).set({ ...restPage, hasPhoto: !!pagePhoto, pins: pinsMeta }, { merge: true })));
-                        }
-
-                        lastCloudError.value = '';
-                        cloudSyncState.value = 'ready';
-                        project.lastSyncAt = now;
-                        const d = await localforage.getItem('proj_' + code);
-                        if (d) { d.lastSyncAt = now; await localforage.setItem('proj_' + code, d); }
-                    } catch (e) {
-                        lastCloudError.value = formatSyncError(e);
-                        cloudSyncState.value = 'error';
-                        if (throwOnError) throw new Error(lastCloudError.value);
-                    }
+                    touchDirty(); drawMode.value = 'browse'; resetZoom();
+                    nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); }); saveAll(); e.target.value = '';
                 };
 
                 const saveAll = async () => {
-                    const code = String(project.code || '').trim();
-                    if (!code) return;
+                    const code = String(project.code || '').trim(); if (!code) return;
                     const now = Date.now();
                     const cleanPages = JSON.parse(JSON.stringify(pages.value)).map(pg => {
-                        delete pg.historyStack; delete pg.redoStack;
-                        (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; });
-                        return pg;
+                        delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg;
                     });
                     
                     await localforage.setItem('proj_' + code, {
                         code, name: project.name || '', date: project.date || '',
                         pages: cleanPages, deletedPageIds: project.deletedPageIds || [], 
-                        updatedAt: now, lastSyncAt: project.lastSyncAt || 0
+                        updatedAt: now, lastSyncAt: project.lastSyncAt || 0,
+                        lastModifiedBy: project.lastModifiedBy || authorName.value
                     });
                 };
 
                 const mergePagesSmart = (localList, cloudList, deletedSet, orderList) => {
-                    const localMap = new Map(localList.map(p => [p.id, p]));
-                    const cloudMap = new Map(cloudList.map(p => [p.id, p]));
-                    const allIds = new Set([...localMap.keys(), ...cloudMap.keys()]);
-                    const result = [];
+                    const localMap = new Map(localList.map(p => [p.id, p])); const cloudMap = new Map(cloudList.map(p => [p.id, p]));
+                    const allIds = new Set([...localMap.keys(), ...cloudMap.keys()]); const result = [];
 
                     allIds.forEach(id => {
                         if (deletedSet.has(id)) return;
-                        const lp = localMap.get(id);
-                        const cp = cloudMap.get(id);
+                        const lp = localMap.get(id), cp = cloudMap.get(id);
                         if (!lp) { result.push(makeEmptyPage(cp)); return; }
                         if (!cp) { result.push(makeEmptyPage(lp)); return; }
 
@@ -1278,20 +1087,13 @@
 
                         const lPins = new Map((lp.pins || []).map(x => [String(x.id), x]));
                         const cPins = new Map((cp.pins || []).map(x => [String(x.id), x]));
-                        const allPinIds = new Set([...lPins.keys(), ...cPins.keys()]);
-                        const mergedPins = [];
+                        const allPinIds = new Set([...lPins.keys(), ...cPins.keys()]); const mergedPins = [];
                         allPinIds.forEach(pid => {
                             const lPin = lPins.get(pid), cPin = cPins.get(pid);
-                            if (!lPin) mergedPins.push(cPin);
-                            else if (!cPin) mergedPins.push(lPin);
-                            else {
-                                const win = (cPin.updatedAt || 0) > (lPin.updatedAt || 0) ? { ...cPin } : { ...lPin };
-                                if (!win.photo) win.photo = lPin.photo || cPin.photo || null;
-                                mergedPins.push(win);
-                            }
+                            if (!lPin) mergedPins.push(cPin); else if (!cPin) mergedPins.push(lPin);
+                            else { const win = (cPin.updatedAt || 0) > (lPin.updatedAt || 0) ? { ...cPin } : { ...lPin }; if (!win.photo) win.photo = lPin.photo || cPin.photo || null; mergedPins.push(win); }
                         });
-                        base.pins = mergedPins;
-                        result.push(makeEmptyPage(base));
+                        base.pins = mergedPins; result.push(makeEmptyPage(base));
                     });
 
                     result.sort((a, b) => {
@@ -1304,67 +1106,38 @@
                 const pullAndMergeFromCloud = async (code, throwOnError = false, allowNotFound = true) => {
                     code = String(code || '').trim();
                     if (!navigator.onLine) {
-                        lastCloudError.value = formatSyncError(new Error('offline'));
-                        cloudSyncState.value = 'error';
-                        if (throwOnError) throw new Error(lastCloudError.value);
-                        return;
+                        lastCloudError.value = formatSyncError(new Error('offline')); cloudSyncState.value = 'error';
+                        if (throwOnError) throw new Error(lastCloudError.value); return;
                     }
-                    if (!db) throw new Error('雲端資料庫未初始化（請確認有網路後重新整理）');
+                    if (!db) throw new Error('雲端資料庫未初始化');
                     cloudSyncState.value = 'syncing';
                     try {
-                        await trySilentAuth();
-                        const projRef = db.collection('site_projects').doc(code);
-                        const [projDoc, pagesSnap, mediaSnap] = await withRetry(() => withTimeout(Promise.all([
-                            projRef.get(),
-                            projRef.collection('pages').get(),
-                            projRef.collection('media').get()
-                        ])));
+                        await trySilentAuth(); const projRef = db.collection('site_projects').doc(code);
+                        const [projDoc, pagesSnap, mediaSnap] = await withRetry(() => withTimeout(Promise.all([projRef.get(), projRef.collection('pages').get(), projRef.collection('media').get()])));
 
                         if (!projDoc.exists) {
                             if (!allowNotFound) throw new Error('雲端找不到工程碼 #' + code);
-                            lastCloudError.value = '';
-                            cloudSyncState.value = 'ready';
-                            return;
+                            lastCloudError.value = ''; cloudSyncState.value = 'ready'; return;
                         }
 
                         const pd = projDoc.data();
                         if (pd.name) project.name = pd.name;
                         if (pd.date) project.date = pd.date;
+                        if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy;
 
-                        const mediaMap = new Map();
-                        mediaSnap.forEach(mDoc => mediaMap.set(String(mDoc.id), mDoc.data().photo));
-
-                        const deletedSet = new Set([...(project.deletedPageIds || []), ...(pd.deletedPageIds || [])]);
-                        project.deletedPageIds = Array.from(deletedSet);
+                        const mediaMap = new Map(); mediaSnap.forEach(mDoc => mediaMap.set(String(mDoc.id), mDoc.data().photo));
+                        const deletedSet = new Set([...(project.deletedPageIds || []), ...(pd.deletedPageIds || [])]); project.deletedPageIds = Array.from(deletedSet);
 
                         let cloudPages = [];
                         if (!pagesSnap.empty) {
                             pagesSnap.forEach(doc => {
                                 const rawPg = doc.data();
-                                const pgData = makeEmptyPage({
-                                    id: doc.id,
-                                    ...rawPg,
+                                cloudPages.push(makeEmptyPage({
+                                    id: doc.id, ...rawPg,
                                     photo: mediaMap.get('page_' + (rawPg.id || doc.id)) || rawPg.photo || null,
-                                    pins: (rawPg.pins || []).map(pin => ({
-                                        ...pin,
-                                        photo: mediaMap.get(String(pin.id)) || pin.photo || null
-                                    }))
-                                });
-                                cloudPages.push(pgData);
+                                    pins: (rawPg.pins || []).map(pin => ({ ...pin, photo: mediaMap.get(String(pin.id)) || pin.photo || null }))
+                                }));
                             });
-                        } else if (pd.planImage) {
-                            const oldPinsSnap = await withRetry(() => withTimeout(projRef.collection('pins').get()));
-                            const oldPins = [];
-                            oldPinsSnap.forEach(doc => {
-                                const op = doc.data();
-                                oldPins.push({ ...op, w: op.photoW || 1200, h: op.photoH || 900 });
-                            });
-                            cloudPages = [makeEmptyPage({
-                                id: 'legacy_page_1',
-                                photo: pd.planImage || null, w: pd.planW || 1200, h: pd.planH || 900, space: pd.planSpace || '',
-                                markers: pd.planMarkers || [], lines: pd.planLines || [], paths: pd.planPaths || [],
-                                pins: oldPins.sort((a, b) => a.id - b.id), updatedAt: pd.updatedAt || 1
-                            })];
                         }
 
                         const orderList = [...(pd.pageIds || []), ...pages.value.map(p => p.id)];
@@ -1372,398 +1145,350 @@
                         if (merged.length) {
                             pages.value = merged;
                             if (activePageIndex.value >= pages.value.length) activePageIndex.value = pages.value.length - 1;
-                            if (activePin.value && activePage.value) {
-                                const foundPin = (activePage.value.pins || []).find(p => String(p.id) === String(activePin.value.id));
-                                activePin.value = foundPin || null;
-                            }
+                            if (activePin.value && activePage.value) activePin.value = (activePage.value.pins || []).find(p => String(p.id) === String(activePin.value.id)) || null;
                         }
 
                         project.lastSyncAt = Date.now();
-                        const cleanPages = JSON.parse(JSON.stringify(pages.value)).map(pg => {
-                            delete pg.historyStack; delete pg.redoStack;
-                            (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; });
-                            return pg;
+                        hasUnsavedCloudChanges.value = false;
+                        await saveAll();
+                        lastCloudError.value = ''; cloudSyncState.value = 'ready';
+                    } catch (e) { lastCloudError.value = formatSyncError(e); cloudSyncState.value = 'error'; if (throwOnError) throw new Error(lastCloudError.value); }
+                };
+
+                const pushToCloud = async (throwOnError = false) => {
+                    const code = String(project.code || '').trim(); if (!db || !code) return;
+                    if (!navigator.onLine) {
+                        lastCloudError.value = formatSyncError(new Error('offline')); cloudSyncState.value = 'error';
+                        if (throwOnError) throw new Error(lastCloudError.value); return;
+                    }
+                    cloudSyncState.value = 'syncing';
+                    try {
+                        await trySilentAuth(); const projRef = db.collection('site_projects').doc(code);
+                        const now = Date.now(); const lastSync = project.lastSyncAt || 0; 
+                        const dirtyPagesRaw = pages.value.filter(pg => (pg.updatedAt || 0) > lastSync);
+                        const dirtyPages = JSON.parse(JSON.stringify(dirtyPagesRaw)).map(pg => {
+                            delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg;
                         });
-                        
-                        await localforage.setItem('proj_' + code, {
-                            code: project.code, name: project.name, date: project.date,
-                            pages: cleanPages, deletedPageIds: project.deletedPageIds, 
-                            updatedAt: Date.now(), lastSyncAt: project.lastSyncAt
-                        });
-                        lastCloudError.value = '';
-                        cloudSyncState.value = 'ready';
+                        const myPageIds = pages.value.map(p => p.id); const myDeletedIds = project.deletedPageIds || [];
+
+                        await withRetry(() => withTimeout(projRef.set({
+                            code, name: project.name || '', date: project.date || '',
+                            pageIds: firebase.firestore.FieldValue.arrayUnion(...myPageIds),
+                            deletedPageIds: myDeletedIds.length ? firebase.firestore.FieldValue.arrayUnion(...myDeletedIds) : [],
+                            updatedAt: now,
+                            lastModifiedBy: authorName.value || '未知設備'
+                        }, { merge: true })));
+
+                        for (const pg of dirtyPages) {
+                            const { photo: pagePhoto, pins, ...restPage } = pg;
+                            if (pagePhoto && !pg.isSketch) await withRetry(() => withTimeout(projRef.collection('media').doc('page_' + pg.id).set({ photo: pagePhoto, updatedAt: pg.updatedAt || now }, { merge: true })));
+                            const pinsMeta = [];
+                            for (const pin of (pins || [])) {
+                                const { photo: pinPhoto, ...restPin } = pin; pinsMeta.push({ ...restPin, hasPhoto: !!pinPhoto });
+                                if (pinPhoto && !pin.isSketch && (pin.updatedAt || 0) > lastSync) await withRetry(() => withTimeout(projRef.collection('media').doc(String(pin.id)).set({ photo: pinPhoto, updatedAt: pin.updatedAt || now }, { merge: true })));
+                            }
+                            await withRetry(() => withTimeout(projRef.collection('pages').doc(pg.id).set({ ...restPage, hasPhoto: !!pagePhoto, pins: pinsMeta }, { merge: true })));
+                        }
+
+                        lastCloudError.value = ''; cloudSyncState.value = 'ready'; project.lastSyncAt = now;
+                        hasUnsavedCloudChanges.value = false;
+                        await saveAll();
                     } catch (e) {
-                        lastCloudError.value = formatSyncError(e);
-                        cloudSyncState.value = 'error';
+                        lastCloudError.value = formatSyncError(e); cloudSyncState.value = 'error';
                         if (throwOnError) throw new Error(lastCloudError.value);
                     }
                 };
 
-                const downloadNow = async () => {
-                    if (!project.code) return;
-                    isProcessing.value = true;
-                    processingText.value = '正在從雲端載入最新進度...';
-                    try {
-                        await pullAndMergeFromCloud(project.code, true, true);
-                        nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
-                        showToast('✅ 已成功合併雲端最新資料');
-                    } catch (err) {
-                        alert('載入失敗：\n' + (err.message || '請檢查網路連線'));
+                // 時光機：建立雲端備份 (只存標記資料，捨去圖片以節省空間，還原時借用媒體庫)
+                const createCloudBackup = async (projCode) => {
+                    if (!db || !navigator.onLine) return;
+                    const localData = await localforage.getItem('proj_' + projCode); if(!localData) return;
+                    
+                    const backupData = JSON.parse(JSON.stringify(localData));
+                    backupData.pages.forEach(p => { delete p.photo; (p.pins || []).forEach(pin => { delete pin.photo; }); });
+                    
+                    const backupRef = db.collection('site_projects').doc(projCode).collection('backups');
+                    const ts = Date.now();
+                    await withRetry(() => withTimeout(backupRef.doc(String(ts)).set({ timestamp: ts, author: authorName.value || '未知', data: JSON.stringify(backupData) })));
+
+                    const snaps = await backupRef.orderBy('timestamp', 'desc').get();
+                    if(snaps.size > 5) {
+                        let i = 0; snaps.forEach(doc => { i++; if(i > 5) doc.ref.delete(); });
                     }
-                    isProcessing.value = false;
                 };
 
                 const uploadNow = async () => {
                     if (!project.code) return;
-                    isProcessing.value = true;
-                    processingText.value = '正在檢查雲端狀態...';
+                    isProcessing.value = true; processingText.value = '正在智能合併並上傳...';
                     try {
-                        if (navigator.onLine && db) {
-                            await trySilentAuth();
-                            const docSnap = await withRetry(() => withTimeout(db.collection('site_projects').doc(project.code).get()));
-                            if (docSnap.exists) {
-                                const cloudTime = docSnap.data().updatedAt || 0;
-                                const localTime = project.lastSyncAt || 0;
-                                if (cloudTime > localTime && localTime !== 0) {
-                                    const ok = confirm("⚠️ 警告：雲端有其他人儲存的新進度！\n\n如果現在強制上傳，將會【完全覆蓋】對方的資料。\n\n建議先按「取消」，點選旁邊的「⬇️載入」將最新進度合併下來後，再進行上傳。\n\n確定要強制覆蓋雲端資料嗎？");
-                                    if (!ok) {
-                                        isProcessing.value = false;
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                        processingText.value = '正在上傳至雲端...';
+                        // 1. 偷偷載入最新進度合併 (Auto-Merge)
+                        await pullAndMergeFromCloud(project.code, false, true);
+                        
+                        // 2. 推送至雲端
                         await pushToCloud(true);
-                        showToast('✅ 成功推送到雲端');
-                    } catch (err) {
-                        alert('上傳失敗：\n' + (err.message || '請檢查網路連線'));
-                    }
+                        
+                        // 3. 建立後備檔 (最近5份)
+                        await createCloudBackup(project.code);
+
+                        showToast('✅ 成功推送到雲端並建立備份');
+                    } catch (err) { alert('上傳失敗：\n' + (err.message || '請檢查網路連線')); }
                     isProcessing.value = false;
                 };
 
-                const restoreFromCloud = async () => {
-                    if (!navigator.onLine || !db) return alert('請檢查網路連線或等待系統初始化。');
-                    isProcessing.value = true;
-                    processingText.value = '正在掃描雲端紀錄...';
+                const downloadNow = async () => {
+                    if (!project.code) return;
+                    isProcessing.value = true; processingText.value = '正在從雲端載入最新進度...';
                     try {
-                        await trySilentAuth();
-                        const snap = await withRetry(() => withTimeout(db.collection('site_projects').get()));
-                        if (snap.empty) {
-                            alert('雲端目前沒有任何工程紀錄。');
-                        } else {
-                            let count = 0;
-                            for (const doc of snap.docs) {
-                                const data = doc.data();
-                                const code = doc.id;
-                                const existing = await localforage.getItem('proj_' + code);
-                                if (!existing) {
-                                    await localforage.setItem('proj_' + code, {
-                                        code: code,
-                                        name: data.name || '已尋回工程',
-                                        date: data.date || '',
-                                        pages: [],
-                                        deletedPageIds: data.deletedPageIds || [],
-                                        updatedAt: data.updatedAt || Date.now(),
-                                        lastSyncAt: 0
-                                    });
-                                    count++;
-                                }
-                            }
-                            await loadProjectList();
-                            if (count > 0) {
-                                showToast(`✅ 尋回完畢，共恢復 ${count} 個工程`);
-                            } else {
-                                showToast('已是最新狀態，無需尋回。');
-                            }
-                        }
-                    } catch (e) {
-                        alert('尋回失敗：' + formatSyncError(e));
-                    }
+                        await pullAndMergeFromCloud(project.code, true, true);
+                        nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
+                        showToast('✅ 已成功合併雲端最新資料');
+                    } catch (err) { alert('載入失敗：\n' + (err.message || '請檢查網路連線')); }
                     isProcessing.value = false;
                 };
 
-                const createNewProject = () => {
+                const createNewProject = async () => {
+                    await checkAuthorName();
                     project.code = Math.floor(100000 + Math.random() * 900000).toString();
                     project.name = ''; project.date = new Date().toISOString().split('T')[0];
-                    project.deletedPageIds = []; project.lastSyncAt = 0;
-                    pages.value = [makeEmptyPage()];
-                    activePageIndex.value = 0; activePin.value = null;
-                    currentView.value = 'proj';
-                    saveAll();
+                    project.deletedPageIds = []; project.lastSyncAt = 0; project.lastModifiedBy = authorName.value;
+                    pages.value = [makeEmptyPage()]; activePageIndex.value = 0; activePin.value = null;
+                    hasUnsavedCloudChanges.value = true; currentView.value = 'proj'; await saveAll();
                 };
 
-                const copyProjectCode = () => {
-                    navigator.clipboard?.writeText(project.code);
-                    showToast('已複製工程碼：#' + project.code);
-                };
+                const copyProjectCode = () => { navigator.clipboard?.writeText(project.code); showToast('已複製工程碼：#' + project.code); };
+                const copyCode = (code) => { navigator.clipboard?.writeText(code); showToast('已複製：#' + code); showManageModal.value = false; };
 
                 const joinProjectByCode = async () => {
-                    const code = String(inputJoinCode.value || '').trim();
-                    if (code.length !== 6) return alert('請輸入 6 位數字工程碼');
+                    await checkAuthorName();
+                    const code = String(inputJoinCode.value || '').trim(); if (code.length !== 6) return alert('請輸入 6 位數字工程碼');
                     isProcessing.value = true; processingText.value = '正在連通工程 #' + code + '...';
                     try {
-                        if (!db) throw new Error('資料庫未連線');
-                        await trySilentAuth();
+                        if (!db) throw new Error('資料庫未連線'); await trySilentAuth();
                         const doc = await withRetry(() => withTimeout(db.collection('site_projects').doc(code).get()));
-                        if (!doc.exists) { alert('雲端找不到工程碼 #' + code + '（請確認另一部機已按同步）'); isProcessing.value = false; return; }
+                        if (!doc.exists) { alert('雲端找不到工程碼 #' + code); isProcessing.value = false; return; }
                         showJoinModal.value = false; inputJoinCode.value = '';
-                        await loadProject(code);
-                        showToast('✅ 已連通工程 #' + code);
-                    } catch (err) {
-                        alert('連線失敗：\n' + formatSyncError(err));
-                    }
+                        await loadProject(code); showToast('✅ 已連通工程 #' + code);
+                    } catch (err) { alert('連線失敗：\n' + formatSyncError(err)); }
                     isProcessing.value = false;
                 };
 
                 const loadProject = async (code) => {
-                    code = String(code);
-                    project.code = code;
-                    project.deletedPageIds = [];
-                    pages.value = [];
+                    code = String(code); project.code = code; project.deletedPageIds = []; pages.value = [];
                     const d = await localforage.getItem('proj_' + code);
                     if (d) {
-                        project.name = d.name || ''; project.date = d.date || '';
-                        project.deletedPageIds = d.deletedPageIds || [];
-                        project.lastSyncAt = d.lastSyncAt || 0;
-                        if (Array.isArray(d.pages) && d.pages.length) {
-                            pages.value = d.pages.map(pg => makeEmptyPage(pg));
-                        } else if (d.planImage || d.pins?.length) {
-                            pages.value = [makeEmptyPage({
-                                id: 'legacy_page_1',
-                                photo: d.planImage || null, w: d.planW || 1200, h: d.planH || 900, space: d.planSpace || '',
-                                markers: d.planMarkers || [], lines: d.planLines || [], paths: d.planPaths || [],
-                                pins: (d.pins || []).map(p => ({ ...p, w: p.photoW || 1200, h: p.photoH || 900 }))
-                            })];
-                        }
+                        project.name = d.name || ''; project.date = d.date || ''; project.deletedPageIds = d.deletedPageIds || []; project.lastSyncAt = d.lastSyncAt || 0; project.lastModifiedBy = d.lastModifiedBy || '';
+                        if (Array.isArray(d.pages) && d.pages.length) pages.value = d.pages.map(pg => makeEmptyPage(pg));
                     }
                     activePageIndex.value = 0; activePin.value = null; currentView.value = 'proj';
+                    hasUnsavedCloudChanges.value = false;
                     await pullAndMergeFromCloud(code, false, true);
                     if (!pages.value.length) pages.value = [makeEmptyPage()];
-                    drawMode.value = 'browse';
-                    nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
+                    drawMode.value = 'browse'; nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
+                };
+
+                // 管理中心選單功能
+                const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
+                
+                const renameProject = async () => {
+                    const newName = prompt('請輸入新的工程名稱：', manageProj.value.name);
+                    if (newName !== null) {
+                        const d = await localforage.getItem('proj_' + manageProj.value.code);
+                        if (d) { d.name = newName.trim(); await localforage.setItem('proj_' + manageProj.value.code, d); }
+                        manageProj.value.name = newName.trim();
+                        await loadProjectList();
+                    }
+                };
+
+                const duplicateProject = async () => {
+                    const d = await localforage.getItem('proj_' + manageProj.value.code);
+                    if (!d) return;
+                    const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+                    d.code = newCode; d.name = (d.name || '工程') + ' (副本)'; d.lastSyncAt = 0;
+                    await localforage.setItem('proj_' + newCode, d);
+                    showManageModal.value = false; await loadProjectList();
+                    showToast('✅ 已複製為新工程 #' + newCode);
                 };
 
                 const deleteProject = async (code) => {
-                    if (!confirm('確定刪除此工程？')) return;
+                    const val = prompt('⚠️ 警告：刪除工程無法復原！\n請親手輸入 "delete" 來確認刪除此工程：');
+                    if (val?.toLowerCase() !== 'delete') return;
                     await localforage.removeItem('proj_' + code);
                     if (db) db.collection('site_projects').doc(String(code)).delete().catch(() => {});
-                    loadProjectList();
+                    showManageModal.value = false; await loadProjectList();
+                };
+
+                const openBackupList = async () => {
+                    showManageModal.value = false; isProcessing.value = true; processingText.value = '正在搜尋時光機紀錄...';
+                    try {
+                        const snaps = await db.collection('site_projects').doc(manageProj.value.code).collection('backups').orderBy('timestamp', 'desc').get();
+                        const list = [];
+                        snaps.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+                        backupList.value = list;
+                        showBackupListModal.value = true;
+                    } catch (e) { alert('讀取備份失敗：' + formatSyncError(e)); }
+                    isProcessing.value = false;
+                };
+
+                const restoreBackup = async (backupDocId) => {
+                    isProcessing.value = true; processingText.value = '正在召喚並還原紀錄...';
+                    try {
+                        const doc = await db.collection('site_projects').doc(manageProj.value.code).collection('backups').doc(backupDocId).get();
+                        const bData = JSON.parse(doc.data().data);
+                        const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+                        bData.code = newCode; bData.name = (bData.name || '工程') + ' (還原檔)'; bData.lastSyncAt = 0;
+                        
+                        // 重新補回本機圖片
+                        const currentLocal = await localforage.getItem('proj_' + manageProj.value.code);
+                        if (currentLocal) {
+                            const photoMap = new Map();
+                            currentLocal.pages.forEach(p => { if(p.photo) photoMap.set(p.id, p.photo); (p.pins||[]).forEach(pin => { if(pin.photo) photoMap.set(pin.id, pin.photo); }); });
+                            bData.pages.forEach(p => { p.photo = photoMap.get(p.id) || null; (p.pins||[]).forEach(pin => { pin.photo = photoMap.get(pin.id) || null; }); });
+                        }
+                        
+                        await localforage.setItem('proj_' + newCode, bData);
+                        showBackupListModal.value = false; await loadProjectList();
+                        showToast('✅ 備份已安全還原為新檔案 #' + newCode);
+                    } catch (e) { alert('還原失敗：' + formatSyncError(e)); }
+                    isProcessing.value = false;
+                };
+
+                // 雲端工程庫 (純文字延遲載入)
+                const openCloudBrowser = async () => {
+                    if (!db || !navigator.onLine) return alert('請檢查網路連線。');
+                    isProcessing.value = true; processingText.value = '正在讀取雲端目錄...';
+                    try {
+                        await trySilentAuth();
+                        const snaps = await db.collection('site_projects').orderBy('updatedAt', 'desc').limit(50).get();
+                        const list = [];
+                        snaps.forEach(doc => list.push({ code: doc.id, ...doc.data() }));
+                        cloudProjectList.value = list; showCloudBrowser.value = true;
+                    } catch (e) { alert('讀取目錄失敗：' + formatSyncError(e)); }
+                    isProcessing.value = false;
+                };
+
+                const downloadFromCloudBrowser = async (code) => {
+                    showCloudBrowser.value = false; await loadProject(code); showToast('✅ 已從雲端載入 #' + code);
                 };
 
                 const loadProjectList = async () => {
-                    const keys = await localforage.keys();
-                    const list = [];
+                    const keys = await localforage.keys(); const list = [];
                     for (const k of keys) {
                         if (k.startsWith('proj_')) {
                             const d = await localforage.getItem(k);
                             if (d?.code) {
                                 const pgs = d.pages || [];
-                                const pinCount = pgs.length ? pgs.reduce((s, p) => s + (p.pins?.length || 0), 0) : (d.pins?.length || 0);
-                                list.push({ code: d.code, name: d.name, date: d.date, pageCount: pgs.length || 1, pinCount, updatedAt: d.updatedAt || 0 });
+                                const pinCount = pgs.length ? pgs.reduce((s, p) => s + (p.pins?.length || 0), 0) : 0;
+                                list.push({ code: d.code, name: d.name, date: d.date, pageCount: pgs.length || 1, pinCount, updatedAt: d.updatedAt || 0, lastModifiedBy: d.lastModifiedBy || '' });
                             }
                         }
                     }
                     projectList.value = list.sort((a, b) => b.updatedAt - a.updatedAt);
                 };
 
-                const backToProjects = () => { loadProjectList(); currentView.value = 'dir'; };
+                const backToProjects = async () => { 
+                    if (hasUnsavedCloudChanges.value) {
+                        if (!confirm('⚠️ 您有最新的改動尚未上傳至雲端，確定要離開嗎？\n（本機已自動保留進度，不怕遺失）')) return;
+                    }
+                    await saveAll(); await loadProjectList(); currentView.value = 'dir'; 
+                };
 
-                onMounted(() => {
-                    loadProjectList();
+                const checkAuthorName = async () => {
+                    let name = await localforage.getItem('measure_author_name');
+                    if (!name) {
+                        name = prompt('👤 請輸入您的稱呼或設備名稱 (例: 明哥、強哥iPad)：');
+                        if (name) { authorName.value = name.trim(); await localforage.setItem('measure_author_name', authorName.value); }
+                    } else { authorName.value = name; }
+                };
+
+                const changeAuthorName = async () => {
+                    const name = prompt('👤 更新設備稱呼：', authorName.value);
+                    if (name) { authorName.value = name.trim(); await localforage.setItem('measure_author_name', authorName.value); }
+                };
+
+                onMounted(async () => {
+                    await checkAuthorName();
+                    await loadProjectList();
                     window.addEventListener('resize', updateWorkspaceSize);
                     window.addEventListener('orientationchange', () => setTimeout(updateWorkspaceSize, 150));
-                    window.addEventListener('online', () => {
-                        cloudSyncState.value = 'ready';
-                        lastCloudError.value = '';
-                    });
-                    window.addEventListener('offline', () => {
-                        cloudSyncState.value = 'error';
-                        lastCloudError.value = formatSyncError(new Error('offline'));
-                    });
+                    window.addEventListener('online', () => { cloudSyncState.value = 'ready'; lastCloudError.value = ''; });
+                    window.addEventListener('offline', () => { cloudSyncState.value = 'error'; lastCloudError.value = formatSyncError(new Error('offline')); });
                     trySilentAuth();
                 });
 
                 const renderCanvasImage = (canvasObj, title, isForPdf = false, includePins = false) => new Promise((resolve) => {
-                    const img = new Image();
-                    img.src = canvasObj.photo;
+                    const img = new Image(); img.src = canvasObj.photo;
                     img.onload = () => {
-                        const c = document.createElement('canvas');
-                        const w = canvasObj.w || 1200, h = canvasObj.h || 900;
-                        c.width = w; c.height = h;
-                        const ctx = c.getContext('2d');
-                        ctx.drawImage(img, 0, 0, w, h);
-
+                        const c = document.createElement('canvas'); const w = canvasObj.w || 1200, h = canvasObj.h || 900; c.width = w; c.height = h;
+                        const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
                         if (!isForPdf) {
                             ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0, 0, w, 64);
                             ctx.fillStyle = '#fff'; ctx.font = 'bold 28px sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
                             ctx.fillText(`📍 ${project.name || '未命名'}${canvasObj.space ? ' [' + canvasObj.space + ']' : ''} | ${title} | ${project.date}`, 20, 32);
                         } else if (canvasObj.space) {
-                            ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(16, 16, 190, 44);
-                            ctx.fillStyle = '#facc15'; ctx.font = 'bold 24px sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+                            ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(16, 16, 190, 44); ctx.fillStyle = '#facc15'; ctx.font = 'bold 24px sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
                             ctx.fillText(`🏠 ${canvasObj.space}`, 26, 38);
                         }
-
                         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
                         (canvasObj.lines || []).forEach(l => {
                             if (l.type === 'arrow-single') {
-                                const hex = l.color === 'gray' ? '#9ca3af' : (l.color === 'white' ? '#ffffff' : '#ef4444');
-                                ctx.strokeStyle = hex; ctx.lineWidth = 4;
+                                const hex = l.color === 'gray' ? '#9ca3af' : (l.color === 'white' ? '#ffffff' : '#ef4444'); ctx.strokeStyle = hex; ctx.lineWidth = 4;
                                 ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
-                                const angle = Math.atan2(l.y2 - l.y1, l.x2 - l.x1);
-                                ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(angle);
-                                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-14, 7); ctx.lineTo(-14, -7); ctx.closePath(); ctx.fill(); ctx.restore();
-                            } else {
-                                ctx.strokeStyle = 'rgba(255, 0, 68, 0.55)'; ctx.lineWidth = 5;
-                                ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
-                            }
+                                const angle = Math.atan2(l.y2 - l.y1, l.x2 - l.x1); ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(angle); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-14, 7); ctx.lineTo(-14, -7); ctx.closePath(); ctx.fill(); ctx.restore();
+                            } else { ctx.strokeStyle = 'rgba(255, 0, 68, 0.55)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }
                         });
-
-                        (canvasObj.paths || []).forEach(p => {
-                            ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 6;
-                            ctx.stroke(new Path2D(p.d));
-                        });
-
+                        (canvasObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 6; ctx.stroke(new Path2D(p.d)); });
                         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                         (canvasObj.markers || []).forEach(m => {
-                            const lines = getMarkerLines(m), color = getStampColor(m);
-                            ctx.font = '900 28px sans-serif';
-                            lines.forEach((line, i) => {
-                                const textY = m.y - (lines.length > 1 ? 16 : 0) + (i * 34);
-                                ctx.lineWidth = 7; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, textY);
-                                ctx.fillStyle = color; ctx.fillText(line, m.x, textY);
-                            });
+                            const lines = getMarkerLines(m), color = getStampColor(m); ctx.font = '900 28px sans-serif';
+                            lines.forEach((line, i) => { const textY = m.y - (lines.length > 1 ? 16 : 0) + (i * 34); ctx.lineWidth = 7; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, textY); ctx.fillStyle = color; ctx.fillText(line, m.x, textY); });
                         });
-
                         if (includePins && canvasObj.pins?.length) {
                             canvasObj.pins.forEach((pin, idx) => {
-                                const px = (pin.x / 100) * w, py = (pin.y / 100) * h;
-                                ctx.beginPath(); ctx.arc(px, py - 22, 20, 0, 2 * Math.PI); ctx.fillStyle = '#dc2626'; ctx.fill();
-                                ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
-                                ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(idx + 1, px, py - 22);
+                                const px = (pin.x / 100) * w, py = (pin.y / 100) * h; ctx.beginPath(); ctx.arc(px, py - 22, 20, 0, 2 * Math.PI); ctx.fillStyle = '#dc2626'; ctx.fill();
+                                ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(idx + 1, px, py - 22);
                             });
                         }
                         resolve(c.toDataURL('image/jpeg', 0.88));
                     };
                 });
 
-                const exportSingleImage = async () => {
-                    if (!activeCanvas.value?.photo) return;
-                    isProcessing.value = true; processingText.value = '正在輸出相片...';
-                    const title = activePin.value ? `釘選${activePinIndex.value + 1}` : `P${activePageIndex.value + 1}`;
-                    const url = await renderCanvasImage(activeCanvas.value, title, false, !activePin.value);
-                    const a = document.createElement('a');
-                    a.download = `${project.name || '工程'}_${activeCanvas.value.space || title}.jpg`;
-                    a.href = url; a.click();
-                    isProcessing.value = false;
-                };
-
                 const exportPdfReport = async () => {
                     isProcessing.value = true; processingText.value = '正在產生圖紙及 BOM 清單...';
                     setTimeout(async () => {
                         try {
-                            const { jsPDF } = window.jspdf;
-                            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-                            const PAGE_W = 1240, PAGE_H = 1754;
-                            const validPages = pages.value.filter(p => p.photo);
-                            const bomMap = {};
-
+                            const { jsPDF } = window.jspdf; const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                            const PAGE_W = 1240, PAGE_H = 1754; const validPages = pages.value.filter(p => p.photo); const bomMap = {};
                             const collectBom = (obj, fallbackSpace) => {
-                                const sp = obj.space || fallbackSpace || '未分類空間';
-                                bomMap[sp] ||= { stamps: {}, dims: [] };
-                                (obj.markers || []).forEach(m => {
-                                    if (m.type === 'stamp' && m.data?.val) {
-                                        bomMap[sp].stamps[m.data.val] = (bomMap[sp].stamps[m.data.val] || 0) + 1;
-                                    } else {
-                                        const txt = getMarkerLines(m).join(' ');
-                                        if (txt.trim()) bomMap[sp].dims.push(txt.trim());
-                                    }
-                                });
+                                const sp = obj.space || fallbackSpace || '未分類空間'; bomMap[sp] ||= { stamps: {}, dims: [] };
+                                (obj.markers || []).forEach(m => { if (m.type === 'stamp' && m.data?.val) { bomMap[sp].stamps[m.data.val] = (bomMap[sp].stamps[m.data.val] || 0) + 1; } else { const txt = getMarkerLines(m).join(' '); if (txt.trim()) bomMap[sp].dims.push(txt.trim()); } });
                             };
 
                             for (let i = 0; i < validPages.length; i++) {
-                                if (i > 0) doc.addPage();
-                                const pg = validPages[i];
-                                collectBom(pg, `P${i + 1}`);
-                                const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H;
-                                const ctx = c.getContext('2d');
-                                ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H);
-                                ctx.fillStyle = '#000'; ctx.font = 'bold 38px sans-serif'; ctx.textAlign = 'left';
+                                if (i > 0) doc.addPage(); const pg = validPages[i]; collectBom(pg, `P${i + 1}`);
+                                const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; const ctx = c.getContext('2d');
+                                ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H); ctx.fillStyle = '#000'; ctx.font = 'bold 38px sans-serif'; ctx.textAlign = 'left';
                                 ctx.fillText(`${project.name || '工程度尺'} (#${project.code}) — P${i + 1}${pg.space ? ' [' + pg.space + ']' : ''}`, 50, 65);
-                                ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#4b5563';
-                                ctx.fillText(`日期: ${project.date}   |   子釘選: ${pg.pins?.length || 0}`, 50, 102);
+                                ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${project.date}   |   子釘選: ${pg.pins?.length || 0}`, 50, 102);
 
-                                const imgUrl = await renderCanvasImage(pg, `P${i + 1}`, true, true);
-                                const im = new Image(); im.src = imgUrl; await new Promise(r => im.onload = r);
-                                const maxW = PAGE_W - 100, maxH = PAGE_H - 180;
-                                let dw = maxW, dh = (im.height / im.width) * dw;
-                                if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; }
-                                ctx.drawImage(im, 50 + (maxW - dw) / 2, 130, dw, dh);
-                                doc.addImage(c.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
-
-                                const subPins = (pg.pins || []).filter(p => p.photo);
-                                subPins.forEach(sp => collectBom(sp, pg.space || `P${i + 1}`));
-                                const subPages = Math.ceil(subPins.length / 4);
-                                const mx = 50, my = 110, gap = 28, cw = (PAGE_W - mx * 2 - gap) / 2, ch = (PAGE_H - my - 50 - gap) / 2;
-                                const slots = [{ x: mx, y: my }, { x: mx + cw + gap, y: my }, { x: mx, y: my + ch + gap }, { x: mx + cw + gap, y: my + ch + gap }];
-
-                                for (let spIdx = 0; spIdx < subPages; spIdx++) {
-                                    doc.addPage();
-                                    const sc = document.createElement('canvas'); sc.width = PAGE_W; sc.height = PAGE_H;
-                                    const sctx = sc.getContext('2d');
-                                    sctx.fillStyle = '#fff'; sctx.fillRect(0, 0, PAGE_W, PAGE_H);
-                                    sctx.fillStyle = '#000'; sctx.font = 'bold 32px sans-serif'; sctx.textAlign = 'left';
-                                    sctx.fillText(`P${i + 1} 釘選詳情 (${spIdx + 1}/${subPages})`, 50, 62);
-                                    for (let s = 0; s < 4; s++) {
-                                        const idx = spIdx * 4 + s;
-                                        if (idx >= subPins.length) break;
-                                        const pin = subPins[idx], pos = slots[s];
-                                        sctx.strokeStyle = '#d1d5db'; sctx.lineWidth = 2; sctx.strokeRect(pos.x, pos.y, cw, ch);
-                                        sctx.fillStyle = '#f3f4f6'; sctx.fillRect(pos.x, pos.y, cw, 48);
-                                        sctx.fillStyle = '#000'; sctx.font = 'bold 24px sans-serif';
-                                        sctx.fillText(`[釘選 ${idx + 1}] ${pin.space || ''}`, pos.x + 14, pos.y + 32);
-                                        const pUrl = await renderCanvasImage(pin, `釘${idx + 1}`, true, false);
-                                        const pim = new Image(); pim.src = pUrl; await new Promise(r => pim.onload = r);
-                                        const mpw = cw - 20, mph = ch - 64;
-                                        let pdw = mpw, pdh = (pim.height / pim.width) * pdw;
-                                        if (pdh > mph) { pdh = mph; pdw = (pim.width / pim.height) * pdh; }
-                                        sctx.drawImage(pim, pos.x + (cw - pdw) / 2, pos.y + 50 + (mph - pdh) / 2, pdw, pdh);
-                                    }
-                                    doc.addImage(sc.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
-                                }
+                                const imgUrl = await renderCanvasImage(pg, `P${i + 1}`, true, true); const im = new Image(); im.src = imgUrl; await new Promise(r => im.onload = r);
+                                const maxW = PAGE_W - 100, maxH = PAGE_H - 180; let dw = maxW, dh = (im.height / im.width) * dw;
+                                if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; } ctx.drawImage(im, 50 + (maxW - dw) / 2, 130, dw, dh); doc.addImage(c.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
                             }
 
                             const spaces = Object.keys(bomMap);
                             if (spaces.length) {
-                                doc.addPage();
-                                const bc = document.createElement('canvas'); bc.width = PAGE_W; bc.height = PAGE_H;
-                                const bctx = bc.getContext('2d');
-                                bctx.fillStyle = '#fff'; bctx.fillRect(0, 0, PAGE_W, PAGE_H);
-                                bctx.fillStyle = '#000'; bctx.font = 'bold 38px sans-serif'; bctx.textAlign = 'left';
-                                bctx.fillText(`📋 工程標註及物料清單 (BOM) — ${project.name || '#' + project.code}`, 50, 70);
+                                doc.addPage(); const bc = document.createElement('canvas'); bc.width = PAGE_W; bc.height = PAGE_H; const bctx = bc.getContext('2d');
+                                bctx.fillStyle = '#fff'; bctx.fillRect(0, 0, PAGE_W, PAGE_H); bctx.fillStyle = '#000'; bctx.font = 'bold 38px sans-serif'; bctx.textAlign = 'left';
+                                bctx.fillText(`📋 工程標註清單 (BOM) — ${project.name || '#' + project.code}`, 50, 70);
                                 let y = 130;
                                 spaces.forEach(sp => {
-                                    if (y > PAGE_H - 180) return;
-                                    bctx.fillStyle = '#111827'; bctx.fillRect(50, y, PAGE_W - 100, 44);
-                                    bctx.fillStyle = '#facc15'; bctx.font = 'bold 24px sans-serif';
-                                    bctx.fillText(`🏠 ${sp}`, 68, y + 30);
-                                    y += 64;
+                                    if (y > PAGE_H - 180) return; bctx.fillStyle = '#111827'; bctx.fillRect(50, y, PAGE_W - 100, 44); bctx.fillStyle = '#facc15'; bctx.font = 'bold 24px sans-serif'; bctx.fillText(`🏠 ${sp}`, 68, y + 30); y += 64;
                                     const stampEntries = Object.entries(bomMap[sp].stamps).map(([k, v]) => `${k} × ${v}`);
-                                    if (stampEntries.length) {
-                                        bctx.fillStyle = '#1f2937'; bctx.font = 'bold 22px sans-serif';
-                                        bctx.fillText(`• 印章統計：${stampEntries.join('  ｜  ')}`, 68, y);
-                                        y += 36;
-                                    }
-                                    if (bomMap[sp].dims.length) {
-                                        bctx.fillStyle = '#374151'; bctx.font = '21px sans-serif';
-                                        bctx.fillText(`• 尺寸備註：${bomMap[sp].dims.join('  ；  ')}`, 68, y);
-                                        y += 40;
-                                    }
-                                    y += 14;
+                                    if (stampEntries.length) { bctx.fillStyle = '#1f2937'; bctx.font = 'bold 22px sans-serif'; bctx.fillText(`• 印章統計：${stampEntries.join('  ｜  ')}`, 68, y); y += 36; }
+                                    if (bomMap[sp].dims.length) { bctx.fillStyle = '#374151'; bctx.font = '21px sans-serif'; bctx.fillText(`• 尺寸備註：${bomMap[sp].dims.join('  ；  ')}`, 68, y); y += 40; } y += 14;
                                 });
                                 doc.addImage(bc.toDataURL('image/jpeg', 0.88), 'JPEG', 0, 0, 210, 297);
                             }
-
                             doc.save(`${project.name || '工程'}_#${project.code}.pdf`);
                         } catch (err) { alert('生成 PDF 失敗，請重試。'); }
                         isProcessing.value = false;
@@ -1772,19 +1497,19 @@
 
                 return {
                     currentView, projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas,
-                    showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList,
+                    showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges,
+                    showManageModal, manageProj, openManageMenu, renameProject, duplicateProject,
+                    showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser,
+                    showBackupListModal, backupList, openBackupList, restoreBackup,
                     arrowColor, freehandColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg,
-                    drawMode, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText,
-                    focusedInput, topTextInputRef,
+                    drawMode, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText, focusedInput, topTextInputRef,
                     stageRef, svgCanvas, wrapperStyle, zoomScale, zoomTransformStyle, resetZoom,
                     currentLine, currentPath, hasUndoItems, hasRedoItems,
-                    createNewProject, loadProject, deleteProject, backToProjects, copyProjectCode, joinProjectByCode,
-                    saveAll, downloadNow, uploadNow, restoreFromCloud, switchPage, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, deleteActivePin,
+                    createNewProject, loadProject, deleteProject, backToProjects, copyProjectCode, copyCode, joinProjectByCode,
+                    saveAll, downloadNow, uploadNow, switchPage, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, deleteActivePin,
                     setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload,
-                    startDrag, onStageTouchStart, onStageTouchMove, onStageTouchEnd,
-                    onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
-                    setMode, deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, setFocus, handleKeypad,
-                    applyTag, applyStamp, updateMarkerSize, getStampColor, getMarkerLines, getTagFields, exportSingleImage, exportPdfReport
+                    startDrag, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
+                    setMode, deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, setFocus, handleKeypad, applyTag, applyStamp, updateMarkerSize, getStampColor, getMarkerLines, getTagFields, exportPdfReport
                 };
             }
         }).mount('#app');
