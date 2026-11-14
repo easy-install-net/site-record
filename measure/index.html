@@ -7,8 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v4.2 (即時自動同步版)</title>
-    <link rel="manifest" href="./manifest.json">
+    <title>度尺寶 Pro v5.0 (預覽與強制同步版)</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
@@ -50,28 +49,34 @@
 <body class="text-gray-100 font-sans antialiased">
     <div id="app" v-cloak class="fixed inset-0 w-full h-full flex flex-col overflow-hidden">
         
-        <!-- 頂部導航欄 (左右動線分離) -->
+        <!-- 頂部導航欄 -->
         <div class="shrink-0 flex flex-col z-30">
             <header class="h-10 bg-black text-white px-2 border-b border-zinc-800 flex justify-between items-center gap-1">
-                <!-- 左手邊：目錄與載入 -->
+                <!-- 左手邊 -->
                 <div class="flex items-center gap-1 min-w-0 flex-1">
                     <span v-if="currentView === 'dir'" class="text-sm font-bold truncate">工程目錄</span>
                     
-                    <button v-if="currentView === 'proj'" @click="backToProjects" class="bg-zinc-800 px-2 py-1 rounded text-xs font-bold shrink-0">‹目錄</button>
-                    <button v-if="currentView === 'proj'" @click="downloadNow" class="bg-blue-600 active:bg-blue-800 text-white px-2 py-1 rounded text-xs font-bold shrink-0">⬇️載入</button>
+                    <button v-if="currentView !== 'dir'" @click="backToProjects" class="bg-zinc-800 px-2 py-1 rounded text-xs font-bold shrink-0">‹目錄</button>
+                    <button v-if="currentView !== 'dir'" @click="downloadNow" class="bg-blue-600 active:bg-blue-800 text-white px-2 py-1 rounded text-xs font-bold shrink-0">⬇️載入</button>
                     
                     <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer ml-1">{{ cloudStatusText }}</span>
                     
                     <input v-if="currentView === 'proj'" v-model="project.name" @blur="saveAll" placeholder="輸入工程名稱..." class="ml-1 bg-transparent text-white text-xs font-bold min-w-0 flex-1 truncate focus:bg-zinc-900 focus:px-1.5 rounded focus:outline-none">
+                    <span v-if="currentView === 'preview'" class="ml-1 text-white text-xs font-bold truncate">{{ project.name || '未命名工程' }}</span>
                 </div>
                 
-                <!-- 右手邊：上傳與其他功能 -->
+                <!-- 右手邊 -->
                 <div class="flex gap-1 items-center shrink-0">
                     <button v-if="currentView === 'dir'" @click="openCloudBrowser" class="bg-zinc-800 text-blue-400 border border-blue-900 px-2 py-1 rounded text-xs font-bold">☁️雲端庫</button>
                     <button v-if="currentView === 'dir'" @click="showJoinModal = true" class="bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold">🔑組合</button>
                     <button v-if="currentView === 'dir'" @click="createNewProject" class="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">+新建</button>
                     
-                    <!-- 發光防呆上傳按鈕 -->
+                    <!-- 預覽模式右側按鈕 -->
+                    <button v-if="currentView === 'preview'" @click="enterEditMode(0)" class="bg-yellow-500 text-black px-3 py-1 rounded text-xs font-bold shadow">✏️ 進入編輯</button>
+                    <button v-if="currentView === 'preview' && pages.length" @click="exportPdfReport" class="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold">PDF</button>
+
+                    <!-- 編輯模式右側按鈕 -->
+                    <button v-if="currentView === 'proj'" @click="switchToPreview" class="bg-zinc-800 text-yellow-400 border border-yellow-600 px-2 py-1 rounded text-xs font-bold">👁️預覽</button>
                     <button v-if="currentView === 'proj'" @click="uploadNow" 
                             :class="hasUnsavedCloudChanges ? 'bg-purple-600 animate-pulse ring-2 ring-purple-400' : 'bg-zinc-700'" 
                             class="text-white px-3 py-1 rounded text-xs font-bold transition-all shadow">
@@ -81,7 +86,7 @@
                 </div>
             </header>
 
-            <!-- 工具列 -->
+            <!-- 編輯模式工具列 (僅在編輯模式顯示，預覽模式完全隱藏防誤觸) -->
             <div v-if="currentView === 'proj'" class="h-11 bg-zinc-900 border-b border-zinc-700 px-1 flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
                 <div class="flex items-center gap-1 shrink-0 justify-center">
                     <button @click="setMode('browse')" :class="drawMode === 'browse' ? 'bg-emerald-500 text-black' : 'bg-zinc-800 text-zinc-300'" class="px-2 py-1.5 text-xs font-bold rounded">睇圖</button>
@@ -115,17 +120,17 @@
             </div>
         </div>
 
-        <div v-if="toastMsg" class="fixed top-12 left-1/2 -translate-x-1/2 z-[80] bg-emerald-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-xl border border-emerald-300">
+        <div v-if="toastMsg" class="fixed top-12 left-1/2 -translate-x-1/2 z-[80] bg-emerald-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-xl border border-emerald-300 whitespace-nowrap">
             {{ toastMsg }}
         </div>
 
-        <!-- 外部目錄視圖 -->
+        <!-- 1. 外部目錄視圖 -->
         <main v-show="currentView === 'dir'" class="flex-1 min-h-0 bg-zinc-950 p-3 overflow-y-auto touch-scrollable">
             <div v-if="projectList.length === 0" class="text-center text-zinc-500 mt-20 text-sm font-bold">
                 本機暫無工程。<br>點右上「+新建」或「☁️雲端庫」連通。
             </div>
             <div v-for="proj in projectList" :key="proj.code" class="bg-zinc-900 border border-zinc-800 p-3 rounded-lg mb-2.5 flex justify-between items-center shadow-lg">
-                <div class="flex-1 mr-2 cursor-pointer min-w-0" @click="loadProject(proj.code)">
+                <div class="flex-1 mr-2 cursor-pointer min-w-0" @click="loadProject(proj.code, true)">
                     <div class="flex items-center gap-1.5">
                         <span class="bg-yellow-400 text-black text-xs font-black px-1.5 py-0.5 rounded shrink-0">#{{ proj.code }}</span>
                         <div class="font-bold text-sm text-white truncate">{{ proj.name || '未命名工程' }}</div>
@@ -136,8 +141,9 @@
                     </div>
                 </div>
                 <div class="flex gap-1.5 shrink-0">
-                    <button @click="loadProject(proj.code)" class="bg-zinc-700 text-white px-2.5 py-1.5 rounded text-xs font-bold">開啟</button>
-                    <button @click="openManageMenu(proj)" class="bg-zinc-800 border border-zinc-600 text-zinc-300 px-2 py-1.5 rounded text-xs font-bold">⚙️管理</button>
+                    <button @click="loadProject(proj.code, true)" class="bg-blue-600 text-white px-2.5 py-1.5 rounded text-xs font-bold">👁️預覽</button>
+                    <button @click="loadProject(proj.code, false)" class="bg-zinc-700 text-white px-2.5 py-1.5 rounded text-xs font-bold">編輯</button>
+                    <button @click="openManageMenu(proj)" class="bg-zinc-800 border border-zinc-600 text-zinc-300 px-2 py-1.5 rounded text-xs font-bold">⚙️</button>
                 </div>
             </div>
             
@@ -146,7 +152,138 @@
             </div>
         </main>
 
-        <!-- 畫布視圖 -->
+        <!-- 2. 全檔唯讀預覽總覽視圖 (防誤觸) -->
+        <main v-show="currentView === 'preview'" class="flex-1 min-h-0 bg-zinc-950 flex flex-col overflow-hidden">
+            <!-- 預覽分頁切換條 -->
+            <div class="bg-zinc-900 border-b border-zinc-800 px-3 py-2 flex items-center justify-between shrink-0">
+                <div class="flex gap-2">
+                    <button @click="previewTab = 'pages'" :class="previewTab === 'pages' ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400'" class="px-3 py-1 rounded-full text-xs font-bold">🖼️ 全部圖紙 ({{ pages.length }}頁)</button>
+                    <button @click="previewTab = 'bom'" :class="previewTab === 'bom' ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400'" class="px-3 py-1 rounded-full text-xs font-bold">📋 統計清單 (BOM)</button>
+                </div>
+                <span class="text-[10px] text-zinc-400">唯讀防誤觸模式</span>
+            </div>
+
+            <!-- 預覽分頁 A：全部圖紙瀑布流 -->
+            <div v-show="previewTab === 'pages'" class="flex-1 overflow-y-auto p-3 touch-scrollable space-y-4">
+                <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-3 flex justify-between items-center">
+                    <div>
+                        <div class="text-xs text-zinc-400">工程編號: <span class="text-yellow-400 font-mono font-bold">#{{ project.code }}</span> ｜ 日期: {{ project.date }}</div>
+                        <div v-if="project.lastModifiedBy" class="text-[11px] text-blue-300 mt-0.5">✍️ 最後修改: {{ project.lastModifiedBy }}</div>
+                    </div>
+                    <button @click="copyProjectCode" class="bg-zinc-800 border border-zinc-700 px-2.5 py-1 rounded text-xs font-bold text-zinc-300">複製碼</button>
+                </div>
+
+                <div v-for="(pg, idx) in pages" :key="pg.id" class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-lg">
+                    <div class="bg-zinc-800/80 px-3 py-2 flex justify-between items-center border-b border-zinc-700">
+                        <div class="flex items-center gap-2">
+                            <span class="bg-black text-white text-xs font-bold px-2 py-0.5 rounded">P{{ idx + 1 }}</span>
+                            <span class="text-yellow-400 font-bold text-sm">{{ pg.space || '未標記空間' }}</span>
+                            <span v-if="pg.pins?.length" class="bg-red-900/80 text-red-200 text-[10px] px-1.5 py-0.5 rounded font-bold">📍 {{ pg.pins.length }} 個釘選</span>
+                        </div>
+                        <button @click="enterEditMode(idx)" class="bg-yellow-500 text-black px-2.5 py-1 rounded text-xs font-bold">✏️ 修改此頁</button>
+                    </div>
+
+                    <!-- 圖紙唯讀預覽框 (包含完整 SVG 標註與釘選點) -->
+                    <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}`)" class="relative w-full bg-black flex items-center justify-center cursor-pointer group">
+                        <div class="relative w-full max-w-lg">
+                            <img :src="pg.photo" class="w-full h-auto block pointer-events-none select-none">
+                            <svg :viewBox="`0 0 ${pg.w || 1200} ${pg.h || 900}`" class="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+                                <line v-for="line in (pg.lines || [])" :key="line.id"
+                                      :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2"
+                                      :stroke="line.type === 'measure' || !line.type ? 'rgba(255, 0, 68, 0.7)' : (line.color === 'gray' ? '#9ca3af' : line.color === 'white' ? '#ffffff' : '#ef4444')"
+                                      :stroke-width="line.type === 'measure' || !line.type ? 6 : 5" stroke-linecap="round" />
+                                <path v-for="path in (pg.paths || [])" :key="path.id" :d="path.d" :stroke="path.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
+                                <g v-for="marker in (pg.markers || [])" :key="marker.id" :transform="`translate(${marker.x}, ${marker.y})`">
+                                    <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(marker)" class="stamp-text">
+                                        <tspan v-for="(line, lIdx) in getMarkerLines(marker)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(marker).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
+                                    </text>
+                                </g>
+                            </svg>
+                            <div v-for="(pin, pIdx) in (pg.pins || [])" :key="pin.id"
+                                 class="absolute w-7 h-7 -ml-3.5 -mt-7 flex flex-col items-center justify-center pointer-events-none"
+                                 :style="{ left: pin.x + '%', top: pin.y + '%' }">
+                                <div class="bg-red-600 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border border-white shadow">{{ pIdx + 1 }}</div>
+                            </div>
+                        </div>
+                        <div class="absolute bottom-2 right-2 bg-black/75 text-white text-[10px] px-2 py-1 rounded backdrop-blur">🔍 點擊放大檢視</div>
+                    </div>
+                    <div v-else class="p-8 text-center text-zinc-500 text-xs">此頁面尚未拍照或建立手繪底圖</div>
+
+                    <!-- 子釘選細節縮圖列 -->
+                    <div v-if="pg.pins?.length" class="p-2.5 bg-zinc-950 border-t border-zinc-800">
+                        <div class="text-[11px] font-bold text-zinc-400 mb-2">📍 頁面局部釘選細節：</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div v-for="(pin, pIdx) in pg.pins" :key="pin.id" @click="pin.photo ? openFullScreenPreview(pin, `P${idx + 1} 釘#${pIdx + 1}`) : null" class="bg-zinc-900 border border-zinc-800 rounded-lg p-1.5 flex items-center gap-2 cursor-pointer">
+                                <div class="w-12 h-12 bg-black rounded overflow-hidden shrink-0 flex items-center justify-center relative">
+                                    <img v-if="pin.photo" :src="pin.photo" class="w-full h-full object-cover">
+                                    <span v-else class="text-[10px] text-zinc-600">無圖</span>
+                                    <span class="absolute top-0 left-0 bg-red-600 text-white text-[9px] font-bold px-1 rounded-br">#{{ pIdx + 1 }}</span>
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-xs font-bold text-zinc-200 truncate">釘選 #{{ pIdx + 1 }}</div>
+                                    <div class="text-[10px] text-zinc-400">{{ (pin.markers || []).length }} 個標註</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 預覽分頁 B：BOM 統計清單 -->
+            <div v-show="previewTab === 'bom'" class="flex-1 overflow-y-auto p-3 touch-scrollable space-y-3">
+                <div v-if="Object.keys(bomSummary).length === 0" class="text-center text-zinc-500 mt-16 text-xs">
+                    目前圖紙尚無任何印章或尺寸標註。
+                </div>
+                <div v-for="(data, spaceName) in bomSummary" :key="spaceName" class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 shadow">
+                    <div class="text-sm font-black text-yellow-400 border-b border-zinc-800 pb-1.5 mb-2.5">🏠 {{ spaceName }}</div>
+                    
+                    <div v-if="Object.keys(data.stamps).length" class="mb-3">
+                        <div class="text-[11px] font-bold text-zinc-400 mb-1.5">🏷️ 項目 / 印章數量統計：</div>
+                        <div class="flex flex-wrap gap-1.5">
+                            <span v-for="(count, label) in data.stamps" :key="label" class="bg-zinc-800 border border-zinc-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold">
+                                {{ label }} <span class="text-yellow-400 ml-1">× {{ count }}</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div v-if="data.dims.length">
+                        <div class="text-[11px] font-bold text-zinc-400 mb-1.5">📏 尺寸與文字備註明細：</div>
+                        <ul class="space-y-1">
+                            <li v-for="(dim, dIdx) in data.dims" :key="dIdx" class="text-xs text-zinc-200 bg-zinc-950 px-2.5 py-1.5 rounded border border-zinc-800/80">
+                                • {{ dim }}
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 唯讀全螢幕大圖檢視器 (點擊預覽圖放大看，100%防誤改) -->
+        <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col">
+            <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-3 flex justify-between items-center shrink-0">
+                <span class="text-xs font-bold text-yellow-400">👁️ 唯讀放大檢視 — {{ fullScreenTitle }}</span>
+                <button @click="fullScreenItem = null" class="bg-zinc-700 text-white px-3 py-1 rounded text-xs font-bold">✕ 關閉</button>
+            </div>
+            <div class="flex-1 overflow-auto flex items-center justify-center p-2 touch-scrollable">
+                <div class="relative max-w-full max-h-full">
+                    <img :src="fullScreenItem.photo" class="max-w-full max-h-[85dvh] object-contain block">
+                    <svg :viewBox="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" class="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+                        <line v-for="line in (fullScreenItem.lines || [])" :key="line.id"
+                              :x1="line.x1" :y1="line.y1" :x2="line.x2" :y2="line.y2"
+                              :stroke="line.type === 'measure' || !line.type ? 'rgba(255, 0, 68, 0.7)' : (line.color === 'gray' ? '#9ca3af' : line.color === 'white' ? '#ffffff' : '#ef4444')"
+                              :stroke-width="line.type === 'measure' || !line.type ? 6 : 5" stroke-linecap="round" />
+                        <path v-for="path in (fullScreenItem.paths || [])" :key="path.id" :d="path.d" :stroke="path.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
+                        <g v-for="marker in (fullScreenItem.markers || [])" :key="marker.id" :transform="`translate(${marker.x}, ${marker.y})`">
+                            <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(marker)" class="stamp-text">
+                                <tspan v-for="(line, lIdx) in getMarkerLines(marker)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(marker).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
+                            </text>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 畫布編輯視圖 -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 relative bg-black overflow-hidden flex flex-col">
             <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                 <div v-if="activePin" class="text-yellow-400 font-bold text-sm mb-2">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
@@ -285,7 +422,7 @@
                         <div class="min-w-0 flex-1 pr-2">
                             <div class="flex items-center gap-1">
                                 <span class="bg-yellow-500 text-black px-1 rounded text-[10px] font-bold">#{{ cp.code }}</span>
-                                <span class="text-sm font-bold truncate">{{ cp.name }}</span>
+                                <span class="text-sm font-bold truncate">{{ cp.name || '未命名工程' }}</span>
                             </div>
                             <div class="text-[10px] text-zinc-400 mt-1">最後更新: {{ new Date(cp.updatedAt).toLocaleString() }}</div>
                             <div v-if="cp.lastModifiedBy" class="text-[10px] text-blue-300">✍️ 由 {{ cp.lastModifiedBy }} 修改</div>
@@ -473,10 +610,6 @@
     </div>
 
     <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./manifest.json').catch(() => {});
-        }
-
         const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
         localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
@@ -521,9 +654,14 @@
             setup() {
                 const authorName = ref('');
                 const hasUnsavedCloudChanges = ref(false);
-                let unsubscribeRealtime = null; // 即時同步監聽器指標
+                let unsubscribePagesListener = null; // 強化版 pages 子集合即時監聽器
+                let isPushingRightNow = false;
 
-                const currentView = ref('dir');
+                const currentView = ref('dir'); // 'dir' | 'preview' | 'proj'
+                const previewTab = ref('pages'); // 'pages' | 'bom'
+                const fullScreenItem = ref(null);
+                const fullScreenTitle = ref('');
+
                 const projectList = ref([]);
                 const project = reactive({ code: '', name: '', date: '', deletedPageIds: [], lastSyncAt: 0, lastModifiedBy: '' });
                 const pages = ref([]);
@@ -552,12 +690,12 @@
                 const toastMsg = ref('');
                 const showToast = (msg) => {
                     toastMsg.value = msg;
-                    setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 2600);
+                    setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 2800);
                 };
 
                 const lastCloudError = ref('');
                 const cloudSyncState = ref('ready');
-                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️即時連通' }[cloudSyncState.value] || '☁️即時連通'));
+                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v5.0連通' }[cloudSyncState.value] || '☁️v5.0連通'));
                 const cloudStatusClass = computed(() => {
                     if (cloudSyncState.value === 'syncing') return 'bg-yellow-900 text-yellow-200';
                     if (cloudSyncState.value === 'error') return 'bg-zinc-800 text-zinc-400';
@@ -575,7 +713,7 @@
 
                 const showCloudDetail = () => {
                     if (cloudSyncState.value === 'error' && lastCloudError.value) alert('離線原因：' + lastCloudError.value);
-                    else showToast('v4.2 即時自動同步監聽中');
+                    else showToast('v5.0 強制即時同步監聽中');
                 };
 
                 const trySilentAuth = async () => {
@@ -638,6 +776,49 @@
                     if (finalH > availH) { finalH = availH; finalW = availH * ratio; }
                     return { width: `${Math.floor(finalW)}px`, height: `${Math.floor(finalH)}px`, position: 'relative' };
                 });
+
+                // BOM 統計計算屬性
+                const bomSummary = computed(() => {
+                    const summary = {};
+                    const scanObj = (obj, fallbackSpace) => {
+                        const sp = obj.space || fallbackSpace || '未分類空間';
+                        (obj.markers || []).forEach(m => {
+                            if (!summary[sp]) summary[sp] = { stamps: {}, dims: [] };
+                            if (m.type === 'stamp' && m.data?.val) {
+                                summary[sp].stamps[m.data.val] = (summary[sp].stamps[m.data.val] || 0) + 1;
+                            } else {
+                                const txt = getMarkerLines(m).join(' ').trim();
+                                if (txt) summary[sp].dims.push(txt);
+                            }
+                        });
+                    };
+                    pages.value.forEach((pg, idx) => {
+                        scanObj(pg, `P${idx + 1}`);
+                        (pg.pins || []).forEach((pin, pIdx) => scanObj(pin, pg.space || `P${idx + 1} 釘#${pIdx + 1}`));
+                    });
+                    return summary;
+                });
+
+                const openFullScreenPreview = (item, title) => {
+                    fullScreenItem.value = item;
+                    fullScreenTitle.value = title;
+                };
+
+                const enterEditMode = (pageIdx = 0) => {
+                    activePageIndex.value = pageIdx;
+                    activePin.value = null;
+                    drawMode.value = 'browse';
+                    currentView.value = 'proj';
+                    resetZoom();
+                    nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
+                };
+
+                const switchToPreview = async () => {
+                    await saveAll();
+                    activePin.value = null;
+                    previewTab.value = 'pages';
+                    currentView.value = 'preview';
+                };
 
                 const isDrawing = ref(false);
                 const startPos = ref({ x: 0, y: 0 });
@@ -1054,7 +1235,6 @@
                     nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); }); saveAll(); e.target.value = '';
                 };
 
-                // 已修復 DataCloneError：徹底剝除 Vue 3 Proxy 外殼
                 const saveAll = async () => {
                     const code = String(project.code || '').trim(); if (!code) return;
                     const now = Date.now();
@@ -1162,35 +1342,32 @@
                     } catch (e) { lastCloudError.value = formatSyncError(e); cloudSyncState.value = 'error'; if (throwOnError) throw new Error(lastCloudError.value); }
                 };
 
-                // 新增：即時雲端監聽器 (A機一上傳，B機自動合併更新)
+                // 強化版：直接監聽 pages 子集合，任何頁面變動 100% 喚醒 B 機刷新
                 const startRealtimeListener = (code) => {
                     stopRealtimeListener();
                     if (!db || !code) return;
+                    let isFirstSnapshot = true;
                     
-                    unsubscribeRealtime = db.collection('site_projects').doc(String(code))
-                        .onSnapshot(async (doc) => {
-                            if (!doc.exists || currentView.value !== 'proj') return;
-                            const pd = doc.data();
-                            const cloudUpdatedAt = pd.updatedAt || 0;
-                            
-                            // 若雲端時間戳記比本機最後同步時間還新，代表有同事剛剛按了上傳
-                            if (cloudUpdatedAt > (project.lastSyncAt || 0) + 1500) {
-                                // 防干擾保護：若本機師傅正在畫線或正在輸入文字，等他完成後再同步
-                                if (isDrawing.value || showTopSheet.value || showTopTextBar.value) return;
-                                
-                                await pullAndMergeFromCloud(code, false, true);
-                                const editor = pd.lastModifiedBy ? `[${pd.lastModifiedBy}]` : '同事';
-                                showToast(`🔄 已自動同步 ${editor} 的最新進度`);
-                            }
+                    unsubscribePagesListener = db.collection('site_projects').doc(String(code)).collection('pages')
+                        .onSnapshot(async (snapshot) => {
+                            if (isFirstSnapshot) { isFirstSnapshot = false; return; }
+                            if (isPushingRightNow || currentView.value === 'dir') return;
+                            if (snapshot.metadata.hasPendingWrites) return; // 忽略本機自己的寫入
+
+                            // 若正在畫線或打字輸入，等操作結束再執行
+                            if (isDrawing.value || showTopSheet.value || showTopTextBar.value) return;
+
+                            await pullAndMergeFromCloud(code, false, true);
+                            showToast('🔄 已自動同步同事最新圖紙進度');
                         }, (err) => {
-                            console.warn('即時監聽暫時中斷:', err);
+                            console.warn('Pages 即時監聽異常:', err);
                         });
                 };
 
                 const stopRealtimeListener = () => {
-                    if (unsubscribeRealtime) {
-                        unsubscribeRealtime();
-                        unsubscribeRealtime = null;
+                    if (unsubscribePagesListener) {
+                        unsubscribePagesListener();
+                        unsubscribePagesListener = null;
                     }
                 };
 
@@ -1200,18 +1377,19 @@
                         lastCloudError.value = formatSyncError(new Error('offline')); cloudSyncState.value = 'error';
                         if (throwOnError) throw new Error(lastCloudError.value); return;
                     }
+                    isPushingRightNow = true;
                     cloudSyncState.value = 'syncing';
                     try {
                         await trySilentAuth(); const projRef = db.collection('site_projects').doc(code);
                         const now = Date.now(); const lastSync = project.lastSyncAt || 0; 
-                        const dirtyPagesRaw = pages.value.filter(pg => (pg.updatedAt || 0) > lastSync);
+                        // 確保至少推送目前所在頁面，避免時間戳誤差漏傳
+                        if (activePage.value) activePage.value.updatedAt = now;
+                        
+                        const dirtyPagesRaw = pages.value.filter(pg => (pg.updatedAt || 0) >= lastSync);
                         const dirtyPages = JSON.parse(JSON.stringify(dirtyPagesRaw)).map(pg => {
                             delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg;
                         });
                         const myPageIds = pages.value.map(p => p.id); const myDeletedIds = JSON.parse(JSON.stringify(project.deletedPageIds || []));
-
-                        // 先將 lastSyncAt 設為 now，避免自己的 onSnapshot 誤判為別人的更新
-                        project.lastSyncAt = now;
 
                         await withRetry(() => withTimeout(projRef.set({
                             code, name: project.name || '', date: project.date || '',
@@ -1223,21 +1401,24 @@
 
                         for (const pg of dirtyPages) {
                             const { photo: pagePhoto, pins, ...restPage } = pg;
-                            if (pagePhoto && !pg.isSketch) await withRetry(() => withTimeout(projRef.collection('media').doc('page_' + pg.id).set({ photo: pagePhoto, updatedAt: pg.updatedAt || now }, { merge: true })));
+                            if (pagePhoto && !pg.isSketch) await withRetry(() => withTimeout(projRef.collection('media').doc('page_' + pg.id).set({ photo: pagePhoto, updatedAt: now }, { merge: true })));
                             const pinsMeta = [];
                             for (const pin of (pins || [])) {
                                 const { photo: pinPhoto, ...restPin } = pin; pinsMeta.push({ ...restPin, hasPhoto: !!pinPhoto });
-                                if (pinPhoto && !pin.isSketch && (pin.updatedAt || 0) > lastSync) await withRetry(() => withTimeout(projRef.collection('media').doc(String(pin.id)).set({ photo: pinPhoto, updatedAt: pin.updatedAt || now }, { merge: true })));
+                                if (pinPhoto && !pin.isSketch) await withRetry(() => withTimeout(projRef.collection('media').doc(String(pin.id)).set({ photo: pinPhoto, updatedAt: now }, { merge: true })));
                             }
-                            await withRetry(() => withTimeout(projRef.collection('pages').doc(pg.id).set({ ...restPage, hasPhoto: !!pagePhoto, pins: pinsMeta }, { merge: true })));
+                            await withRetry(() => withTimeout(projRef.collection('pages').doc(pg.id).set({ ...restPage, updatedAt: now, hasPhoto: !!pagePhoto, pins: pinsMeta }, { merge: true })));
                         }
 
+                        project.lastSyncAt = now;
                         lastCloudError.value = ''; cloudSyncState.value = 'ready';
                         hasUnsavedCloudChanges.value = false;
                         await saveAll();
                     } catch (e) {
                         lastCloudError.value = formatSyncError(e); cloudSyncState.value = 'error';
                         if (throwOnError) throw new Error(lastCloudError.value);
+                    } finally {
+                        setTimeout(() => { isPushingRightNow = false; }, 1000);
                     }
                 };
 
@@ -1265,7 +1446,7 @@
                         await pullAndMergeFromCloud(project.code, false, true);
                         await pushToCloud(true);
                         await createCloudBackup(project.code);
-                        showToast('✅ 成功推送到雲端並通知其他設備');
+                        showToast('✅ 成功推送到雲端並同步其他設備');
                     } catch (err) { alert('上傳失敗：\n' + (err.message || '請檢查網路連線')); }
                     isProcessing.value = false;
                 };
@@ -1302,25 +1483,27 @@
                         const doc = await withRetry(() => withTimeout(db.collection('site_projects').doc(code).get()));
                         if (!doc.exists) { alert('雲端找不到工程碼 #' + code); isProcessing.value = false; return; }
                         showJoinModal.value = false; inputJoinCode.value = '';
-                        await loadProject(code); showToast('✅ 已連通工程 #' + code);
+                        await loadProject(code, true); showToast('✅ 已連通工程 #' + code);
                     } catch (err) { alert('連線失敗：\n' + formatSyncError(err)); }
                     isProcessing.value = false;
                 };
 
-                const loadProject = async (code) => {
+                // openAsPreview = true 代表預設先進入預覽模式防誤改
+                const loadProject = async (code, openAsPreview = true) => {
                     code = String(code); project.code = code; project.deletedPageIds = []; pages.value = [];
                     const d = await localforage.getItem('proj_' + code);
                     if (d) {
                         project.name = d.name || ''; project.date = d.date || ''; project.deletedPageIds = d.deletedPageIds || []; project.lastSyncAt = d.lastSyncAt || 0; project.lastModifiedBy = d.lastModifiedBy || '';
                         if (Array.isArray(d.pages) && d.pages.length) pages.value = d.pages.map(pg => makeEmptyPage(pg));
                     }
-                    activePageIndex.value = 0; activePin.value = null; currentView.value = 'proj';
+                    activePageIndex.value = 0; activePin.value = null;
+                    previewTab.value = 'pages';
+                    currentView.value = openAsPreview ? 'preview' : 'proj';
                     hasUnsavedCloudChanges.value = false;
                     await pullAndMergeFromCloud(code, false, true);
                     if (!pages.value.length) pages.value = [makeEmptyPage()];
                     drawMode.value = 'browse'; nextTick(() => { updateWorkspaceSize(); syncSvgViewBox(); });
                     
-                    // 啟動全自動即時監聽
                     startRealtimeListener(code);
                 };
 
@@ -1402,7 +1585,7 @@
                 };
 
                 const downloadFromCloudBrowser = async (code) => {
-                    showCloudBrowser.value = false; await loadProject(code); showToast('✅ 已從雲端載入 #' + code);
+                    showCloudBrowser.value = false; await loadProject(code, true); showToast('✅ 已從雲端載入 #' + code);
                 };
 
                 const loadProjectList = async () => {
@@ -1421,7 +1604,7 @@
                 };
 
                 const backToProjects = async () => { 
-                    stopRealtimeListener(); // 離開工程時關閉即時監聽以節省流量
+                    stopRealtimeListener();
                     hasUnsavedCloudChanges.value = false;
                     await saveAll(); 
                     await loadProjectList(); 
@@ -1532,7 +1715,8 @@
                 };
 
                 return {
-                    currentView, projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas,
+                    currentView, previewTab, fullScreenItem, fullScreenTitle, bomSummary, openFullScreenPreview, enterEditMode, switchToPreview,
+                    projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas,
                     showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges,
                     showManageModal, manageProj, openManageMenu, renameProject, duplicateProject,
                     showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser,
