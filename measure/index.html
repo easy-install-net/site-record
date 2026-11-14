@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v7.3</title>
+    <title>度尺寶 Pro v7.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -79,7 +79,7 @@
                 </div>
             </header>
 
-            <!-- 編輯工具列 (固定高度不跳動，順序：睇圖 單箭 塗鴉 度尺 印章 落釘) -->
+            <!-- 編輯工具列 -->
             <div v-if="currentView === 'proj'" class="w-full flex flex-col bg-zinc-900 border-b border-zinc-700 shrink-0">
                 <div class="h-11 px-1 flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
                     <div class="flex items-center gap-1 shrink-0">
@@ -95,7 +95,6 @@
                     </div>
                 </div>
 
-                <!-- 顏色列 (固定佔位高度，切換工具畫布紋風不動) -->
                 <div class="h-8 bg-zinc-950 flex items-center justify-center gap-2 transition-opacity duration-200" :class="(drawMode === 'arrow-single' || drawMode === 'freehand') ? 'opacity-100' : 'opacity-0 pointer-events-none'">
                     <span class="text-[10px] text-zinc-400 font-bold">顏色:</span>
                     <template v-if="drawMode === 'arrow-single'">
@@ -172,9 +171,9 @@
                             </div>
                         </div>
 
-                        <!-- Unified SVG 縮圖：使用 :view-box.camel 確保 100% 完整縮放不裁剪 -->
-                        <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''} (最後改: ${pg.author || project.lastModifiedBy || '未知'})`)" class="h-44 relative bg-zinc-950 cursor-pointer active:bg-zinc-800 overflow-hidden">
-                            <div class="absolute inset-1.5 overflow-hidden">
+                        <!-- 絕對定位鎖死縮圖框，防止溢出 -->
+                        <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''} (最後改: ${pg.author || project.lastModifiedBy || '未知'})`)" class="h-44 relative bg-zinc-950 cursor-pointer active:bg-zinc-800 overflow-hidden flex items-center justify-center">
+                            <div class="absolute inset-1.5 overflow-hidden flex items-center justify-center">
                                 <svg :view-box.camel="`0 0 ${pg.w || 1200} ${pg.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="pointer-events-none select-none">
                                     <rect x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" fill="#ffffff" />
                                     <image :href="pg.photo" x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" preserveAspectRatio="none" />
@@ -270,11 +269,15 @@
             </div>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器 (純 CSS 置中 + :view-box.camel，100% 完整顯示全圖) -->
+        <!-- 唯讀全螢幕大圖檢視器 (新增一鍵複製圖片 / 下載完整標註圖片) -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col overflow-hidden">
-            <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-3 flex justify-between items-center shrink-0 z-10">
-                <span class="text-xs font-bold text-yellow-400 truncate pr-2">👁️ {{ fullScreenTitle }}</span>
-                <button @click="fullScreenItem = null" class="bg-zinc-700 text-white px-3 py-1 rounded text-xs font-bold shadow-lg shrink-0">✕ 關閉</button>
+            <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-2.5 flex justify-between items-center gap-1.5 shrink-0 z-10">
+                <span class="text-xs font-bold text-yellow-400 truncate min-w-0 flex-1">👁️ {{ fullScreenTitle }}</span>
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <button @click="copyFullScreenImage" class="bg-blue-600 active:bg-blue-700 text-white px-2.5 py-1 rounded text-xs font-bold shadow">📋複製</button>
+                    <button @click="downloadFullScreenImage" class="bg-emerald-600 active:bg-emerald-700 text-white px-2.5 py-1 rounded text-xs font-bold shadow">⬇️下載</button>
+                    <button @click="fullScreenItem = null" class="bg-zinc-700 active:bg-zinc-600 text-white px-2.5 py-1 rounded text-xs font-bold shadow">✕關閉</button>
+                </div>
             </div>
             
             <div class="flex-1 min-h-0 w-full relative bg-zinc-950 overflow-hidden">
@@ -709,7 +712,7 @@
                 const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
                 const lastCloudError = ref(''), cloudSyncState = ref('ready');
-                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v7.3連通' }[cloudSyncState.value] || '☁️v7.3連通'));
+                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v7.5連通' }[cloudSyncState.value] || '☁️v7.5連通'));
                 const cloudStatusClass = computed(() => cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' : cloudSyncState.value === 'error' ? 'bg-zinc-800 text-zinc-400' : 'bg-emerald-950 text-emerald-300 border border-emerald-700');
 
                 const customStamps = ref([]);
@@ -726,7 +729,7 @@
                     return msg || '連線異常';
                 };
 
-                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v7.3 全螢幕自動縮放引擎運作中');
+                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v7.5 支援 PDF 連同釘選子圖紙一齊輸出');
                 const trySilentAuth = async () => { if (auth && !auth.currentUser) try { await withTimeout(auth.signInAnonymously(), 8000); } catch (e) {} };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -857,7 +860,6 @@
                 const hasUndoItems = computed(() => activeCanvas.value?.historyStack?.length > 0);
                 const hasRedoItems = computed(() => activeCanvas.value?.redoStack?.length > 0);
 
-                // 核心座標轉換：透過 SVG 原生 CTM 逆矩陣直接映射螢幕點擊至 viewBox 座標
                 const getCoords = (e) => {
                     const svg = svgCanvas.value;
                     if (!svg || !activeCanvas.value) return { x: 0, y: 0 };
@@ -1049,7 +1051,6 @@
                     saveAll();
                 };
 
-                // 修正拉字差值算法：指邊停邊不彈開，且在睇圖或印章模式下均可拖曳調整位置
                 const startDrag = (marker, e) => { 
                     if (e.touches?.length > 1) return; 
                     e.preventDefault(); e.stopPropagation();
@@ -1633,12 +1634,19 @@
                     trySilentAuth();
                 });
 
-                const renderPdfPageImg = (canvasObj) => new Promise((resolve) => {
+                const renderAnnotatedCanvas = (canvasObj) => new Promise((resolve) => {
                     const img = new Image(); img.src = canvasObj.photo;
                     img.onload = () => {
                         const c = document.createElement('canvas'), w = canvasObj.w || 1200, h = canvasObj.h || 900; c.width = w; c.height = h;
                         const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-                        if (canvasObj.space) { ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(16, 16, 190, 44); ctx.fillStyle = '#facc15'; ctx.font = 'bold 24px sans-serif'; ctx.textBaseline = 'middle'; ctx.fillText(`🏠 ${canvasObj.space}`, 26, 38); }
+                        if (canvasObj.space) {
+                            ctx.font = 'bold 24px sans-serif';
+                            const labelTxt = `🏠 ${canvasObj.space}`;
+                            const boxW = Math.max(170, ctx.measureText(labelTxt).width + 24);
+                            ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(16, 16, boxW, 44);
+                            ctx.fillStyle = '#facc15'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+                            ctx.fillText(labelTxt, 28, 38);
+                        }
                         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
                         (canvasObj.lines || []).forEach(l => {
                             if (l.type === 'arrow-single') {
@@ -1651,15 +1659,66 @@
                         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                         (canvasObj.markers || []).forEach(m => {
                             const lines = getMarkerLines(m), color = getStampColor(m); ctx.font = '900 28px sans-serif';
-                            lines.forEach((line, i) => { const y = m.y - (lines.length > 1 ? 16 : 0) + (i * 34); ctx.lineWidth = 7; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); });
+                            const startY = m.y - ((lines.length - 1) * 34) / 2;
+                            lines.forEach((line, i) => { const y = startY + (i * 34); ctx.lineWidth = 7; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); });
                         });
                         (canvasObj.pins || []).forEach((pin, idx) => {
                             const px = (pin.x / 100) * w, py = (pin.y / 100) * h; ctx.beginPath(); ctx.arc(px, py - 22, 20, 0, 2 * Math.PI); ctx.fillStyle = '#dc2626'; ctx.fill();
                             ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(idx + 1, px, py - 22);
                         });
-                        resolve(c.toDataURL('image/jpeg', 0.88));
+                        resolve(c);
                     };
                 });
+
+                const renderPdfPageImg = async (canvasObj) => {
+                    const c = await renderAnnotatedCanvas(canvasObj);
+                    return c.toDataURL('image/jpeg', 0.88);
+                };
+
+                const copyFullScreenImage = async () => {
+                    if (!fullScreenItem.value?.photo) return;
+                    const item = fullScreenItem.value;
+                    try {
+                        if (navigator.clipboard && window.ClipboardItem) {
+                            const pngBlobPromise = renderAnnotatedCanvas(item).then(c => new Promise((res, rej) => {
+                                c.toBlob(b => b ? res(b) : rej(new Error('生成圖片失敗')), 'image/png');
+                            }));
+                            await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlobPromise })]);
+                            showToast('✅ 已複製圖片，可直接貼上發送');
+                            return;
+                        }
+                    } catch (err) {}
+                    try {
+                        const c = await renderAnnotatedCanvas(item);
+                        const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+                        const file = new File([blob], 'measure_photo.png', { type: 'image/png' });
+                        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                            await navigator.share({ files: [file] });
+                            return;
+                        }
+                    } catch (e) {}
+                    alert('此瀏覽器不支援直接複製圖片，請按旁邊「⬇️下載」儲存圖片。');
+                };
+
+                const downloadFullScreenImage = async () => {
+                    if (!fullScreenItem.value?.photo) return;
+                    try {
+                        const c = await renderAnnotatedCanvas(fullScreenItem.value);
+                        const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.92));
+                        const url = URL.createObjectURL(blob);
+                        const cleanTitle = (fullScreenTitle.value || '圖紙').split('(')[0].trim().replace(/[\\/:*?"<>|\s]+/g, '_');
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${project.name || '工程'}_#${project.code}_${cleanTitle}.jpg`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        setTimeout(() => URL.revokeObjectURL(url), 2000);
+                        showToast('✅ 已下載圖片');
+                    } catch (err) {
+                        alert('下載圖片失敗，請重試。');
+                    }
+                };
 
                 const exportPdfReport = async (perPage = 1) => {
                     showPdfModal.value = false;
@@ -1668,7 +1727,27 @@
                     setTimeout(async () => {
                         try {
                             const { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-                            const PAGE_W = 1240, PAGE_H = 1754, validPages = pages.value.filter(p => p.photo);
+                            const PAGE_W = 1240, PAGE_H = 1754;
+                            
+                            // 掃描所有主圖紙及其內部已拍攝的釘選子圖紙，展平為獨立 PDF 頁面
+                            const validPages = [];
+                            pages.value.forEach((pg, pIdx) => {
+                                const pageNumStr = `P${pIdx + 1}`;
+                                if (pg.photo) {
+                                    validPages.push({ ...pg, pdfLabel: `${pageNumStr}${pg.space ? ' [' + pg.space + ']' : ''}`, authorDisplay: pg.author || project.lastModifiedBy || '未知' });
+                                }
+                                (pg.pins || []).forEach((pin, pinIdx) => {
+                                    if (pin.photo) {
+                                        validPages.push({ ...pin, pdfLabel: `${pageNumStr} 📍釘選#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}`, authorDisplay: pg.author || project.lastModifiedBy || '未知' });
+                                    }
+                                });
+                            });
+
+                            if (!validPages.length) {
+                                alert('沒有可輸出的圖紙！');
+                                isProcessing.value = false;
+                                return;
+                            }
 
                             if (perPage === 4) {
                                 const totalPdfPages = Math.ceil(validPages.length / 4);
@@ -1684,7 +1763,7 @@
                                     ctx.fillStyle = '#000'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'left';
                                     ctx.fillText(`${project.name || '工程度尺'} (#${project.code})`, marginX, 60);
                                     ctx.font = 'bold 21px sans-serif'; ctx.fillStyle = '#4b5563';
-                                    ctx.fillText(`日期: ${project.date}   |   共 ${validPages.length} 張圖紙   |   第 ${pIdx + 1} / ${totalPdfPages} 頁`, marginX, 94);
+                                    ctx.fillText(`日期: ${project.date}   |   共 ${validPages.length} 張圖紙(含釘選)   |   第 ${pIdx + 1} / ${totalPdfPages} 頁`, marginX, 94);
 
                                     for (let j = 0; j < 4; j++) {
                                         const imgIdx = pIdx * 4 + j;
@@ -1700,8 +1779,8 @@
                                         ctx.fillStyle = '#f3f4f6';
                                         ctx.fillRect(cx + 1, cy + 1, cellW - 2, 44);
                                         ctx.fillStyle = '#111827'; ctx.font = 'bold 20px sans-serif';
-                                        const cellTitle = `P${imgIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}${pg.author ? ' - ' + pg.author : ''}`;
-                                        ctx.fillText(cellTitle.slice(0, 26), cx + 14, cy + 30);
+                                        const cellTitle = `${pg.pdfLabel}${pg.authorDisplay && pg.authorDisplay !== '未知' ? ' - ' + pg.authorDisplay : ''}`;
+                                        ctx.fillText(cellTitle.slice(0, 30), cx + 14, cy + 30);
 
                                         const im = new Image(); im.src = await renderPdfPageImg(pg); await new Promise(r => im.onload = r);
                                         const maxW = cellW - 20, maxH = cellH - 60;
@@ -1716,8 +1795,10 @@
                                     if (i > 0) doc.addPage();
                                     const pg = validPages[i], c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H;
                                     const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H); ctx.fillStyle = '#000'; ctx.font = 'bold 38px sans-serif';
-                                    ctx.fillText(`${project.name || '工程度尺'} (#${project.code}) — P${i + 1}${pg.space ? ' [' + pg.space + ']' : ''}`, 50, 65);
-                                    ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${project.date}   |   最後修改: ${pg.author || project.lastModifiedBy || '未知'}   |   子釘選: ${pg.pins?.length || 0}`, 50, 102);
+                                    ctx.fillText(`${project.name || '工程度尺'} (#${project.code}) — ${pg.pdfLabel}`, 50, 65);
+                                    ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#4b5563'; 
+                                    const pinCountText = pg.pins?.length ? `   |   子釘選: ${pg.pins.length}` : '';
+                                    ctx.fillText(`日期: ${project.date}   |   最後修改: ${pg.authorDisplay}${pinCountText}`, 50, 102);
                                     const im = new Image(); im.src = await renderPdfPageImg(pg); await new Promise(r => im.onload = r);
                                     const maxW = PAGE_W - 100, maxH = PAGE_H - 180; let dw = maxW, dh = (im.height / im.width) * dw;
                                     if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; }
@@ -1732,7 +1813,7 @@
 
                 return {
                     currentView, previewTab, fullScreenItem, fullScreenTitle, bomSummary, getLineStroke,
-                    openFullScreenPreview, enterEditMode, switchToPreview, duplicateCurrentPage,
+                    openFullScreenPreview, copyFullScreenImage, downloadFullScreenImage, enterEditMode, switchToPreview, duplicateCurrentPage,
                     showMergeModal, mergeableGroups, mergePageGroup, showPdfModal,
                     showPhotoPoolModal, photoPoolList, photoPoolTarget, openPhotoPool, selectFromPhotoPool, deleteFromPhotoPool,
                     projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH,
