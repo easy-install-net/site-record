@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v8.7</title>
+    <title>度尺寶 Pro v9.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -157,16 +157,20 @@
                     <button @click="previewTab = 'bom'" :class="previewTab === 'bom' ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400'" class="px-2.5 py-1 rounded-full text-xs font-bold">📋 BOM清單</button>
                 </div>
                 <button v-if="mergeableGroups.length" @click="showMergeModal = true" class="bg-purple-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow animate-pulse">🔗 合併同底圖 ({{ mergeableGroups.length }})</button>
-                <span v-else class="text-[10px] text-zinc-400">點圖睇全張大圖</span>
+                <span v-else class="text-[10px] text-zinc-400">按住 ⠿P1 拖拉改頁數</span>
             </div>
 
             <div v-show="previewTab === 'pages'" class="flex-1 overflow-y-auto p-2.5 touch-scrollable">
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    <div v-for="(pg, idx) in pages" :key="pg.id" class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-lg flex flex-col justify-between">
+                    <div v-for="(pg, idx) in pages" :key="pg.id" :data-page-idx="idx"
+                         :class="[draggingPageIdx === idx ? 'opacity-40 scale-95 ring-2 ring-yellow-400' : '', dragOverPageIdx === idx && draggingPageIdx !== idx ? 'ring-2 ring-blue-500 bg-zinc-800' : '']"
+                         class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-lg flex flex-col justify-between transition-all duration-150">
                         <div class="bg-zinc-800/90 px-2 py-1.5 border-b border-zinc-700 flex flex-col gap-0.5">
                             <div class="flex items-center justify-between gap-1">
                                 <div class="flex items-center gap-1 min-w-0">
-                                    <span class="bg-black text-white text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0">P{{ idx + 1 }}</span>
+                                    <span @pointerdown.stop.prevent="startPageDrag(idx, $event)" style="touch-action:none" title="按住拖拉調整頁數順序" class="cursor-grab active:cursor-grabbing bg-black hover:bg-zinc-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 flex items-center gap-0.5 border border-zinc-700">
+                                        <span class="text-zinc-400">⠿</span>P{{ idx + 1 }}
+                                    </span>
                                     <span class="text-yellow-400 font-bold text-xs truncate">{{ pg.space || '未標空間' }}</span>
                                 </div>
                                 <button @click="enterEditMode(idx)" class="bg-yellow-500 text-black px-2 py-0.5 rounded text-[11px] font-bold shrink-0">✏️改</button>
@@ -176,7 +180,7 @@
                             </div>
                         </div>
 
-                        <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`, pg.date, pg.author)" class="h-44 relative bg-zinc-950 cursor-pointer active:bg-zinc-800 overflow-hidden flex items-center justify-center">
+                        <div v-if="pg.photo" @click="openFullScreenPreview(pg)" class="h-44 relative bg-zinc-950 cursor-pointer active:bg-zinc-800 overflow-hidden flex items-center justify-center">
                             <div class="absolute inset-1.5 overflow-hidden flex items-center justify-center">
                                 <svg :view-box.camel="`0 0 ${pg.w || 1200} ${pg.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="pointer-events-none">
                                     <rect x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" fill="#ffffff" />
@@ -212,12 +216,12 @@
 
                         <div class="bg-zinc-950 px-2 py-1.5 border-t border-zinc-800/80 flex items-center justify-between gap-1 flex-wrap">
                             <div v-if="pg.pins?.length" class="flex items-center gap-1 flex-wrap">
-                                <button v-for="(pin, pIdx) in pg.pins" :key="pin.id" @click.stop="pin.photo ? openFullScreenPreview(pin, `P${idx + 1} 釘選#${pIdx + 1}`, pg.date, pg.author) : enterEditMode(idx)" class="bg-red-950 border border-red-700/80 text-red-200 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                <button v-for="(pin, pIdx) in pg.pins" :key="pin.id" @click.stop="pin.photo ? openFullScreenPreview(pin) : enterEditMode(idx)" class="bg-red-950 border border-red-700/80 text-red-200 text-[10px] font-bold px-1.5 py-0.5 rounded">
                                     📍釘#{{ pIdx + 1 }}
                                 </button>
                             </div>
                             <span v-else class="text-[10px] text-zinc-500">無落釘</span>
-                            <span v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`, pg.date, pg.author)" class="text-[10px] text-zinc-400 cursor-pointer">🔍全圖</span>
+                            <span v-if="pg.photo" @click="openFullScreenPreview(pg)" class="text-[10px] text-zinc-400 cursor-pointer">🔍全圖</span>
                         </div>
                     </div>
                 </div>
@@ -244,11 +248,12 @@
             </div>
         </main>
 
-        <!-- 📄 PDF 排版選擇 Modal -->
+        <!-- 📄 PDF 排版選擇 Modal（新增每頁 2 張） -->
         <div v-if="showPdfModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showPdfModal = false">
             <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-4 flex flex-col gap-2.5 text-white shadow-2xl">
                 <div class="text-sm font-bold text-center text-emerald-400 mb-1">📄 選擇輸出 PDF 排版</div>
                 <button @click="exportPdfReport(1)" class="w-full bg-emerald-600 text-white py-3 rounded-lg text-sm font-bold shadow">🖼️ 每頁 1 張 (大圖清晰版)</button>
+                <button @click="exportPdfReport(2)" class="w-full bg-indigo-600 text-white py-3 rounded-lg text-sm font-bold shadow">▯▯ 每頁 2 張 (上下雙圖版)</button>
                 <button @click="exportPdfReport(4)" class="w-full bg-blue-600 text-white py-3 rounded-lg text-sm font-bold shadow">田 每頁 4 張 (2×2 緊湊總覽版)</button>
                 <button @click="showPdfModal = false" class="w-full text-zinc-400 py-1.5 text-xs font-bold mt-1">取消</button>
             </div>
@@ -272,19 +277,27 @@
             </div>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器 -->
+        <!-- 唯讀全螢幕大圖檢視器（支援左右頁按鈕翻頁） -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col overflow-hidden">
             <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-2 flex justify-between items-center gap-1 shrink-0 z-10">
-                <span class="text-xs font-bold text-yellow-400 truncate min-w-0 flex-1">👁️ {{ fullScreenTitle }}</span>
+                <div class="flex items-center gap-1 min-w-0 flex-1">
+                    <button @click="prevFullScreen" :disabled="fullScreenIndex <= 0" :class="fullScreenIndex <= 0 ? 'opacity-30' : 'active:bg-zinc-600'" class="bg-zinc-800 border border-zinc-700 text-white px-2 py-1 rounded text-xs font-bold shrink-0">◀</button>
+                    <span class="text-xs font-bold text-yellow-400 truncate min-w-0">{{ fullScreenTitle }}</span>
+                    <button @click="nextFullScreen" :disabled="fullScreenIndex >= fullScreenList.length - 1" :class="fullScreenIndex >= fullScreenList.length - 1 ? 'opacity-30' : 'active:bg-zinc-600'" class="bg-zinc-800 border border-zinc-700 text-white px-2 py-1 rounded text-xs font-bold shrink-0">▶</button>
+                </div>
                 <div class="flex items-center gap-1 shrink-0">
                     <button @click="showWatermark = !showWatermark" :class="showWatermark ? 'bg-amber-500 text-black' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'" class="px-2 py-1 rounded text-[11px] font-bold shadow">🏷️水印:{{ showWatermark ? '開' : '關' }}</button>
                     <button @click="copyFullScreenImage" class="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold shadow">📋複製</button>
                     <button @click="downloadFullScreenImage" class="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold shadow">⬇️下載</button>
-                    <button @click="fullScreenItem = null" class="bg-zinc-700 text-white px-2 py-1 rounded text-xs font-bold shadow">✕</button>
+                    <button @click="fullScreenIndex = -1" class="bg-zinc-700 text-white px-2 py-1 rounded text-xs font-bold shadow">✕</button>
                 </div>
             </div>
             
             <div class="flex-1 min-h-0 w-full relative bg-zinc-950 overflow-hidden">
+                <!-- 左右懸浮翻頁大按鈕 -->
+                <button v-if="fullScreenIndex > 0" @click.stop="prevFullScreen" class="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-10 h-12 rounded-xl bg-black/65 hover:bg-black/85 active:scale-95 border border-zinc-600/80 text-white text-lg font-black flex items-center justify-center shadow-xl">◀</button>
+                <button v-if="fullScreenIndex < fullScreenList.length - 1" @click.stop="nextFullScreen" class="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-10 h-12 rounded-xl bg-black/65 hover:bg-black/85 active:scale-95 border border-zinc-600/80 text-white text-lg font-black flex items-center justify-center shadow-xl">▶</button>
+
                 <div class="absolute inset-2.5 overflow-hidden">
                     <svg :view-box.camel="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;">
                         <defs>
@@ -342,7 +355,10 @@
                 <button @click="openPhotoPool('replaceCurrent')" class="w-56 bg-blue-600 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg">🖼️ 從工程底圖庫選圖</button>
                 <button @click="initSketchOnCurrent(true)" class="w-56 bg-amber-400 text-black px-5 py-3 rounded-xl text-sm font-bold shadow-lg">✏️ 空白手繪 (格線)</button>
                 <button @click="initSketchOnCurrent(false)" class="w-56 bg-zinc-800 text-white border border-zinc-700 px-5 py-2.5 rounded-xl text-xs font-bold">⬜ 空白手繪 (純白)</button>
-                <button v-if="activePin" @click="exitPinSubPage" class="mt-4 text-zinc-400 text-xs font-bold">‹ 取消並返回主頁</button>
+                <template v-if="activePin">
+                    <button @click="exitPinSubPage" class="mt-3 text-zinc-400 text-xs font-bold">‹ 返回主頁 (保留空釘)</button>
+                    <button @click="deleteActivePin" class="mt-1 bg-red-600 active:bg-red-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-lg">🗑️ 刪除此釘選</button>
+                </template>
             </div>
 
             <div v-else class="flex-1 min-h-0 w-full relative overflow-hidden">
@@ -358,12 +374,12 @@
                             <button @click="deleteCurrentPage" class="px-2 py-0.5 text-red-400 font-bold text-xs">刪頁</button>
                         </template>
                     </div>
-                    <div v-else class="bg-red-950/90 border border-red-800 rounded-full flex items-center px-2 py-1 shadow">
-                        <button @click="exitPinSubPage" class="text-white text-[11px] font-bold pr-2">‹ 返回 P{{ activePageIndex + 1 }}</button>
-                        <div class="w-px h-3 bg-red-700 mx-1"></div>
-                        <span class="px-1 text-yellow-300 font-bold text-[11px]">📍 釘 #{{ activePinIndex + 1 }}</span>
-                        <div class="w-px h-3 bg-red-700 mx-1"></div>
-                        <button @click="deleteActivePin" :class="deletePinConfirm ? 'text-white bg-red-600 px-1 rounded' : 'text-red-300'" class="pl-1 text-[11px] font-bold">{{ deletePinConfirm ? '確認?' : '刪釘' }}</button>
+                    <div v-else class="bg-red-950/90 border border-red-800 rounded-full flex items-center px-2.5 py-1 shadow">
+                        <button @click="exitPinSubPage" class="text-white text-xs font-bold pr-2">‹ 返回 P{{ activePageIndex + 1 }}</button>
+                        <div class="w-px h-3.5 bg-red-700 mx-1"></div>
+                        <span class="px-1 text-yellow-300 font-bold text-xs">📍 釘 #{{ activePinIndex + 1 }}</span>
+                        <div class="w-px h-3.5 bg-red-700 mx-1"></div>
+                        <button @click="deleteActivePin" class="bg-red-600 active:bg-red-700 text-white px-2.5 py-0.5 rounded-full text-xs font-bold shadow">🗑️刪釘</button>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <button @click="showSpaceModal = true" class="bg-black/80 backdrop-blur text-yellow-400 border border-yellow-500/70 px-2.5 py-1 rounded-full text-xs font-black shadow">🏠 {{ activeCanvas.space || '標記空間' }}</button>
@@ -433,6 +449,7 @@
                                :transform="`translate(${(pin.x / 100) * canvasW}, ${(pin.y / 100) * canvasH})`"
                                class="cursor-pointer pointer-events-auto"
                                @touchstart.stop @mousedown.stop @click.stop="openPinSubPage(pin, index)">
+                                <circle cx="0" cy="-20" r="34" fill="transparent" />
                                 <polygon points="-11,-11 11,-11 0,5" fill="#dc2626" />
                                 <circle cx="0" cy="-26" r="22" fill="#dc2626" stroke="#ffffff" stroke-width="3.5" />
                                 <text x="0" y="-25" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="22" font-weight="900">{{ index + 1 }}</text>
@@ -745,16 +762,96 @@
                 let unsubPages = null, isPushing = false, isAutoQueueing = false;
 
                 const currentView = ref('dir'), previewTab = ref('pages');
-                const fullScreenItem = ref(null), fullScreenTitle = ref(''), fullScreenDate = ref(''), fullScreenAuthor = ref('');
                 const showWatermark = ref(true);
 
                 const projectList = ref([]);
-                const project = reactive({ code: '', name: '', date: '', deletedPageIds: [], lastSyncAt: 0, lastModifiedBy: '' });
+                const project = reactive({ code: '', name: '', date: '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '' });
                 const pages = ref([]), photoPool = ref([]), activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
                 const activePage = computed(() => pages.value[activePageIndex.value] || null);
                 const activeCanvas = computed(() => activePin.value || activePage.value);
                 const canvasW = computed(() => activeCanvas.value?.w || 1200);
                 const canvasH = computed(() => activeCanvas.value?.h || 900);
+
+                // 全螢幕預覽清單與左右翻頁控制
+                const fullScreenIndex = ref(-1);
+                const fullScreenList = computed(() => {
+                    const list = [];
+                    pages.value.forEach((pg, pIdx) => {
+                        const pgDate = pg.date || project.date || getTodayStr();
+                        const pgAuthor = pg.author || project.lastModifiedBy || '';
+                        if (pg.photo) {
+                            list.push({
+                                item: pg,
+                                label: `P${pIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`,
+                                date: pgDate,
+                                author: pgAuthor
+                            });
+                        }
+                        (pg.pins || []).forEach((pin, pinIdx) => {
+                            if (pin.photo) {
+                                list.push({
+                                    item: pin,
+                                    label: `P${pIdx + 1} 📍釘#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}`,
+                                    date: pin.date || pgDate,
+                                    author: pin.author || pgAuthor
+                                });
+                            }
+                        });
+                    });
+                    return list;
+                });
+
+                const currentFullScreen = computed(() => (fullScreenIndex.value >= 0 && fullScreenIndex.value < fullScreenList.value.length) ? fullScreenList.value[fullScreenIndex.value] : null);
+                const fullScreenItem = computed(() => currentFullScreen.value?.item || null);
+                const fullScreenTitle = computed(() => currentFullScreen.value ? `${currentFullScreen.value.label} (${fullScreenIndex.value + 1}/${fullScreenList.value.length})` : '');
+                const fullScreenDate = computed(() => currentFullScreen.value?.date || getTodayStr());
+                const fullScreenAuthor = computed(() => currentFullScreen.value?.author || '');
+
+                const openFullScreenPreview = (targetItem) => {
+                    if (!targetItem) return;
+                    const idx = fullScreenList.value.findIndex(x => x.item === targetItem || String(x.item.id) === String(targetItem.id));
+                    if (idx !== -1) fullScreenIndex.value = idx;
+                };
+                const prevFullScreen = () => { if (fullScreenIndex.value > 0) fullScreenIndex.value--; };
+                const nextFullScreen = () => { if (fullScreenIndex.value < fullScreenList.value.length - 1) fullScreenIndex.value++; };
+
+                // 預覽頁拖拉改頁數狀態
+                const draggingPageIdx = ref(null), dragOverPageIdx = ref(null);
+
+                const startPageDrag = (idx, e) => {
+                    if (pages.value.length <= 1) return;
+                    draggingPageIdx.value = idx;
+                    dragOverPageIdx.value = idx;
+                    const onMove = (ev) => {
+                        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+                        const card = el?.closest('[data-page-idx]');
+                        if (card) {
+                            const targetIdx = Number(card.getAttribute('data-page-idx'));
+                            if (!Number.isNaN(targetIdx)) dragOverPageIdx.value = targetIdx;
+                        }
+                    };
+                    const onUp = async () => {
+                        window.removeEventListener('pointermove', onMove);
+                        window.removeEventListener('pointerup', onUp);
+                        window.removeEventListener('pointercancel', onUp);
+                        const from = draggingPageIdx.value, to = dragOverPageIdx.value;
+                        draggingPageIdx.value = null;
+                        dragOverPageIdx.value = null;
+                        if (from !== null && to !== null && from !== to) {
+                            const [moved] = pages.value.splice(from, 1);
+                            pages.value.splice(to, 0, moved);
+                            activePageIndex.value = to;
+                            project.pageOrderUpdatedAt = Date.now();
+                            hasUnsavedCloudChanges.value = true;
+                            if (!navigator.onLine) cloudSyncState.value = 'offline';
+                            await saveAll();
+                            showToast(`✅ 已調整為 P${to + 1}`);
+                        }
+                    };
+                    window.addEventListener('pointermove', onMove);
+                    window.addEventListener('pointerup', onUp);
+                    window.addEventListener('pointercancel', onUp);
+                };
 
                 const buildWatermarkLines = (item, itemDate, itemAuthor) => {
                     const lines = [];
@@ -777,7 +874,7 @@
                 const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
                 const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-                const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v8.7' }[cloudSyncState.value] || '☁️v8.7'));
+                const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v9.0' }[cloudSyncState.value] || '☁️v9.0'));
                 const cloudStatusClass = computed(() =>
                     cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' :
                     cloudSyncState.value === 'offline' ? 'bg-amber-950 text-amber-300 border border-amber-700' :
@@ -801,7 +898,7 @@
                 const showCloudDetail = () => {
                     if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                     else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                    else showToast('v8.7 支援 Ctrl+V 畫布內直接貼圖');
+                    else showToast('v9.0 PDF 2張1頁輸出・單頁預覽左右翻頁');
                 };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -847,7 +944,8 @@
                         space: c.space || '', date: getTodayStr(), author: me,
                         photo: pg.photo, photoId: sharedPhotoId, w: c.w || 1200, h: c.h || 900,
                         isSketch: !!c.isSketch, hasGrid: !!c.hasGrid,
-                        markers: c.markers || [], lines: c.lines || [], walls: c.walls || [], paths: c.paths || [], pins: c.pins || []
+                        markers: c.markers || [], lines: c.lines || [], walls: c.walls || [], paths: c.paths || [], pins: c.pins || [],
+                        deletedPinIds: c.deletedPinIds || []
                     });
                     pages.value.push(newPg);
                     activePageIndex.value = pages.value.length - 1;
@@ -858,18 +956,11 @@
                     return true;
                 };
 
-                const drawMode = ref('browse'), showTopSheet = ref(false), showTopTextBar = ref(false), activeMarker = ref(null), deletePinConfirm = ref(false);
+                const drawMode = ref('browse'), showTopSheet = ref(false), showTopTextBar = ref(false), activeMarker = ref(null);
                 const isProcessing = ref(false), processingText = ref(''), focusedInput = ref('val'), topTextInputRef = ref(null), svgCanvas = ref(null);
 
                 const getLineStroke = (l, alpha = 0.55) => !l.type || l.type === 'measure' ? `rgba(255, 0, 68, ${alpha})` : ({ gray: '#9ca3af', white: '#ffffff' }[l.color] || '#ef4444');
                 const getWallSegments = (w) => buildWallSegments(w);
-
-                const openFullScreenPreview = (item, title, parentDate = '', parentAuthor = '') => {
-                    fullScreenItem.value = item;
-                    fullScreenTitle.value = title;
-                    fullScreenDate.value = item?.date || parentDate || project.date || getTodayStr();
-                    fullScreenAuthor.value = item?.author || parentAuthor || project.lastModifiedBy || '';
-                };
 
                 const enterEditMode = (idx = 0) => { activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; };
                 const switchToPreview = async () => { await saveAll(); activePin.value = null; previewTab.value = 'pages'; currentView.value = 'preview'; };
@@ -885,16 +976,22 @@
 
                 const mergePageGroup = async (grp) => {
                     const maps = { lines: new Map(), walls: new Map(), paths: new Map(), markers: new Map(), pins: new Map() };
+                    const delPins = new Set(project.deletedPinIds || []);
                     let space = '', w = 1200, h = 900, isSketch = false, hasGrid = false;
                     grp.items.forEach(({ pg }) => {
                         if (!space && pg.space) space = pg.space;
                         w = pg.w || w; h = pg.h || h; isSketch ||= !!pg.isSketch; hasGrid ||= !!pg.hasGrid;
-                        Object.keys(maps).forEach(k => (pg[k] || []).forEach(x => maps[k].set(String(x.id), JSON.parse(JSON.stringify(x)))));
+                        (pg.deletedPinIds || []).forEach(id => delPins.add(String(id)));
+                        Object.keys(maps).forEach(k => (pg[k] || []).forEach(x => {
+                            if (k === 'pins' && delPins.has(String(x.id))) return;
+                            maps[k].set(String(x.id), JSON.parse(JSON.stringify(x)));
+                        }));
                     });
                     const mergedPg = makeEmptyPage({
                         space, date: getTodayStr(), author: (authorName.value || '團隊') + ' (合併)',
                         photo: grp.photo, photoId: grp.key, w, h, isSketch, hasGrid,
-                        lines: [...maps.lines.values()], walls: [...maps.walls.values()], paths: [...maps.paths.values()], markers: [...maps.markers.values()], pins: [...maps.pins.values()]
+                        lines: [...maps.lines.values()], walls: [...maps.walls.values()], paths: [...maps.paths.values()], markers: [...maps.markers.values()], pins: [...maps.pins.values()],
+                        deletedPinIds: [...delPins]
                     });
                     pages.value.push(mergedPg);
                     dirtyPageIds.add(mergedPg.id);
@@ -968,7 +1065,7 @@
                         id: 'pg_' + Date.now() + '_' + Math.floor(Math.random() * 99999),
                         space: '', date: ov.date || getTodayStr(), author: authorName.value || '',
                         photo: null, photoId: '', w: 1200, h: 900, isSketch: false, hasGrid: false,
-                        markers: [], lines: [], walls: [], paths: [], pins: [], historyStack: [], redoStack: [],
+                        markers: [], lines: [], walls: [], paths: [], pins: [], deletedPinIds: [], historyStack: [], redoStack: [],
                         updatedAt: Date.now(), ...ov
                     };
                     if (pg.isSketch && !pg.photo) pg.photo = renderSketchDataUrl(pg.w || 1200, pg.h || 1500, !!pg.hasGrid);
@@ -1027,6 +1124,7 @@
                     dirtyPageIds.delete(delId);
                     pages.value.splice(activePageIndex.value, 1);
                     activePageIndex.value = Math.max(0, activePageIndex.value - 1);
+                    project.pageOrderUpdatedAt = Date.now();
                     hasUnsavedCloudChanges.value = true; saveAll();
                     if (db && project.code) {
                         const ref = db.collection('site_projects').doc(String(project.code));
@@ -1039,16 +1137,33 @@
                 const openPinSubPage = (pin, idx) => {
                     Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], walls: pin.walls || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || activePage.value?.space || '' });
                     if (pin.isSketch && !pin.photo) pin.photo = renderSketchDataUrl(pin.w, pin.h, !!pin.hasGrid);
-                    activePin.value = pin; activePinIndex.value = idx; deletePinConfirm.value = false; drawMode.value = 'browse';
+                    activePin.value = pin; activePinIndex.value = idx; drawMode.value = 'browse';
                 };
 
                 const exitPinSubPage = () => { activePin.value = null; drawMode.value = 'browse'; };
 
-                const deleteActivePin = () => {
-                    if (!deletePinConfirm.value) { deletePinConfirm.value = true; setTimeout(() => { deletePinConfirm.value = false; }, 3000); return; }
+                const deleteActivePin = async () => {
+                    if (!activePin.value || !activePage.value) return;
                     autoBranchIfNeeded();
-                    activePage.value.pins = activePage.value.pins.filter(p => p.id !== activePin.value.id);
-                    touchDirty(); deletePinConfirm.value = false; exitPinSubPage(); saveAll();
+                    const pinId = String(activePin.value.id);
+                    const pg = activePage.value;
+                    const idx = (pg.pins || []).findIndex(p => String(p.id) === pinId);
+                    if (idx !== -1) {
+                        const removedPin = JSON.parse(JSON.stringify(pg.pins[idx]));
+                        pg.pins.splice(idx, 1);
+                        pg.deletedPinIds ||= [];
+                        if (!pg.deletedPinIds.includes(pinId)) pg.deletedPinIds.push(pinId);
+                        project.deletedPinIds ||= [];
+                        if (!project.deletedPinIds.includes(pinId)) project.deletedPinIds.push(pinId);
+
+                        pg.historyStack ||= [];
+                        pg.redoStack = [];
+                        pg.historyStack.push({ type: 'delete_pin', pin: removedPin, index: idx });
+                    }
+                    touchDirty(pg);
+                    exitPinSubPage();
+                    await saveAll();
+                    showToast('🗑️ 已刪釘（按 ↶ 可復原）');
                 };
 
                 const resolveMediaDoc = async (doc) => {
@@ -1205,8 +1320,12 @@
                         autoBranchIfNeeded();
                         const pw = activePage.value.w || 1200, ph = activePage.value.h || 900;
                         activePage.value.pins ||= [];
+                        activePage.value.historyStack ||= [];
+                        activePage.value.redoStack = [];
                         const newPin = { id: 'pin_' + Date.now(), name: `位置 ${activePage.value.pins.length + 1}`, x: parseFloat(((endPos.x / pw) * 100).toFixed(2)), y: parseFloat(((endPos.y / ph) * 100).toFixed(2)), photo: null, photoId: '', w: 1200, h: 900, space: activePage.value.space || '', markers: [], lines: [], walls: [], paths: [], historyStack: [], redoStack: [], updatedAt: Date.now() };
-                        activePage.value.pins.push(newPin); touchDirty(); openPinSubPage(newPin, activePage.value.pins.length - 1); saveAll(); return;
+                        activePage.value.pins.push(newPin);
+                        activePage.value.historyStack.push({ type: 'pin', pinId: newPin.id });
+                        touchDirty(); openPinSubPage(newPin, activePage.value.pins.length - 1); saveAll(); return;
                     }
 
                     if (drawMode.value === 'stamp' && dist < 14) { currentLine.value = null; currentWall.value = null; currentPath.value = ''; createPointMarker(endPos.x, endPos.y, 'stamp'); return; }
@@ -1249,6 +1368,24 @@
                         const wi = (c.walls || []).findIndex(w => w.id === act.wallId); if (wi !== -1) u.wall = c.walls.splice(wi, 1)[0];
                     } else if (act.type === 'freehand') {
                         const pi = c.paths.findIndex(p => p.id === act.pathId); if (pi !== -1) u.path = c.paths.splice(pi, 1)[0];
+                    } else if (act.type === 'pin') {
+                        const pni = (c.pins || []).findIndex(p => String(p.id) === String(act.pinId));
+                        if (pni !== -1) {
+                            u.pin = c.pins.splice(pni, 1)[0];
+                            const pid = String(u.pin.id);
+                            c.deletedPinIds ||= []; if (!c.deletedPinIds.includes(pid)) c.deletedPinIds.push(pid);
+                            project.deletedPinIds ||= []; if (!project.deletedPinIds.includes(pid)) project.deletedPinIds.push(pid);
+                        }
+                    } else if (act.type === 'delete_pin' && act.pin) {
+                        c.pins ||= [];
+                        const insertIdx = Math.min(act.index ?? c.pins.length, c.pins.length);
+                        c.pins.splice(insertIdx, 0, act.pin);
+                        const pid = String(act.pin.id);
+                        if (c.deletedPinIds) c.deletedPinIds = c.deletedPinIds.filter(x => x !== pid);
+                        if (project.deletedPinIds) project.deletedPinIds = project.deletedPinIds.filter(x => x !== pid);
+                        u.pin = act.pin;
+                        u.index = insertIdx;
+                        showToast('↩️ 已復原釘選');
                     }
                     c.redoStack.push(u); touchDirty(); saveAll();
                 };
@@ -1260,6 +1397,19 @@
                     if (u.marker) { c.markers.push(u.marker); act.markerId = u.marker.id; }
                     if (u.wall) { c.walls ||= []; c.walls.push(u.wall); act.wallId = u.wall.id; }
                     if (u.path) { c.paths.push(u.path); act.pathId = u.path.id; }
+                    if (u.type === 'pin' && u.pin) {
+                        c.pins ||= []; c.pins.push(u.pin); act.pinId = u.pin.id;
+                        const pid = String(u.pin.id);
+                        if (c.deletedPinIds) c.deletedPinIds = c.deletedPinIds.filter(x => x !== pid);
+                        if (project.deletedPinIds) project.deletedPinIds = project.deletedPinIds.filter(x => x !== pid);
+                    } else if (u.type === 'delete_pin' && u.pin) {
+                        const pid = String(u.pin.id);
+                        c.pins = (c.pins || []).filter(p => String(p.id) !== pid);
+                        c.deletedPinIds ||= []; if (!c.deletedPinIds.includes(pid)) c.deletedPinIds.push(pid);
+                        project.deletedPinIds ||= []; if (!project.deletedPinIds.includes(pid)) project.deletedPinIds.push(pid);
+                        act.pin = u.pin;
+                        act.index = u.index;
+                    }
                     c.historyStack.push(act); touchDirty(); saveAll();
                 };
 
@@ -1273,7 +1423,7 @@
                 };
 
                 const switchMarkerType = (t, fKey) => { ensureMarkerBranched(); activeMarker.value.type = t; focusedInput.value = fKey; updateMarkerSize(activeMarker.value); touchDirty(); };
-                const closeTopTextBar = () => { if (['stamp','text','image'].includes(activeMarker.value?.type) && activeMarker.value?.type !== 'image' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
+                const closeTopTextBar = () => { if (['stamp','text'].includes(activeMarker.value?.type) && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
                 const closeTopSheet = () => { if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopSheet.value = false; saveAll(); };
 
                 const handleKeypad = (key) => {
@@ -1413,7 +1563,7 @@
                         }
                         drawMode.value = 'browse';
                         await saveAll();
-                    } catch (err) { showToast('貼上失敗，請確定複製的是圖片'); }
+                    } catch (_) { showToast('貼上失敗，請確定複製的是圖片'); }
                     finally { isProcessing.value = false; }
                 };
 
@@ -1428,7 +1578,7 @@
                             }
                         }
                         showToast('剪貼簿內無圖片');
-                    } catch (err) { showToast('請使用 Ctrl+V (或 Cmd+V) 貼上'); }
+                    } catch (_) { showToast('請使用 Ctrl+V (或 Cmd+V) 貼上'); }
                 };
 
                 const handleGlobalPaste = async (e) => {
@@ -1445,6 +1595,13 @@
                     }
                 };
 
+                const handleGlobalKeydown = (e) => {
+                    if (fullScreenIndex.value === -1) return;
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); prevFullScreen(); }
+                    else if (e.key === 'ArrowRight') { e.preventDefault(); nextFullScreen(); }
+                    else if (e.key === 'Escape') { e.preventDefault(); fullScreenIndex.value = -1; }
+                };
+
                 const saveAll = async () => {
                     const code = String(project.code || '').trim(); if (!code) return;
                     const cleanPages = JSON.parse(JSON.stringify(pages.value || [])).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
@@ -1453,6 +1610,8 @@
                         code, name: String(project.name || ''), date: String(project.date || ''),
                         pages: cleanPages, photoPool: JSON.parse(JSON.stringify(photoPool.value || [])),
                         deletedPageIds: JSON.parse(JSON.stringify(project.deletedPageIds || [])),
+                        deletedPinIds: JSON.parse(JSON.stringify(project.deletedPinIds || [])),
+                        pageOrderUpdatedAt: Number(project.pageOrderUpdatedAt || 0),
                         updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0),
                         lastModifiedBy: String(project.lastModifiedBy || authorName.value || ''),
                         pendingUpload: hasPending
@@ -1462,20 +1621,31 @@
 
                 const mergePagesSmart = (localList, cloudList, deletedSet, orderList) => {
                     const lMap = new Map(localList.map(p => [p.id, p])), cMap = new Map(cloudList.map(p => [p.id, p])), result = [];
+                    const globalDeletedPins = new Set((project.deletedPinIds || []).map(String));
                     new Set([...lMap.keys(), ...cMap.keys()]).forEach(id => {
                         if (deletedSet.has(id)) return;
                         const lp = lMap.get(id), cp = cMap.get(id);
-                        if (!lp || !cp) { result.push(makeEmptyPage(lp || cp)); return; }
+                        const pageDeletedPins = new Set([...globalDeletedPins, ...((lp?.deletedPinIds || []).map(String)), ...((cp?.deletedPinIds || []).map(String))]);
+                        if (!lp || !cp) {
+                            const single = makeEmptyPage(lp || cp);
+                            single.pins = (single.pins || []).filter(x => !pageDeletedPins.has(String(x.id)));
+                            single.deletedPinIds = [...pageDeletedPins];
+                            result.push(single);
+                            return;
+                        }
                         const base = (cp.updatedAt || 0) > (lp.updatedAt || 0) ? { ...cp } : { ...lp };
                         if (!base.photo) base.photo = lp.photo || cp.photo || null;
                         if (!base.date) base.date = lp.date || cp.date || getTodayStr();
                         const lPins = new Map((lp.pins || []).map(x => [String(x.id), x])), cPins = new Map((cp.pins || []).map(x => [String(x.id), x])), mergedPins = [];
                         new Set([...lPins.keys(), ...cPins.keys()]).forEach(pid => {
+                            if (pageDeletedPins.has(pid)) return;
                             const lP = lPins.get(pid), cP = cPins.get(pid);
                             if (!lP || !cP) mergedPins.push(lP || cP);
                             else { const w = (cP.updatedAt || 0) > (lP.updatedAt || 0) ? { ...cP } : { ...lP }; if (!w.photo) w.photo = lP.photo || cP.photo || null; mergedPins.push(w); }
                         });
-                        base.pins = mergedPins; result.push(makeEmptyPage(base));
+                        base.pins = mergedPins;
+                        base.deletedPinIds = [...pageDeletedPins];
+                        result.push(makeEmptyPage(base));
                     });
                     return result.sort((a, b) => (orderList.indexOf(a.id) === -1 ? 9999 : orderList.indexOf(a.id)) - (orderList.indexOf(b.id) === -1 ? 9999 : orderList.indexOf(b.id)));
                 };
@@ -1500,6 +1670,8 @@
                         if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy;
                         const deletedSet = new Set([...(project.deletedPageIds || []), ...(pd.deletedPageIds || [])]);
                         project.deletedPageIds = [...deletedSet];
+                        const deletedPins = new Set([...(project.deletedPinIds || []).map(String), ...((pd.deletedPinIds || []).map(String))]);
+                        project.deletedPinIds = [...deletedPins];
 
                         const cloudPages = pagesSnap.docs.map(doc => {
                             const r = doc.data();
@@ -1510,14 +1682,20 @@
                             });
                         });
 
-                        const merged = mergePagesSmart(pages.value, cloudPages, deletedSet, [...(pd.pageIds || []), ...pages.value.map(p => p.id)]);
+                        const localOrderNewer = (project.pageOrderUpdatedAt || 0) > (pd.pageOrderUpdatedAt || 0);
+                        if (!localOrderNewer && pd.pageOrderUpdatedAt) project.pageOrderUpdatedAt = pd.pageOrderUpdatedAt;
+                        const orderList = localOrderNewer
+                            ? [...pages.value.map(p => p.id), ...(pd.pageIds || [])]
+                            : [...(pd.pageIds || []), ...pages.value.map(p => p.id)];
+
+                        const merged = mergePagesSmart(pages.value, cloudPages, deletedSet, orderList);
                         if (merged.length) {
                             pages.value = merged;
                             if (activePageIndex.value >= pages.value.length) activePageIndex.value = pages.value.length - 1;
                             if (activePin.value && activePage.value) activePin.value = (activePage.value.pins || []).find(p => String(p.id) === String(activePin.value.id)) || null;
                         }
                         project.lastSyncAt = Date.now();
-                        if (dirtyPageIds.size === 0) hasUnsavedCloudChanges.value = false;
+                        if (dirtyPageIds.size === 0 && !hasUnsavedCloudChanges.value) hasUnsavedCloudChanges.value = false;
                         await saveAll();
                         cloudSyncState.value = hasUnsavedCloudChanges.value ? 'queued' : 'ready';
                     } catch (e) {
@@ -1568,8 +1746,10 @@
 
                     const projPatch = {
                         code, name: projObj.name || '', date: projObj.date || getTodayStr(),
-                        pageIds: firebase.firestore.FieldValue.arrayUnion(...rawPages.map(p => p.id)),
+                        pageIds: rawPages.map(p => p.id),
+                        pageOrderUpdatedAt: projObj.pageOrderUpdatedAt || now,
                         deletedPageIds: projObj.deletedPageIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPageIds) : [],
+                        deletedPinIds: projObj.deletedPinIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPinIds) : [],
                         updatedAt: now
                     };
                     if (dirtyPages.length > 0 && authorName.value) projPatch.lastModifiedBy = authorName.value;
@@ -1600,7 +1780,7 @@
                     if (!navigator.onLine) { await saveAll(); cloudSyncState.value = 'offline'; if (throwErr) throw new Error('目前無網絡'); return; }
                     isPushing = true; cloudSyncState.value = 'syncing';
                     try {
-                        const now = await pushProjectPayload({ code, name: project.name, date: project.date, pages: pages.value, deletedPageIds: project.deletedPageIds, lastSyncAt: project.lastSyncAt }, true, onProgress);
+                        const now = await pushProjectPayload({ code, name: project.name, date: project.date, pages: pages.value, deletedPageIds: project.deletedPageIds, deletedPinIds: project.deletedPinIds, pageOrderUpdatedAt: project.pageOrderUpdatedAt, lastSyncAt: project.lastSyncAt }, true, onProgress);
                         dirtyPageIds.clear(); project.lastSyncAt = now; cloudSyncState.value = 'ready'; hasUnsavedCloudChanges.value = false; await saveAll();
                     } catch (e) {
                         await saveAll(); cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; if (throwErr) throw e;
@@ -1666,7 +1846,7 @@
                 const createNewProject = async () => {
                     await checkAuthorName();
                     const today = getTodayStr(), firstPg = makeEmptyPage({ date: today });
-                    Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: today, deletedPageIds: [], lastSyncAt: 0, lastModifiedBy: authorName.value });
+                    Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: today, deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
                     pages.value = [firstPg]; photoPool.value = []; activePageIndex.value = 0; activePin.value = null;
                     dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id); hasUnsavedCloudChanges.value = true;
                     cloudSyncState.value = navigator.onLine ? 'queued' : 'offline';
@@ -1690,10 +1870,10 @@
                 };
 
                 const loadProject = async (code, openAsPreview = true) => {
-                    code = String(code); project.code = code; project.deletedPageIds = []; pages.value = []; photoPool.value = []; dirtyPageIds.clear();
+                    code = String(code); project.code = code; project.deletedPageIds = []; project.deletedPinIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; dirtyPageIds.clear();
                     const d = await localforage.getItem('proj_' + code);
                     if (d) {
-                        Object.assign(project, { name: d.name || '', date: d.date || '', deletedPageIds: d.deletedPageIds || [], lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' });
+                        Object.assign(project, { name: d.name || '', date: d.date || '', deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' });
                         if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg));
                         if (d.photoPool) photoPool.value = d.photoPool;
                         hasUnsavedCloudChanges.value = !!d.pendingUpload;
@@ -1859,6 +2039,7 @@
                     window.addEventListener('online', () => { cloudSyncState.value = 'ready'; showToast('🌐 網絡已恢復'); processPendingUploadQueue(false); });
                     window.addEventListener('offline', () => { cloudSyncState.value = 'offline'; });
                     window.addEventListener('paste', handleGlobalPaste);
+                    window.addEventListener('keydown', handleGlobalKeydown);
                     if (navigator.onLine) setTimeout(() => processPendingUploadQueue(false), 1500);
                     setInterval(() => { if (navigator.onLine) processPendingUploadQueue(true); }, 15000);
                 });
@@ -1955,7 +2136,7 @@
                         const url = URL.createObjectURL(await new Promise(res => c.toBlob(res, 'image/jpeg', 0.92)));
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `${sanitizeFilename(project.name || '工程')}_#${project.code}_${sanitizeFilename(fullScreenTitle.value || '圖紙')}_${dStr}.jpg`;
+                        a.download = `${sanitizeFilename(project.name || '工程')}_#${project.code}_${sanitizeFilename(currentFullScreen.value?.label || '圖紙')}_${dStr}.jpg`;
                         document.body.appendChild(a); a.click(); document.body.removeChild(a);
                         setTimeout(() => URL.revokeObjectURL(url), 2000);
                         showToast('✅ 已下載圖片');
@@ -1981,21 +2162,23 @@
                             const headerDate = uniqueDates.length > 1 ? `${uniqueDates[0]} ~ ${uniqueDates[uniqueDates.length - 1]}` : (uniqueDates[0] || getTodayStr());
                             const fileDateTag = sanitizeFilename(uniqueDates[uniqueDates.length - 1] || getTodayStr());
 
-                            if (perPage === 4) {
-                                const totalPdf = Math.ceil(validPages.length / 4), mx = 45, topY = 115, gap = 24;
-                                const cellW = Math.floor((PAGE_W - mx * 2 - gap) / 2), cellH = Math.floor((PAGE_H - topY - 45 - gap) / 2);
+                            if (perPage > 1) {
+                                const cols = perPage === 4 ? 2 : 1, rows = 2;
+                                const totalPdf = Math.ceil(validPages.length / perPage), mx = 45, topY = 115, gap = 24;
+                                const cellW = Math.floor((PAGE_W - mx * 2 - (cols - 1) * gap) / cols);
+                                const cellH = Math.floor((PAGE_H - topY - 45 - (rows - 1) * gap) / rows);
                                 for (let pIdx = 0; pIdx < totalPdf; pIdx++) {
                                     if (pIdx > 0) doc.addPage();
                                     const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H;
                                     const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H);
                                     ctx.fillStyle = '#000'; ctx.font = 'bold 34px sans-serif'; ctx.fillText(`${project.name || '工程度尺'} (#${project.code})`, mx, 60);
                                     ctx.font = 'bold 21px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${headerDate}   |   共 ${validPages.length} 張   |   第 ${pIdx + 1} / ${totalPdf} 頁`, mx, 94);
-                                    for (let j = 0; j < 4; j++) {
-                                        const pg = validPages[pIdx * 4 + j]; if (!pg) break;
-                                        const cx = mx + (j % 2) * (cellW + gap), cy = topY + Math.floor(j / 2) * (cellH + gap);
+                                    for (let j = 0; j < perPage; j++) {
+                                        const pg = validPages[pIdx * perPage + j]; if (!pg) break;
+                                        const cx = mx + (j % cols) * (cellW + gap), cy = topY + Math.floor(j / cols) * (cellH + gap);
                                         ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 2; ctx.strokeRect(cx, cy, cellW, cellH);
                                         ctx.fillStyle = '#f3f4f6'; ctx.fillRect(cx + 1, cy + 1, cellW - 2, 44);
-                                        ctx.fillStyle = '#111827'; ctx.font = 'bold 20px sans-serif'; ctx.fillText(`${pg.pdfLabel} (${pg.date})`.slice(0, 32), cx + 14, cy + 30);
+                                        ctx.fillStyle = '#111827'; ctx.font = 'bold 20px sans-serif'; ctx.fillText(`${pg.pdfLabel} (${pg.date})`.slice(0, cols === 1 ? 56 : 32), cx + 14, cy + 30);
                                         const im = await renderAnnotatedCanvas(pg, true, pg.date, pg.author);
                                         const maxW = cellW - 20, maxH = cellH - 60;
                                         let dw = maxW, dh = (im.height / im.width) * dw;
@@ -2019,15 +2202,17 @@
                                     doc.addImage(c.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
                                 }
                             }
-                            doc.save(`${sanitizeFilename(project.name || '工程')}_#${project.code}_${fileDateTag}_${perPage === 4 ? '4合1' : '單頁'}.pdf`);
+                            const modeTag = perPage === 4 ? '4合1' : perPage === 2 ? '2合1' : '單頁';
+                            doc.save(`${sanitizeFilename(project.name || '工程')}_#${project.code}_${fileDateTag}_${modeTag}.pdf`);
                         } catch (_) { alert('生成 PDF 失敗'); }
                         finally { isProcessing.value = false; }
                     }, 50);
                 };
 
                 return {
-                    offlineReady, currentView, previewTab, fullScreenItem, fullScreenTitle, fullScreenWatermarkLines, showWatermark, bomSummary, getLineStroke, getWallSegments,
-                    openFullScreenPreview, copyFullScreenImage, downloadFullScreenImage, enterEditMode, switchToPreview, duplicateCurrentPage,
+                    offlineReady, currentView, previewTab, fullScreenIndex, fullScreenList, fullScreenItem, fullScreenTitle, fullScreenWatermarkLines, showWatermark, bomSummary, getLineStroke, getWallSegments,
+                    draggingPageIdx, dragOverPageIdx, startPageDrag,
+                    openFullScreenPreview, prevFullScreen, nextFullScreen, copyFullScreenImage, downloadFullScreenImage, enterEditMode, switchToPreview, duplicateCurrentPage,
                     showMergeModal, mergeableGroups, mergePageGroup, showPdfModal, showPhotoPoolModal, photoPoolList, openPhotoPool, selectFromPhotoPool, deleteFromPhotoPool,
                     projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH,
                     showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges, markProjectChanged,
@@ -2035,16 +2220,4 @@
                     showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
                     showBackupListModal, backupList, openBackupList, restoreBackup,
                     arrowColor, freehandColor, wallStyle, wallColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg,
-                    customStamps, promptCustomStamp, drawMode, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText, focusedInput, topTextInputRef,
-                    svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
-                    createNewProject, loadProject, deleteProject, backToProjects, copyCode, joinProjectByCode,
-                    saveAll, downloadNow, uploadNow, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, deleteActivePin,
-                    setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload, pasteFromClipboard,
-                    startDrag, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
-                    deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, onMarkerTextInput, handleKeypad, applyTag, applyStamp, getStampColor, getMarkerLines, getTagFields, exportPdfReport
-                };
-            }
-        }).mount('#app');
-    </script>
-</body>
-</html>
+                    customStamps, promptCustomStamp, drawMode, showTopSheet, showTopTextBar, activeMarker, is
