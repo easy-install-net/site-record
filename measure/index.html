@@ -7,14 +7,13 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v8.2</title>
+    <title>度尺寶 Pro v8.3</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <style>
         [v-cloak] { display: none !important; }
         * { box-sizing: border-box; }
@@ -57,7 +56,7 @@
                     <button v-if="currentView !== 'dir'" @click="backToProjects" class="bg-zinc-800 px-2 py-1 rounded text-xs font-bold shrink-0">‹目錄</button>
                     <button v-if="currentView !== 'dir'" @click="downloadNow" class="bg-blue-600 active:bg-blue-800 text-white px-2 py-1 rounded text-xs font-bold shrink-0">⬇️載入</button>
                     <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer ml-1">{{ cloudStatusText }}</span>
-                    <input v-if="currentView === 'proj'" v-model="project.name" @input="markProjectChanged" @blur="saveAll" placeholder="輸入工程名稱..." class="ml-1 bg-transparent text-white text-xs font-bold min-w-0 flex-1 truncate focus:bg-zinc-900 focus:px-1.5 rounded focus:outline-none">
+                    <input v-if="currentView === 'proj'" v-model="project.name" @input="markProjectChanged" @blur="saveAll" placeholder="輸入地址 / 工程名..." class="ml-1 bg-transparent text-white text-xs font-bold min-w-0 flex-1 truncate focus:bg-zinc-900 focus:px-1.5 rounded focus:outline-none">
                     <span v-if="currentView === 'preview'" class="ml-1 text-white text-xs font-bold truncate">{{ project.name || '未命名工程' }}</span>
                 </div>
                 
@@ -119,8 +118,7 @@
                         <div class="font-bold text-sm text-white truncate">{{ proj.name || '未命名工程' }}</div>
                         <span v-if="proj.pendingUpload" class="bg-purple-900/90 border border-purple-500 text-purple-200 text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0">⏳待上傳</span>
                     </div>
-                    <div v-if="proj.address" class="text-[11px] text-amber-300 mt-0.5 truncate">📍 {{ proj.address }}</div>
-                    <div class="text-[10px] text-zinc-400 mt-0.5 flex flex-col gap-0.5">
+                    <div class="text-[10px] text-zinc-400 mt-1 flex flex-col gap-0.5">
                         <span>{{ proj.date }} ｜ {{ proj.pageCount || 1 }} 頁 ｜ {{ proj.pinCount || 0 }} 釘</span>
                         <span v-if="proj.lastModifiedBy" class="text-blue-300 font-bold">✍️ 最後修改: [{{ proj.lastModifiedBy }}]</span>
                     </div>
@@ -161,10 +159,6 @@
                             </div>
                         </div>
                         <button @click="copyCode(project.code)" class="bg-zinc-800 border border-zinc-700 px-2.5 py-1 rounded text-xs font-bold text-zinc-300 shrink-0">複製碼</button>
-                    </div>
-                    <div class="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 focus-within:border-yellow-500/70 rounded px-2 py-1">
-                        <span class="text-xs text-amber-400 shrink-0">📍地址:</span>
-                        <input type="text" v-model="project.address" @input="markProjectChanged" @blur="saveAll" placeholder="輸入地盤地址 (自動印於預覽右上角印章)..." class="flex-1 min-w-0 bg-transparent text-xs text-white font-bold focus:outline-none">
                     </div>
                     <div v-if="project.lastModifiedBy" class="text-[10px] text-blue-300 font-bold truncate">✍️ 全檔最後更新: {{ project.lastModifiedBy }}</div>
                 </div>
@@ -514,7 +508,6 @@
                                 <span class="bg-yellow-500 text-black px-1 rounded text-[10px] font-bold">#{{ cp.code }}</span>
                                 <span class="text-sm font-bold truncate">{{ cp.name || '未命名工程' }}</span>
                             </div>
-                            <div v-if="cp.address" class="text-[10px] text-amber-300 mt-0.5 truncate">📍 {{ cp.address }}</div>
                             <div class="text-[10px] text-zinc-400 mt-0.5">更新: {{ cp.updatedAt ? new Date(cp.updatedAt).toLocaleString() : '未知' }}</div>
                             <div v-if="cp.lastModifiedBy" class="text-[10px] text-blue-300">✍️ 由 {{ cp.lastModifiedBy }} 修改</div>
                         </div>
@@ -660,7 +653,6 @@
             </div>
         </div>
 
-        <!-- 載入中彈窗 (附帶隨時可按的取消按鈕，永不卡死) -->
         <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center text-white font-bold px-6 text-center">
             <div class="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-3"></div>
             <p class="text-sm">{{ processingText }}</p>
@@ -675,9 +667,7 @@
         const offlineReady = ref(false);
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(() => { offlineReady.value = true; })
-                    .catch(() => {});
+                navigator.serviceWorker.register('./sw.js').then(() => { offlineReady.value = true; }).catch(() => {});
             });
             navigator.serviceWorker.ready.then(() => { offlineReady.value = true; }).catch(() => {});
         }
@@ -692,13 +682,12 @@
             appId: "1:17077391191:web:f167a311052c56bd3d7812"
         };
 
-        let db = null, auth = null;
+        let db = null;
         try {
             if (window.firebase) {
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
                 db.settings({ experimentalAutoDetectLongPolling: true, ignoreUndefinedProperties: true });
-                auth = firebase.auth();
             }
         } catch (e) {}
 
@@ -734,7 +723,7 @@
                 const showWatermark = ref(true);
 
                 const projectList = ref([]);
-                const project = reactive({ code: '', name: '', address: '', date: '', deletedPageIds: [], lastSyncAt: 0, lastModifiedBy: '' });
+                const project = reactive({ code: '', name: '', date: '', deletedPageIds: [], lastSyncAt: 0, lastModifiedBy: '' });
                 const pages = ref([]), photoPool = ref([]), activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
                 const activePage = computed(() => pages.value[activePageIndex.value] || null);
                 const activeCanvas = computed(() => activePin.value || activePage.value);
@@ -743,8 +732,7 @@
 
                 const watermarkStamp = computed(() => {
                     const lines = [];
-                    if (project.name && project.name.trim()) lines.push({ text: `🏗️ ${project.name.trim()}`, color: '#ffffff' });
-                    if (project.address && project.address.trim()) lines.push({ text: `📍 ${project.address.trim()}`, color: '#facc15' });
+                    if (project.name && project.name.trim()) lines.push({ text: `📍 ${project.name.trim()}`, color: '#facc15' });
                     if (project.date && project.date.trim()) lines.push({ text: `📅 ${project.date.trim()}`, color: '#e4e4e7' });
                     if (!lines.length) return { lines: [], boxW: 0, boxH: 0 };
                     const boxW = measureBoxWidth(lines.map(l => l.text), 21, 28);
@@ -765,8 +753,8 @@
                     syncing: '☁️上傳中',
                     offline: '📴離線度尺中',
                     queued: '⏳待自動上傳',
-                    ready: '☁️v8.2連通'
-                }[cloudSyncState.value] || '☁️v8.2連通'));
+                    ready: '☁️v8.3連通'
+                }[cloudSyncState.value] || '☁️v8.3連通'));
                 const cloudStatusClass = computed(() =>
                     cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' :
                     cloudSyncState.value === 'offline' ? 'bg-amber-950 text-amber-300 border border-amber-700' :
@@ -791,10 +779,8 @@
                 const showCloudDetail = () => {
                     if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號時自動上傳');
                     else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                    else showToast('v8.2 右上角日期及地址印章 ＋ 離線保護運作中');
+                    else showToast('v8.3 拔除登入認證 ＋ 瘦身提速版運作中');
                 };
-
-                const trySilentAuth = async () => { if (auth && !auth.currentUser) try { await withTimeout(auth.signInAnonymously(), 5000); } catch (e) {} };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
                 const getBaseImageKey = (pg) => pg?.photoId ? String(pg.photoId) : (pg?.photo && !pg.isSketch ? photoFingerprint(pg.photo) : '');
@@ -1114,7 +1100,6 @@
 
                         try {
                             if (db && navigator.onLine && project.code) {
-                                await trySilentAuth();
                                 const mediaMap = await loadMediaMapFromRef(db.collection('site_projects').doc(String(project.code)));
                                 mediaMap.forEach((val, docId) => {
                                     addUnique({ id: docId, photo: val.photo, w: val.data.w, h: val.data.h, author: val.data.author, updatedAt: val.data.updatedAt });
@@ -1407,7 +1392,7 @@
                     const cleanPool = JSON.parse(JSON.stringify(photoPool.value || []));
                     const hasPending = hasUnsavedCloudChanges.value || dirtyPageIds.size > 0;
                     await localforage.setItem('proj_' + code, {
-                        code, name: String(project.name || ''), address: String(project.address || ''), date: String(project.date || ''),
+                        code, name: String(project.name || ''), date: String(project.date || ''),
                         pages: cleanPages, photoPool: cleanPool,
                         deletedPageIds: JSON.parse(JSON.stringify(project.deletedPageIds || [])),
                         updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0),
@@ -1447,7 +1432,7 @@
                     if (!db) throw new Error('雲端資料庫未初始化');
                     cloudSyncState.value = 'syncing';
                     try {
-                        await trySilentAuth(); const projRef = db.collection('site_projects').doc(code);
+                        const projRef = db.collection('site_projects').doc(code);
                         const [projDoc, pagesSnap, mediaMap] = await Promise.all([
                             withRetry(() => withTimeout(projRef.get())),
                             withRetry(() => withTimeout(projRef.collection('pages').get())),
@@ -1461,7 +1446,6 @@
 
                         const pd = projDoc.data();
                         if (pd.name) project.name = pd.name;
-                        if (pd.address) project.address = pd.address;
                         if (pd.date) project.date = pd.date;
                         if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy;
                         const deletedSet = new Set([...(project.deletedPageIds || []), ...(pd.deletedPageIds || [])]); project.deletedPageIds = Array.from(deletedSet);
@@ -1559,7 +1543,6 @@
                 const pushProjectPayload = async (projObj, isCurrentOpen = true, onProgress = null) => {
                     const code = String(projObj.code || '').trim();
                     if (!db || !code || !navigator.onLine) return false;
-                    await trySilentAuth();
 
                     const projRef = db.collection('site_projects').doc(code);
                     const now = Date.now();
@@ -1578,7 +1561,7 @@
                     const myDeletedIds = JSON.parse(JSON.stringify(projObj.deletedPageIds || []));
 
                     const projPatch = {
-                        code, name: projObj.name || '', address: projObj.address || '', date: projObj.date || '',
+                        code, name: projObj.name || '', date: projObj.date || '',
                         pageIds: firebase.firestore.FieldValue.arrayUnion(...rawPages.map(p => p.id)),
                         deletedPageIds: myDeletedIds.length ? firebase.firestore.FieldValue.arrayUnion(...myDeletedIds) : [],
                         updatedAt: now
@@ -1634,7 +1617,7 @@
                     isPushingRightNow = true; cloudSyncState.value = 'syncing';
                     try {
                         const now = await pushProjectPayload({
-                            code, name: project.name, address: project.address, date: project.date,
+                            code, name: project.name, date: project.date,
                             pages: pages.value, deletedPageIds: project.deletedPageIds,
                             lastSyncAt: project.lastSyncAt
                         }, true, onProgress);
@@ -1733,7 +1716,7 @@
                 const createNewProject = async () => {
                     await checkAuthorName();
                     const firstPg = makeEmptyPage({ author: authorName.value || '' });
-                    Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', address: '', date: new Date().toISOString().split('T')[0], deletedPageIds: [], lastSyncAt: 0, lastModifiedBy: authorName.value });
+                    Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: new Date().toISOString().split('T')[0], deletedPageIds: [], lastSyncAt: 0, lastModifiedBy: authorName.value });
                     pages.value = [firstPg]; photoPool.value = []; activePageIndex.value = 0; activePin.value = null;
                     dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id);
                     hasUnsavedCloudChanges.value = true;
@@ -1749,7 +1732,7 @@
                     if (!navigator.onLine) return alert('連通新工程碼需要網絡連線，請連網後再試。');
                     isProcessing.value = true; processingText.value = '正在連通工程 #' + code + '...';
                     try {
-                        if (!db) throw new Error('資料庫未連線'); await trySilentAuth();
+                        if (!db) throw new Error('資料庫未連線');
                         const doc = await withRetry(() => withTimeout(db.collection('site_projects').doc(code).get(), 15000));
                         if (!doc.exists) { alert('雲端找不到工程碼 #' + code); return; }
                         showJoinModal.value = false; inputJoinCode.value = ''; await loadProject(code, true); showToast('✅ 已連通工程 #' + code);
@@ -1761,7 +1744,7 @@
                     code = String(code); project.code = code; project.deletedPageIds = []; pages.value = []; photoPool.value = []; dirtyPageIds.clear();
                     const d = await localforage.getItem('proj_' + code);
                     if (d) {
-                        Object.assign(project, { name: d.name || '', address: d.address || '', date: d.date || '', deletedPageIds: d.deletedPageIds || [], lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' });
+                        Object.assign(project, { name: d.name || '', date: d.date || '', deletedPageIds: d.deletedPageIds || [], lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' });
                         if (Array.isArray(d.pages) && d.pages.length) pages.value = d.pages.map(pg => makeEmptyPage(pg));
                         if (Array.isArray(d.photoPool)) photoPool.value = d.photoPool;
                         hasUnsavedCloudChanges.value = !!d.pendingUpload;
@@ -1778,7 +1761,7 @@
                 const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
 
                 const renameProject = async () => {
-                    const newName = prompt('請輸入新的工程名稱：', manageProj.value.name);
+                    const newName = prompt('請輸入新的地址 / 工程名稱：', manageProj.value.name);
                     if (newName !== null) {
                         const trimmed = newName.trim();
                         const code = String(manageProj.value.code);
@@ -1832,7 +1815,6 @@
                         await localforage.removeItem('proj_' + code);
                         await removeFromPendingQueue(code);
                         if (db && navigator.onLine) {
-                            await trySilentAuth();
                             const projRef = db.collection('site_projects').doc(String(code));
                             await Promise.all([deleteSubcol(projRef, 'pages'), deleteMediaSubcol(projRef), deleteSubcol(projRef, 'backups')]);
                             await withTimeout(projRef.delete(), 15000);
@@ -1851,7 +1833,6 @@
                     if (!confirm('🧹 掃描並徹底清除「已刪除工程」殘留在雲端的照片、頁面與備份垃圾？\n（現存工程的資料完全不會受影響）')) return;
                     isProcessing.value = true; processingText.value = '正在掃描並清理雲端殘留垃圾...';
                     try {
-                        await trySilentAuth();
                         const activeSnap = await withTimeout(db.collection('site_projects').get(), 15000);
                         const activeIds = new Set();
                         activeSnap.forEach(d => activeIds.add(d.id));
@@ -1881,7 +1862,6 @@
                 const openBackupList = async () => {
                     showManageModal.value = false; isProcessing.value = true; processingText.value = '正在搜尋時光機紀錄...';
                     try {
-                        await trySilentAuth();
                         const snaps = await withTimeout(
                             db.collection('site_projects').doc(manageProj.value.code).collection('backups').get(),
                             15000
@@ -1916,17 +1896,23 @@
 
                 const openCloudBrowser = async () => {
                     if (!db || !navigator.onLine) return alert('請檢查網路連線。');
-                    isProcessing.value = true; processingText.value = '正在讀取雲端目錄...';
+                    isProcessing.value = true; processingText.value = '正在極速讀取雲端目錄...';
                     try {
-                        await trySilentAuth();
+                        // 只抽取最近更新的 30 個工程（極速載入）
                         const snaps = await withTimeout(
-                            db.collection('site_projects').limit(100).get(),
-                            15000,
+                            db.collection('site_projects')
+                              .orderBy('updatedAt', 'desc')
+                              .limit(30)
+                              .get(),
+                            10000,
                             '讀取雲端目錄逾時，請檢查網路後重試'
                         );
                         const list = [];
-                        snaps.forEach(doc => list.push({ code: doc.id, ...doc.data() }));
-                        list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                        snaps.forEach(doc => {
+                            const d = doc.data();
+                            // 過濾掉可能為空殼的舊格式
+                            if (d.name || d.updatedAt) list.push({ code: doc.id, ...d });
+                        });
                         cloudProjectList.value = list;
                         showCloudBrowser.value = true;
                     } catch (e) {
@@ -1947,7 +1933,7 @@
                             if (d?.code) {
                                 const pgs = d.pages || [];
                                 list.push({
-                                    code: d.code, name: d.name, address: d.address || '', date: d.date,
+                                    code: d.code, name: d.name, date: d.date,
                                     pageCount: pgs.length || 1,
                                     pinCount: pgs.reduce((s, p) => s + (p.pins?.length || 0), 0),
                                     updatedAt: d.updatedAt || 0,
@@ -2010,7 +1996,6 @@
                         lastCloudError.value = formatSyncError(new Error('offline'));
                     });
                     if (navigator.onLine) {
-                        trySilentAuth();
                         setTimeout(() => processPendingUploadQueue(false), 1500);
                     }
                     setInterval(() => {
@@ -2151,8 +2136,6 @@
                                 return;
                             }
 
-                            const addrSuffix = project.address ? `   |   地址: ${project.address}` : '';
-
                             if (perPage === 4) {
                                 const totalPdfPages = Math.ceil(validPages.length / 4);
                                 const marginX = 45, topY = 115, gap = 24;
@@ -2167,7 +2150,7 @@
                                     ctx.fillStyle = '#000'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'left';
                                     ctx.fillText(`${project.name || '工程度尺'} (#${project.code})`, marginX, 60);
                                     ctx.font = 'bold 21px sans-serif'; ctx.fillStyle = '#4b5563';
-                                    ctx.fillText(`日期: ${project.date}${addrSuffix}   |   共 ${validPages.length} 張圖紙   |   第 ${pIdx + 1} / ${totalPdfPages} 頁`, marginX, 94);
+                                    ctx.fillText(`日期: ${project.date}   |   共 ${validPages.length} 張圖紙   |   第 ${pIdx + 1} / ${totalPdfPages} 頁`, marginX, 94);
 
                                     for (let j = 0; j < 4; j++) {
                                         const imgIdx = pIdx * 4 + j;
@@ -2202,7 +2185,7 @@
                                     ctx.fillText(`${project.name || '工程度尺'} (#${project.code}) — ${pg.pdfLabel}`, 50, 65);
                                     ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#4b5563'; 
                                     const pinCountText = pg.pins?.length ? `   |   子釘選: ${pg.pins.length}` : '';
-                                    ctx.fillText(`日期: ${project.date}${addrSuffix}   |   最後修改: ${pg.authorDisplay}${pinCountText}`, 50, 102);
+                                    ctx.fillText(`日期: ${project.date}   |   最後修改: ${pg.authorDisplay}${pinCountText}`, 50, 102);
                                     const im = new Image(); im.src = await renderPdfPageImg(pg); await new Promise(r => im.onload = r);
                                     const maxW = PAGE_W - 100, maxH = PAGE_H - 180; let dw = maxW, dh = (im.height / im.width) * dw;
                                     if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; }
