@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v8.3</title>
+    <title>度尺寶 Pro v8.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -42,22 +42,29 @@
             stroke: #000; stroke-width: 5px; stroke-linejoin: round; stroke-linecap: round;
             user-select: none; pointer-events: none;
         }
+        .wm-outline-text {
+            font-weight: 900; font-size: 23px; paint-order: stroke fill;
+            stroke: #000000; stroke-width: 6px; stroke-linejoin: round; stroke-linecap: round;
+            user-select: none; pointer-events: none;
+        }
         .hide-caret { caret-color: transparent; }
     </style>
 </head>
 <body class="text-gray-100 font-sans antialiased">
     <div id="app" v-cloak class="fixed inset-0 w-full h-full max-w-full max-h-full flex flex-col overflow-hidden">
         
-        <!-- 頂部導航欄 -->
+        <!-- 頂部導航欄：唯一工程碼（一撳複製）+ 加大1號字直接修改地址 -->
         <div class="shrink-0 w-full flex flex-col z-30 bg-zinc-950">
-            <header class="h-10 w-full bg-black text-white px-2 border-b border-zinc-800 flex justify-between items-center gap-1 overflow-hidden">
+            <header class="h-11 w-full bg-black text-white px-2 border-b border-zinc-800 flex justify-between items-center gap-1 overflow-hidden">
                 <div class="flex items-center gap-1 min-w-0 flex-1">
                     <span v-if="currentView === 'dir'" class="text-sm font-bold truncate">工程目錄</span>
                     <button v-if="currentView !== 'dir'" @click="backToProjects" class="bg-zinc-800 px-2 py-1 rounded text-xs font-bold shrink-0">‹目錄</button>
                     <button v-if="currentView !== 'dir'" @click="downloadNow" class="bg-blue-600 active:bg-blue-800 text-white px-2 py-1 rounded text-xs font-bold shrink-0">⬇️載入</button>
-                    <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer ml-1">{{ cloudStatusText }}</span>
-                    <input v-if="currentView === 'proj'" v-model="project.name" @input="markProjectChanged" @blur="saveAll" placeholder="輸入地址 / 工程名..." class="ml-1 bg-transparent text-white text-xs font-bold min-w-0 flex-1 truncate focus:bg-zinc-900 focus:px-1.5 rounded focus:outline-none">
-                    <span v-if="currentView === 'preview'" class="ml-1 text-white text-xs font-bold truncate">{{ project.name || '未命名工程' }}</span>
+                    <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer">{{ cloudStatusText }}</span>
+                    <template v-if="currentView !== 'dir'">
+                        <button @click="copyCode(project.code)" title="點擊複製工程碼" class="bg-yellow-400 active:bg-yellow-500 text-black text-xs font-mono font-black px-1.5 py-0.5 rounded shrink-0 ml-0.5">#{{ project.code }}</button>
+                        <input v-model="project.name" @input="markProjectChanged" @blur="saveAll" @keyup.enter="$event.target.blur()" placeholder="點擊輸入地址..." class="ml-1 bg-zinc-900/80 focus:bg-zinc-900 border border-zinc-800 focus:border-yellow-500 text-white text-base font-bold min-w-0 flex-1 px-2 py-0.5 rounded focus:outline-none truncate">
+                    </template>
                 </div>
                 
                 <div class="flex gap-1 items-center shrink-0">
@@ -67,12 +74,12 @@
                         <button @click="createNewProject" class="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">+新建</button>
                     </template>
                     <template v-else-if="currentView === 'preview'">
-                        <button @click="enterEditMode(0)" class="bg-yellow-500 text-black px-3 py-1 rounded text-xs font-bold shadow">✏️ 進入編輯</button>
+                        <button @click="enterEditMode(0)" class="bg-yellow-500 text-black px-2.5 py-1 rounded text-xs font-bold shadow">✏️編輯</button>
                         <button v-if="pages.length" @click="showPdfModal = true" class="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold">PDF</button>
                     </template>
                     <template v-else>
                         <button @click="switchToPreview" class="bg-zinc-800 text-yellow-400 border border-yellow-600 px-2 py-1 rounded text-xs font-bold">👁️預覽</button>
-                        <button @click="uploadNow" :class="hasUnsavedCloudChanges ? 'bg-purple-600 animate-pulse ring-2 ring-purple-400' : 'bg-zinc-700'" class="text-white px-3 py-1 rounded text-xs font-bold transition-all shadow">⬆️上傳</button>
+                        <button @click="uploadNow" :class="hasUnsavedCloudChanges ? 'bg-purple-600 animate-pulse ring-2 ring-purple-400' : 'bg-zinc-700'" class="text-white px-2.5 py-1 rounded text-xs font-bold transition-all shadow">⬆️上傳</button>
                         <button v-if="pages.length" @click="showPdfModal = true" class="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold">PDF</button>
                     </template>
                 </div>
@@ -82,7 +89,7 @@
             <div v-if="currentView === 'proj'" class="w-full flex flex-col bg-zinc-900 border-b border-zinc-700 shrink-0">
                 <div class="h-11 px-1 flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
                     <div class="flex items-center gap-1 shrink-0">
-                        <button v-for="m in [{id:'browse',l:'睇圖',c:'bg-emerald-500 text-black'},{id:'arrow-single',l:'單箭'},{id:'freehand',l:'塗鴉'},{id:'line',l:'度尺'},{id:'stamp',l:'印章'}]"
+                        <button v-for="m in [{id:'browse',l:'睇圖',c:'bg-emerald-500 text-black'},{id:'arrow-single',l:'單箭'},{id:'freehand',l:'繪圖'},{id:'wall',l:'牆線'},{id:'line',l:'度尺'},{id:'stamp',l:'印章'}]"
                                 :key="m.id" @click="drawMode = m.id"
                                 :class="drawMode === m.id ? (m.c || 'bg-white text-black') : 'bg-zinc-800 text-zinc-300'"
                                 class="px-2 py-1.5 text-xs font-bold rounded">{{ m.l }}</button>
@@ -94,12 +101,22 @@
                     </div>
                 </div>
 
-                <div class="h-8 bg-zinc-950 flex items-center justify-center gap-2 transition-opacity duration-200" :class="(drawMode === 'arrow-single' || drawMode === 'freehand') ? 'opacity-100' : 'opacity-0 pointer-events-none'">
-                    <span class="text-[10px] text-zinc-400 font-bold">顏色:</span>
-                    <template v-if="drawMode === 'arrow-single'">
+                <!-- 副工具列（顏色 / 牆線雙模式切換） -->
+                <div class="h-8 bg-zinc-950 flex items-center justify-center gap-2 px-2 transition-opacity duration-200" :class="(drawMode === 'arrow-single' || drawMode === 'freehand' || drawMode === 'wall') ? 'opacity-100' : 'opacity-0 pointer-events-none'">
+                    <template v-if="drawMode === 'wall'">
+                        <div class="flex items-center gap-1 bg-zinc-900 border border-zinc-700 rounded p-0.5">
+                            <button @click="wallStyle = 'hollow'" :class="wallStyle === 'hollow' ? 'bg-yellow-400 text-black' : 'text-zinc-300'" class="px-2 py-0.5 rounded text-[11px] font-bold">═空心雙線</button>
+                            <button @click="wallStyle = 'hatched'" :class="wallStyle === 'hatched' ? 'bg-yellow-400 text-black' : 'text-zinc-300'" class="px-2 py-0.5 rounded text-[11px] font-bold">⫽斜線陰影</button>
+                        </div>
+                        <span class="text-[10px] text-zinc-400 font-bold ml-1">色:</span>
+                        <button v-for="c in [{id:'#111827',bg:'bg-gray-900 border border-gray-500'},{id:'#ef4444',bg:'bg-red-500'},{id:'#3b82f6',bg:'bg-blue-500'},{id:'#ffffff',bg:'bg-white'}]" :key="c.id" @click="wallColor = c.id" :class="[c.bg, wallColor === c.id ? 'ring-2 ring-yellow-400 scale-110' : '']" class="w-4 h-4 rounded-full"></button>
+                    </template>
+                    <template v-else-if="drawMode === 'arrow-single'">
+                        <span class="text-[10px] text-zinc-400 font-bold">顏色:</span>
                         <button v-for="c in [{id:'gray',bg:'bg-gray-400'},{id:'white',bg:'bg-white'},{id:'red',bg:'bg-red-500'}]" :key="c.id" @click="arrowColor = c.id" :class="[c.bg, arrowColor === c.id ? 'ring-2 ring-blue-400 scale-110' : '']" class="w-4 h-4 rounded-full"></button>
                     </template>
                     <template v-else>
+                        <span class="text-[10px] text-zinc-400 font-bold">顏色:</span>
                         <button v-for="c in [{id:'#3b82f6',bg:'bg-blue-500'},{id:'#eab308',bg:'bg-yellow-500'},{id:'#ef4444',bg:'bg-red-500'},{id:'#111827',bg:'bg-gray-900 border border-gray-500'}]" :key="c.id" @click="freehandColor = c.id" :class="[c.bg, freehandColor === c.id ? 'ring-2 ring-white scale-110' : '']" class="w-4 h-4 rounded-full"></button>
                     </template>
                 </div>
@@ -115,7 +132,7 @@
                 <div class="flex-1 mr-2 cursor-pointer min-w-0" @click="loadProject(proj.code, true)">
                     <div class="flex items-center gap-1.5">
                         <span class="bg-yellow-400 text-black text-xs font-black px-1.5 py-0.5 rounded shrink-0">#{{ proj.code }}</span>
-                        <div class="font-bold text-sm text-white truncate">{{ proj.name || '未命名工程' }}</div>
+                        <div class="font-bold text-sm text-white truncate">{{ proj.name || '未輸入地址' }}</div>
                         <span v-if="proj.pendingUpload" class="bg-purple-900/90 border border-purple-500 text-purple-200 text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0">⏳待上傳</span>
                     </div>
                     <div class="text-[10px] text-zinc-400 mt-1 flex flex-col gap-0.5">
@@ -135,7 +152,7 @@
             </div>
         </main>
 
-        <!-- 2. 全檔唯讀預覽總覽視圖 -->
+        <!-- 2. 全檔唯讀預覽總覽視圖（取消中間灰色欄，每張圖紙卡底部獨立日期） -->
         <main v-show="currentView === 'preview'" class="flex-1 min-h-0 w-full bg-zinc-950 flex flex-col overflow-hidden">
             <div class="bg-zinc-900 border-b border-zinc-800 px-3 py-2 flex items-center justify-between shrink-0 gap-1">
                 <div class="flex gap-1.5">
@@ -148,21 +165,7 @@
                 <span v-else class="text-[10px] text-zinc-400">點圖睇全張大圖</span>
             </div>
 
-            <div v-show="previewTab === 'pages'" class="flex-1 overflow-y-auto p-2.5 touch-scrollable space-y-3">
-                <div class="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 flex flex-col gap-2">
-                    <div class="flex justify-between items-center gap-2">
-                        <div class="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                            <span class="text-xs text-zinc-400 shrink-0">工程碼: <span class="text-yellow-400 font-mono font-bold">#{{ project.code }}</span></span>
-                            <div class="flex items-center gap-1 bg-zinc-950 border border-zinc-700 rounded px-2 py-0.5">
-                                <span class="text-[11px] text-zinc-400">📅</span>
-                                <input type="date" v-model="project.date" @change="markProjectChanged(); saveAll()" class="bg-transparent text-white text-xs font-bold focus:outline-none">
-                            </div>
-                        </div>
-                        <button @click="copyCode(project.code)" class="bg-zinc-800 border border-zinc-700 px-2.5 py-1 rounded text-xs font-bold text-zinc-300 shrink-0">複製碼</button>
-                    </div>
-                    <div v-if="project.lastModifiedBy" class="text-[10px] text-blue-300 font-bold truncate">✍️ 全檔最後更新: {{ project.lastModifiedBy }}</div>
-                </div>
-
+            <div v-show="previewTab === 'pages'" class="flex-1 overflow-y-auto p-2.5 touch-scrollable">
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                     <div v-for="(pg, idx) in pages" :key="pg.id" class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-lg flex flex-col justify-between">
                         <div class="bg-zinc-800/90 px-2 py-1.5 border-b border-zinc-700 flex flex-col gap-1">
@@ -178,13 +181,16 @@
                             </div>
                         </div>
 
-                        <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''} (最後改: ${pg.author || project.lastModifiedBy || '未知'})`)" class="h-44 relative bg-zinc-950 cursor-pointer active:bg-zinc-800 overflow-hidden flex items-center justify-center">
+                        <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''} (最後改: ${pg.author || project.lastModifiedBy || '未知'})`, pg.date)" class="h-44 relative bg-zinc-950 cursor-pointer active:bg-zinc-800 overflow-hidden flex items-center justify-center">
                             <div class="absolute inset-1.5 overflow-hidden flex items-center justify-center">
                                 <svg :view-box.camel="`0 0 ${pg.w || 1200} ${pg.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="pointer-events-none select-none">
                                     <rect x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" fill="#ffffff" />
                                     <image :href="pg.photo" x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" preserveAspectRatio="none" />
                                     <rect x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" fill="none" stroke="#52525b" stroke-width="4" />
-                                    <line v-for="l in (pg.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 5 : 6" stroke-linecap="round" />
+                                    <g v-for="w in (pg.walls || [])" :key="w.id">
+                                        <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" />
+                                    </g>
+                                    <line v-for="l in (pg.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 4 : 6" stroke-linecap="round" />
                                     <path v-for="p in (pg.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
                                     <g v-for="m in (pg.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
                                         <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
@@ -200,14 +206,21 @@
                         </div>
                         <div v-else class="h-44 flex items-center justify-center text-zinc-600 text-[11px]">空白未拍照</div>
 
-                        <div class="bg-zinc-950 px-2 py-1.5 border-t border-zinc-800/80 flex items-center justify-between gap-1 flex-wrap">
-                            <div v-if="pg.pins?.length" class="flex items-center gap-1 flex-wrap">
-                                <button v-for="(pin, pIdx) in pg.pins" :key="pin.id" @click.stop="pin.photo ? openFullScreenPreview(pin, `P${idx + 1} 釘選#${pIdx + 1}`) : enterEditMode(idx)" class="bg-red-950 border border-red-700/80 text-red-200 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                                    📍釘#{{ pIdx + 1 }}
-                                </button>
+                        <!-- 圖紙卡底部：落釘按鈕 + 每頁獨立日期選擇器 -->
+                        <div class="bg-zinc-950 px-2 py-1.5 border-t border-zinc-800/80 flex flex-col gap-1.5">
+                            <div class="flex items-center justify-between gap-1 flex-wrap">
+                                <div v-if="pg.pins?.length" class="flex items-center gap-1 flex-wrap">
+                                    <button v-for="(pin, pIdx) in pg.pins" :key="pin.id" @click.stop="pin.photo ? openFullScreenPreview(pin, `P${idx + 1} 釘選#${pIdx + 1}`, pg.date) : enterEditMode(idx)" class="bg-red-950 border border-red-700/80 text-red-200 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                        📍釘#{{ pIdx + 1 }}
+                                    </button>
+                                </div>
+                                <span v-else class="text-[10px] text-zinc-500">無落釘</span>
+                                <span v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`, pg.date)" class="text-[10px] text-zinc-400 cursor-pointer">🔍全圖</span>
                             </div>
-                            <span v-else class="text-[10px] text-zinc-500">無落釘</span>
-                            <span v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`)" class="text-[10px] text-zinc-400 cursor-pointer">🔍全圖</span>
+                            <div class="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded px-1.5 py-0.5">
+                                <span class="text-[10px] text-zinc-400 shrink-0">📅日期</span>
+                                <input type="date" v-model="pg.date" @change="onPageDateChange(pg)" class="bg-transparent text-zinc-200 text-[11px] font-bold focus:outline-none text-right min-w-0">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -275,7 +288,7 @@
             </div>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器 -->
+        <!-- 唯讀全螢幕大圖檢視器（左上角無黑底有邊字水印 + 開關） -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col overflow-hidden">
             <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-2 flex justify-between items-center gap-1 shrink-0 z-10">
                 <span class="text-xs font-bold text-yellow-400 truncate min-w-0 flex-1">👁️ {{ fullScreenTitle }}</span>
@@ -291,26 +304,26 @@
                 <div class="absolute inset-2.5 overflow-hidden">
                     <svg :view-box.camel="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="select-none">
                         <defs>
-                            <marker id="fs-arrow-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#9ca3af" /></marker>
-                            <marker id="fs-arrow-white" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" /></marker>
-                            <marker id="fs-arrow-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" /></marker>
+                            <marker id="fs-arrow-gray" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#9ca3af" /></marker>
+                            <marker id="fs-arrow-white" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#ffffff" /></marker>
+                            <marker id="fs-arrow-red" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#ef4444" /></marker>
                         </defs>
                         <rect x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" fill="#ffffff" />
                         <image :href="fullScreenItem.photo" x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" preserveAspectRatio="none" />
                         <rect x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" fill="none" stroke="#52525b" stroke-width="4" />
 
-                        <g v-if="showWatermark && fullScreenItem.space" transform="translate(16, 16)">
-                            <rect x="0" y="0" :width="measureBoxWidth(['🏠 ' + fullScreenItem.space], 24, 28)" height="44" rx="6" fill="rgba(0,0,0,0.82)" stroke="rgba(255,255,255,0.22)" stroke-width="1.5" />
-                            <text x="14" y="23" dominant-baseline="central" fill="#facc15" font-size="24" font-weight="900">🏠 {{ fullScreenItem.space }}</text>
+                        <!-- 左上角無黑底高對比有邊字水印 -->
+                        <g v-if="showWatermark && fullScreenWatermarkLines.length" transform="translate(22, 26)">
+                            <text v-for="(item, wIdx) in fullScreenWatermarkLines" :key="wIdx" x="0" :y="wIdx * 32" dominant-baseline="central" :fill="item.color" class="wm-outline-text">{{ item.text }}</text>
                         </g>
 
-                        <g v-if="showWatermark && watermarkStamp.lines.length" :transform="`translate(${(fullScreenItem.w || 1200) - watermarkStamp.boxW - 16}, 16)`">
-                            <rect x="0" y="0" :width="watermarkStamp.boxW" :height="watermarkStamp.boxH" rx="8" fill="rgba(0,0,0,0.82)" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" />
-                            <text v-for="(item, wIdx) in watermarkStamp.lines" :key="wIdx" x="14" :y="24 + wIdx * 30" dominant-baseline="central" :fill="item.color" font-size="21" font-weight="900">{{ item.text }}</text>
+                        <!-- 牆身雙平行線 / 斜線陰影 -->
+                        <g v-for="w in (fullScreenItem.walls || [])" :key="w.id">
+                            <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" />
                         </g>
 
                         <line v-for="l in (fullScreenItem.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
-                              :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 5 : 6" stroke-linecap="round"
+                              :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 4 : 6" stroke-linecap="round"
                               :marker-end="l.type === 'arrow-single' ? `url(#fs-arrow-${l.color})` : null" />
                         <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
                         <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
@@ -373,6 +386,7 @@
                 <!-- 右上模式提示 -->
                 <div class="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end pointer-events-none">
                     <div v-if="drawMode === 'browse'" class="bg-emerald-500 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow opacity-85">👆 睇圖 / 拖字</div>
+                    <div v-else-if="drawMode === 'wall'" class="bg-yellow-400 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow">🧱 拉線畫牆身</div>
                     <div v-else-if="drawMode === 'stamp'" class="bg-yellow-400 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow">🏷️ 點畫面蓋印</div>
                     <div v-else-if="drawMode === 'pin'" class="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px] font-black shadow">📍 點畫面落釘</div>
                 </div>
@@ -385,14 +399,23 @@
                          @touchstart="onStageTouchStart" @touchmove="onStageTouchMove" @touchend="onStageTouchEnd"
                          @mousedown="onStageMouseDown" @mousemove="onStageMouseMove" @mouseup="onStageMouseUp">
                         <defs>
-                            <marker id="arrow-end-gray" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#9ca3af" /></marker>
-                            <marker id="arrow-end-white" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" /></marker>
-                            <marker id="arrow-end-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" /></marker>
+                            <marker id="arrow-end-gray" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#9ca3af" /></marker>
+                            <marker id="arrow-end-white" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#ffffff" /></marker>
+                            <marker id="arrow-end-red" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#ef4444" /></marker>
                         </defs>
 
                         <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="#ffffff" />
                         <image :href="activeCanvas.photo" x="0" y="0" :width="canvasW" :height="canvasH" preserveAspectRatio="none" />
                         <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="none" stroke="#52525b" stroke-width="4" />
+
+                        <!-- 已完成的牆身雙平行線 / 斜線陰影 -->
+                        <g v-for="w in (activeCanvas.walls || [])" :key="w.id">
+                            <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" />
+                        </g>
+                        <!-- 正在拖拉的即時牆線預覽 -->
+                        <g v-if="currentWall">
+                            <line v-for="(seg, sIdx) in getWallSegments(currentWall)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="currentWall.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" />
+                        </g>
 
                         <line v-for="l in (activeCanvas.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
                               :stroke="getLineStroke(l, 0.55)" :stroke-width="l.type === 'arrow-single' ? 4 : 5" stroke-linecap="round"
@@ -478,10 +501,10 @@
             <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-0 flex flex-col text-white shadow-2xl overflow-hidden">
                 <div class="bg-zinc-800 p-3 text-center border-b border-zinc-700">
                     <div class="text-sm font-bold text-yellow-400">管理工程 #{{ manageProj.code }}</div>
-                    <div class="text-[11px] text-zinc-400 mt-1 truncate">{{ manageProj.name || '未命名工程' }}</div>
+                    <div class="text-[11px] text-zinc-400 mt-1 truncate">{{ manageProj.name || '未輸入地址' }}</div>
                 </div>
                 <div class="flex flex-col">
-                    <button @click="renameProject" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">✏️ 重新命名</button>
+                    <button @click="renameProject" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">✏️ 修改地址 / 名稱</button>
                     <button @click="copyCode(manageProj.code)" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">🔗 複製工程碼</button>
                     <button @click="duplicateProject" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">👯‍♂️ 複製為新檔 (不影響原圖)</button>
                     <button @click="openBackupList" class="p-4 text-sm font-bold text-left text-blue-400 hover:bg-zinc-800 border-b border-zinc-800">⏳ 歷史備份與還原 (時光機)</button>
@@ -506,7 +529,7 @@
                         <div class="min-w-0 flex-1 pr-2">
                             <div class="flex items-center gap-1">
                                 <span class="bg-yellow-500 text-black px-1 rounded text-[10px] font-bold">#{{ cp.code }}</span>
-                                <span class="text-sm font-bold truncate">{{ cp.name || '未命名工程' }}</span>
+                                <span class="text-sm font-bold truncate">{{ cp.name || '未輸入地址' }}</span>
                             </div>
                             <div class="text-[10px] text-zinc-400 mt-0.5">更新: {{ cp.updatedAt ? new Date(cp.updatedAt).toLocaleString() : '未知' }}</div>
                             <div v-if="cp.lastModifiedBy" class="text-[10px] text-blue-300">✍️ 由 {{ cp.lastModifiedBy }} 修改</div>
@@ -704,11 +727,56 @@
 
         const CHUNK_SIZE = 350000;
 
-        const _measureCtx = document.createElement('canvas').getContext('2d');
-        const measureBoxWidth = (texts, fontSize = 21, padX = 28) => {
-            _measureCtx.font = `900 ${fontSize}px sans-serif`;
-            const maxW = Math.max(0, ...texts.map(t => _measureCtx.measureText(String(t || '')).width));
-            return Math.max(160, Math.ceil(maxW + padX));
+        const getTodayStr = () => {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        };
+
+        const sanitizeFilename = (str) => String(str || '').trim().replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
+
+        // 統一純數學幾何引擎：保證編輯畫布(SVG)、預覽、複製、下載與PDF 100% 像素級零偏差
+        const buildWallSegments = (wObj) => {
+            if (!wObj) return [];
+            const dx = wObj.x2 - wObj.x1;
+            const dy = wObj.y2 - wObj.y1;
+            const L = Math.hypot(dx, dy);
+            if (L < 4) return [];
+
+            const ux = dx / L, uy = dy / L;
+            const nx = -uy, ny = ux;
+            const halfW = 9; // 牆身總闊 18px
+
+            const p1A = { x: wObj.x1 + nx * halfW, y: wObj.y1 + ny * halfW };
+            const p2A = { x: wObj.x2 + nx * halfW, y: wObj.y2 + ny * halfW };
+            const p1B = { x: wObj.x1 - nx * halfW, y: wObj.y1 - ny * halfW };
+            const p2B = { x: wObj.x2 - nx * halfW, y: wObj.y2 - ny * halfW };
+
+            const segs = [
+                { x1: p1A.x, y1: p1A.y, x2: p2A.x, y2: p2A.y, isHatch: false },
+                { x1: p1B.x, y1: p1B.y, x2: p2B.x, y2: p2B.y, isHatch: false },
+                { x1: p1A.x, y1: p1A.y, x2: p1B.x, y2: p1B.y, isHatch: false },
+                { x1: p2A.x, y1: p2A.y, x2: p2B.x, y2: p2B.y, isHatch: false }
+            ];
+
+            if (wObj.style === 'hatched') {
+                const step = 14;
+                for (let c = -halfW + step; c < L + halfW; c += step) {
+                    const tStart = Math.max(-halfW, -c);
+                    const tEnd = Math.min(halfW, L - c);
+                    if (tEnd - tStart > 0.5) {
+                        const sStart = c + tStart;
+                        const sEnd = c + tEnd;
+                        segs.push({
+                            x1: wObj.x1 + sStart * ux + tStart * nx,
+                            y1: wObj.y1 + sStart * uy + tStart * ny,
+                            x2: wObj.x1 + sEnd * ux + tEnd * nx,
+                            y2: wObj.y1 + sEnd * uy + tEnd * ny,
+                            isHatch: true
+                        });
+                    }
+                }
+            }
+            return segs;
         };
 
         createApp({
@@ -719,7 +787,7 @@
                 let unsubscribePagesListener = null, isPushingRightNow = false, isAutoQueueRunning = false;
 
                 const currentView = ref('dir'), previewTab = ref('pages');
-                const fullScreenItem = ref(null), fullScreenTitle = ref('');
+                const fullScreenItem = ref(null), fullScreenTitle = ref(''), fullScreenDate = ref('');
                 const showWatermark = ref(true);
 
                 const projectList = ref([]);
@@ -730,31 +798,35 @@
                 const canvasW = computed(() => activeCanvas.value?.w || 1200);
                 const canvasH = computed(() => activeCanvas.value?.h || 900);
 
-                const watermarkStamp = computed(() => {
+                // 左上角無黑底高對比水印行組裝
+                const buildWatermarkLines = (item, itemDate) => {
                     const lines = [];
                     if (project.name && project.name.trim()) lines.push({ text: `📍 ${project.name.trim()}`, color: '#facc15' });
-                    if (project.date && project.date.trim()) lines.push({ text: `📅 ${project.date.trim()}`, color: '#e4e4e7' });
-                    if (!lines.length) return { lines: [], boxW: 0, boxH: 0 };
-                    const boxW = measureBoxWidth(lines.map(l => l.text), 21, 28);
-                    const boxH = 18 + lines.length * 30;
-                    return { lines, boxW, boxH };
-                });
+                    if (item?.space && item.space.trim()) lines.push({ text: `🏠 ${item.space.trim()}`, color: '#ffffff' });
+                    const dStr = itemDate || item?.date || project.date;
+                    if (dStr && String(dStr).trim()) lines.push({ text: `📅 ${String(dStr).trim()}`, color: '#ffffff' });
+                    return lines;
+                };
+
+                const fullScreenWatermarkLines = computed(() => buildWatermarkLines(fullScreenItem.value, fullScreenDate.value));
 
                 const showJoinModal = ref(false), inputJoinCode = ref(''), showAddPageModal = ref(false), showSpaceModal = ref(false), showMergeModal = ref(false), showPdfModal = ref(false);
                 const spaceList = ref(['主人房', '睡房一', '睡房二', '客廳', '飯廳', '廚房', '客廁', '套廁', '儲物室', '玄關', '露台']);
                 const showManageModal = ref(false), manageProj = ref({}), showCloudBrowser = ref(false), cloudProjectList = ref([]), showBackupListModal = ref(false), backupList = ref([]);
                 const showPhotoPoolModal = ref(false), photoPoolList = ref([]), photoPoolTarget = ref('newPage');
 
-                const arrowColor = ref('red'), freehandColor = ref('#3b82f6'), toastMsg = ref('');
+                const arrowColor = ref('red'), freehandColor = ref('#3b82f6');
+                const wallStyle = ref('hollow'), wallColor = ref('#111827');
+                const toastMsg = ref('');
                 const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3200); };
 
                 const lastCloudError = ref(''), cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
                 const cloudStatusText = computed(() => ({
-                    syncing: '☁️上傳中',
-                    offline: '📴離線度尺中',
-                    queued: '⏳待自動上傳',
-                    ready: '☁️v8.3連通'
-                }[cloudSyncState.value] || '☁️v8.3連通'));
+                    syncing: '☁️上傳',
+                    offline: '📴離線',
+                    queued: '⏳待傳',
+                    ready: '☁️v8.4'
+                }[cloudSyncState.value] || '☁️v8.4'));
                 const cloudStatusClass = computed(() =>
                     cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' :
                     cloudSyncState.value === 'offline' ? 'bg-amber-950 text-amber-300 border border-amber-700' :
@@ -779,7 +851,7 @@
                 const showCloudDetail = () => {
                     if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號時自動上傳');
                     else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                    else showToast('v8.3 拔除登入認證 ＋ 瘦身提速版運作中');
+                    else showToast('v8.4 牆線雙平行線＋斜線陰影・每頁獨立日期');
                 };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -805,6 +877,16 @@
                 const markProjectChanged = () => {
                     hasUnsavedCloudChanges.value = true;
                     if (!navigator.onLine) cloudSyncState.value = 'offline';
+                };
+
+                // 單頁日期變更（直接更新原頁，不觸發自動複製分頁）
+                const onPageDateChange = (pg) => {
+                    if (!pg) return;
+                    pg.updatedAt = Date.now();
+                    dirtyPageIds.add(pg.id);
+                    hasUnsavedCloudChanges.value = true;
+                    if (!navigator.onLine) cloudSyncState.value = 'offline';
+                    saveAll();
                 };
 
                 const touchDirty = (targetPage = activePage.value) => {
@@ -833,6 +915,7 @@
                     const oldPinId = activePin.value ? String(activePin.value.id) : null;
                     const newPg = makeEmptyPage({
                         space: cloned.space || '',
+                        date: cloned.date || getTodayStr(),
                         author: me,
                         photo: pg.photo,
                         photoId: sharedPhotoId,
@@ -842,6 +925,7 @@
                         hasGrid: !!cloned.hasGrid,
                         markers: cloned.markers || [],
                         lines: cloned.lines || [],
+                        walls: cloned.walls || [],
                         paths: cloned.paths || [],
                         pins: cloned.pins || []
                     });
@@ -859,8 +943,14 @@
                 const svgCanvas = ref(null);
 
                 const getLineStroke = (l, alpha = 0.55) => l.type === 'measure' || !l.type ? `rgba(255, 0, 68, ${alpha})` : (l.color === 'gray' ? '#9ca3af' : l.color === 'white' ? '#ffffff' : '#ef4444');
+                const getWallSegments = (wObj) => buildWallSegments(wObj);
 
-                const openFullScreenPreview = (item, title) => { fullScreenItem.value = item; fullScreenTitle.value = title; };
+                const openFullScreenPreview = (item, title, parentDate = '') => {
+                    fullScreenItem.value = item;
+                    fullScreenTitle.value = title;
+                    fullScreenDate.value = item?.date || parentDate || project.date || getTodayStr();
+                };
+
                 const enterEditMode = (pageIdx = 0) => { activePageIndex.value = pageIdx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; };
                 const switchToPreview = async () => { await saveAll(); activePin.value = null; previewTab.value = 'pages'; currentView.value = 'preview'; };
 
@@ -880,15 +970,17 @@
                 });
 
                 const mergePageGroup = async (grp) => {
-                    const lineMap = new Map(), pathMap = new Map(), markerMap = new Map(), pinMap = new Map();
-                    let space = '', w = 1200, h = 900, isSketch = false, hasGrid = false;
+                    const lineMap = new Map(), wallMap = new Map(), pathMap = new Map(), markerMap = new Map(), pinMap = new Map();
+                    let space = '', date = '', w = 1200, h = 900, isSketch = false, hasGrid = false;
                     grp.items.forEach(({ pg }) => {
                         if (!space && pg.space) space = pg.space;
+                        if (!date && pg.date) date = pg.date;
                         if (pg.w) w = pg.w;
                         if (pg.h) h = pg.h;
                         if (pg.isSketch) isSketch = true;
                         if (pg.hasGrid) hasGrid = true;
                         (pg.lines || []).forEach(l => lineMap.set(String(l.id), JSON.parse(JSON.stringify(l))));
+                        (pg.walls || []).forEach(wl => wallMap.set(String(wl.id), JSON.parse(JSON.stringify(wl))));
                         (pg.paths || []).forEach(p => pathMap.set(String(p.id), JSON.parse(JSON.stringify(p))));
                         (pg.markers || []).forEach(m => markerMap.set(String(m.id), JSON.parse(JSON.stringify(m))));
                         (pg.pins || []).forEach(pin => pinMap.set(String(pin.id), JSON.parse(JSON.stringify(pin))));
@@ -896,11 +988,13 @@
 
                     const mergedPg = makeEmptyPage({
                         space,
+                        date: date || getTodayStr(),
                         author: (authorName.value || '團隊') + ' (合併)',
                         photo: grp.photo,
                         photoId: grp.key,
                         w, h, isSketch, hasGrid,
                         lines: Array.from(lineMap.values()),
+                        walls: Array.from(wallMap.values()),
                         paths: Array.from(pathMap.values()),
                         markers: Array.from(markerMap.values()),
                         pins: Array.from(pinMap.values())
@@ -927,7 +1021,7 @@
                     return summary;
                 });
 
-                const isDrawing = ref(false), startPos = ref({ x: 0, y: 0 }), currentLine = ref(null), currentPath = ref('');
+                const isDrawing = ref(false), startPos = ref({ x: 0, y: 0 }), currentLine = ref(null), currentWall = ref(null), currentPath = ref('');
                 let tempPoints = [];
                 const draggedMarker = ref(null), dragOrigin = ref({ x: 0, y: 0 }), markerOrigin = ref({ x: 0, y: 0 }), isDraggingMarker = ref(false);
                 const hasUndoItems = computed(() => activeCanvas.value?.historyStack?.length > 0);
@@ -961,6 +1055,17 @@
                     };
                 };
 
+                // 牆線水平 / 垂直 ±4度自動吸附拉直
+                const snapWallEnd = (x1, y1, x2, y2) => {
+                    const dx = x2 - x1, dy = y2 - y1;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist < 10) return { x: x2, y: y2 };
+                    const deg = Math.abs(Math.atan2(dy, dx) * 180 / Math.PI);
+                    if (deg <= 4 || deg >= 176) return { x: x2, y: y1 };
+                    if (Math.abs(deg - 90) <= 4) return { x: x1, y: y2 };
+                    return { x: x2, y: y2 };
+                };
+
                 const renderSketchDataUrl = (w, h, hasGrid) => {
                     const c = document.createElement('canvas'); c.width = w; c.height = h;
                     const ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
@@ -973,7 +1078,19 @@
                 };
 
                 const makeEmptyPage = (overrides = {}) => {
-                    const pg = { id: 'pg_' + Date.now() + '_' + Math.floor(Math.random() * 999), space: '', author: authorName.value || '', photo: null, photoId: '', w: 1200, h: 900, isSketch: false, hasGrid: false, markers: [], lines: [], paths: [], pins: [], historyStack: [], redoStack: [], updatedAt: Date.now(), ...overrides };
+                    const pg = {
+                        id: 'pg_' + Date.now() + '_' + Math.floor(Math.random() * 999),
+                        space: '',
+                        date: overrides.date || project.date || getTodayStr(),
+                        author: authorName.value || '',
+                        photo: null, photoId: '', w: 1200, h: 900,
+                        isSketch: false, hasGrid: false,
+                        markers: [], lines: [], walls: [], paths: [], pins: [],
+                        historyStack: [], redoStack: [],
+                        updatedAt: Date.now(),
+                        ...overrides
+                    };
+                    if (!pg.date) pg.date = getTodayStr();
                     if (pg.isSketch && !pg.photo) pg.photo = renderSketchDataUrl(pg.w || 1200, pg.h || 1500, !!pg.hasGrid);
                     return pg;
                 };
@@ -986,7 +1103,7 @@
 
                 const addNewSketchPage = (hasGrid) => {
                     showAddPageModal.value = false;
-                    const newPg = makeEmptyPage({ photo: renderSketchDataUrl(1200, 1500, hasGrid), w: 1200, h: 1500, isSketch: true, hasGrid, author: authorName.value || '' });
+                    const newPg = makeEmptyPage({ date: getTodayStr(), photo: renderSketchDataUrl(1200, 1500, hasGrid), w: 1200, h: 1500, isSketch: true, hasGrid, author: authorName.value || '' });
                     pages.value.push(newPg);
                     activePageIndex.value = pages.value.length - 1;
                     dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
@@ -999,7 +1116,19 @@
                     const sharedPhotoId = src.photoId || ('page_' + src.id);
                     src.photoId = sharedPhotoId;
                     const cloned = JSON.parse(JSON.stringify(src));
-                    const newPg = makeEmptyPage({ space: src.space || '', author: authorName.value || '', photo: src.photo, photoId: sharedPhotoId, w: src.w || 1200, h: src.h || 900, isSketch: !!src.isSketch, hasGrid: !!src.hasGrid, markers: keepAnnotations ? (cloned.markers || []) : [], lines: keepAnnotations ? (cloned.lines || []) : [], paths: keepAnnotations ? (cloned.paths || []) : [], pins: [] });
+                    const newPg = makeEmptyPage({
+                        space: src.space || '',
+                        date: getTodayStr(),
+                        author: authorName.value || '',
+                        photo: src.photo, photoId: sharedPhotoId,
+                        w: src.w || 1200, h: src.h || 900,
+                        isSketch: !!src.isSketch, hasGrid: !!src.hasGrid,
+                        markers: keepAnnotations ? (cloned.markers || []) : [],
+                        lines: keepAnnotations ? (cloned.lines || []) : [],
+                        walls: keepAnnotations ? (cloned.walls || []) : [],
+                        paths: keepAnnotations ? (cloned.paths || []) : [],
+                        pins: []
+                    });
                     pages.value.push(newPg);
                     activePageIndex.value = pages.value.length - 1;
                     dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
@@ -1038,7 +1167,7 @@
                 };
 
                 const openPinSubPage = (pin, idx) => {
-                    Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || activePage.value?.space || '' });
+                    Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], walls: pin.walls || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || activePage.value?.space || '' });
                     if (pin.isSketch && !pin.photo) pin.photo = renderSketchDataUrl(pin.w, pin.h, !!pin.hasGrid);
                     activePin.value = pin; activePinIndex.value = idx; deletePinConfirm.value = false;
                     drawMode.value = 'browse';
@@ -1120,7 +1249,7 @@
                 const selectFromPhotoPool = (item) => {
                     showPhotoPoolModal.value = false;
                     if (photoPoolTarget.value === 'newPage') {
-                        const newPg = makeEmptyPage({ photo: item.photo, photoId: item.id, w: item.w || 1200, h: item.h || 900, author: authorName.value || '' });
+                        const newPg = makeEmptyPage({ date: getTodayStr(), photo: item.photo, photoId: item.id, w: item.w || 1200, h: item.h || 900, author: authorName.value || '' });
                         pages.value.push(newPg);
                         activePageIndex.value = pages.value.length - 1;
                         dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
@@ -1188,8 +1317,14 @@
 
                 const beginStroke = (e) => {
                     isDrawing.value = true; startPos.value = getCoords(e);
-                    if (drawMode.value === 'line' || drawMode.value === 'arrow-single') currentLine.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y };
-                    else if (drawMode.value === 'freehand') { tempPoints = [[startPos.value.x, startPos.value.y]]; currentPath.value = `M ${startPos.value.x} ${startPos.value.y}`; }
+                    if (drawMode.value === 'line' || drawMode.value === 'arrow-single') {
+                        currentLine.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y };
+                    } else if (drawMode.value === 'wall') {
+                        currentWall.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y, style: wallStyle.value, color: wallColor.value };
+                    } else if (drawMode.value === 'freehand') {
+                        tempPoints = [[startPos.value.x, startPos.value.y]];
+                        currentPath.value = `M ${startPos.value.x} ${startPos.value.y}`;
+                    }
                 };
 
                 const moveStroke = (e) => {
@@ -1208,8 +1343,15 @@
                         }
                     } else if (isDrawing.value) {
                         e.preventDefault(); const p = getCoords(e);
-                        if (drawMode.value === 'line' || drawMode.value === 'arrow-single') { currentLine.value.x2 = p.x; currentLine.value.y2 = p.y; }
-                        else if (drawMode.value === 'freehand') { tempPoints.push([p.x, p.y]); currentPath.value = `M ${tempPoints.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`; }
+                        if (drawMode.value === 'line' || drawMode.value === 'arrow-single') {
+                            currentLine.value.x2 = p.x; currentLine.value.y2 = p.y;
+                        } else if (drawMode.value === 'wall' && currentWall.value) {
+                            const snapped = snapWallEnd(currentWall.value.x1, currentWall.value.y1, p.x, p.y);
+                            currentWall.value.x2 = snapped.x; currentWall.value.y2 = snapped.y;
+                        } else if (drawMode.value === 'freehand') {
+                            tempPoints.push([p.x, p.y]);
+                            currentPath.value = `M ${tempPoints.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`;
+                        }
                     }
                 };
 
@@ -1228,17 +1370,28 @@
                     isDrawing.value = false; const endPos = getCoords(e), drawDist = Math.hypot(endPos.x - startPos.value.x, endPos.y - startPos.value.y);
 
                     if (!activePin.value && drawMode.value === 'pin') {
-                        currentLine.value = null; currentPath.value = '';
+                        currentLine.value = null; currentWall.value = null; currentPath.value = '';
                         autoBranchIfNeeded();
                         const pw = activePage.value.w || 1200, ph = activePage.value.h || 900;
                         activePage.value.pins ||= [];
-                        const newPin = { id: 'pin_' + Date.now(), name: `位置 ${activePage.value.pins.length + 1}`, x: parseFloat(((endPos.x / pw) * 100).toFixed(2)), y: parseFloat(((endPos.y / ph) * 100).toFixed(2)), photo: null, photoId: '', w: 1200, h: 900, space: activePage.value.space || '', markers: [], lines: [], paths: [], historyStack: [], redoStack: [], updatedAt: Date.now() };
+                        const newPin = { id: 'pin_' + Date.now(), name: `位置 ${activePage.value.pins.length + 1}`, x: parseFloat(((endPos.x / pw) * 100).toFixed(2)), y: parseFloat(((endPos.y / ph) * 100).toFixed(2)), photo: null, photoId: '', w: 1200, h: 900, space: activePage.value.space || '', markers: [], lines: [], walls: [], paths: [], historyStack: [], redoStack: [], updatedAt: Date.now() };
                         activePage.value.pins.push(newPin); touchDirty(); openPinSubPage(newPin, activePage.value.pins.length - 1); saveAll(); return;
                     }
 
-                    if (drawMode.value === 'stamp' && drawDist < 14) { currentLine.value = null; currentPath.value = ''; createPointMarker(endPos.x, endPos.y, 'stamp'); return; }
+                    if (drawMode.value === 'stamp' && drawDist < 14) { currentLine.value = null; currentWall.value = null; currentPath.value = ''; createPointMarker(endPos.x, endPos.y, 'stamp'); return; }
 
-                    if ((drawMode.value === 'line' || drawMode.value === 'arrow-single') && currentLine.value) {
+                    if (drawMode.value === 'wall' && currentWall.value) {
+                        const wLen = Math.hypot(currentWall.value.x2 - currentWall.value.x1, currentWall.value.y2 - currentWall.value.y1);
+                        if (wLen >= 12) {
+                            autoBranchIfNeeded();
+                            const c = activeCanvas.value; c.walls ||= []; c.historyStack ||= []; c.redoStack = [];
+                            const wallId = Date.now();
+                            c.walls.push({ ...currentWall.value, id: wallId });
+                            c.historyStack.push({ type: 'wall', wallId });
+                            touchDirty();
+                        }
+                        currentWall.value = null;
+                    } else if ((drawMode.value === 'line' || drawMode.value === 'arrow-single') && currentLine.value) {
                         autoBranchIfNeeded();
                         const c = activeCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                         const lineId = Date.now(), markerId = lineId + 1;
@@ -1275,6 +1428,8 @@
                         if (li !== -1) undone.line = c.lines.splice(li, 1)[0]; if (mi !== -1) undone.marker = c.markers.splice(mi, 1)[0];
                     } else if (act.type === 'marker') {
                         const mi = c.markers.findIndex(m => m.id === act.markerId); if (mi !== -1) undone.marker = c.markers.splice(mi, 1)[0];
+                    } else if (act.type === 'wall') {
+                        const wi = (c.walls || []).findIndex(w => w.id === act.wallId); if (wi !== -1) undone.wall = c.walls.splice(wi, 1)[0];
                     } else if (act.type === 'freehand') {
                         const pi = c.paths.findIndex(p => p.id === act.pathId); if (pi !== -1) undone.path = c.paths.splice(pi, 1)[0];
                     }
@@ -1286,6 +1441,7 @@
                     const u = c.redoStack.pop(), act = { type: u.type };
                     if (u.line) { c.lines.push(u.line); act.lineId = u.line.id; }
                     if (u.marker) { c.markers.push(u.marker); act.markerId = u.marker.id; }
+                    if (u.wall) { c.walls ||= []; c.walls.push(u.wall); act.wallId = u.wall.id; }
                     if (u.path) { c.paths.push(u.path); act.pathId = u.path.id; }
                     c.historyStack.push(act); touchDirty(); saveAll();
                 };
@@ -1376,7 +1532,7 @@
                     photoPool.value.push({ id: photoId, photo: res.b64, w: res.w, h: res.h, author: authorName.value || '', updatedAt: Date.now() });
 
                     if (asNewPage) {
-                        const newPg = makeEmptyPage({ photo: res.b64, photoId, w: res.w, h: res.h, author: authorName.value || '' });
+                        const newPg = makeEmptyPage({ date: getTodayStr(), photo: res.b64, photoId, w: res.w, h: res.h, author: authorName.value || '' });
                         pages.value.push(newPg); activePageIndex.value = pages.value.length - 1;
                         dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
                     } else if (activeCanvas.value) {
@@ -1410,6 +1566,7 @@
                         if (!lp || !cp) { result.push(makeEmptyPage(lp || cp)); return; }
                         const base = (cp.updatedAt || 0) > (lp.updatedAt || 0) ? { ...cp } : { ...lp };
                         if (!base.photo) base.photo = lp.photo || cp.photo || null;
+                        if (!base.date) base.date = lp.date || cp.date || project.date || getTodayStr();
                         const lPins = new Map((lp.pins || []).map(x => [String(x.id), x])), cPins = new Map((cp.pins || []).map(x => [String(x.id), x])), mergedPins = [];
                         new Set([...lPins.keys(), ...cPins.keys()]).forEach(pid => {
                             const lP = lPins.get(pid), cP = cPins.get(pid);
@@ -1455,7 +1612,9 @@
                             const r = doc.data();
                             const pgPhoto = (r.photoId && mediaMap.get(r.photoId)?.photo) || mediaMap.get('page_' + (r.id || doc.id))?.photo || r.photo || null;
                             cloudPages.push(makeEmptyPage({
-                                id: doc.id, ...r, photo: pgPhoto,
+                                id: doc.id, ...r,
+                                date: r.date || pd.date || project.date || getTodayStr(),
+                                photo: pgPhoto,
                                 pins: (r.pins || []).map(pin => ({
                                     ...pin,
                                     photo: (pin.photoId && mediaMap.get(pin.photoId)?.photo) || mediaMap.get(String(pin.id))?.photo || pin.photo || null
@@ -1715,8 +1874,9 @@
 
                 const createNewProject = async () => {
                     await checkAuthorName();
-                    const firstPg = makeEmptyPage({ author: authorName.value || '' });
-                    Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: new Date().toISOString().split('T')[0], deletedPageIds: [], lastSyncAt: 0, lastModifiedBy: authorName.value });
+                    const today = getTodayStr();
+                    const firstPg = makeEmptyPage({ date: today, author: authorName.value || '' });
+                    Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: today, deletedPageIds: [], lastSyncAt: 0, lastModifiedBy: authorName.value });
                     pages.value = [firstPg]; photoPool.value = []; activePageIndex.value = 0; activePin.value = null;
                     dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id);
                     hasUnsavedCloudChanges.value = true;
@@ -1761,7 +1921,7 @@
                 const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
 
                 const renameProject = async () => {
-                    const newName = prompt('請輸入新的地址 / 工程名稱：', manageProj.value.name);
+                    const newName = prompt('請輸入新的地址 / 名稱：', manageProj.value.name);
                     if (newName !== null) {
                         const trimmed = newName.trim();
                         const code = String(manageProj.value.code);
@@ -1772,7 +1932,7 @@
                             db.collection('site_projects').doc(code).set({ name: trimmed, updatedAt: Date.now() }, { merge: true }).catch(() => {});
                         }
                         await loadProjectList();
-                        showToast('✅ 已更新工程名稱');
+                        showToast('✅ 已更新地址');
                     }
                 };
 
@@ -1898,19 +2058,14 @@
                     if (!db || !navigator.onLine) return alert('請檢查網路連線。');
                     isProcessing.value = true; processingText.value = '正在極速讀取雲端目錄...';
                     try {
-                        // 只抽取最近更新的 30 個工程（極速載入）
                         const snaps = await withTimeout(
-                            db.collection('site_projects')
-                              .orderBy('updatedAt', 'desc')
-                              .limit(30)
-                              .get(),
+                            db.collection('site_projects').orderBy('updatedAt', 'desc').limit(30).get(),
                             10000,
                             '讀取雲端目錄逾時，請檢查網路後重試'
                         );
                         const list = [];
                         snaps.forEach(doc => {
                             const d = doc.data();
-                            // 過濾掉可能為空殼的舊格式
                             if (d.name || d.updatedAt) list.push({ code: doc.id, ...d });
                         });
                         cloudProjectList.value = list;
@@ -2003,45 +2158,62 @@
                     }, 15000);
                 });
 
-                const renderAnnotatedCanvas = (canvasObj, includeStamp = true) => new Promise((resolve) => {
+                // 統一畫布合成（SVG與Canvas共用同一組幾何坐標、左上無黑底有邊字水印、縮小箭頭）
+                const renderAnnotatedCanvas = (canvasObj, includeStamp = true, itemDate = '') => new Promise((resolve) => {
                     const img = new Image(); img.src = canvasObj.photo;
                     img.onload = () => {
                         const c = document.createElement('canvas'), w = canvasObj.w || 1200, h = canvasObj.h || 900; c.width = w; c.height = h;
                         const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
 
-                        if (includeStamp && canvasObj.space) {
-                            const labelTxt = `🏠 ${canvasObj.space}`;
-                            const boxW = measureBoxWidth([labelTxt], 24, 28);
-                            ctx.fillStyle = 'rgba(0,0,0,0.82)';
-                            ctx.beginPath(); ctx.roundRect(16, 16, boxW, 44, 6); ctx.fill();
-                            ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1.5; ctx.stroke();
-                            ctx.font = '900 24px sans-serif'; ctx.fillStyle = '#facc15';
-                            ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-                            ctx.fillText(labelTxt, 30, 39);
-                        }
-
-                        if (includeStamp && watermarkStamp.value.lines.length) {
-                            const wm = watermarkStamp.value;
-                            const wx = w - wm.boxW - 16, wy = 16;
-                            ctx.fillStyle = 'rgba(0,0,0,0.82)';
-                            ctx.beginPath(); ctx.roundRect(wx, wy, wm.boxW, wm.boxH, 8); ctx.fill();
-                            ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5; ctx.stroke();
-                            ctx.font = '900 21px sans-serif';
-                            ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-                            wm.lines.forEach((item, idx) => {
-                                ctx.fillStyle = item.color;
-                                ctx.fillText(item.text, wx + 14, wy + 24 + idx * 30);
-                            });
+                        // 左上角無黑底高對比有邊字水印
+                        if (includeStamp) {
+                            const wmLines = buildWatermarkLines(canvasObj, itemDate);
+                            if (wmLines.length) {
+                                ctx.font = '900 23px sans-serif';
+                                ctx.textAlign = 'left';
+                                ctx.textBaseline = 'middle';
+                                ctx.lineJoin = 'round';
+                                ctx.lineCap = 'round';
+                                wmLines.forEach((item, idx) => {
+                                    const y = 26 + idx * 32;
+                                    ctx.lineWidth = 6;
+                                    ctx.strokeStyle = '#000000';
+                                    ctx.strokeText(item.text, 22, y);
+                                    ctx.fillStyle = item.color;
+                                    ctx.fillText(item.text, 22, y);
+                                });
+                            }
                         }
 
                         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+                        // 牆身雙平行線 / 斜線陰影（共用 buildWallSegments 坐標）
+                        (canvasObj.walls || []).forEach(wObj => {
+                            const segs = buildWallSegments(wObj);
+                            ctx.strokeStyle = wObj.color || '#111827';
+                            segs.forEach(seg => {
+                                ctx.lineWidth = seg.isHatch ? 2.5 : 3.5;
+                                ctx.beginPath();
+                                ctx.moveTo(seg.x1, seg.y1);
+                                ctx.lineTo(seg.x2, seg.y2);
+                                ctx.stroke();
+                            });
+                        });
+
+                        // 單箭（縮小版箭頭）與度尺線
                         (canvasObj.lines || []).forEach(l => {
                             if (l.type === 'arrow-single') {
                                 const hex = getLineStroke(l); ctx.strokeStyle = hex; ctx.lineWidth = 4;
                                 ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
-                                const angle = Math.atan2(l.y2 - l.y1, l.x2 - l.x1); ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(angle); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-14, 7); ctx.lineTo(-14, -7); ctx.closePath(); ctx.fill(); ctx.restore();
-                            } else { ctx.strokeStyle = getLineStroke(l, 0.55); ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }
+                                const angle = Math.atan2(l.y2 - l.y1, l.x2 - l.x1);
+                                ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(angle);
+                                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-9, 4.5); ctx.lineTo(-9, -4.5); ctx.closePath(); ctx.fill(); ctx.restore();
+                            } else {
+                                ctx.strokeStyle = getLineStroke(l, 0.55); ctx.lineWidth = 5;
+                                ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
+                            }
                         });
+
                         (canvasObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 6; ctx.stroke(new Path2D(p.d)); });
                         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                         (canvasObj.markers || []).forEach(m => {
@@ -2058,7 +2230,7 @@
                 });
 
                 const renderPdfPageImg = async (canvasObj) => {
-                    const c = await renderAnnotatedCanvas(canvasObj, true);
+                    const c = await renderAnnotatedCanvas(canvasObj, true, canvasObj.date || project.date || getTodayStr());
                     return c.toDataURL('image/jpeg', 0.88);
                 };
 
@@ -2066,9 +2238,10 @@
                     if (!fullScreenItem.value?.photo) return;
                     const item = fullScreenItem.value;
                     const withStamp = showWatermark.value;
+                    const dStr = fullScreenDate.value;
                     try {
                         if (navigator.clipboard && window.ClipboardItem) {
-                            const pngBlobPromise = renderAnnotatedCanvas(item, withStamp).then(c => new Promise((res, rej) => {
+                            const pngBlobPromise = renderAnnotatedCanvas(item, withStamp, dStr).then(c => new Promise((res, rej) => {
                                 c.toBlob(b => b ? res(b) : rej(new Error('生成圖片失敗')), 'image/png');
                             }));
                             await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlobPromise })]);
@@ -2077,7 +2250,7 @@
                         }
                     } catch (err) {}
                     try {
-                        const c = await renderAnnotatedCanvas(item, withStamp);
+                        const c = await renderAnnotatedCanvas(item, withStamp, dStr);
                         const blob = await new Promise(res => c.toBlob(res, 'image/png'));
                         const file = new File([blob], 'measure_photo.png', { type: 'image/png' });
                         if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -2091,18 +2264,20 @@
                 const downloadFullScreenImage = async () => {
                     if (!fullScreenItem.value?.photo) return;
                     try {
-                        const c = await renderAnnotatedCanvas(fullScreenItem.value, showWatermark.value);
+                        const dStr = sanitizeFilename(fullScreenDate.value || getTodayStr());
+                        const c = await renderAnnotatedCanvas(fullScreenItem.value, showWatermark.value, fullScreenDate.value);
                         const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.92));
                         const url = URL.createObjectURL(blob);
-                        const cleanTitle = (fullScreenTitle.value || '圖紙').split('(')[0].trim().replace(/[\\/:*?"<>|\s]+/g, '_');
+                        const safeAddr = sanitizeFilename(project.name || '工程');
+                        const cleanTitle = sanitizeFilename((fullScreenTitle.value || '圖紙').split('(')[0]);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `${project.name || '工程'}_#${project.code}_${cleanTitle}.jpg`;
+                        a.download = `${safeAddr}_#${project.code}_${cleanTitle}_${dStr}.jpg`;
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
                         setTimeout(() => URL.revokeObjectURL(url), 2000);
-                        showToast('✅ 已下載圖片');
+                        showToast('✅ 已下載圖片（檔名已附日期）');
                     } catch (err) {
                         alert('下載圖片失敗，請重試。');
                     }
@@ -2120,12 +2295,13 @@
                             const validPages = [];
                             pages.value.forEach((pg, pIdx) => {
                                 const pageNumStr = `P${pIdx + 1}`;
+                                const pgDate = pg.date || project.date || getTodayStr();
                                 if (pg.photo) {
-                                    validPages.push({ ...pg, pdfLabel: `${pageNumStr}${pg.space ? ' [' + pg.space + ']' : ''}`, authorDisplay: pg.author || project.lastModifiedBy || '未知' });
+                                    validPages.push({ ...pg, date: pgDate, pdfLabel: `${pageNumStr}${pg.space ? ' [' + pg.space + ']' : ''}`, authorDisplay: pg.author || project.lastModifiedBy || '未知' });
                                 }
                                 (pg.pins || []).forEach((pin, pinIdx) => {
                                     if (pin.photo) {
-                                        validPages.push({ ...pin, pdfLabel: `${pageNumStr} 📍釘選#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}`, authorDisplay: pg.author || project.lastModifiedBy || '未知' });
+                                        validPages.push({ ...pin, date: pgDate, pdfLabel: `${pageNumStr} 📍釘選#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}`, authorDisplay: pg.author || project.lastModifiedBy || '未知' });
                                     }
                                 });
                             });
@@ -2135,6 +2311,10 @@
                                 isProcessing.value = false;
                                 return;
                             }
+
+                            const uniqueDates = Array.from(new Set(validPages.map(p => p.date).filter(Boolean)));
+                            const headerDateText = uniqueDates.length > 1 ? `${uniqueDates[0]} ~ ${uniqueDates[uniqueDates.length - 1]}` : (uniqueDates[0] || getTodayStr());
+                            const fileDateTag = sanitizeFilename(uniqueDates[uniqueDates.length - 1] || getTodayStr());
 
                             if (perPage === 4) {
                                 const totalPdfPages = Math.ceil(validPages.length / 4);
@@ -2150,7 +2330,7 @@
                                     ctx.fillStyle = '#000'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'left';
                                     ctx.fillText(`${project.name || '工程度尺'} (#${project.code})`, marginX, 60);
                                     ctx.font = 'bold 21px sans-serif'; ctx.fillStyle = '#4b5563';
-                                    ctx.fillText(`日期: ${project.date}   |   共 ${validPages.length} 張圖紙   |   第 ${pIdx + 1} / ${totalPdfPages} 頁`, marginX, 94);
+                                    ctx.fillText(`日期: ${headerDateText}   |   共 ${validPages.length} 張圖紙   |   第 ${pIdx + 1} / ${totalPdfPages} 頁`, marginX, 94);
 
                                     for (let j = 0; j < 4; j++) {
                                         const imgIdx = pIdx * 4 + j;
@@ -2166,8 +2346,8 @@
                                         ctx.fillStyle = '#f3f4f6';
                                         ctx.fillRect(cx + 1, cy + 1, cellW - 2, 44);
                                         ctx.fillStyle = '#111827'; ctx.font = 'bold 20px sans-serif';
-                                        const cellTitle = `${pg.pdfLabel}${pg.authorDisplay && pg.authorDisplay !== '未知' ? ' - ' + pg.authorDisplay : ''}`;
-                                        ctx.fillText(cellTitle.slice(0, 30), cx + 14, cy + 30);
+                                        const cellTitle = `${pg.pdfLabel} (${pg.date})`;
+                                        ctx.fillText(cellTitle.slice(0, 32), cx + 14, cy + 30);
 
                                         const im = new Image(); im.src = await renderPdfPageImg(pg); await new Promise(r => im.onload = r);
                                         const maxW = cellW - 20, maxH = cellH - 60;
@@ -2185,22 +2365,23 @@
                                     ctx.fillText(`${project.name || '工程度尺'} (#${project.code}) — ${pg.pdfLabel}`, 50, 65);
                                     ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#4b5563'; 
                                     const pinCountText = pg.pins?.length ? `   |   子釘選: ${pg.pins.length}` : '';
-                                    ctx.fillText(`日期: ${project.date}   |   最後修改: ${pg.authorDisplay}${pinCountText}`, 50, 102);
+                                    ctx.fillText(`日期: ${pg.date}   |   最後修改: ${pg.authorDisplay}${pinCountText}`, 50, 102);
                                     const im = new Image(); im.src = await renderPdfPageImg(pg); await new Promise(r => im.onload = r);
                                     const maxW = PAGE_W - 100, maxH = PAGE_H - 180; let dw = maxW, dh = (im.height / im.width) * dw;
                                     if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; }
                                     ctx.drawImage(im, 50 + (maxW - dw) / 2, 130, dw, dh); doc.addImage(c.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
                                 }
                             }
-                            doc.save(`${project.name || '工程'}_#${project.code}_${perPage === 4 ? '4合1' : '單頁'}.pdf`);
+                            const safeAddr = sanitizeFilename(project.name || '工程');
+                            doc.save(`${safeAddr}_#${project.code}_${fileDateTag}_${perPage === 4 ? '4合1' : '單頁'}.pdf`);
                         } catch (err) { alert('生成 PDF 失敗，請重試。'); }
                         finally { isProcessing.value = false; }
                     }, 50);
                 };
 
                 return {
-                    offlineReady, currentView, previewTab, fullScreenItem, fullScreenTitle, showWatermark, watermarkStamp, measureBoxWidth, bomSummary, getLineStroke,
-                    openFullScreenPreview, copyFullScreenImage, downloadFullScreenImage, enterEditMode, switchToPreview, duplicateCurrentPage,
+                    offlineReady, currentView, previewTab, fullScreenItem, fullScreenTitle, fullScreenDate, fullScreenWatermarkLines, showWatermark, bomSummary, getLineStroke, getWallSegments,
+                    openFullScreenPreview, copyFullScreenImage, downloadFullScreenImage, enterEditMode, switchToPreview, duplicateCurrentPage, onPageDateChange,
                     showMergeModal, mergeableGroups, mergePageGroup, showPdfModal,
                     showPhotoPoolModal, photoPoolList, photoPoolTarget, openPhotoPool, selectFromPhotoPool, deleteFromPhotoPool,
                     projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH,
@@ -2208,10 +2389,10 @@
                     showManageModal, manageProj, openManageMenu, renameProject, duplicateProject,
                     showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
                     showBackupListModal, backupList, openBackupList, restoreBackup,
-                    arrowColor, freehandColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg,
+                    arrowColor, freehandColor, wallStyle, wallColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg,
                     customStamps, promptCustomStamp,
                     drawMode, showTopSheet, showTopTextBar, activeMarker, deletePinConfirm, isProcessing, processingText, focusedInput, topTextInputRef,
-                    svgCanvas, currentLine, currentPath, hasUndoItems, hasRedoItems,
+                    svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
                     createNewProject, loadProject, deleteProject, backToProjects, copyCode, joinProjectByCode,
                     saveAll, downloadNow, uploadNow, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, deleteActivePin,
                     setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload,
