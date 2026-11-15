@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#09090b">
+    <meta name="theme-color" content="#ffffff">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v9.1</title>
+    <title>度尺寶 Pro v9.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js'"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -18,45 +18,45 @@
         * { box-sizing: border-box; }
         html, body {
             position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh;
-            margin: 0; padding: 0; overflow: hidden; background: #09090b;
+            margin: 0; padding: 0; overflow: hidden; background: #ffffff; color: #111827;
             -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
             overscroll-behavior: none; touch-action: manipulation;
             padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", "Helvetica Neue", sans-serif;
         }
-        input, select, textarea { font-size: 16px !important; -webkit-user-select: text; user-select: text; }
+        input, select, textarea { font-size: 16px !important; -webkit-user-select: text; user-select: text; color: #111827; }
         .canvas-touch-lock { touch-action: none !important; }
         .touch-scrollable { touch-action: pan-y !important; -webkit-overflow-scrolling: touch; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .micro-btn {
-            padding: 5px 8px; font-size: 13px; font-weight: 700; line-height: 1.2;
+            padding: 5px 8px; font-size: 14px; font-weight: 700; line-height: 1.2; letter-spacing: 0.5px;
             border: 1px solid #d1d5db; border-radius: 6px; white-space: nowrap;
-            background: #f3f4f6; color: #111827;
+            background: #ffffff; color: #111827;
         }
-        .micro-btn:active { background: #111827; color: #fff; }
+        .micro-btn:active { background: #e5e7eb; }
         .stamp-text {
-            font-weight: 900; font-size: 28px; paint-order: stroke fill;
+            font-weight: 900; font-size: 28px; paint-order: stroke fill; letter-spacing: 1px;
             stroke: #000; stroke-width: 5px; stroke-linejoin: round; stroke-linecap: round;
             pointer-events: none;
         }
         .wm-text {
-            font-weight: 900; font-size: 23px; paint-order: stroke fill;
+            font-weight: 900; font-size: 23px; paint-order: stroke fill; letter-spacing: 1px;
             stroke: #000; stroke-width: 6px; stroke-linejoin: round; stroke-linecap: round;
             pointer-events: none;
         }
     </style>
 </head>
-<body class="text-gray-100 font-sans antialiased">
-    <!-- 防黑屏啟動保護層 -->
-    <div id="boot-screen" style="position:fixed;inset:0;z-index:200;background:#09090b;color:#facc15;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:sans-serif;">
-        <div id="boot-msg" style="font-size:15px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v9.1...</div>
-        <button id="boot-retry" onclick="location.reload()" style="display:none;margin-top:16px;background:#2563eb;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">🔄 重新載入</button>
+<body class="antialiased">
+    <div id="boot-screen" style="position:fixed;inset:0;z-index:200;background:#ffffff;color:#111827;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:sans-serif;">
+        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v9.2...</div>
+        <button id="boot-retry" onclick="location.reload()" style="display:none;margin-top:16px;background:#111827;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;">🔄 重新載入</button>
     </div>
     <script>
         window.__showBootError = function(msg) {
             var el = document.getElementById('boot-msg');
             var btn = document.getElementById('boot-retry');
-            if (el) { el.style.color = '#f87171'; el.textContent = '⚠️ 啟動異常：' + msg; }
+            if (el) { el.style.color = '#dc2626'; el.textContent = '⚠️ 啟動異常：' + msg; }
             if (btn) btn.style.display = 'inline-block';
         };
         window.addEventListener('error', function(e) {
@@ -69,144 +69,143 @@
         }, 5000);
     </script>
 
-    <div id="app" class="fixed inset-0 w-full h-full flex flex-col overflow-hidden">
+    <div id="app" class="fixed inset-0 w-full h-full flex flex-col overflow-hidden bg-zinc-50">
         
         <!-- 頂部導航欄 -->
-        <div class="shrink-0 w-full flex flex-col z-30 bg-zinc-950">
-            <header class="h-11 w-full bg-black text-white px-2 border-b border-zinc-800 flex justify-between items-center gap-1 overflow-hidden">
+        <div class="shrink-0 w-full flex flex-col z-30 bg-white border-b border-zinc-200">
+            <header class="h-11 w-full px-2 flex justify-between items-center gap-1 overflow-hidden">
                 <div class="flex items-center gap-1 min-w-0 flex-1">
-                    <span v-if="currentView === 'dir'" class="text-sm font-bold truncate">工程目錄</span>
+                    <span v-if="currentView === 'dir'" class="text-sm font-bold text-zinc-900 truncate">工程目錄</span>
                     <template v-else>
-                        <button @click="backToProjects" class="bg-zinc-800 px-2 py-1 rounded text-xs font-bold shrink-0">‹目錄</button>
-                        <button @click="downloadNow" class="bg-blue-600 active:bg-blue-800 text-white px-2 py-1 rounded text-xs font-bold shrink-0">⬇️載入</button>
+                        <button @click="backToProjects" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold shrink-0">‹目錄</button>
+                        <button @click="downloadNow" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold shrink-0">⬇️載入</button>
                     </template>
-                    <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer">{{ cloudStatusText }}</span>
+                    <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded-md font-bold shrink-0 cursor-pointer border">{{ cloudStatusText }}</span>
                     <template v-if="currentView !== 'dir'">
-                        <button @click="copyCode(project.code)" class="bg-yellow-400 active:bg-yellow-500 text-black text-xs font-mono font-black px-1.5 py-0.5 rounded shrink-0 ml-0.5">#{{ project.code }}</button>
-                        <input v-model="project.name" @input="markProjectChanged" @blur="saveAll" @keyup.enter="$event.target.blur()" placeholder="點擊輸入地址..." class="ml-1 bg-zinc-900/80 focus:bg-zinc-900 border border-zinc-800 focus:border-yellow-500 text-white text-base font-bold min-w-0 flex-1 px-2 py-0.5 rounded focus:outline-none truncate">
+                        <button @click="copyCode(project.code)" class="bg-amber-100 text-amber-900 border border-amber-300 text-xs font-mono font-black px-1.5 py-0.5 rounded-md shrink-0 ml-0.5">#{{ project.code }}</button>
+                        <input v-model="project.name" @input="markProjectChanged" @blur="saveAll" @keyup.enter="$event.target.blur()" placeholder="點擊輸入地址..." class="ml-1 bg-zinc-50 focus:bg-white border border-zinc-300 focus:border-blue-500 text-zinc-900 text-[15px] font-bold min-w-0 flex-1 px-2 py-0.5 rounded-md focus:outline-none truncate">
                     </template>
                 </div>
                 
                 <div class="flex gap-1 items-center shrink-0">
                     <template v-if="currentView === 'dir'">
-                        <button @click="openCloudBrowser" class="bg-zinc-800 text-blue-400 border border-blue-900 px-2 py-1 rounded text-xs font-bold">☁️雲端庫</button>
-                        <button @click="showJoinModal = true" class="bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold">🔑組合</button>
-                        <button @click="createNewProject" class="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold">+新建</button>
+                        <button @click="openCloudBrowser" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold">☁️雲端庫</button>
+                        <button @click="showJoinModal = true" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold">🔑組合</button>
+                        <button @click="createNewProject" class="bg-zinc-900 text-white px-3 py-1 rounded-md text-xs font-bold">+新建</button>
                     </template>
                     <template v-else-if="currentView === 'preview'">
-                        <button @click="enterEditMode(0)" class="bg-yellow-500 text-black px-2.5 py-1 rounded text-xs font-bold shadow">✏️編輯</button>
-                        <button v-if="pages.length" @click="showPdfModal = true" class="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold">PDF</button>
+                        <button @click="enterEditMode(0)" class="bg-zinc-900 text-white px-3 py-1 rounded-md text-xs font-bold">✏️編輯</button>
+                        <button v-if="pages.length" @click="showPdfModal = true" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold">PDF</button>
                     </template>
                     <template v-else>
-                        <button @click="switchToPreview" class="bg-zinc-800 text-yellow-400 border border-yellow-600 px-2 py-1 rounded text-xs font-bold">👁️預覽</button>
-                        <button @click="uploadNow" :class="hasUnsavedCloudChanges ? 'bg-purple-600 animate-pulse ring-2 ring-purple-400' : 'bg-zinc-700'" class="text-white px-2.5 py-1 rounded text-xs font-bold shadow">⬆️上傳</button>
-                        <button v-if="pages.length" @click="showPdfModal = true" class="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold">PDF</button>
+                        <button @click="switchToPreview" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold">👁️預覽</button>
+                        <button @click="uploadNow" :class="hasUnsavedCloudChanges ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-zinc-300 text-zinc-800'" class="px-2.5 py-1 rounded-md text-xs font-bold border transition-colors">⬆️上傳</button>
+                        <button v-if="pages.length" @click="showPdfModal = true" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold">PDF</button>
                     </template>
                 </div>
             </header>
 
             <!-- 編輯工具列 -->
-            <div v-if="currentView === 'proj'" class="w-full flex flex-col bg-zinc-900 border-b border-zinc-700 shrink-0">
-                <div class="h-11 px-1 flex items-center justify-center gap-1 overflow-x-auto no-scrollbar">
-                    <div class="flex items-center gap-1 shrink-0">
-                        <button v-for="m in [{id:'browse',l:'睇圖',c:'bg-emerald-500 text-black'},{id:'arrow-single',l:'單箭'},{id:'freehand',l:'繪圖'},{id:'wall',l:'牆線'},{id:'line',l:'度尺'},{id:'stamp',l:'印章'}]"
+            <div v-if="currentView === 'proj'" class="w-full flex flex-col bg-white border-b border-zinc-200 shrink-0">
+                <div class="h-11 px-1 flex items-center justify-center gap-1.5 overflow-x-auto no-scrollbar">
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button v-for="m in [{id:'browse',l:'睇圖'},{id:'arrow-single',l:'單箭'},{id:'freehand',l:'繪圖'},{id:'wall',l:'牆線'},{id:'line',l:'度尺'},{id:'stamp',l:'印章'}]"
                                 :key="m.id" @click="drawMode = m.id"
-                                :class="drawMode === m.id ? (m.c || 'bg-white text-black') : 'bg-zinc-800 text-zinc-300'"
-                                class="px-2 py-1.5 text-xs font-bold rounded">{{ m.l }}</button>
-                        <button v-if="!activePin" @click="drawMode = 'pin'" :class="drawMode === 'pin' ? 'bg-red-600 text-white' : 'bg-zinc-800 text-red-400 border border-red-800'" class="px-2 py-1.5 text-xs font-bold rounded">落釘</button>
+                                :class="drawMode === m.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'"
+                                class="px-2.5 py-1 text-sm font-bold rounded-md border">{{ m.l }}</button>
+                        <button v-if="!activePin" @click="drawMode = 'pin'" :class="drawMode === 'pin' ? 'bg-red-50 text-red-700 border-red-300' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2.5 py-1 text-sm font-bold rounded-md border">落釘</button>
                     </div>
-                    <div class="flex items-center gap-1 border-l border-zinc-700 pl-1 shrink-0">
-                        <button @click="undoLastAction" :class="hasUndoItems ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-600'" class="px-2 py-1 text-sm font-bold rounded">↶</button>
-                        <button @click="redoAction" :class="hasRedoItems ? 'bg-blue-500 text-white' : 'bg-zinc-800 text-zinc-600'" class="px-2 py-1 text-sm font-bold rounded">↷</button>
+                    <div class="flex items-center gap-1.5 border-l border-zinc-300 pl-1.5 shrink-0">
+                        <button @click="undoLastAction" :class="hasUndoItems ? 'text-zinc-900 border-zinc-400 bg-zinc-50' : 'text-zinc-300 border-zinc-200 bg-white'" class="px-2 py-1 text-sm font-bold rounded-md border">↶</button>
+                        <button @click="redoAction" :class="hasRedoItems ? 'text-zinc-900 border-zinc-400 bg-zinc-50' : 'text-zinc-300 border-zinc-200 bg-white'" class="px-2 py-1 text-sm font-bold rounded-md border">↷</button>
                     </div>
                 </div>
 
-                <div class="h-8 bg-zinc-950 flex items-center justify-center gap-2 px-2" :class="['arrow-single','freehand','wall'].includes(drawMode) ? 'opacity-100' : 'opacity-0 pointer-events-none'">
+                <div class="h-8 bg-zinc-50 border-t border-zinc-200 flex items-center justify-center gap-2 px-2" :class="['arrow-single','freehand','wall'].includes(drawMode) ? 'opacity-100' : 'opacity-0 pointer-events-none'">
                     <template v-if="drawMode === 'wall'">
-                        <div class="flex items-center gap-1 bg-zinc-900 border border-zinc-700 rounded p-0.5">
-                            <button @click="wallStyle = 'hollow'" :class="wallStyle === 'hollow' ? 'bg-yellow-400 text-black' : 'text-zinc-300'" class="px-2 py-0.5 rounded text-[11px] font-bold">═空心雙線</button>
-                            <button @click="wallStyle = 'hatched'" :class="wallStyle === 'hatched' ? 'bg-yellow-400 text-black' : 'text-zinc-300'" class="px-2 py-0.5 rounded text-[11px] font-bold">⫽斜線陰影</button>
+                        <div class="flex items-center gap-1 bg-white border border-zinc-300 rounded p-0.5">
+                            <button @click="wallStyle = 'hollow'" :class="wallStyle === 'hollow' ? 'bg-zinc-900 text-white' : 'text-zinc-600'" class="px-2 py-0.5 rounded text-[11px] font-bold">═空心雙線</button>
+                            <button @click="wallStyle = 'hatched'" :class="wallStyle === 'hatched' ? 'bg-zinc-900 text-white' : 'text-zinc-600'" class="px-2 py-0.5 rounded text-[11px] font-bold">⫽斜線陰影</button>
                         </div>
-                        <button v-for="c in ['#111827','#ef4444','#3b82f6','#ffffff']" :key="c" @click="wallColor = c" :style="{backgroundColor: c}" :class="wallColor === c ? 'ring-2 ring-yellow-400 scale-110' : ''" class="w-4 h-4 rounded-full border border-zinc-500"></button>
+                        <button v-for="c in ['#111827','#ef4444','#3b82f6','#ffffff']" :key="c" @click="wallColor = c" :style="{backgroundColor: c}" :class="wallColor === c ? 'ring-2 ring-zinc-900 scale-110' : ''" class="w-4 h-4 rounded-full border border-zinc-400"></button>
                     </template>
                     <template v-else-if="drawMode === 'arrow-single'">
-                        <span class="text-[10px] text-zinc-400 font-bold">顏色:</span>
-                        <button v-for="c in [{id:'gray',bg:'bg-gray-400'},{id:'white',bg:'bg-white'},{id:'red',bg:'bg-red-500'}]" :key="c.id" @click="arrowColor = c.id" :class="[c.bg, arrowColor === c.id ? 'ring-2 ring-blue-400 scale-110' : '']" class="w-4 h-4 rounded-full"></button>
+                        <span class="text-[11px] text-zinc-600 font-bold">顏色:</span>
+                        <button v-for="c in [{id:'gray',bg:'bg-gray-400'},{id:'white',bg:'bg-white'},{id:'red',bg:'bg-red-500'}]" :key="c.id" @click="arrowColor = c.id" :class="[c.bg, arrowColor === c.id ? 'ring-2 ring-zinc-900 scale-110' : '']" class="w-4 h-4 rounded-full border border-zinc-300"></button>
                     </template>
                     <template v-else>
-                        <span class="text-[10px] text-zinc-400 font-bold">顏色:</span>
-                        <button v-for="c in ['#3b82f6','#eab308','#ef4444','#111827']" :key="c" @click="freehandColor = c" :style="{backgroundColor: c}" :class="freehandColor === c ? 'ring-2 ring-white scale-110' : ''" class="w-4 h-4 rounded-full border border-zinc-500"></button>
+                        <span class="text-[11px] text-zinc-600 font-bold">顏色:</span>
+                        <button v-for="c in ['#3b82f6','#eab308','#ef4444','#111827']" :key="c" @click="freehandColor = c" :style="{backgroundColor: c}" :class="freehandColor === c ? 'ring-2 ring-zinc-900 scale-110' : ''" class="w-4 h-4 rounded-full border border-zinc-400"></button>
                     </template>
                 </div>
             </div>
         </div>
 
-        <div v-if="toastMsg" class="fixed top-12 left-1/2 -translate-x-1/2 z-[80] bg-emerald-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-xl border border-emerald-300 whitespace-nowrap">{{ toastMsg }}</div>
+        <div v-if="toastMsg" class="fixed top-12 left-1/2 -translate-x-1/2 z-[80] bg-zinc-900 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl border border-zinc-700 whitespace-nowrap">{{ toastMsg }}</div>
 
         <!-- 1. 工程目錄視圖 -->
-        <main v-show="currentView === 'dir'" class="flex-1 min-h-0 w-full bg-zinc-950 p-3 overflow-y-auto touch-scrollable">
+        <main v-show="currentView === 'dir'" class="flex-1 min-h-0 w-full p-3 overflow-y-auto touch-scrollable">
             <div v-if="!projectList.length" class="text-center text-zinc-500 mt-20 text-sm font-bold">本機暫無工程。<br>點右上「+新建」或「☁️雲端庫」連通。</div>
-            <div v-for="proj in projectList" :key="proj.code" class="bg-zinc-900 border border-zinc-800 p-3 rounded-lg mb-2.5 flex justify-between items-center shadow-lg">
+            <div v-for="proj in projectList" :key="proj.code" class="bg-white border border-zinc-300 p-3 rounded-lg mb-2.5 flex justify-between items-center shadow-sm">
                 <div class="flex-1 mr-2 cursor-pointer min-w-0" @click="loadProject(proj.code, true)">
                     <div class="flex items-center gap-1.5">
-                        <span class="bg-yellow-400 text-black text-xs font-black px-1.5 py-0.5 rounded shrink-0">#{{ proj.code }}</span>
-                        <div class="font-bold text-sm text-white truncate">{{ proj.name || '未輸入地址' }}</div>
-                        <span v-if="proj.pendingUpload" class="bg-purple-900/90 border border-purple-500 text-purple-200 text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0">⏳待上傳</span>
+                        <span class="bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black px-1.5 py-0.5 rounded-md shrink-0">#{{ proj.code }}</span>
+                        <div class="font-bold text-sm text-zinc-900 truncate">{{ proj.name || '未輸入地址' }}</div>
+                        <span v-if="proj.pendingUpload" class="bg-blue-50 text-blue-700 border border-blue-300 text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0">⏳待上傳</span>
                     </div>
-                    <div class="text-[10px] text-zinc-400 mt-1 flex flex-col gap-0.5">
+                    <div class="text-[11px] text-zinc-500 mt-1 flex flex-col gap-0.5">
                         <span>{{ proj.date }} ｜ {{ proj.pageCount || 1 }} 頁 ｜ {{ proj.pinCount || 0 }} 釘</span>
-                        <span v-if="proj.lastModifiedBy" class="text-blue-300 font-bold">✍️ 最後修改: [{{ proj.lastModifiedBy }}]</span>
+                        <span v-if="proj.lastModifiedBy" class="text-blue-600 font-bold">✍️ 最後修改: [{{ proj.lastModifiedBy }}]</span>
                     </div>
                 </div>
                 <div class="flex gap-1.5 shrink-0">
-                    <button @click="loadProject(proj.code, true)" class="bg-blue-600 text-white px-2.5 py-1.5 rounded text-xs font-bold">👁️預覽</button>
-                    <button @click="loadProject(proj.code, false)" class="bg-zinc-700 text-white px-2.5 py-1.5 rounded text-xs font-bold">編輯</button>
-                    <button @click="openManageMenu(proj)" class="bg-zinc-800 border border-zinc-600 text-zinc-300 px-2 py-1.5 rounded text-xs font-bold">⚙️</button>
+                    <button @click="loadProject(proj.code, true)" class="bg-white border border-zinc-300 text-zinc-800 px-3 py-1.5 rounded-md text-xs font-bold shadow-sm">👁️預覽</button>
+                    <button @click="loadProject(proj.code, false)" class="bg-zinc-800 text-white border border-zinc-800 px-3 py-1.5 rounded-md text-xs font-bold shadow-sm">編輯</button>
+                    <button @click="openManageMenu(proj)" class="bg-white border border-zinc-300 text-zinc-500 px-2 py-1.5 rounded-md text-xs font-bold shadow-sm">⚙️</button>
                 </div>
             </div>
             <div class="mt-8 text-center flex flex-col items-center gap-2">
-                <button @click="changeAuthorName" class="text-xs text-zinc-500 underline">👤 目前設備稱呼: {{ authorName || '未設定' }}</button>
-                <span class="text-[10px] text-zinc-600">{{ offlineReady ? '🛡️ 已啟用完全離線保護' : '⏳ 正在準備離線緩存...' }}</span>
+                <button @click="changeAuthorName" class="text-xs text-blue-600 font-bold underline">👤 目前設備稱呼: {{ authorName || '未設定' }}</button>
+                <span class="text-[10px] text-zinc-400">{{ offlineReady ? '🛡️ 已啟用完全離線保護' : '⏳ 正在準備離線緩存...' }}</span>
             </div>
         </main>
 
         <!-- 2. 全檔唯讀預覽總覽視圖 -->
-        <main v-show="currentView === 'preview'" class="flex-1 min-h-0 w-full bg-zinc-950 flex flex-col overflow-hidden">
-            <div class="bg-zinc-900 border-b border-zinc-800 px-3 py-2 flex items-center justify-between shrink-0 gap-1">
+        <main v-show="currentView === 'preview'" class="flex-1 min-h-0 w-full flex flex-col overflow-hidden bg-zinc-100">
+            <div class="bg-white border-b border-zinc-200 px-3 py-2 flex items-center justify-between shrink-0 gap-1">
                 <div class="flex gap-1.5">
-                    <button @click="previewTab = 'pages'" :class="previewTab === 'pages' ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400'" class="px-2.5 py-1 rounded-full text-xs font-bold">🖼️ 圖紙 ({{ pages.length }}頁)</button>
-                    <button @click="previewTab = 'bom'" :class="previewTab === 'bom' ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400'" class="px-2.5 py-1 rounded-full text-xs font-bold">📋 BOM清單</button>
+                    <button @click="previewTab = 'pages'" :class="previewTab === 'pages' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-300'" class="px-3 py-1 rounded-md text-xs font-bold border">🖼️ 圖紙 ({{ pages.length }}頁)</button>
+                    <button @click="previewTab = 'bom'" :class="previewTab === 'bom' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-300'" class="px-3 py-1 rounded-md text-xs font-bold border">📋 BOM清單</button>
                 </div>
-                <button v-if="mergeableGroups.length" @click="showMergeModal = true" class="bg-purple-600 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow animate-pulse">🔗 合併同底圖 ({{ mergeableGroups.length }})</button>
-                <span v-else class="text-[10px] text-zinc-400">按住 ⠿P1 拖拉改頁數</span>
+                <button v-if="mergeableGroups.length" @click="showMergeModal = true" class="bg-indigo-50 text-indigo-700 border border-indigo-300 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">🔗 合併同底圖 ({{ mergeableGroups.length }})</button>
+                <span v-else class="text-[11px] text-zinc-500 font-bold">按住 ⠿P1 拖拉改頁數</span>
             </div>
 
-            <div v-show="previewTab === 'pages'" class="flex-1 overflow-y-auto p-2.5 touch-scrollable">
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            <div v-show="previewTab === 'pages'" class="flex-1 overflow-y-auto p-2 touch-scrollable">
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     <div v-for="(pg, idx) in pages" :key="pg.id" :data-page-idx="idx"
-                         :class="[draggingPageIdx === idx ? 'opacity-40 scale-95 ring-2 ring-yellow-400' : '', dragOverPageIdx === idx && draggingPageIdx !== idx ? 'ring-2 ring-blue-500 bg-zinc-800' : '']"
-                         class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-lg flex flex-col justify-between transition-all duration-150">
-                        <div class="bg-zinc-800/90 px-2 py-1.5 border-b border-zinc-700 flex flex-col gap-0.5">
+                         :class="[draggingPageIdx === idx ? 'opacity-40 scale-95 ring-2 ring-blue-500' : '', dragOverPageIdx === idx && draggingPageIdx !== idx ? 'ring-2 ring-blue-500 bg-blue-50' : '']"
+                         class="bg-white border border-zinc-300 rounded-lg overflow-hidden shadow-sm flex flex-col justify-between transition-all duration-150">
+                        <div class="bg-zinc-50 px-2 py-1.5 border-b border-zinc-200 flex flex-col gap-0.5">
                             <div class="flex items-center justify-between gap-1">
                                 <div class="flex items-center gap-1 min-w-0">
-                                    <span @pointerdown.stop.prevent="startPageDrag(idx, $event)" style="touch-action:none" title="按住拖拉調整頁數順序" class="cursor-grab active:cursor-grabbing bg-black hover:bg-zinc-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 flex items-center gap-0.5 border border-zinc-700">
+                                    <span @pointerdown.stop.prevent="startPageDrag(idx, $event)" style="touch-action:none" title="按住拖拉調整頁數順序" class="cursor-grab active:cursor-grabbing bg-white hover:bg-zinc-100 text-zinc-900 border border-zinc-300 text-[11px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
                                         <span class="text-zinc-400">⠿</span>P{{ idx + 1 }}
                                     </span>
-                                    <span class="text-yellow-400 font-bold text-xs truncate">{{ pg.space || '未標空間' }}</span>
+                                    <span class="text-zinc-900 font-bold text-xs truncate">{{ pg.space || '未標空間' }}</span>
                                 </div>
-                                <button @click="enterEditMode(idx)" class="bg-yellow-500 text-black px-2 py-0.5 rounded text-[11px] font-bold shrink-0">✏️改</button>
+                                <button @click="enterEditMode(idx)" class="bg-zinc-900 text-white px-2 py-0.5 rounded text-[11px] font-bold shrink-0">✏️改</button>
                             </div>
-                            <div class="text-[10px] text-blue-300 font-bold truncate">
+                            <div class="text-[10px] text-zinc-500 font-bold truncate">
                                 📅{{ pg.date || project.date }} ✍️{{ pg.author || project.lastModifiedBy || '未知' }}
                             </div>
                         </div>
 
-                        <div v-if="pg.photo" @click="openFullScreenPreview(pg)" class="h-44 relative bg-zinc-950 cursor-pointer active:bg-zinc-800 overflow-hidden flex items-center justify-center">
-                            <div class="absolute inset-1.5 overflow-hidden flex items-center justify-center">
+                        <div v-if="pg.photo" @click="openFullScreenPreview(pg)" class="h-40 relative bg-zinc-100 cursor-pointer active:bg-zinc-200 overflow-hidden flex items-center justify-center">
+                            <div class="absolute inset-1 overflow-hidden flex items-center justify-center">
                                 <svg :view-box.camel="`0 0 ${pg.w || 1200} ${pg.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="pointer-events-none">
                                     <rect x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" fill="#ffffff" />
                                     <image :href="pg.photo" x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" preserveAspectRatio="none" />
-                                    <rect x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" fill="none" stroke="#52525b" stroke-width="4" />
                                     
                                     <g v-for="m in (pg.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
                                         <template v-if="m.type === 'image'">
@@ -233,16 +232,16 @@
                                 </svg>
                             </div>
                         </div>
-                        <div v-else class="h-44 flex items-center justify-center text-zinc-600 text-[11px]">空白未拍照</div>
+                        <div v-else class="h-40 flex items-center justify-center text-zinc-500 text-[12px] font-bold">空白未拍照</div>
 
-                        <div class="bg-zinc-950 px-2 py-1.5 border-t border-zinc-800/80 flex items-center justify-between gap-1 flex-wrap">
+                        <div class="bg-zinc-50 px-2 py-1.5 border-t border-zinc-200 flex items-center justify-between gap-1 flex-wrap">
                             <div v-if="pg.pins?.length" class="flex items-center gap-1 flex-wrap">
-                                <button v-for="(pin, pIdx) in pg.pins" :key="pin.id" @click.stop="pin.photo ? openFullScreenPreview(pin) : enterEditMode(idx)" class="bg-red-950 border border-red-700/80 text-red-200 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                <button v-for="(pin, pIdx) in pg.pins" :key="pin.id" @click.stop="pin.photo ? openFullScreenPreview(pin) : enterEditMode(idx)" class="bg-red-50 border border-red-300 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded">
                                     📍釘#{{ pIdx + 1 }}
                                 </button>
                             </div>
-                            <span v-else class="text-[10px] text-zinc-500">無落釘</span>
-                            <span v-if="pg.photo" @click="openFullScreenPreview(pg)" class="text-[10px] text-zinc-400 cursor-pointer">🔍全圖</span>
+                            <span v-else class="text-[11px] text-zinc-400 font-bold">無落釘</span>
+                            <span v-if="pg.photo" @click="openFullScreenPreview(pg)" class="text-[11px] text-zinc-500 font-bold cursor-pointer hover:text-zinc-800">🔍全圖</span>
                         </div>
                     </div>
                 </div>
@@ -250,19 +249,19 @@
 
             <!-- BOM 統計清單 -->
             <div v-show="previewTab === 'bom'" class="flex-1 overflow-y-auto p-3 touch-scrollable space-y-3">
-                <div v-if="!Object.keys(bomSummary).length" class="text-center text-zinc-500 mt-16 text-xs">目前圖紙尚無任何印章或尺寸標註。</div>
-                <div v-for="(data, spaceName) in bomSummary" :key="spaceName" class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 shadow">
-                    <div class="text-sm font-black text-yellow-400 border-b border-zinc-800 pb-1.5 mb-2.5">🏠 {{ spaceName }}</div>
+                <div v-if="!Object.keys(bomSummary).length" class="text-center text-zinc-500 mt-16 text-sm font-bold">目前圖紙尚無任何印章或尺寸標註。</div>
+                <div v-for="(data, spaceName) in bomSummary" :key="spaceName" class="bg-white border border-zinc-300 rounded-lg p-3 shadow-sm">
+                    <div class="text-[15px] font-black text-zinc-900 border-b border-zinc-200 pb-1.5 mb-2.5">🏠 {{ spaceName }}</div>
                     <div v-if="Object.keys(data.stamps).length" class="mb-3">
-                        <div class="text-[11px] font-bold text-zinc-400 mb-1.5">🏷️ 項目 / 印章數量統計：</div>
+                        <div class="text-xs font-bold text-zinc-500 mb-1.5">🏷️ 項目 / 印章數量統計：</div>
                         <div class="flex flex-wrap gap-1.5">
-                            <span v-for="(count, label) in data.stamps" :key="label" class="bg-zinc-800 border border-zinc-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold">{{ label }} <span class="text-yellow-400 ml-1">× {{ count }}</span></span>
+                            <span v-for="(count, label) in data.stamps" :key="label" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-xs font-bold">{{ label }} <span class="text-blue-600 ml-1">× {{ count }}</span></span>
                         </div>
                     </div>
                     <div v-if="data.dims.length">
-                        <div class="text-[11px] font-bold text-zinc-400 mb-1.5">📏 尺寸與文字備註明細：</div>
+                        <div class="text-xs font-bold text-zinc-500 mb-1.5">📏 尺寸與文字備註明細：</div>
                         <ul class="space-y-1">
-                            <li v-for="(dim, dIdx) in data.dims" :key="dIdx" class="text-xs text-zinc-200 bg-zinc-950 px-2.5 py-1.5 rounded border border-zinc-800/80">• {{ dim }}</li>
+                            <li v-for="(dim, dIdx) in data.dims" :key="dIdx" class="text-[13px] text-zinc-800 font-bold bg-zinc-50 px-2.5 py-1.5 rounded-md border border-zinc-200">• {{ dim }}</li>
                         </ul>
                     </div>
                 </div>
@@ -270,55 +269,55 @@
         </main>
 
         <!-- 📄 PDF 排版選擇 Modal -->
-        <div v-if="showPdfModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showPdfModal = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-4 flex flex-col gap-2.5 text-white shadow-2xl">
-                <div class="text-sm font-bold text-center text-emerald-400 mb-1">📄 選擇輸出 PDF 排版</div>
-                <button @click="exportPdfReport(1)" class="w-full bg-emerald-600 text-white py-3 rounded-lg text-sm font-bold shadow">🖼️ 每頁 1 張 (大圖清晰版)</button>
-                <button @click="exportPdfReport(2)" class="w-full bg-indigo-600 text-white py-3 rounded-lg text-sm font-bold shadow">▯▯ 每頁 2 張 (上下雙圖版)</button>
-                <button @click="exportPdfReport(4)" class="w-full bg-blue-600 text-white py-3 rounded-lg text-sm font-bold shadow">田 每頁 4 張 (2×2 緊湊總覽版)</button>
-                <button @click="showPdfModal = false" class="w-full text-zinc-400 py-1.5 text-xs font-bold mt-1">取消</button>
+        <div v-if="showPdfModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showPdfModal = false">
+            <div class="bg-white border border-zinc-200 w-full max-w-xs rounded-xl p-4 flex flex-col gap-2.5 shadow-xl">
+                <div class="text-[15px] font-black text-center text-zinc-900 mb-1 border-b border-zinc-200 pb-2">📄 選擇輸出 PDF 排版</div>
+                <button @click="exportPdfReport(1)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[13px] font-bold shadow-sm">🖼️ 每頁 1 張 (大圖清晰版)</button>
+                <button @click="exportPdfReport(2)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[13px] font-bold shadow-sm">▯▯ 每頁 2 張 (上下雙圖版)</button>
+                <button @click="exportPdfReport(4)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[13px] font-bold shadow-sm">田 每頁 4 張 (2×2 緊湊總覽版)</button>
+                <button @click="showPdfModal = false" class="w-full text-zinc-500 py-2 text-xs font-bold mt-1">取消</button>
             </div>
         </div>
 
         <!-- 🔗 智能合併同底圖 Modal -->
-        <div v-if="showMergeModal" class="fixed inset-0 bg-black/85 z-[65] flex items-center justify-center p-4" @click.self="showMergeModal = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-sm rounded-xl p-4 flex flex-col text-white shadow-2xl max-h-[80vh]">
-                <h3 class="text-sm font-bold text-purple-400 border-b border-zinc-700 pb-2 mb-3">🔗 智能合併同底圖分頁</h3>
+        <div v-if="showMergeModal" class="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4" @click.self="showMergeModal = false">
+            <div class="bg-white border border-zinc-200 w-full max-w-sm rounded-xl p-4 flex flex-col shadow-xl max-h-[80vh]">
+                <h3 class="text-[15px] font-black text-zinc-900 border-b border-zinc-200 pb-2 mb-3">🔗 智能合併同底圖分頁</h3>
                 <div class="overflow-y-auto flex-1 touch-scrollable space-y-2.5">
-                    <div v-for="grp in mergeableGroups" :key="grp.key" class="bg-zinc-800 border border-zinc-700 rounded-lg p-2.5 flex items-center gap-2.5">
-                        <img :src="grp.photo" class="w-14 h-14 object-cover rounded bg-black shrink-0">
+                    <div v-for="grp in mergeableGroups" :key="grp.key" class="bg-zinc-50 border border-zinc-300 rounded-lg p-2.5 flex items-center gap-2.5">
+                        <img :src="grp.photo" class="w-14 h-14 object-cover rounded bg-zinc-200 shrink-0">
                         <div class="min-w-0 flex-1">
-                            <div class="text-xs font-bold text-yellow-400 truncate">{{ grp.items.map(x => `P${x.idx + 1}`).join(' + ') }}</div>
-                            <div class="text-[10px] text-zinc-300 mt-0.5 truncate">{{ grp.items.map(x => x.pg.author || '未知').join(' / ') }}</div>
-                            <button @click="mergePageGroup(grp)" class="mt-1.5 bg-purple-600 text-white px-3 py-1 rounded text-xs font-bold shadow">✨ 立即合併為新頁</button>
+                            <div class="text-xs font-bold text-zinc-900 truncate">{{ grp.items.map(x => `P${x.idx + 1}`).join(' + ') }}</div>
+                            <div class="text-[10px] text-zinc-500 mt-0.5 truncate">{{ grp.items.map(x => x.pg.author || '未知').join(' / ') }}</div>
+                            <button @click="mergePageGroup(grp)" class="mt-1.5 bg-white border border-zinc-400 text-zinc-900 px-3 py-1 rounded-md text-xs font-bold shadow-sm">✨ 立即合併為新頁</button>
                         </div>
                     </div>
                 </div>
-                <button @click="showMergeModal = false" class="mt-3 w-full bg-zinc-800 py-2 rounded-lg text-xs font-bold">關閉</button>
+                <button @click="showMergeModal = false" class="mt-3 w-full bg-white border border-zinc-300 py-2 rounded-md text-xs font-bold">關閉</button>
             </div>
         </div>
 
         <!-- 唯讀全螢幕大圖檢視器 -->
-        <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col overflow-hidden">
-            <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-2 flex justify-between items-center gap-1 shrink-0 z-10">
+        <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-zinc-100 flex flex-col overflow-hidden">
+            <div class="h-11 bg-white border-b border-zinc-300 px-2 flex justify-between items-center gap-1 shrink-0 z-10">
                 <div class="flex items-center gap-1 min-w-0 flex-1">
-                    <button @click="prevFullScreen" :disabled="fullScreenIndex <= 0" :class="fullScreenIndex <= 0 ? 'opacity-30' : 'active:bg-zinc-600'" class="bg-zinc-800 border border-zinc-700 text-white px-2 py-1 rounded text-xs font-bold shrink-0">◀</button>
-                    <span class="text-xs font-bold text-yellow-400 truncate min-w-0">{{ fullScreenTitle }}</span>
-                    <button @click="nextFullScreen" :disabled="fullScreenIndex >= fullScreenList.length - 1" :class="fullScreenIndex >= fullScreenList.length - 1 ? 'opacity-30' : 'active:bg-zinc-600'" class="bg-zinc-800 border border-zinc-700 text-white px-2 py-1 rounded text-xs font-bold shrink-0">▶</button>
+                    <button @click="prevFullScreen" :disabled="fullScreenIndex <= 0" :class="fullScreenIndex <= 0 ? 'opacity-30' : 'active:bg-zinc-100'" class="bg-white border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 shadow-sm">◀</button>
+                    <span class="text-[13px] font-black text-zinc-900 truncate min-w-0 px-1">{{ fullScreenTitle }}</span>
+                    <button @click="nextFullScreen" :disabled="fullScreenIndex >= fullScreenList.length - 1" :class="fullScreenIndex >= fullScreenList.length - 1 ? 'opacity-30' : 'active:bg-zinc-100'" class="bg-white border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 shadow-sm">▶</button>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
-                    <button @click="showWatermark = !showWatermark" :class="showWatermark ? 'bg-amber-500 text-black' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'" class="px-2 py-1 rounded text-[11px] font-bold shadow">🏷️水印:{{ showWatermark ? '開' : '關' }}</button>
-                    <button @click="copyFullScreenImage" class="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold shadow">📋複製</button>
-                    <button @click="downloadFullScreenImage" class="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold shadow">⬇️下載</button>
-                    <button @click="fullScreenIndex = -1" class="bg-zinc-700 text-white px-2 py-1 rounded text-xs font-bold shadow">✕</button>
+                    <button @click="showWatermark = !showWatermark" :class="showWatermark ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-white text-zinc-500 border-zinc-300'" class="px-2.5 py-1 rounded-md text-[11px] font-bold border shadow-sm">🏷️水印:{{ showWatermark ? '開' : '關' }}</button>
+                    <button @click="copyFullScreenImage" class="bg-white border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">📋複製</button>
+                    <button @click="downloadFullScreenImage" class="bg-white border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">⬇️下載</button>
+                    <button @click="fullScreenIndex = -1" class="bg-zinc-900 text-white px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">✕</button>
                 </div>
             </div>
             
-            <div class="flex-1 min-h-0 w-full relative bg-zinc-950 overflow-hidden">
-                <button v-if="fullScreenIndex > 0" @click.stop="prevFullScreen" class="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-10 h-12 rounded-xl bg-black/65 hover:bg-black/85 active:scale-95 border border-zinc-600/80 text-white text-lg font-black flex items-center justify-center shadow-xl">◀</button>
-                <button v-if="fullScreenIndex < fullScreenList.length - 1" @click.stop="nextFullScreen" class="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-10 h-12 rounded-xl bg-black/65 hover:bg-black/85 active:scale-95 border border-zinc-600/80 text-white text-lg font-black flex items-center justify-center shadow-xl">▶</button>
+            <div class="flex-1 min-h-0 w-full relative bg-zinc-200 overflow-hidden">
+                <button v-if="fullScreenIndex > 0" @click.stop="prevFullScreen" class="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-10 h-12 rounded-xl bg-white/90 hover:bg-white active:scale-95 border border-zinc-300 text-zinc-900 text-lg font-black flex items-center justify-center shadow-lg">◀</button>
+                <button v-if="fullScreenIndex < fullScreenList.length - 1" @click.stop="nextFullScreen" class="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-10 h-12 rounded-xl bg-white/90 hover:bg-white active:scale-95 border border-zinc-300 text-zinc-900 text-lg font-black flex items-center justify-center shadow-lg">▶</button>
 
-                <div class="absolute inset-2.5 overflow-hidden">
+                <div class="absolute inset-1 overflow-hidden bg-white shadow-sm border border-zinc-300 rounded-lg">
                     <svg :view-box.camel="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;">
                         <defs>
                             <marker id="fs-arrow-gray" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#9ca3af" /></marker>
@@ -327,10 +326,9 @@
                         </defs>
                         <rect x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" fill="#ffffff" />
                         <image :href="fullScreenItem.photo" x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" preserveAspectRatio="none" />
-                        <rect x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" fill="none" stroke="#52525b" stroke-width="4" />
-
+                        
                         <g v-if="showWatermark && fullScreenWatermarkLines.length" transform="translate(22, 26)">
-                            <text v-for="(item, wIdx) in fullScreenWatermarkLines" :key="wIdx" x="0" :y="wIdx * 32" dominant-baseline="central" :fill="item.color" class="wm-text">{{ item.text }}</text>
+                            <text v-for="(item, wIdx) in fullScreenWatermarkLines" :key="wIdx" x="0" :y="wIdx * 32" dominant-baseline="central" :fill="item.color === '#ffffff' ? '#111827' : (item.color === '#facc15' ? '#d97706' : item.color)" class="wm-text" stroke="#ffffff" stroke-width="6">{{ item.text }}</text>
                         </g>
 
                         <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
@@ -364,59 +362,74 @@
         </div>
 
         <!-- 3. 畫布編輯視圖 -->
-        <main v-show="currentView === 'proj'" class="flex-1 min-h-0 w-full relative bg-zinc-950 overflow-hidden flex flex-col">
+        <main v-show="currentView === 'proj'" class="flex-1 min-h-0 w-full relative bg-zinc-100 overflow-hidden flex flex-col">
             <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
-                <div v-if="activePin" class="text-yellow-400 font-bold text-sm mb-1">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
-                <label class="w-56 text-center bg-white text-black px-5 py-3 rounded-xl text-sm font-bold cursor-pointer shadow-lg">
-                    📷 {{ activePin ? '拍照 / 揀相' : '拍照 / 多選圖自動分頁' }}
-                    <input type="file" accept="image/*" :multiple="!activePin" class="hidden" @change="e => handleImageUpload(e, false)">
-                </label>
-                <button @click="pasteFromClipboard(false)" class="w-56 bg-indigo-600 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg">📋 貼上剪貼簿圖片</button>
-                <button @click="openPhotoPool('replaceCurrent')" class="w-56 bg-blue-600 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg">🖼️ 從工程底圖庫選圖</button>
-                <button @click="initSketchOnCurrent(true)" class="w-56 bg-amber-400 text-black px-5 py-3 rounded-xl text-sm font-bold shadow-lg">✏️ 空白手繪 (格線)</button>
-                <button @click="initSketchOnCurrent(false)" class="w-56 bg-zinc-800 text-white border border-zinc-700 px-5 py-2.5 rounded-xl text-xs font-bold">⬜ 空白手繪 (純白)</button>
+                <div v-if="activePin" class="text-zinc-800 font-black text-[15px] mb-1">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
+                
+                <div class="flex gap-2 w-64">
+                    <label class="flex-1 text-center bg-zinc-900 text-white py-3 rounded-xl text-[15px] font-bold cursor-pointer shadow-sm border border-zinc-800">
+                        📷 拍照
+                        <input type="file" accept="image/*" capture="environment" class="hidden" @change="e => handleImageUpload(e, false)">
+                    </label>
+                    <label class="flex-1 text-center bg-white text-zinc-900 py-3 rounded-xl text-[14px] font-bold cursor-pointer shadow-sm border border-zinc-300">
+                        📁 {{ activePin ? '揀相' : '多選圖' }}
+                        <input type="file" accept="image/*" :multiple="!activePin" class="hidden" @change="e => handleImageUpload(e, false)">
+                    </label>
+                </div>
+
+                <button @click="pasteFromClipboard(false)" class="w-64 bg-white border border-zinc-300 text-zinc-900 py-3 rounded-xl text-[14px] font-bold shadow-sm flex items-center justify-center gap-2">
+                    <span>📋</span> 貼上剪貼簿
+                </button>
+                <button @click="openPhotoPool('replaceCurrent')" class="w-64 bg-white border border-zinc-300 text-zinc-900 py-3 rounded-xl text-[14px] font-bold shadow-sm flex items-center justify-center gap-2">
+                    <span>🖼️</span> 工程底圖庫
+                </button>
+                <button @click="initSketchOnCurrent" class="w-64 bg-white border border-zinc-300 text-zinc-900 py-3 rounded-xl text-[14px] font-bold shadow-sm flex items-center justify-center gap-2">
+                    <span>✏️</span> 空白手繪
+                </button>
+                
                 <template v-if="activePin">
-                    <button @click="exitPinSubPage" class="mt-3 text-zinc-400 text-xs font-bold">‹ 返回主頁 (保留空釘)</button>
-                    <button @click="deleteActivePin" class="mt-1 bg-red-600 active:bg-red-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-lg">🗑️ 刪除此釘選</button>
+                    <button @click="exitPinSubPage" class="mt-4 text-zinc-500 text-xs font-bold underline">‹ 返回主頁 (保留空釘)</button>
+                    <button @click="deleteActivePin" class="mt-1 bg-red-50 border border-red-300 text-red-700 px-5 py-2 rounded-lg text-xs font-bold">🗑️ 刪除此釘選</button>
                 </template>
             </div>
 
             <div v-else class="flex-1 min-h-0 w-full relative overflow-hidden">
                 <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
-                    <div v-if="!activePin" class="bg-black/80 backdrop-blur border border-zinc-700 rounded-full flex items-center px-1 py-1 shadow">
-                        <button @click="prevPage" class="px-2 py-0.5 text-zinc-300 font-bold text-xs" :class="{ 'opacity-30': activePageIndex === 0 }">◀</button>
-                        <span class="px-1 text-white font-bold text-[11px]">P{{ activePageIndex + 1 }}/{{ pages.length }}</span>
-                        <button @click="nextPage" class="px-2 py-0.5 text-zinc-300 font-bold text-xs" :class="{ 'opacity-30': activePageIndex === pages.length - 1 }">▶</button>
-                        <div class="w-px h-3 bg-zinc-600 mx-1"></div>
-                        <button @click="showAddPageModal = true" class="px-2 py-0.5 text-blue-400 font-bold text-xs">+加頁</button>
+                    <div v-if="!activePin" class="bg-white/90 backdrop-blur border border-zinc-300 rounded-md flex items-center px-1.5 py-1 shadow-sm">
+                        <button @click="prevPage" class="px-2 py-0.5 text-zinc-600 font-black text-xs" :class="{ 'opacity-30': activePageIndex === 0 }">◀</button>
+                        <span class="px-1.5 text-zinc-900 font-black text-xs">P{{ activePageIndex + 1 }}/{{ pages.length }}</span>
+                        <button @click="nextPage" class="px-2 py-0.5 text-zinc-600 font-black text-xs" :class="{ 'opacity-30': activePageIndex === pages.length - 1 }">▶</button>
+                        <div class="w-px h-3.5 bg-zinc-300 mx-1.5"></div>
+                        <button @click="showAddPageModal = true" class="px-2 py-0.5 text-blue-600 font-bold text-xs">+加頁</button>
                         <template v-if="pages.length > 1">
-                            <div class="w-px h-3 bg-zinc-600 mx-1"></div>
-                            <button @click="deleteCurrentPage" class="px-2 py-0.5 text-red-400 font-bold text-xs">刪頁</button>
+                            <div class="w-px h-3.5 bg-zinc-300 mx-1.5"></div>
+                            <button @click="deleteCurrentPage" class="px-2 py-0.5 text-red-600 font-bold text-xs">刪頁</button>
                         </template>
                     </div>
-                    <div v-else class="bg-red-950/90 border border-red-800 rounded-full flex items-center px-2.5 py-1 shadow">
-                        <button @click="exitPinSubPage" class="text-white text-xs font-bold pr-2">‹ 返回 P{{ activePageIndex + 1 }}</button>
-                        <div class="w-px h-3.5 bg-red-700 mx-1"></div>
-                        <span class="px-1 text-yellow-300 font-bold text-xs">📍 釘 #{{ activePinIndex + 1 }}</span>
-                        <div class="w-px h-3.5 bg-red-700 mx-1"></div>
-                        <button @click="deleteActivePin" class="bg-red-600 active:bg-red-700 text-white px-2.5 py-0.5 rounded-full text-xs font-bold shadow">🗑️刪釘</button>
+                    <div v-else class="bg-red-50 border border-red-300 rounded-md flex items-center px-2 py-1 shadow-sm">
+                        <button @click="exitPinSubPage" class="text-red-700 text-[11px] font-bold pr-2">‹ 返回 P{{ activePageIndex + 1 }}</button>
+                        <div class="w-px h-3.5 bg-red-300 mx-1"></div>
+                        <span class="px-1 text-red-900 font-black text-[11px]">📍 釘 #{{ activePinIndex + 1 }}</span>
+                        <div class="w-px h-3.5 bg-red-300 mx-1"></div>
+                        <button @click="deleteActivePin" class="bg-white border border-red-300 text-red-700 px-2 py-0.5 rounded text-[11px] font-bold shadow-sm">🗑️刪釘</button>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <button @click="showSpaceModal = true" class="bg-black/80 backdrop-blur text-yellow-400 border border-yellow-500/70 px-2.5 py-1 rounded-full text-xs font-black shadow">🏠 {{ activeCanvas.space || '標記空間' }}</button>
-                        <span v-if="!activePin && (activePage?.author || project.lastModifiedBy)" class="bg-blue-950/90 text-blue-300 border border-blue-700 px-2 py-0.5 rounded-full text-[10px] font-bold shadow">✍️{{ activePage?.author || project.lastModifiedBy }}</span>
-                        <button v-if="activeCanvas.isSketch" @click="toggleSketchGrid" class="bg-black/80 text-zinc-200 border border-zinc-600 px-2 py-1 rounded-full text-[11px] font-bold shadow">{{ activeCanvas.hasGrid ? '▦格' : '⬜白' }}</button>
-                        <button @click="pasteFromClipboard(false)" class="bg-indigo-600/90 backdrop-blur text-white border border-indigo-500 px-2 py-1 rounded-full text-[11px] font-bold shadow">📋貼圖</button>
+                        <button @click="showSpaceModal = true" class="bg-white/90 backdrop-blur text-zinc-900 border border-zinc-300 px-2.5 py-1 rounded-md text-[11px] font-black shadow-sm">🏠 {{ activeCanvas.space || '標記空間' }}</button>
+                        <span v-if="!activePin && (activePage?.author || project.lastModifiedBy)" class="bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm">✍️{{ activePage?.author || project.lastModifiedBy }}</span>
+                        <button v-if="activeCanvas.isSketch" @click="toggleSketchGrid" class="bg-white text-zinc-700 border border-zinc-300 px-2 py-1 rounded-md text-[11px] font-bold shadow-sm">{{ activeCanvas.hasGrid ? '▦格' : '⬜白' }}</button>
+                        <button @click="pasteFromClipboard(false)" class="bg-white text-zinc-700 border border-zinc-300 px-2 py-1 rounded-md text-[11px] font-bold shadow-sm">📋貼圖</button>
                     </div>
                 </div>
 
                 <div class="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end pointer-events-none">
-                    <div v-if="drawMode === 'browse'" class="bg-emerald-500 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow opacity-85">👆 睇圖 / 拖字 / 移圖</div>
-                    <div v-else-if="drawMode === 'wall'" class="bg-yellow-400 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow">🧱 拉線畫牆身</div>
-                    <div v-else-if="drawMode === 'stamp'" class="bg-yellow-400 text-black px-2 py-0.5 rounded-full text-[10px] font-black shadow">🏷️ 點畫面蓋印</div>
-                    <div v-else-if="drawMode === 'pin'" class="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px] font-black shadow">📍 點畫面落釘</div>
+                    <div v-if="drawMode === 'browse'" class="bg-zinc-900 text-white px-2.5 py-1 rounded-md text-[11px] font-bold shadow-sm opacity-90">👆 睇圖 / 拖字 / 移圖</div>
+                    <div v-else-if="drawMode === 'wall'" class="bg-white border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-[11px] font-bold shadow-sm">🧱 拉線畫牆身</div>
+                    <div v-else-if="drawMode === 'stamp'" class="bg-white border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-[11px] font-bold shadow-sm">🏷️ 點畫面蓋印</div>
+                    <div v-else-if="drawMode === 'pin'" class="bg-red-50 border border-red-300 text-red-700 px-2.5 py-1 rounded-md text-[11px] font-bold shadow-sm">📍 點畫面落釘</div>
                 </div>
 
-                <div class="absolute inset-2.5 overflow-hidden">
+                <!-- 畫布外邊距收窄至 4px (inset-1) -->
+                <div class="absolute inset-1 overflow-hidden bg-white shadow-sm border border-zinc-300 rounded-lg" id="draw-stage">
                     <svg ref="svgCanvas" :view-box.camel="`0 0 ${canvasW} ${canvasH}`" preserveAspectRatio="xMidYMid meet"
                          style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;"
                          class="canvas-touch-lock"
@@ -430,8 +443,7 @@
 
                         <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="#ffffff" />
                         <image :href="activeCanvas.photo" x="0" y="0" :width="canvasW" :height="canvasH" preserveAspectRatio="none" />
-                        <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="none" stroke="#52525b" stroke-width="4" />
-
+                        
                         <g v-for="w in (activeCanvas.walls || [])" :key="w.id">
                             <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" />
                         </g>
@@ -481,228 +493,257 @@
         </main>
 
         <!-- +加頁選單 Modal -->
-        <div v-if="showAddPageModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showAddPageModal = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-4 flex flex-col gap-2.5 text-white shadow-2xl">
-                <div class="text-sm font-bold text-center text-yellow-400 mb-1">新增工程頁面</div>
-                <button @click="pasteFromClipboard(true)" class="w-full bg-emerald-600 text-white py-2.5 rounded-lg text-sm font-bold shadow">📋 貼上剪貼簿為新頁</button>
-                <button @click="openPhotoPool('newPage')" class="w-full bg-indigo-600 text-white py-2.5 rounded-lg text-sm font-bold shadow">🖼️ 從工程底圖庫選圖 (救回誤刪)</button>
+        <div v-if="showAddPageModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showAddPageModal = false">
+            <div class="bg-white border border-zinc-200 w-full max-w-xs rounded-xl p-4 flex flex-col gap-2.5 shadow-xl">
+                <div class="text-[15px] font-black text-center text-zinc-900 mb-1 border-b border-zinc-200 pb-2">新增工程頁面</div>
+                
+                <button @click="pasteFromClipboard(true)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[14px] font-bold shadow-sm flex items-center gap-2 justify-center"><span>📋</span> 貼上剪貼簿</button>
+                
+                <div class="flex gap-2 w-full">
+                    <label class="flex-1 text-center bg-zinc-900 text-white py-2.5 rounded-md text-[14px] font-bold cursor-pointer shadow-sm border border-zinc-800 flex items-center justify-center gap-1.5">
+                        <span>📷</span> 拍照
+                        <input type="file" accept="image/*" capture="environment" class="hidden" @change="e => handleImageUpload(e, true)">
+                    </label>
+                    <label class="flex-1 text-center bg-white text-zinc-900 py-2.5 rounded-md text-[14px] font-bold cursor-pointer shadow-sm border border-zinc-300 flex items-center justify-center gap-1.5">
+                        <span>📁</span> 多選圖
+                        <input type="file" accept="image/*" multiple class="hidden" @change="e => handleImageUpload(e, true)">
+                    </label>
+                </div>
+
+                <button @click="openPhotoPool('newPage')" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[14px] font-bold shadow-sm flex items-center gap-2 justify-center"><span>🖼️</span> 工程底圖庫</button>
+                
                 <template v-if="activePage?.photo">
-                    <button @click="duplicateCurrentPage(false)" class="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-bold shadow">📄 複製當前純淨底圖為新頁</button>
-                    <button @click="duplicateCurrentPage(true)" class="w-full bg-zinc-800 border border-blue-500/50 text-blue-300 py-2 rounded-lg text-xs font-bold">📑 連同標註複製整頁</button>
+                    <div class="border-t border-zinc-200 my-0.5"></div>
+                    <button @click="duplicateCurrentPage(false)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[14px] font-bold shadow-sm flex items-center gap-2 justify-center"><span>📄</span> 複製當前底圖</button>
+                    <button @click="duplicateCurrentPage(true)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[14px] font-bold shadow-sm flex items-center gap-2 justify-center"><span>📑</span> 複製整頁標註</button>
                 </template>
-                <div class="border-t border-zinc-800 my-0.5"></div>
-                <label class="w-full text-center bg-white text-black py-2.5 rounded-lg text-sm font-bold cursor-pointer">
-                    📷 拍照 / 一次多選圖自動分頁
-                    <input type="file" accept="image/*" multiple class="hidden" @change="e => handleImageUpload(e, true)">
-                </label>
-                <button @click="addNewSketchPage(true)" class="w-full bg-amber-400 text-black py-2.5 rounded-lg text-sm font-bold">✏️ 空白手繪 (格線)</button>
-                <button @click="addNewSketchPage(false)" class="w-full bg-zinc-800 text-white border border-zinc-600 py-2 rounded-lg text-xs font-bold">⬜ 空白手繪 (純白)</button>
-                <button @click="showAddPageModal = false" class="w-full text-zinc-400 py-1.5 text-xs font-bold mt-1">取消</button>
+                
+                <div class="border-t border-zinc-200 my-0.5"></div>
+                <button @click="initSketchOnCurrent" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[14px] font-bold shadow-sm flex items-center gap-2 justify-center"><span>✏️</span> 空白手繪</button>
+                
+                <button @click="showAddPageModal = false" class="w-full text-zinc-500 py-2 text-xs font-bold mt-1">取消</button>
+            </div>
+        </div>
+
+        <!-- Y鍵分歧複製提示框 -->
+        <div v-if="showBranchPrompt" class="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-4">
+            <div class="bg-white border border-zinc-300 w-full max-w-sm rounded-xl p-5 flex flex-col shadow-2xl">
+                <h3 class="text-[16px] font-black text-zinc-900 mb-2">⚠️ 跨人編輯提示</h3>
+                <p class="text-[14px] text-zinc-600 font-bold mb-4 leading-relaxed">
+                    此頁原由 <span class="text-blue-600">[{{ branchOwner }}]</span> 修改。<br>
+                    輸入 <span class="text-zinc-900 font-black">"Y"</span> 複製為新頁獨立修改。<br>
+                    (直接按確定或取消則覆蓋原頁)
+                </p>
+                <input ref="branchInputRef" type="text" v-model="branchInputValue" @keyup.enter="confirmBranch" class="w-full bg-zinc-50 border-2 border-zinc-300 rounded-md p-3 text-center text-xl font-bold text-zinc-900 mb-4 focus:outline-none focus:border-blue-500" placeholder="Y">
+                <div class="flex gap-2">
+                    <button @click="cancelBranch" class="flex-1 bg-white border border-zinc-300 text-zinc-600 font-bold py-2.5 rounded-md text-sm">取消 (覆蓋)</button>
+                    <button @click="confirmBranch" class="flex-1 bg-zinc-900 text-white font-bold py-2.5 rounded-md text-sm shadow-sm">確定</button>
+                </div>
             </div>
         </div>
 
         <!-- 🖼️ 工程底圖庫 Modal -->
-        <div v-if="showPhotoPoolModal" class="fixed inset-0 bg-black/85 z-[60] flex items-center justify-center p-4" @click.self="showPhotoPoolModal = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-md rounded-xl p-4 flex flex-col text-white shadow-2xl max-h-[82vh]">
-                <div class="flex justify-between items-center border-b border-zinc-700 pb-2 mb-3">
-                    <h3 class="text-sm font-bold text-blue-400">🖼️ 工程底圖庫 (#{{ project.code }})</h3>
-                    <span class="text-[10px] text-zinc-400">點選圖片直接建立頁面</span>
+        <div v-if="showPhotoPoolModal" class="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" @click.self="showPhotoPoolModal = false">
+            <div class="bg-white border border-zinc-200 w-full max-w-md rounded-xl p-4 flex flex-col shadow-xl max-h-[82vh]">
+                <div class="flex justify-between items-center border-b border-zinc-200 pb-2 mb-3">
+                    <h3 class="text-[15px] font-black text-zinc-900">🖼️ 工程底圖庫 (#{{ project.code }})</h3>
+                    <span class="text-[10px] text-zinc-500 font-bold">點圖直接建立頁面</span>
                 </div>
                 <div class="overflow-y-auto flex-1 touch-scrollable no-scrollbar">
-                    <div v-if="!photoPoolList.length" class="text-center text-zinc-500 py-12 text-xs">此工程暫無已拍攝的底圖紀錄。</div>
+                    <div v-if="!photoPoolList.length" class="text-center text-zinc-400 py-12 text-sm font-bold">此工程暫無已拍攝的底圖紀錄。</div>
                     <div class="grid grid-cols-2 gap-2.5">
-                        <div v-for="item in photoPoolList" :key="item.id" @click="selectFromPhotoPool(item)" class="relative bg-black border border-zinc-700 rounded-lg overflow-hidden cursor-pointer">
+                        <div v-for="item in photoPoolList" :key="item.id" @click="selectFromPhotoPool(item)" class="relative bg-zinc-100 border border-zinc-300 rounded-lg overflow-hidden cursor-pointer shadow-sm">
                             <img :src="item.photo" class="w-full h-32 object-cover block">
-                            <button @click.stop="deleteFromPhotoPool(item)" class="absolute top-1.5 right-1.5 bg-black/80 text-red-400 border border-red-800/70 w-6 h-6 rounded-full text-xs flex items-center justify-center">🗑️</button>
-                            <div class="p-1.5 bg-zinc-950/90 text-[10px] text-zinc-300 flex justify-between">
+                            <button @click.stop="deleteFromPhotoPool(item)" class="absolute top-1.5 right-1.5 bg-white/90 text-red-600 border border-zinc-300 w-7 h-7 rounded-full text-xs flex items-center justify-center shadow-sm font-bold">✕</button>
+                            <div class="p-1.5 bg-white border-t border-zinc-200 text-[10px] text-zinc-600 font-bold flex justify-between">
                                 <span class="truncate">{{ item.author ? '✍️' + item.author : '工程原圖' }}</span>
-                                <span class="text-zinc-500 shrink-0">{{ item.w }}×{{ item.h }}</span>
+                                <span class="text-zinc-400 shrink-0">{{ item.w }}×{{ item.h }}</span>
                             </div>
                         </div>
                     </div>
                 </div>
-                <button @click="showPhotoPoolModal = false" class="mt-3 w-full bg-zinc-800 py-2 rounded-lg text-xs font-bold">關閉</button>
+                <button @click="showPhotoPoolModal = false" class="mt-3 w-full bg-white border border-zinc-300 text-zinc-800 py-2 rounded-md text-xs font-bold">關閉</button>
             </div>
         </div>
 
         <!-- ⚙️ 管理目錄選單 Modal -->
-        <div v-if="showManageModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showManageModal = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl overflow-hidden flex flex-col text-white shadow-2xl">
-                <div class="bg-zinc-800 p-3 text-center border-b border-zinc-700">
-                    <div class="text-sm font-bold text-yellow-400">管理工程 #{{ manageProj.code }}</div>
-                    <div class="text-[11px] text-zinc-400 mt-1 truncate">{{ manageProj.name || '未輸入地址' }}</div>
+        <div v-if="showManageModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showManageModal = false">
+            <div class="bg-white border border-zinc-200 w-full max-w-xs rounded-xl overflow-hidden flex flex-col shadow-xl">
+                <div class="bg-zinc-50 p-3 text-center border-b border-zinc-200">
+                    <div class="text-[15px] font-black text-zinc-900">管理工程 #{{ manageProj.code }}</div>
+                    <div class="text-xs text-zinc-500 font-bold mt-1 truncate">{{ manageProj.name || '未輸入地址' }}</div>
                 </div>
-                <button @click="renameProject" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">✏️ 修改地址 / 名稱</button>
-                <button @click="copyCode(manageProj.code)" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">🔗 複製工程碼</button>
-                <button @click="duplicateProject" class="p-4 text-sm font-bold text-left hover:bg-zinc-800 border-b border-zinc-800">👯‍♂️ 複製為新檔</button>
-                <button @click="openBackupList" class="p-4 text-sm font-bold text-left text-blue-400 hover:bg-zinc-800 border-b border-zinc-800">⏳ 歷史備份與還原</button>
-                <button @click="deleteProject(manageProj.code)" class="p-4 text-sm font-bold text-left text-red-500 hover:bg-red-950">🗑️ 刪除此工程</button>
-                <button @click="showManageModal = false" class="p-3 text-xs font-bold text-zinc-500 bg-black text-center">取消</button>
+                <button @click="renameProject" class="p-4 text-[14px] font-bold text-left text-zinc-800 hover:bg-zinc-50 border-b border-zinc-100">✏️ 修改地址 / 名稱</button>
+                <button @click="copyCode(manageProj.code)" class="p-4 text-[14px] font-bold text-left text-zinc-800 hover:bg-zinc-50 border-b border-zinc-100">🔗 複製工程碼</button>
+                <button @click="duplicateProject" class="p-4 text-[14px] font-bold text-left text-zinc-800 hover:bg-zinc-50 border-b border-zinc-100">👯‍♂️ 複製為新檔</button>
+                <button @click="openBackupList" class="p-4 text-[14px] font-bold text-left text-blue-600 hover:bg-zinc-50 border-b border-zinc-100">⏳ 歷史備份與還原</button>
+                <button @click="deleteProject(manageProj.code)" class="p-4 text-[14px] font-bold text-left text-red-600 hover:bg-red-50">🗑️ 刪除此工程</button>
+                <button @click="showManageModal = false" class="p-3 text-xs font-bold text-zinc-500 bg-white text-center border-t border-zinc-200">取消</button>
             </div>
         </div>
 
         <!-- ☁️ 雲端工程庫 Modal -->
-        <div v-if="showCloudBrowser" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" @click.self="showCloudBrowser = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-md rounded-xl p-4 flex flex-col text-white shadow-2xl max-h-[82vh]">
-                <div class="flex justify-between items-center border-b border-zinc-700 pb-2.5 mb-3">
-                    <h3 class="text-sm font-bold text-blue-400">☁️ 雲端工程庫 ({{ cloudProjectList.length }})</h3>
-                    <button @click="cleanCloudGarbage" class="bg-red-950 border border-red-700 text-red-200 px-2.5 py-1 rounded text-[11px] font-bold">🧹 清理殘留垃圾</button>
+        <div v-if="showCloudBrowser" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showCloudBrowser = false">
+            <div class="bg-white border border-zinc-200 w-full max-w-md rounded-xl p-4 flex flex-col shadow-xl max-h-[82vh]">
+                <div class="flex justify-between items-center border-b border-zinc-200 pb-2.5 mb-3">
+                    <h3 class="text-[15px] font-black text-zinc-900">☁️ 雲端工程庫 ({{ cloudProjectList.length }})</h3>
+                    <button @click="cleanCloudGarbage" class="bg-white border border-zinc-300 text-zinc-600 px-2.5 py-1 rounded-md text-[11px] font-bold shadow-sm">🧹 清理殘留垃圾</button>
                 </div>
                 <div class="overflow-y-auto flex-1 touch-scrollable no-scrollbar">
-                    <div v-if="!cloudProjectList.length" class="text-center text-zinc-500 py-10 text-xs">無雲端紀錄...</div>
-                    <div v-for="cp in cloudProjectList" :key="cp.code" class="bg-zinc-800 rounded p-3 mb-2 flex justify-between items-center">
+                    <div v-if="!cloudProjectList.length" class="text-center text-zinc-400 py-10 text-sm font-bold">無雲端紀錄...</div>
+                    <div v-for="cp in cloudProjectList" :key="cp.code" class="bg-zinc-50 border border-zinc-200 rounded-lg p-3 mb-2 flex justify-between items-center">
                         <div class="min-w-0 flex-1 pr-2">
                             <div class="flex items-center gap-1">
-                                <span class="bg-yellow-500 text-black px-1 rounded text-[10px] font-bold">#{{ cp.code }}</span>
-                                <span class="text-sm font-bold truncate">{{ cp.name || '未輸入地址' }}</span>
+                                <span class="bg-amber-100 text-amber-900 border border-amber-300 px-1.5 rounded text-[10px] font-black">#{{ cp.code }}</span>
+                                <span class="text-[14px] font-bold text-zinc-900 truncate">{{ cp.name || '未輸入地址' }}</span>
                             </div>
-                            <div class="text-[10px] text-zinc-400 mt-0.5">更新: {{ cp.updatedAt ? new Date(cp.updatedAt).toLocaleString() : '未知' }}</div>
-                            <div v-if="cp.lastModifiedBy" class="text-[10px] text-blue-300">✍️ 由 {{ cp.lastModifiedBy }} 修改</div>
+                            <div class="text-[10px] text-zinc-500 font-bold mt-1">更新: {{ cp.updatedAt ? new Date(cp.updatedAt).toLocaleString() : '未知' }}</div>
+                            <div v-if="cp.lastModifiedBy" class="text-[10px] text-blue-600 font-bold">✍️ 由 {{ cp.lastModifiedBy }} 修改</div>
                         </div>
-                        <button @click="downloadFromCloudBrowser(cp.code)" class="bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold shrink-0">⬇️載入</button>
+                        <button @click="downloadFromCloudBrowser(cp.code)" class="bg-white border border-zinc-300 text-zinc-900 px-3 py-1.5 rounded-md text-xs font-bold shrink-0 shadow-sm">⬇️載入</button>
                     </div>
                 </div>
-                <button @click="showCloudBrowser = false" class="mt-4 w-full bg-zinc-800 py-2 rounded text-xs font-bold">關閉</button>
+                <button @click="showCloudBrowser = false" class="mt-4 w-full bg-white border border-zinc-300 text-zinc-800 py-2 rounded-md text-xs font-bold">關閉</button>
             </div>
         </div>
 
         <!-- ⏳ 時光機備份清單 Modal -->
-        <div v-if="showBackupListModal" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" @click.self="showBackupListModal = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-sm rounded-xl p-4 flex flex-col text-white shadow-2xl">
-                <h3 class="text-sm font-bold text-blue-400 mb-4 border-b border-zinc-700 pb-2">⏳ 雲端備份時光機 (#{{ manageProj.code }})</h3>
+        <div v-if="showBackupListModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showBackupListModal = false">
+            <div class="bg-white border border-zinc-200 w-full max-w-sm rounded-xl p-4 flex flex-col shadow-xl">
+                <h3 class="text-[15px] font-black text-zinc-900 mb-4 border-b border-zinc-200 pb-2">⏳ 雲端備份時光機 (#{{ manageProj.code }})</h3>
                 <div class="overflow-y-auto touch-scrollable max-h-[50vh]">
-                    <div v-if="!backupList.length" class="text-center text-zinc-500 py-10 text-xs">尚未建立備份</div>
-                    <div v-for="bk in backupList" :key="bk.id" class="bg-zinc-800 border border-zinc-700 rounded p-3 mb-2 flex justify-between items-center">
+                    <div v-if="!backupList.length" class="text-center text-zinc-400 py-10 text-sm font-bold">尚未建立備份</div>
+                    <div v-for="bk in backupList" :key="bk.id" class="bg-zinc-50 border border-zinc-200 rounded-lg p-3 mb-2 flex justify-between items-center">
                         <div>
-                            <div class="text-xs font-bold text-yellow-400">{{ new Date(bk.timestamp).toLocaleString() }}</div>
-                            <div class="text-[10px] text-zinc-400 mt-1">✍️ 備份者: {{ bk.author || '未知' }}</div>
+                            <div class="text-sm font-bold text-zinc-900">{{ new Date(bk.timestamp).toLocaleString() }}</div>
+                            <div class="text-[11px] text-zinc-500 font-bold mt-1">✍️ 備份者: {{ bk.author || '未知' }}</div>
                         </div>
-                        <button @click="restoreBackup(bk.id)" class="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold">⏳還原</button>
+                        <button @click="restoreBackup(bk.id)" class="bg-white border border-zinc-300 text-zinc-900 px-3 py-1.5 rounded-md text-xs font-bold shadow-sm">⏳還原</button>
                     </div>
                 </div>
-                <button @click="showBackupListModal = false" class="mt-4 w-full bg-zinc-800 py-2 rounded text-xs font-bold">關閉</button>
+                <button @click="showBackupListModal = false" class="mt-4 w-full bg-white border border-zinc-300 text-zinc-800 py-2 rounded-md text-xs font-bold">關閉</button>
             </div>
         </div>
 
         <!-- 文字輸入條 / 貼圖控制條 -->
-        <div v-if="showTopTextBar && activeMarker" class="fixed top-0 left-0 w-full bg-white text-black border-b-4 border-blue-600 z-[60] shadow-2xl flex items-center gap-2 p-2 px-3" @touchstart.stop @mousedown.stop>
+        <div v-if="showTopTextBar && activeMarker" class="fixed top-0 left-0 w-full bg-white text-zinc-900 border-b border-zinc-300 z-[60] shadow-md flex items-center gap-2 p-2 px-3" @touchstart.stop @mousedown.stop>
             <template v-if="activeMarker.type === 'image'">
-                <span class="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-1 rounded shrink-0">貼圖</span>
-                <span class="flex-1 text-sm text-zinc-500 font-bold px-2 truncate">已選取圖片，可拖拉移動。</span>
-                <button @click="deleteMarkerTop" class="bg-red-100 text-red-600 border border-red-300 px-3 py-2 rounded text-sm font-bold shrink-0">刪除</button>
-                <button @click="closeTopTextBar" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold shrink-0 shadow-md">確定</button>
+                <span class="text-[11px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded shrink-0">貼圖</span>
+                <span class="flex-1 text-[13px] text-zinc-600 font-bold px-2 truncate">已選取圖片，可拖拉移動。</span>
+                <button @click="deleteMarkerTop" class="bg-white text-red-600 border border-zinc-300 px-3 py-1.5 rounded-md text-xs font-bold shrink-0 shadow-sm">刪除</button>
+                <button @click="closeTopTextBar" class="bg-zinc-900 text-white px-4 py-1.5 rounded-md text-xs font-bold shrink-0 shadow-sm">確定</button>
             </template>
             <template v-else>
-                <span class="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-1 rounded shrink-0">備註</span>
-                <input ref="topTextInputRef" type="text" v-model="activeMarker.data.val" @input="onMarkerTextInput" @keyup.enter="closeTopTextBar" class="flex-1 min-w-0 bg-zinc-100 border border-zinc-300 p-2 text-base font-bold rounded focus:outline-none focus:border-blue-500" placeholder="補加備註...">
-                <button @click="deleteMarkerTop" class="bg-red-100 text-red-600 border border-red-300 px-3 py-2 rounded text-sm font-bold shrink-0">刪除</button>
-                <button @click="closeTopTextBar" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold shrink-0 shadow-md">確定</button>
+                <span class="text-[11px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded shrink-0">備註</span>
+                <input ref="topTextInputRef" type="text" v-model="activeMarker.data.val" @input="onMarkerTextInput" @keyup.enter="closeTopTextBar" class="flex-1 min-w-0 bg-white border border-zinc-300 p-1.5 px-2 text-[15px] font-bold rounded-md focus:outline-none focus:border-blue-500" placeholder="補加備註...">
+                <button @click="deleteMarkerTop" class="bg-white text-red-600 border border-zinc-300 px-3 py-1.5 rounded-md text-xs font-bold shrink-0 shadow-sm">刪除</button>
+                <button @click="closeTopTextBar" class="bg-zinc-900 text-white px-4 py-1.5 rounded-md text-xs font-bold shrink-0 shadow-sm">確定</button>
             </template>
         </div>
 
         <!-- 空間標記 Modal -->
-        <div v-if="showSpaceModal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4" @click.self="showSpaceModal = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-4 text-white shadow-2xl">
-                <div class="text-sm font-bold text-yellow-400 mb-2.5">🏠 標記本頁空間</div>
+        <div v-if="showSpaceModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showSpaceModal = false">
+            <div class="bg-white border border-zinc-200 w-full max-w-xs rounded-xl p-4 text-zinc-900 shadow-xl">
+                <div class="text-[15px] font-black text-zinc-900 mb-3 border-b border-zinc-200 pb-2">🏠 標記本頁空間</div>
                 <div class="flex flex-wrap gap-1.5 mb-4">
-                    <button v-for="sp in spaceList" :key="sp" @click="setPageSpace(sp)" :class="activeCanvas?.space === sp ? 'bg-yellow-400 text-black' : 'bg-zinc-800 text-zinc-200'" class="px-2.5 py-1.5 rounded-lg text-xs font-bold">{{ sp }}</button>
-                    <button @click="addCustomSpace" class="bg-blue-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold">+自訂</button>
+                    <button v-for="sp in spaceList" :key="sp" @click="setPageSpace(sp)" :class="activeCanvas?.space === sp ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2.5 py-1.5 rounded-md text-[13px] font-bold border">{{ sp }}</button>
+                    <button @click="addCustomSpace" class="bg-blue-50 text-blue-700 border-blue-300 border px-2.5 py-1.5 rounded-md text-[13px] font-bold">+自訂</button>
                 </div>
-                <div class="flex gap-2">
-                    <button v-if="activeCanvas?.space" @click="setPageSpace('')" class="flex-1 bg-red-900 text-white py-2 rounded-lg text-xs font-bold">清除</button>
-                    <button @click="showSpaceModal = false" class="flex-1 bg-zinc-800 text-white py-2 rounded-lg text-xs font-bold">關閉</button>
+                <div class="flex gap-2 border-t border-zinc-200 pt-3">
+                    <button v-if="activeCanvas?.space" @click="setPageSpace('')" class="flex-1 bg-white text-red-600 border border-zinc-300 py-2 rounded-md text-xs font-bold shadow-sm">清除</button>
+                    <button @click="showSpaceModal = false" class="flex-1 bg-zinc-900 text-white py-2 rounded-md text-xs font-bold shadow-sm">關閉</button>
                 </div>
             </div>
         </div>
 
         <!-- 輸入工程碼 Modal -->
-        <div v-if="showJoinModal" class="fixed inset-0 bg-black/75 z-50 flex items-start justify-center p-4 pt-[12vh]" @click.self="showJoinModal = false">
-            <div class="bg-zinc-900 border border-zinc-700 w-full max-w-xs rounded-xl p-4 text-white">
-                <h3 class="text-sm font-bold text-yellow-400 mb-2">🔑 輸入 6 位數工程碼</h3>
-                <input type="text" inputmode="numeric" maxlength="6" v-model="inputJoinCode" placeholder="849201" class="w-full bg-black border-2 border-yellow-500 rounded-lg p-2.5 text-center text-2xl font-mono font-bold tracking-widest text-white mb-4 focus:outline-none">
+        <div v-if="showJoinModal" class="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 pt-[12vh]" @click.self="showJoinModal = false">
+            <div class="bg-white border border-zinc-200 w-full max-w-xs rounded-xl p-4 text-zinc-900 shadow-xl">
+                <h3 class="text-[15px] font-black text-zinc-900 mb-3 border-b border-zinc-200 pb-2">🔑 輸入 6 位數工程碼</h3>
+                <input type="text" inputmode="numeric" maxlength="6" v-model="inputJoinCode" placeholder="849201" class="w-full bg-zinc-50 border-2 border-zinc-300 rounded-md p-2.5 text-center text-2xl font-mono font-bold tracking-widest text-zinc-900 mb-4 focus:outline-none focus:border-blue-500">
                 <div class="flex gap-2">
-                    <button @click="showJoinModal = false" class="flex-1 bg-zinc-800 text-white font-bold py-2.5 rounded-lg text-xs">取消</button>
-                    <button @click="joinProjectByCode" class="flex-1 bg-yellow-500 text-black font-bold py-2.5 rounded-lg text-xs">連通</button>
+                    <button @click="showJoinModal = false" class="flex-1 bg-white text-zinc-700 border border-zinc-300 font-bold py-2.5 rounded-md text-xs shadow-sm">取消</button>
+                    <button @click="joinProjectByCode" class="flex-1 bg-zinc-900 text-white font-bold py-2.5 rounded-md text-xs shadow-sm">連通</button>
                 </div>
             </div>
         </div>
 
         <!-- 度尺與印章輸入面板 -->
-        <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/40 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
-        <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-black border-b-2 border-black rounded-b-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[85dvh]" @touchstart.stop @mousedown.stop>
-            <div class="px-3 py-2 bg-zinc-900 text-white flex justify-between items-center shrink-0">
-                <span class="font-bold text-xs text-yellow-400">📍 {{ activeMarker.type === 'stamp' ? '一撳蓋印章' : '度尺設定' }}</span>
+        <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/20 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
+        <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-zinc-900 border-b border-x border-zinc-300 rounded-b-xl z-50 flex flex-col shadow-xl overflow-hidden max-h-[85dvh]" @touchstart.stop @mousedown.stop>
+            <div class="px-3 py-2 bg-zinc-50 border-b border-zinc-200 flex justify-between items-center shrink-0">
+                <span class="font-black text-[13px] text-zinc-900">📍 {{ activeMarker.type === 'stamp' ? '一撳蓋印章' : '度尺設定' }}</span>
                 <div class="flex gap-2">
-                    <button @click="deleteMarkerTop" class="bg-red-700 text-white font-bold px-3 py-1 rounded text-xs">刪除</button>
-                    <button @click="closeTopSheet" class="bg-emerald-600 text-white font-bold px-4 py-1 rounded text-xs">完成</button>
+                    <button @click="deleteMarkerTop" class="bg-white text-red-600 border border-zinc-300 font-bold px-3 py-1.5 rounded-md text-xs shadow-sm">刪除</button>
+                    <button @click="closeTopSheet" class="bg-zinc-900 text-white font-bold px-4 py-1.5 rounded-md text-xs shadow-sm">完成</button>
                 </div>
             </div>
 
-            <div v-if="activeMarker.type !== 'stamp'" class="p-1.5 bg-zinc-200 border-b border-zinc-300 shrink-0 flex items-center justify-center gap-1.5">
-                <input type="text" v-model="activeMarker.data.name" @input="onMarkerTextInput" @focus="focusedInput = 'name'" class="w-[5.5em] border-2 border-zinc-400 p-1 text-sm font-bold bg-white rounded text-center" placeholder="標籤">
-                <span class="font-bold text-base">:</span>
-                <input type="text" readonly :value="activeMarker.data[focusedInput === 'name' ? 'val' : focusedInput]" @click="focusedInput = (focusedInput === 'name' ? 'val' : focusedInput)" class="flex-1 min-w-0 border-2 border-blue-600 bg-blue-50 p-1 px-2 text-sm font-bold rounded cursor-pointer" placeholder="點擊下方數字...">
+            <div v-if="activeMarker.type !== 'stamp'" class="p-2 bg-white border-b border-zinc-200 shrink-0 flex items-center justify-center gap-1.5">
+                <input type="text" v-model="activeMarker.data.name" @input="onMarkerTextInput" @focus="focusedInput = 'name'" class="w-[5.5em] border border-zinc-300 p-1.5 text-[15px] font-bold bg-zinc-50 rounded-md text-center focus:outline-none focus:border-blue-500" placeholder="標籤">
+                <span class="font-black text-lg text-zinc-400">:</span>
+                <input type="text" readonly :value="activeMarker.data[focusedInput === 'name' ? 'val' : focusedInput]" @click="focusedInput = (focusedInput === 'name' ? 'val' : focusedInput)" class="flex-1 min-w-0 border-2 border-blue-500 bg-blue-50 p-1.5 px-3 text-[15px] font-bold rounded-md cursor-pointer text-zinc-900" placeholder="點擊下方數字...">
             </div>
 
-            <div v-if="activeMarker.type !== 'stamp'" class="p-1.5 border-b border-zinc-200 flex gap-1.5 overflow-x-auto no-scrollbar bg-zinc-100 shrink-0">
-                <button v-for="t in [{id:'general',l:'尺寸',f:'val'},{id:'door',l:'門洞',f:'w_in'},{id:'window',l:'窗',f:'w_in'},{id:'beam',l:'樑',f:'w'},{id:'column',l:'柱',f:'w'}]" :key="t.id" @click="switchMarkerType(t.id, t.f)" :class="activeMarker.type === t.id ? 'bg-black text-white' : 'bg-white text-black'" class="micro-btn py-1 px-3">{{ t.l }}</button>
+            <div v-if="activeMarker.type !== 'stamp'" class="p-2 border-b border-zinc-200 flex gap-1.5 overflow-x-auto no-scrollbar bg-zinc-50 shrink-0">
+                <button v-for="t in [{id:'general',l:'尺寸',f:'val'},{id:'door',l:'門洞',f:'w_in'},{id:'window',l:'窗',f:'w_in'},{id:'beam',l:'樑',f:'w'},{id:'column',l:'柱',f:'w'}]" :key="t.id" @click="switchMarkerType(t.id, t.f)" :class="activeMarker.type === t.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'" class="px-3 py-1.5 text-[13px] font-bold rounded-md border shadow-sm whitespace-nowrap">{{ t.l }}</button>
             </div>
 
-            <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[300px]">
-                <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2.5">
-                    <button @click="promptCustomStamp" class="w-full bg-blue-50 border border-blue-200 text-blue-700 py-1.5 rounded-lg text-xs font-bold">➕ 新增自訂印章</button>
+            <div class="p-3 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[300px]">
+                <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-3">
+                    <button @click="promptCustomStamp" class="w-full bg-blue-50 border border-blue-200 text-blue-700 py-2 rounded-md text-[13px] font-bold shadow-sm">➕ 新增自訂印章</button>
                     <div v-if="customStamps.length" class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-bold text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded">自訂</span>
-                        <button v-for="s in customStamps" :key="s" @click="applyStamp(s)" class="micro-btn border-zinc-400 text-zinc-800">{{ s }}</button>
+                        <span class="text-[10px] font-black text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">自訂</span>
+                        <button v-for="s in customStamps" :key="s" @click="applyStamp(s)" class="micro-btn">{{ s }}</button>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">泥水</span>
-                        <button v-for="s in ['需清拆','牆身斜','牆體不平','空鼓','滲水','局部凸出']" :key="s" @click="applyStamp(s)" class="micro-btn border-red-500 text-red-700">{{ s }}</button>
+                        <span class="text-[10px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">泥水</span>
+                        <button v-for="s in ['需清拆','牆身斜','牆體不平','空鼓','滲水','局部凸出']" :key="s" @click="applyStamp(s)" class="micro-btn border-red-200 text-red-700">{{ s }}</button>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-bold text-yellow-800 bg-yellow-100 px-1.5 py-0.5 rounded">水電</span>
-                        <button v-for="s in ['開關','單蘇','孖蘇','燈曲','數據','燈線']" :key="s" @click="applyStamp(s)" class="micro-btn border-yellow-600 text-yellow-900">{{ s }}</button>
+                        <span class="text-[10px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">水電</span>
+                        <button v-for="s in ['開關','單蘇','孖蘇','燈曲','數據','燈線']" :key="s" @click="applyStamp(s)" class="micro-btn border-amber-300 text-amber-900">{{ s }}</button>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">結構</span>
-                        <button v-for="s in ['留通道','開門方向','可保留','實地台']" :key="s" @click="applyStamp(s)" class="micro-btn border-blue-600 text-blue-800">{{ s }}</button>
+                        <span class="text-[10px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">結構</span>
+                        <button v-for="s in ['留通道','開門方向','可保留','實地台']" :key="s" @click="applyStamp(s)" class="micro-btn border-blue-200 text-blue-700">{{ s }}</button>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">木工</span>
-                        <button v-for="s in ['要收口','見光','開背板','生口位','避窗簾盒','留散熱','要分件']" :key="s" @click="applyStamp(s)" class="micro-btn border-amber-600 text-amber-900">{{ s }}</button>
+                        <span class="text-[10px] font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200">木工</span>
+                        <button v-for="s in ['要收口','見光','開背板','生口位','避窗簾盒','留散熱','要分件']" :key="s" @click="applyStamp(s)" class="micro-btn border-orange-300 text-orange-800">{{ s }}</button>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">空間</span>
-                        <button v-for="sp in spaceList" :key="sp" @click="applyStamp(sp)" class="micro-btn border-purple-500 text-purple-800">{{ sp }}</button>
+                        <span class="text-[10px] font-black text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">空間</span>
+                        <button v-for="sp in spaceList" :key="sp" @click="applyStamp(sp)" class="micro-btn border-purple-200 text-purple-700">{{ sp }}</button>
                     </div>
                 </div>
 
-                <div v-else-if="['window','door','beam','column'].includes(activeMarker.type)" :class="['window','door'].includes(activeMarker.type) ? 'grid-cols-3' : 'grid-cols-2'" class="grid gap-1.5">
+                <div v-else-if="['window','door','beam','column'].includes(activeMarker.type)" :class="['window','door'].includes(activeMarker.type) ? 'grid-cols-3' : 'grid-cols-2'" class="grid gap-2">
                     <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
-                        <label class="text-[10px] font-bold text-zinc-700 bg-zinc-200 px-1 py-0.5 text-center rounded-t">{{ field.label }}</label>
-                        <input type="text" readonly :value="activeMarker.data[field.key]" @click="focusedInput = field.key" :class="focusedInput === field.key ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-500' : 'border-zinc-300 bg-white'" class="w-full border p-1 text-sm font-bold text-center rounded-b cursor-pointer">
+                        <label class="text-[11px] font-bold text-zinc-600 bg-zinc-100 border border-zinc-200 border-b-0 px-1 py-1 text-center rounded-t-md">{{ field.label }}</label>
+                        <input type="text" readonly :value="activeMarker.data[field.key]" @click="focusedInput = field.key" :class="focusedInput === field.key ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 z-10 relative' : 'border-zinc-300 bg-white'" class="w-full border p-1.5 text-[15px] font-bold text-zinc-900 text-center rounded-b-md cursor-pointer outline-none shadow-sm">
                     </div>
                 </div>
 
-                <div v-else class="flex flex-col gap-1.5">
-                    <div v-for="row in [{t:'基礎',items:['高','闊','深','厚','總闊','總高','總深']},{t:'水電',items:['制中-地','制底-地','制中-牆','制邊-牆']},{t:'預留',items:['冷氣','電箱','留位','避','凸','地腳線','包喉']},{t:'預位',items:['假天花','喉底-地','喉邊-牆']}]" :key="row.t" class="flex gap-1 overflow-x-auto no-scrollbar">
-                        <span class="text-[10px] font-bold bg-zinc-200 px-1.5 py-0.5 rounded shrink-0 flex items-center">{{ row.t }}</span>
-                        <button v-for="w in row.items" :key="w" @click="applyTag(w)" class="micro-btn py-0.5 px-2 text-xs">{{ w }}</button>
+                <div v-else class="flex flex-col gap-2">
+                    <div v-for="row in [{t:'基礎',items:['高','闊','深','厚','總闊','總高','總深']},{t:'水電',items:['制中-地','制底-地','制中-牆','制邊-牆']},{t:'預留',items:['冷氣','電箱','留位','避','凸','地腳線','包喉']},{t:'預位',items:['假天花','喉底-地','喉邊-牆']}]" :key="row.t" class="flex gap-1.5 overflow-x-auto no-scrollbar items-center">
+                        <span class="text-[10px] font-black text-zinc-500 bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded shrink-0">{{ row.t }}</span>
+                        <button v-for="w in row.items" :key="w" @click="applyTag(w)" class="micro-btn py-1">{{ w }}</button>
                     </div>
                 </div>
             </div>
 
-            <div v-if="activeMarker.type !== 'stamp'" class="bg-zinc-200 p-1.5 border-t border-zinc-300 grid grid-cols-4 gap-1 shrink-0 pb-3">
+            <div v-if="activeMarker.type !== 'stamp'" class="bg-zinc-100 p-2 border-t border-zinc-200 grid grid-cols-4 gap-1.5 shrink-0 pb-4">
                 <button v-for="k in ['1','2','3','DEL','4','5','6','0','7','8','9','ENTER']" :key="k" @click.stop="handleKeypad(k)"
-                        :class="k === 'DEL' ? 'bg-red-100 border-red-300 text-red-700 text-lg' : k === 'ENTER' ? 'bg-blue-600 text-white text-sm' : 'bg-white border-zinc-300 text-lg'"
-                        class="border rounded shadow-sm font-bold py-1">{{ k === 'DEL' ? '⌫' : k === 'ENTER' ? '確定' : k }}</button>
+                        :class="k === 'DEL' ? 'bg-white border-red-300 text-red-600 text-xl' : k === 'ENTER' ? 'bg-zinc-900 border-zinc-900 text-white text-[15px]' : 'bg-white border-zinc-300 text-zinc-900 text-xl'"
+                        class="border rounded-lg shadow-sm font-bold py-2.5 active:scale-95 transition-transform">{{ k === 'DEL' ? '⌫' : k === 'ENTER' ? '確定' : k }}</button>
             </div>
         </div>
 
-        <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center text-white font-bold px-6 text-center">
-            <div class="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-3"></div>
-            <p class="text-sm">{{ processingText }}</p>
-            <button @click="isProcessing = false" class="mt-5 bg-zinc-800 border border-zinc-600 text-zinc-200 px-4 py-1.5 rounded-full text-xs font-bold">✕ 取消等待</button>
+        <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center text-zinc-900 font-bold px-6 text-center">
+            <div class="w-10 h-10 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin mb-4 shadow-sm"></div>
+            <p class="text-[15px]">{{ processingText }}</p>
+            <button @click="isProcessing = false" class="mt-6 bg-white border border-zinc-300 text-zinc-600 px-5 py-2 rounded-full text-xs font-bold shadow-sm">✕ 取消等待</button>
         </div>
     </div>
 
@@ -895,12 +936,12 @@
                     const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
                     const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-                    const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v9.1' }[cloudSyncState.value] || '☁️v9.1'));
+                    const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v9.2' }[cloudSyncState.value] || '☁️v9.2'));
                     const cloudStatusClass = computed(() =>
-                        cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' :
-                        cloudSyncState.value === 'offline' ? 'bg-amber-950 text-amber-300 border border-amber-700' :
-                        cloudSyncState.value === 'queued' ? 'bg-purple-950 text-purple-200 border border-purple-600' :
-                        'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                        cloudSyncState.value === 'syncing' ? 'bg-amber-100 text-amber-900 border-amber-300' :
+                        cloudSyncState.value === 'offline' ? 'bg-zinc-100 text-zinc-500 border-zinc-300' :
+                        cloudSyncState.value === 'queued' ? 'bg-blue-50 text-blue-700 border-blue-300' :
+                        'bg-emerald-50 text-emerald-700 border-emerald-300'
                     );
 
                     const customStamps = ref([]);
@@ -919,7 +960,7 @@
                     const showCloudDetail = () => {
                         if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                         else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                        else showToast('v9.1 防黑屏穩定版・PDF 2張1頁・單頁左右翻頁');
+                        else showToast('v9.2 白底印刷版・跨人 Y鍵複製・防黑屏');
                     };
 
                     const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -952,12 +993,35 @@
                         if (!navigator.onLine) cloudSyncState.value = 'offline';
                     };
 
-                    const autoBranchIfNeeded = () => {
-                        const pg = activePage.value, me = String(authorName.value || '').trim();
-                        if (!pg || !pg.photo || !me) return false;
-                        const owner = String(pg.author || '').trim();
-                        if (!owner || owner === me) return false;
+                    // Y鍵跨人複製分歧狀態
+                    const showBranchPrompt = ref(false);
+                    const branchOwner = ref('');
+                    const branchInputValue = ref('');
+                    const pendingBranchAction = ref(null);
+                    const branchTargetPage = ref(null);
 
+                    const triggerBranchPrompt = (pg, owner, actionCb) => {
+                        if (isDrawing.value) {
+                            isDrawing.value = false;
+                            currentLine.value = null;
+                            currentWall.value = null;
+                            currentPath.value = '';
+                        }
+                        if (draggedMarker.value) {
+                            draggedMarker.value.x = markerOrigin.value.x;
+                            draggedMarker.value.y = markerOrigin.value.y;
+                            draggedMarker.value = null;
+                            isDraggingMarker.value = false;
+                        }
+                        branchOwner.value = owner;
+                        branchInputValue.value = '';
+                        branchTargetPage.value = pg;
+                        pendingBranchAction.value = actionCb;
+                        showBranchPrompt.value = true;
+                        nextTick(() => { if (document.querySelector('input[placeholder="Y"]')) document.querySelector('input[placeholder="Y"]').focus(); });
+                    };
+
+                    const doBranchCopy = (pg, me) => {
                         const c = JSON.parse(JSON.stringify(pg)), sharedPhotoId = pg.photoId || ('page_' + pg.id);
                         pg.photoId = sharedPhotoId;
                         const oldPinId = activePin.value ? String(activePin.value.id) : null;
@@ -973,8 +1037,34 @@
                         if (oldPinId) activePin.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null;
                         dirtyPageIds.add(newPg.id);
                         hasUnsavedCloudChanges.value = true;
-                        showToast(`📋 已自動複製為 P${pages.value.length}，不覆蓋 [${owner}] 的原圖`);
-                        return true;
+                        showToast(`📋 已為你複製為 P${pages.value.length} (保留 [${branchOwner.value}] 原圖)`);
+                    };
+
+                    const confirmBranch = () => {
+                        if (branchInputValue.value.trim().toUpperCase() === 'Y') {
+                            doBranchCopy(branchTargetPage.value, String(authorName.value || '').trim());
+                        }
+                        const cb = pendingBranchAction.value;
+                        showBranchPrompt.value = false;
+                        pendingBranchAction.value = null;
+                        branchTargetPage.value = null;
+                        if (cb) cb();
+                    };
+
+                    const cancelBranch = () => {
+                        const cb = pendingBranchAction.value;
+                        showBranchPrompt.value = false;
+                        pendingBranchAction.value = null;
+                        branchTargetPage.value = null;
+                        if (cb) cb();
+                    };
+
+                    const checkBranchNeed = (actionCb) => {
+                        const pg = activePage.value, me = String(authorName.value || '').trim();
+                        if (!pg || !pg.photo || !me) return actionCb();
+                        const owner = String(pg.author || '').trim();
+                        if (!owner || owner === me) return actionCb();
+                        triggerBranchPrompt(pg, owner, actionCb);
                     };
 
                     const drawMode = ref('browse'), showTopSheet = ref(false), showTopTextBar = ref(false), activeMarker = ref(null);
@@ -1070,6 +1160,21 @@
                         return { x: x2, y: y2 };
                     };
 
+                    // 自動根據設備實際大小計算合適的畫布解像度
+                    const getAdaptiveCanvasSize = () => {
+                        const stage = document.getElementById('draw-stage');
+                        let w = 1200, h = 1500;
+                        if (stage) {
+                            const rect = stage.getBoundingClientRect();
+                            if (rect.width > 0 && rect.height > 0) {
+                                const ratio = rect.width / rect.height;
+                                if (ratio > 1) { h = 1500; w = Math.round(h * ratio); }
+                                else { w = 1500; h = Math.round(w / ratio); }
+                            }
+                        }
+                        return { w, h };
+                    };
+
                     const renderSketchDataUrl = (w, h, hasGrid) => {
                         const c = document.createElement('canvas'); c.width = w; c.height = h;
                         const ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
@@ -1089,19 +1194,25 @@
                             markers: [], lines: [], walls: [], paths: [], pins: [], deletedPinIds: [], historyStack: [], redoStack: [],
                             updatedAt: Date.now(), ...ov
                         };
-                        if (pg.isSketch && !pg.photo) pg.photo = renderSketchDataUrl(pg.w || 1200, pg.h || 1500, !!pg.hasGrid);
+                        if (pg.isSketch && !pg.photo) {
+                            const size = getAdaptiveCanvasSize();
+                            pg.w = ov.w || size.w; pg.h = ov.h || size.h;
+                            pg.photo = renderSketchDataUrl(pg.w, pg.h, !!pg.hasGrid);
+                        }
                         return pg;
                     };
 
-                    const initSketchOnCurrent = (hasGrid) => {
+                    const initSketchOnCurrent = () => {
                         if (!activeCanvas.value) return;
-                        Object.assign(activeCanvas.value, { photo: renderSketchDataUrl(1200, 1500, hasGrid), w: 1200, h: 1500, isSketch: true, hasGrid });
+                        const size = getAdaptiveCanvasSize();
+                        Object.assign(activeCanvas.value, { photo: renderSketchDataUrl(size.w, size.h, true), w: size.w, h: size.h, isSketch: true, hasGrid: true });
                         touchDirty(); drawMode.value = 'browse'; saveAll();
                     };
 
                     const addNewSketchPage = (hasGrid) => {
                         showAddPageModal.value = false;
-                        const newPg = makeEmptyPage({ photo: renderSketchDataUrl(1200, 1500, hasGrid), w: 1200, h: 1500, isSketch: true, hasGrid });
+                        const size = getAdaptiveCanvasSize();
+                        const newPg = makeEmptyPage({ photo: renderSketchDataUrl(size.w, size.h, hasGrid), w: size.w, h: size.h, isSketch: true, hasGrid });
                         pages.value.push(newPg); activePageIndex.value = pages.value.length - 1;
                         dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
                         drawMode.value = 'browse'; saveAll();
@@ -1126,10 +1237,11 @@
 
                     const toggleSketchGrid = () => {
                         if (!activeCanvas.value) return;
-                        autoBranchIfNeeded();
-                        activeCanvas.value.hasGrid = !activeCanvas.value.hasGrid;
-                        activeCanvas.value.photo = renderSketchDataUrl(activeCanvas.value.w || 1200, activeCanvas.value.h || 1500, activeCanvas.value.hasGrid);
-                        touchDirty(); saveAll();
+                        checkBranchNeed(() => {
+                            activeCanvas.value.hasGrid = !activeCanvas.value.hasGrid;
+                            activeCanvas.value.photo = renderSketchDataUrl(activeCanvas.value.w || 1200, activeCanvas.value.h || 1500, activeCanvas.value.hasGrid);
+                            touchDirty(); saveAll();
+                        });
                     };
 
                     const switchPage = (idx) => { activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; };
@@ -1157,7 +1269,11 @@
 
                     const openPinSubPage = (pin, idx) => {
                         Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], walls: pin.walls || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || activePage.value?.space || '' });
-                        if (pin.isSketch && !pin.photo) pin.photo = renderSketchDataUrl(pin.w, pin.h, !!pin.hasGrid);
+                        if (pin.isSketch && !pin.photo) {
+                            const size = getAdaptiveCanvasSize();
+                            pin.photo = renderSketchDataUrl(size.w, size.h, !!pin.hasGrid);
+                            pin.w = size.w; pin.h = size.h;
+                        }
                         activePin.value = pin; activePinIndex.value = idx; drawMode.value = 'browse';
                     };
 
@@ -1165,26 +1281,27 @@
 
                     const deleteActivePin = async () => {
                         if (!activePin.value || !activePage.value) return;
-                        autoBranchIfNeeded();
-                        const pinId = String(activePin.value.id);
-                        const pg = activePage.value;
-                        const idx = (pg.pins || []).findIndex(p => String(p.id) === pinId);
-                        if (idx !== -1) {
-                            const removedPin = JSON.parse(JSON.stringify(pg.pins[idx]));
-                            pg.pins.splice(idx, 1);
-                            pg.deletedPinIds ||= [];
-                            if (!pg.deletedPinIds.includes(pinId)) pg.deletedPinIds.push(pinId);
-                            project.deletedPinIds ||= [];
-                            if (!project.deletedPinIds.includes(pinId)) project.deletedPinIds.push(pinId);
+                        checkBranchNeed(async () => {
+                            const pinId = String(activePin.value.id);
+                            const pg = activePage.value;
+                            const idx = (pg.pins || []).findIndex(p => String(p.id) === pinId);
+                            if (idx !== -1) {
+                                const removedPin = JSON.parse(JSON.stringify(pg.pins[idx]));
+                                pg.pins.splice(idx, 1);
+                                pg.deletedPinIds ||= [];
+                                if (!pg.deletedPinIds.includes(pinId)) pg.deletedPinIds.push(pinId);
+                                project.deletedPinIds ||= [];
+                                if (!project.deletedPinIds.includes(pinId)) project.deletedPinIds.push(pinId);
 
-                            pg.historyStack ||= [];
-                            pg.redoStack = [];
-                            pg.historyStack.push({ type: 'delete_pin', pin: removedPin, index: idx });
-                        }
-                        touchDirty(pg);
-                        exitPinSubPage();
-                        await saveAll();
-                        showToast('🗑️ 已刪釘（按 ↶ 可復原）');
+                                pg.historyStack ||= [];
+                                pg.redoStack = [];
+                                pg.historyStack.push({ type: 'delete_pin', pin: removedPin, index: idx });
+                            }
+                            touchDirty(pg);
+                            exitPinSubPage();
+                            await saveAll();
+                            showToast('🗑️ 已刪釘（按 ↶ 可復原）');
+                        });
                     };
 
                     const resolveMediaDoc = async (doc) => {
@@ -1244,11 +1361,14 @@
                             pages.value.push(newPg); activePageIndex.value = pages.value.length - 1;
                             dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
                             showToast(`✅ 已建立 P${pages.value.length}`);
+                            drawMode.value = 'browse'; saveAll();
                         } else if (activeCanvas.value) {
-                            Object.assign(activeCanvas.value, { photo: item.photo, photoId: item.id, w: item.w || 1200, h: item.h || 900, isSketch: false });
-                            touchDirty();
+                            checkBranchNeed(() => {
+                                Object.assign(activeCanvas.value, { photo: item.photo, photoId: item.id, w: item.w || 1200, h: item.h || 900, isSketch: false });
+                                touchDirty();
+                                drawMode.value = 'browse'; saveAll();
+                            });
                         }
-                        drawMode.value = 'browse'; saveAll();
                     };
 
                     const deleteFromPhotoPool = async (item) => {
@@ -1264,34 +1384,35 @@
                         }
                     };
 
-                    const setPageSpace = (sp) => { autoBranchIfNeeded(); if (activeCanvas.value) activeCanvas.value.space = sp; touchDirty(); showSpaceModal.value = false; saveAll(); };
+                    const setPageSpace = (sp) => { checkBranchNeed(() => { if (activeCanvas.value) activeCanvas.value.space = sp; touchDirty(); showSpaceModal.value = false; saveAll(); }); };
                     const addCustomSpace = () => { const s = prompt('輸入空間名稱（例如：閣樓）')?.trim(); if (s) { if (!spaceList.value.includes(s)) spaceList.value.push(s); setPageSpace(s); } };
 
                     const createPointMarker = (x, y, forceType) => {
-                        autoBranchIfNeeded();
-                        const c = activeCanvas.value; if (!c) return;
-                        c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
-                        const markerId = Date.now();
-                        const newMarker = { id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType, data: { val: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' } };
-                        updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
-                        touchDirty(); activeMarker.value = newMarker;
-                        if (forceType === 'stamp') showTopSheet.value = true; else { showTopTextBar.value = true; nextTick(() => topTextInputRef.value?.focus()); }
-                        saveAll();
+                        checkBranchNeed(() => {
+                            const c = activeCanvas.value; if (!c) return;
+                            c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
+                            const markerId = Date.now();
+                            const newMarker = { id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType, data: { val: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' } };
+                            updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
+                            touchDirty(); activeMarker.value = newMarker;
+                            if (forceType === 'stamp') showTopSheet.value = true; else { showTopTextBar.value = true; nextTick(() => topTextInputRef.value?.focus()); }
+                            saveAll();
+                        });
                     };
 
                     const startDrag = (marker, e) => {
-                        if (e.touches?.length > 1) return;
+                        if (e.touches?.length > 1 || showBranchPrompt.value) return;
                         e.preventDefault(); e.stopPropagation();
                         draggedMarker.value = marker;
                         const p = getCoords(e); dragOrigin.value = { x: p.x, y: p.y }; markerOrigin.value = { x: marker.x, y: marker.y }; isDraggingMarker.value = false;
                     };
 
-                    const onStageTouchStart = (e) => { if (!showTopSheet.value && !showTopTextBar.value && !draggedMarker.value && e.touches.length === 1 && drawMode.value !== 'browse') beginStroke(e); };
-                    const onStageTouchMove = (e) => { if (e.touches.length === 1) moveStroke(e); };
-                    const onStageTouchEnd = (e) => { if (e.touches.length === 0) endStroke(e); };
-                    const onStageMouseDown = (e) => { if (!showTopSheet.value && !showTopTextBar.value && !draggedMarker.value && drawMode.value !== 'browse') beginStroke(e); };
-                    const onStageMouseMove = (e) => moveStroke(e);
-                    const onStageMouseUp = (e) => endStroke(e);
+                    const onStageTouchStart = (e) => { if (!showTopSheet.value && !showTopTextBar.value && !draggedMarker.value && e.touches.length === 1 && drawMode.value !== 'browse' && !showBranchPrompt.value) beginStroke(e); };
+                    const onStageTouchMove = (e) => { if (e.touches.length === 1 && !showBranchPrompt.value) moveStroke(e); };
+                    const onStageTouchEnd = (e) => { if (e.touches.length === 0 && !showBranchPrompt.value) endStroke(e); };
+                    const onStageMouseDown = (e) => { if (!showTopSheet.value && !showTopTextBar.value && !draggedMarker.value && drawMode.value !== 'browse' && !showBranchPrompt.value) beginStroke(e); };
+                    const onStageMouseMove = (e) => { if (!showBranchPrompt.value) moveStroke(e); };
+                    const onStageMouseUp = (e) => { if (!showBranchPrompt.value) endStroke(e); };
 
                     const beginStroke = (e) => {
                         isDrawing.value = true; startPos.value = getCoords(e);
@@ -1306,7 +1427,8 @@
                             if (Math.hypot(dx, dy) > 5 || isDraggingMarker.value) {
                                 if (!isDraggingMarker.value) {
                                     isDraggingMarker.value = true;
-                                    if (autoBranchIfNeeded()) draggedMarker.value = (activeCanvas.value.markers || []).find(m => m.id === draggedMarker.value.id) || draggedMarker.value;
+                                    checkBranchNeed(() => { draggedMarker.value = (activeCanvas.value.markers || []).find(m => m.id === draggedMarker.value?.id) || draggedMarker.value; });
+                                    if (showBranchPrompt.value) return; 
                                 }
                                 draggedMarker.value.x = Math.round(Math.max(0, Math.min(canvasW.value, markerOrigin.value.x + dx)));
                                 draggedMarker.value.y = Math.round(Math.max(0, Math.min(canvasH.value, markerOrigin.value.y + dy)));
@@ -1337,134 +1459,153 @@
                         isDrawing.value = false; const endPos = getCoords(e), dist = Math.hypot(endPos.x - startPos.value.x, endPos.y - startPos.value.y);
 
                         if (!activePin.value && drawMode.value === 'pin') {
+                            const cacheLine = currentLine.value, cacheWall = currentWall.value, cachePath = currentPath.value;
                             currentLine.value = null; currentWall.value = null; currentPath.value = '';
-                            autoBranchIfNeeded();
-                            const pw = activePage.value.w || 1200, ph = activePage.value.h || 900;
-                            activePage.value.pins ||= [];
-                            activePage.value.historyStack ||= [];
-                            activePage.value.redoStack = [];
-                            const newPin = { id: 'pin_' + Date.now(), name: `位置 ${activePage.value.pins.length + 1}`, x: parseFloat(((endPos.x / pw) * 100).toFixed(2)), y: parseFloat(((endPos.y / ph) * 100).toFixed(2)), photo: null, photoId: '', w: 1200, h: 900, space: activePage.value.space || '', markers: [], lines: [], walls: [], paths: [], historyStack: [], redoStack: [], updatedAt: Date.now() };
-                            activePage.value.pins.push(newPin);
-                            activePage.value.historyStack.push({ type: 'pin', pinId: newPin.id });
-                            touchDirty(); openPinSubPage(newPin, activePage.value.pins.length - 1); saveAll(); return;
+                            checkBranchNeed(() => {
+                                const pw = activePage.value.w || 1200, ph = activePage.value.h || 900;
+                                activePage.value.pins ||= [];
+                                activePage.value.historyStack ||= [];
+                                activePage.value.redoStack = [];
+                                const newPin = { id: 'pin_' + Date.now(), name: `位置 ${activePage.value.pins.length + 1}`, x: parseFloat(((endPos.x / pw) * 100).toFixed(2)), y: parseFloat(((endPos.y / ph) * 100).toFixed(2)), photo: null, photoId: '', w: 1200, h: 900, space: activePage.value.space || '', markers: [], lines: [], walls: [], paths: [], historyStack: [], redoStack: [], updatedAt: Date.now() };
+                                activePage.value.pins.push(newPin);
+                                activePage.value.historyStack.push({ type: 'pin', pinId: newPin.id });
+                                touchDirty(); openPinSubPage(newPin, activePage.value.pins.length - 1); saveAll();
+                            });
+                            return;
                         }
 
                         if (drawMode.value === 'stamp' && dist < 14) { currentLine.value = null; currentWall.value = null; currentPath.value = ''; createPointMarker(endPos.x, endPos.y, 'stamp'); return; }
 
                         if (drawMode.value === 'wall' && currentWall.value) {
                             if (Math.hypot(currentWall.value.x2 - currentWall.value.x1, currentWall.value.y2 - currentWall.value.y1) >= 12) {
-                                autoBranchIfNeeded();
-                                const c = activeCanvas.value; c.walls ||= []; c.historyStack ||= []; c.redoStack = [];
-                                const wallId = Date.now(); c.walls.push({ ...currentWall.value, id: wallId }); c.historyStack.push({ type: 'wall', wallId }); touchDirty();
+                                checkBranchNeed(() => {
+                                    const c = activeCanvas.value; c.walls ||= []; c.historyStack ||= []; c.redoStack = [];
+                                    const wallId = Date.now(); c.walls.push({ ...currentWall.value, id: wallId }); c.historyStack.push({ type: 'wall', wallId }); touchDirty(); saveAll();
+                                });
                             }
                             currentWall.value = null;
                         } else if ((drawMode.value === 'line' || drawMode.value === 'arrow-single') && currentLine.value) {
-                            autoBranchIfNeeded();
-                            const c = activeCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
-                            const lineId = Date.now(), markerId = lineId + 1;
-                            c.lines.push({ ...currentLine.value, id: lineId, type: drawMode.value === 'line' ? 'measure' : 'arrow-single', color: drawMode.value === 'arrow-single' ? arrowColor.value : null });
-                            const newMarker = { id: markerId, lineId, x: Math.round((currentLine.value.x1 + currentLine.value.x2) / 2), y: Math.round((currentLine.value.y1 + currentLine.value.y2) / 2), w: 140, h: 56, type: 'general', data: { val: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' } };
-                            updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
-                            touchDirty(); activeMarker.value = newMarker; focusedInput.value = 'val'; showTopSheet.value = true; currentLine.value = null;
+                            checkBranchNeed(() => {
+                                const c = activeCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
+                                const lineId = Date.now(), markerId = lineId + 1;
+                                c.lines.push({ ...currentLine.value, id: lineId, type: drawMode.value === 'line' ? 'measure' : 'arrow-single', color: drawMode.value === 'arrow-single' ? arrowColor.value : null });
+                                const newMarker = { id: markerId, lineId, x: Math.round((currentLine.value.x1 + currentLine.value.x2) / 2), y: Math.round((currentLine.value.y1 + currentLine.value.y2) / 2), w: 140, h: 56, type: 'general', data: { val: '', name: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' } };
+                                updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
+                                touchDirty(); activeMarker.value = newMarker; focusedInput.value = 'val'; showTopSheet.value = true; currentLine.value = null; saveAll();
+                            });
                         } else if (drawMode.value === 'freehand' && currentPath.value) {
-                            autoBranchIfNeeded();
-                            const c = activeCanvas.value; c.paths ||= []; c.historyStack ||= []; c.redoStack = [];
-                            const pathId = Date.now(); c.paths.push({ id: pathId, d: currentPath.value, color: freehandColor.value }); c.historyStack.push({ type: 'freehand', pathId }); touchDirty(); currentPath.value = '';
+                            checkBranchNeed(() => {
+                                const c = activeCanvas.value; c.paths ||= []; c.historyStack ||= []; c.redoStack = [];
+                                const pathId = Date.now(); c.paths.push({ id: pathId, d: currentPath.value, color: freehandColor.value }); c.historyStack.push({ type: 'freehand', pathId }); touchDirty(); currentPath.value = ''; saveAll();
+                            });
                         }
-                        saveAll();
                     };
 
-                    const ensureMarkerBranched = () => { if (activeMarker.value && autoBranchIfNeeded()) activeMarker.value = (activeCanvas.value.markers || []).find(m => m.id === activeMarker.value.id) || activeMarker.value; };
-                    const onMarkerTextInput = () => { ensureMarkerBranched(); updateMarkerSize(activeMarker.value); touchDirty(); };
+                    const ensureMarkerBranched = (cb) => {
+                        if (activeMarker.value) {
+                            checkBranchNeed(() => {
+                                activeMarker.value = (activeCanvas.value.markers || []).find(m => m.id === activeMarker.value.id) || activeMarker.value;
+                                if (cb) cb();
+                            });
+                        } else if (cb) cb();
+                    };
+                    
+                    const onMarkerTextInput = () => { ensureMarkerBranched(() => { updateMarkerSize(activeMarker.value); touchDirty(); }); };
 
                     const undoLastAction = () => {
-                        const c = activeCanvas.value; if (!c?.historyStack?.length) return; c.redoStack ||= [];
-                        const act = c.historyStack.pop(), u = { type: act.type };
-                        if (act.type === 'line_marker') {
-                            const li = c.lines.findIndex(l => l.id === act.lineId), mi = c.markers.findIndex(m => m.id === act.markerId);
-                            if (li !== -1) u.line = c.lines.splice(li, 1)[0]; if (mi !== -1) u.marker = c.markers.splice(mi, 1)[0];
-                        } else if (act.type === 'marker') {
-                            const mi = c.markers.findIndex(m => m.id === act.markerId); if (mi !== -1) u.marker = c.markers.splice(mi, 1)[0];
-                        } else if (act.type === 'wall') {
-                            const wi = (c.walls || []).findIndex(w => w.id === act.wallId); if (wi !== -1) u.wall = c.walls.splice(wi, 1)[0];
-                        } else if (act.type === 'freehand') {
-                            const pi = c.paths.findIndex(p => p.id === act.pathId); if (pi !== -1) u.path = c.paths.splice(pi, 1)[0];
-                        } else if (act.type === 'pin') {
-                            const pni = (c.pins || []).findIndex(p => String(p.id) === String(act.pinId));
-                            if (pni !== -1) {
-                                u.pin = c.pins.splice(pni, 1)[0];
-                                const pid = String(u.pin.id);
-                                c.deletedPinIds ||= []; if (!c.deletedPinIds.includes(pid)) c.deletedPinIds.push(pid);
-                                project.deletedPinIds ||= []; if (!project.deletedPinIds.includes(pid)) project.deletedPinIds.push(pid);
+                        checkBranchNeed(() => {
+                            const c = activeCanvas.value; if (!c?.historyStack?.length) return; c.redoStack ||= [];
+                            const act = c.historyStack.pop(), u = { type: act.type };
+                            if (act.type === 'line_marker') {
+                                const li = c.lines.findIndex(l => l.id === act.lineId), mi = c.markers.findIndex(m => m.id === act.markerId);
+                                if (li !== -1) u.line = c.lines.splice(li, 1)[0]; if (mi !== -1) u.marker = c.markers.splice(mi, 1)[0];
+                            } else if (act.type === 'marker') {
+                                const mi = c.markers.findIndex(m => m.id === act.markerId); if (mi !== -1) u.marker = c.markers.splice(mi, 1)[0];
+                            } else if (act.type === 'wall') {
+                                const wi = (c.walls || []).findIndex(w => w.id === act.wallId); if (wi !== -1) u.wall = c.walls.splice(wi, 1)[0];
+                            } else if (act.type === 'freehand') {
+                                const pi = c.paths.findIndex(p => p.id === act.pathId); if (pi !== -1) u.path = c.paths.splice(pi, 1)[0];
+                            } else if (act.type === 'pin') {
+                                const pni = (c.pins || []).findIndex(p => String(p.id) === String(act.pinId));
+                                if (pni !== -1) {
+                                    u.pin = c.pins.splice(pni, 1)[0];
+                                    const pid = String(u.pin.id);
+                                    c.deletedPinIds ||= []; if (!c.deletedPinIds.includes(pid)) c.deletedPinIds.push(pid);
+                                    project.deletedPinIds ||= []; if (!project.deletedPinIds.includes(pid)) project.deletedPinIds.push(pid);
+                                }
+                            } else if (act.type === 'delete_pin' && act.pin) {
+                                c.pins ||= [];
+                                const insertIdx = Math.min(act.index ?? c.pins.length, c.pins.length);
+                                c.pins.splice(insertIdx, 0, act.pin);
+                                const pid = String(act.pin.id);
+                                if (c.deletedPinIds) c.deletedPinIds = c.deletedPinIds.filter(x => x !== pid);
+                                if (project.deletedPinIds) project.deletedPinIds = project.deletedPinIds.filter(x => x !== pid);
+                                u.pin = act.pin;
+                                u.index = insertIdx;
+                                showToast('↩️ 已復原釘選');
                             }
-                        } else if (act.type === 'delete_pin' && act.pin) {
-                            c.pins ||= [];
-                            const insertIdx = Math.min(act.index ?? c.pins.length, c.pins.length);
-                            c.pins.splice(insertIdx, 0, act.pin);
-                            const pid = String(act.pin.id);
-                            if (c.deletedPinIds) c.deletedPinIds = c.deletedPinIds.filter(x => x !== pid);
-                            if (project.deletedPinIds) project.deletedPinIds = project.deletedPinIds.filter(x => x !== pid);
-                            u.pin = act.pin;
-                            u.index = insertIdx;
-                            showToast('↩️ 已復原釘選');
-                        }
-                        c.redoStack.push(u); touchDirty(); saveAll();
+                            c.redoStack.push(u); touchDirty(); saveAll();
+                        });
                     };
 
                     const redoAction = () => {
-                        const c = activeCanvas.value; if (!c?.redoStack?.length) return;
-                        const u = c.redoStack.pop(), act = { type: u.type };
-                        if (u.line) { c.lines.push(u.line); act.lineId = u.line.id; }
-                        if (u.marker) { c.markers.push(u.marker); act.markerId = u.marker.id; }
-                        if (u.wall) { c.walls ||= []; c.walls.push(u.wall); act.wallId = u.wall.id; }
-                        if (u.path) { c.paths.push(u.path); act.pathId = u.path.id; }
-                        if (u.type === 'pin' && u.pin) {
-                            c.pins ||= []; c.pins.push(u.pin); act.pinId = u.pin.id;
-                            const pid = String(u.pin.id);
-                            if (c.deletedPinIds) c.deletedPinIds = c.deletedPinIds.filter(x => x !== pid);
-                            if (project.deletedPinIds) project.deletedPinIds = project.deletedPinIds.filter(x => x !== pid);
-                        } else if (u.type === 'delete_pin' && u.pin) {
-                            const pid = String(u.pin.id);
-                            c.pins = (c.pins || []).filter(p => String(p.id) !== pid);
-                            c.deletedPinIds ||= []; if (!c.deletedPinIds.includes(pid)) c.deletedPinIds.push(pid);
-                            project.deletedPinIds ||= []; if (!project.deletedPinIds.includes(pid)) project.deletedPinIds.push(pid);
-                            act.pin = u.pin;
-                            act.index = u.index;
-                        }
-                        c.historyStack.push(act); touchDirty(); saveAll();
+                        checkBranchNeed(() => {
+                            const c = activeCanvas.value; if (!c?.redoStack?.length) return;
+                            const u = c.redoStack.pop(), act = { type: u.type };
+                            if (u.line) { c.lines.push(u.line); act.lineId = u.line.id; }
+                            if (u.marker) { c.markers.push(u.marker); act.markerId = u.marker.id; }
+                            if (u.wall) { c.walls ||= []; c.walls.push(u.wall); act.wallId = u.wall.id; }
+                            if (u.path) { c.paths.push(u.path); act.pathId = u.path.id; }
+                            if (u.type === 'pin' && u.pin) {
+                                c.pins ||= []; c.pins.push(u.pin); act.pinId = u.pin.id;
+                                const pid = String(u.pin.id);
+                                if (c.deletedPinIds) c.deletedPinIds = c.deletedPinIds.filter(x => x !== pid);
+                                if (project.deletedPinIds) project.deletedPinIds = project.deletedPinIds.filter(x => x !== pid);
+                            } else if (u.type === 'delete_pin' && u.pin) {
+                                const pid = String(u.pin.id);
+                                c.pins = (c.pins || []).filter(p => String(p.id) !== pid);
+                                c.deletedPinIds ||= []; if (!c.deletedPinIds.includes(pid)) c.deletedPinIds.push(pid);
+                                project.deletedPinIds ||= []; if (!project.deletedPinIds.includes(pid)) project.deletedPinIds.push(pid);
+                                act.pin = u.pin;
+                                act.index = u.index;
+                            }
+                            c.historyStack.push(act); touchDirty(); saveAll();
+                        });
                     };
 
                     const deleteMarkerTop = () => {
-                        ensureMarkerBranched();
-                        const c = activeCanvas.value, m = activeMarker.value; if (!m || !c) return;
-                        if (m.lineId) c.lines = (c.lines || []).filter(l => l.id !== m.lineId);
-                        c.markers = (c.markers || []).filter(x => x.id !== m.id);
-                        if (c.historyStack) c.historyStack = c.historyStack.filter(h => h.markerId !== m.id);
-                        c.redoStack = []; touchDirty(); showTopSheet.value = false; showTopTextBar.value = false; activeMarker.value = null; saveAll();
+                        ensureMarkerBranched(() => {
+                            const c = activeCanvas.value, m = activeMarker.value; if (!m || !c) return;
+                            if (m.lineId) c.lines = (c.lines || []).filter(l => l.id !== m.lineId);
+                            c.markers = (c.markers || []).filter(x => x.id !== m.id);
+                            if (c.historyStack) c.historyStack = c.historyStack.filter(h => h.markerId !== m.id);
+                            c.redoStack = []; touchDirty(); showTopSheet.value = false; showTopTextBar.value = false; activeMarker.value = null; saveAll();
+                        });
                     };
 
-                    const switchMarkerType = (t, fKey) => { ensureMarkerBranched(); activeMarker.value.type = t; focusedInput.value = fKey; updateMarkerSize(activeMarker.value); touchDirty(); };
+                    const switchMarkerType = (t, fKey) => { ensureMarkerBranched(() => { activeMarker.value.type = t; focusedInput.value = fKey; updateMarkerSize(activeMarker.value); touchDirty(); }); };
                     const closeTopTextBar = () => { if (['stamp','text'].includes(activeMarker.value?.type) && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
                     const closeTopSheet = () => { if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopSheet.value = false; saveAll(); };
 
                     const handleKeypad = (key) => {
                         if (!activeMarker.value || !focusedInput.value) return;
-                        ensureMarkerBranched();
-                        if (focusedInput.value === 'name') focusedInput.value = 'val';
-                        const cur = String(activeMarker.value.data[focusedInput.value] || '');
-                        if (key === 'DEL') { activeMarker.value.data[focusedInput.value] = cur.slice(0, -1); touchDirty(); }
-                        else if (key === 'ENTER') {
-                            const tp = activeMarker.value.type;
-                            if (['window','door','beam','column'].includes(tp)) {
-                                const f = getTagFields(tp), idx = f.findIndex(x => x.key === focusedInput.value);
-                                idx >= 0 && idx < f.length - 1 ? (focusedInput.value = f[idx + 1].key) : closeTopSheet();
-                            } else closeTopSheet();
-                        } else if (cur.length < 6) { activeMarker.value.data[focusedInput.value] = cur + key; touchDirty(); }
-                        updateMarkerSize(activeMarker.value);
+                        ensureMarkerBranched(() => {
+                            if (focusedInput.value === 'name') focusedInput.value = 'val';
+                            const cur = String(activeMarker.value.data[focusedInput.value] || '');
+                            if (key === 'DEL') { activeMarker.value.data[focusedInput.value] = cur.slice(0, -1); touchDirty(); }
+                            else if (key === 'ENTER') {
+                                const tp = activeMarker.value.type;
+                                if (['window','door','beam','column'].includes(tp)) {
+                                    const f = getTagFields(tp), idx = f.findIndex(x => x.key === focusedInput.value);
+                                    idx >= 0 && idx < f.length - 1 ? (focusedInput.value = f[idx + 1].key) : closeTopSheet();
+                                } else closeTopSheet();
+                            } else if (cur.length < 6) { activeMarker.value.data[focusedInput.value] = cur + key; touchDirty(); }
+                            updateMarkerSize(activeMarker.value);
+                        });
                     };
 
-                    const applyTag = (name) => { if (activeMarker.value) { ensureMarkerBranched(); activeMarker.value.data.name = name; focusedInput.value = 'val'; updateMarkerSize(activeMarker.value); touchDirty(); } };
-                    const applyStamp = (txt) => { if (activeMarker.value) { ensureMarkerBranched(); activeMarker.value.data.val = txt; updateMarkerSize(activeMarker.value); touchDirty(); closeTopSheet(); } };
+                    const applyTag = (name) => { if (activeMarker.value) { ensureMarkerBranched(() => { activeMarker.value.data.name = name; focusedInput.value = 'val'; updateMarkerSize(activeMarker.value); touchDirty(); }); } };
+                    const applyStamp = (txt) => { if (activeMarker.value) { ensureMarkerBranched(() => { activeMarker.value.data.val = txt; updateMarkerSize(activeMarker.value); touchDirty(); closeTopSheet(); }); } };
 
                     const updateMarkerSize = (m) => {
                         if (m.type === 'image') return;
@@ -1530,9 +1671,12 @@
                                 photoPool.value.push({ id: photoId, photo: res.b64, w: res.w, h: res.h, author: authorName.value || '', updatedAt: Date.now() });
 
                                 if (i === 0 && !asNewPage && activeCanvas.value && !activeCanvas.value.photo) {
-                                    Object.assign(activeCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false });
-                                    touchDirty();
-                                    firstAddedIdx = activePageIndex.value;
+                                    checkBranchNeed(() => {
+                                        Object.assign(activeCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false });
+                                        touchDirty();
+                                        firstAddedIdx = activePageIndex.value;
+                                    });
+                                    if (showBranchPrompt.value) await new Promise(r => { const timer = setInterval(() => { if (!showBranchPrompt.value) { clearInterval(timer); r(); } }, 200); });
                                 } else {
                                     const newPg = makeEmptyPage({ photo: res.b64, photoId, w: res.w, h: res.h });
                                     pages.value.push(newPg);
@@ -1561,8 +1705,10 @@
 
                             if (forceNewPage || !activeCanvas.value?.photo) {
                                 if (!forceNewPage && !activeCanvas.value?.photo) {
-                                    Object.assign(activeCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false });
-                                    touchDirty();
+                                    checkBranchNeed(() => {
+                                        Object.assign(activeCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false });
+                                        touchDirty();
+                                    });
                                 } else {
                                     const newPg = makeEmptyPage({ photo: res.b64, photoId, w: res.w, h: res.h });
                                     pages.value.push(newPg); activePageIndex.value = pages.value.length - 1;
@@ -1570,17 +1716,18 @@
                                 }
                                 showToast('✅ 貼上為底圖');
                             } else {
-                                autoBranchIfNeeded();
-                                const c = activeCanvas.value;
-                                c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
-                                const markerId = Date.now();
-                                let tw = res.w, th = res.h;
-                                const maxS = Math.min(canvasW.value, canvasH.value) * 0.8;
-                                if (tw > maxS || th > maxS) { if (tw > th) { th = Math.round(th * maxS / tw); tw = maxS; } else { tw = Math.round(tw * maxS / th); th = maxS; } }
-                                const newMarker = { id: markerId, x: Math.round(canvasW.value / 2), y: Math.round(canvasH.value / 2), w: tw, h: th, type: 'image', data: { b64: res.b64 } };
-                                c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
-                                activeMarker.value = newMarker; showTopTextBar.value = true; touchDirty();
-                                showToast('✅ 貼圖成功，可任意拖拉');
+                                checkBranchNeed(() => {
+                                    const c = activeCanvas.value;
+                                    c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
+                                    const markerId = Date.now();
+                                    let tw = res.w, th = res.h;
+                                    const maxS = Math.min(canvasW.value, canvasH.value) * 0.8;
+                                    if (tw > maxS || th > maxS) { if (tw > th) { th = Math.round(th * maxS / tw); tw = maxS; } else { tw = Math.round(tw * maxS / th); th = maxS; } }
+                                    const newMarker = { id: markerId, x: Math.round(canvasW.value / 2), y: Math.round(canvasH.value / 2), w: tw, h: th, type: 'image', data: { b64: res.b64 } };
+                                    c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
+                                    activeMarker.value = newMarker; showTopTextBar.value = true; touchDirty();
+                                    showToast('✅ 貼圖成功，可任意拖拉');
+                                });
                             }
                             drawMode.value = 'browse';
                             await saveAll();
@@ -1819,7 +1966,7 @@
                     };
 
                     const processPendingUploadQueue = async (silent = true) => {
-                        if (isAutoQueueing || !navigator.onLine || !db || isDrawing.value || showTopSheet.value || showTopTextBar.value) return;
+                        if (isAutoQueueing || !navigator.onLine || !db || isDrawing.value || showTopSheet.value || showTopTextBar.value || showBranchPrompt.value) return;
                         const queue = (await localforage.getItem('pending_upload_queue')) || [];
                         if (!queue.length) return;
                         isAutoQueueing = true;
@@ -2088,8 +2235,9 @@
                                 ctx.font = '900 23px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
                                 wmLines.forEach((item, idx) => {
                                     const y = 26 + idx * 32;
-                                    ctx.lineWidth = 6; ctx.strokeStyle = '#000000'; ctx.strokeText(item.text, 22, y);
-                                    ctx.fillStyle = item.color; ctx.fillText(item.text, 22, y);
+                                    ctx.lineWidth = 6; ctx.strokeStyle = '#ffffff'; ctx.strokeText(item.text, 22, y);
+                                    ctx.fillStyle = item.color === '#ffffff' ? '#111827' : (item.color === '#facc15' ? '#d97706' : item.color);
+                                    ctx.fillText(item.text, 22, y);
                                 });
                             }
                         }
@@ -2244,6 +2392,7 @@
                         showBackupListModal, backupList, openBackupList, restoreBackup,
                         arrowColor, freehandColor, wallStyle, wallColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg,
                         customStamps, promptCustomStamp, drawMode, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
+                        showBranchPrompt, branchOwner, branchInputValue, confirmBranch, cancelBranch,
                         svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
                         createNewProject, loadProject, deleteProject, backToProjects, copyCode, joinProjectByCode,
                         saveAll, downloadNow, uploadNow, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, deleteActivePin,
