@@ -935,7 +935,20 @@
                         });
                         return list;
                     });
+                        const copyShareLink = () => {
+                        const code = String(project.code || '').trim();
+                        if (!code) return;
+                        const link = window.location.href.split('index.html')[0] + 'view.html?code=' + code;
+                        const msg = `📋 工程度尺圖 (#${code})\n📍 地址：${project.name || '未標題'}\n👉 點擊檢視：\n${link}`;
+                        try {
+                            navigator.clipboard.writeText(msg);
+                            showToast('🔗 已複製 WhatsApp 專屬連結，可直接發送');
+                        } catch (_) {
+                            showToast('⚠️ 複製失敗，請手動複製連結');
+                        }
+                    };
 
+                    
                     const currentFullScreen = computed(() => (fullScreenIndex.value >= 0 && fullScreenIndex.value < fullScreenList.value.length) ? fullScreenList.value[fullScreenIndex.value] : null);
                     const fullScreenItem = computed(() => currentFullScreen.value?.item || null);
                     const fullScreenTitle = computed(() => currentFullScreen.value ? `${currentFullScreen.value.label} (${fullScreenIndex.value + 1}/${fullScreenList.value.length})` : '');
