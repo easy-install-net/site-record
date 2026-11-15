@@ -1,7 +1,8 @@
-const CACHE_NAME = 'site-measure-pro-v9.3';
+const CACHE_NAME = 'site-measure-pro-v9.4';
 const PRECACHE_URLS = [
     './',
     './index.html',
+    './view.html',
     'https://cdn.tailwindcss.com',
     'https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js',
@@ -38,7 +39,7 @@ self.addEventListener('fetch', (e) => {
     const req = e.request;
     if (req.method !== 'GET' || req.url.includes('googleapis.com')) return;
 
-    if (req.mode === 'navigate' || req.url.endsWith('/index.html') || req.url.endsWith('/measure/')) {
+    if (req.mode === 'navigate' || req.url.endsWith('/index.html') || req.url.endsWith('/view.html') || req.url.endsWith('/measure/')) {
         e.respondWith((async () => {
             const cache = await caches.open(CACHE_NAME);
             try {
@@ -47,11 +48,11 @@ self.addEventListener('fetch', (e) => {
                 const fresh = await fetch(req, { signal: ctrl.signal });
                 clearTimeout(timer);
                 if (fresh?.ok) {
-                    cache.put('./index.html', fresh.clone());
+                    cache.put(req, fresh.clone());
                     return fresh;
                 }
             } catch (_) {}
-            return (await cache.match('./index.html')) || (await cache.match('./')) || fetch(req);
+            return (await cache.match(req, { ignoreSearch: true })) || (await cache.match('./index.html')) || fetch(req);
         })());
         return;
     }
