@@ -1,4 +1,4 @@
-const CACHE_NAME = 'site-measure-pro-v8.0';
+const CACHE_NAME = 'site-measure-pro-v8.4';
 const PRECACHE_URLS = [
     './',
     './index.html',
@@ -7,8 +7,7 @@ const PRECACHE_URLS = [
     'https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
     'https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js',
-    'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js',
-    'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js'
+    'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js'
 ];
 
 self.addEventListener('install', (event) => {
