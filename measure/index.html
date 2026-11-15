@@ -95,6 +95,7 @@
                     </template>
                     <template v-else-if="currentView === 'preview'">
                         <button @click="enterEditMode(0)" class="bg-zinc-900 text-white px-3 py-1 rounded-md text-xs font-bold">✏️編輯</button>
+                        <button @click="copyShareLink" class="bg-indigo-50 border border-indigo-300 text-indigo-700 px-2.5 py-1 rounded-md text-xs font-bold active:bg-indigo-100">🔗發給師傅</button>
                         <button v-if="pages.length" @click="showPdfModal = true" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold">PDF</button>
                     </template>
                     <template v-else>
