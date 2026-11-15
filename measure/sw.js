@@ -1,4 +1,4 @@
-const CACHE_NAME = 'site-measure-pro-v8.5';
+const CACHE_NAME = 'site-measure-pro-v8.6';
 const PRECACHE_URLS = [
     './',
     './index.html',
@@ -15,11 +15,12 @@ self.addEventListener('install', (e) => {
     e.waitUntil(
         caches.open(CACHE_NAME).then((cache) =>
             Promise.allSettled(
-                PRECACHE_URLS.map((url) =>
-                    fetch(url.startsWith('http') ? new Request(url, { mode: 'no-cors' }) : url)
-                        .then((res) => res && cache.put(url, res))
-                        .catch(() => {})
-                )
+                PRECACHE_URLS.map(async (url) => {
+                    try {
+                        const res = await fetch(url.startsWith('http') ? new Request(url, { mode: 'no-cors' }) : url);
+                        if (res) await cache.put(url, res);
+                    } catch (_) {}
+                })
             )
         )
     );
@@ -34,18 +35,18 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-    const req = e.request, url = req.url;
-    if (req.method !== 'GET' || url.includes('firestore.googleapis.com') || url.includes('identitytoolkit.googleapis.com') || url.includes('securetoken.googleapis.com')) return;
+    const req = e.request;
+    if (req.method !== 'GET' || req.url.includes('googleapis.com')) return;
 
-    if (req.mode === 'navigate' || url.endsWith('/index.html') || url.endsWith('/measure/')) {
+    if (req.mode === 'navigate' || req.url.endsWith('/index.html') || req.url.endsWith('/measure/')) {
         e.respondWith((async () => {
             const cache = await caches.open(CACHE_NAME);
             try {
                 const ctrl = new AbortController();
-                const t = setTimeout(() => ctrl.abort(), 3000);
+                const timer = setTimeout(() => ctrl.abort(), 3000);
                 const fresh = await fetch(req, { signal: ctrl.signal });
-                clearTimeout(t);
-                if (fresh && fresh.ok) {
+                clearTimeout(timer);
+                if (fresh?.ok) {
                     cache.put('./index.html', fresh.clone());
                     return fresh;
                 }
@@ -58,8 +59,8 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
         caches.match(req, { ignoreSearch: true }).then((cached) => cached || fetch(req).then((res) => {
             if (res && (res.status === 200 || res.type === 'opaque')) {
-                const clone = res.clone();
-                caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+                const copy = res.clone();
+                caches.open(CACHE_NAME).then((c) => c.put(req, copy));
             }
             return res;
         }).catch(() => cached))
