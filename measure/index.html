@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v9.3</title>
+    <title>度尺寶 Pro v9.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js'"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -49,7 +49,7 @@
 </head>
 <body class="antialiased">
     <div id="boot-screen" style="position:fixed;inset:0;z-index:200;background:#ffffff;color:#111827;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:sans-serif;">
-        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v9.3...</div>
+        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v9.4...</div>
         <button id="boot-retry" onclick="location.reload()" style="display:none;margin-top:16px;background:#111827;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;">🔄 重新載入</button>
     </div>
     <script>
@@ -94,8 +94,8 @@
                         <button @click="createNewProject" class="bg-zinc-900 text-white px-3 py-1 rounded-md text-xs font-bold">+新建</button>
                     </template>
                     <template v-else-if="currentView === 'preview'">
-                        <button @click="enterEditMode(0)" class="bg-zinc-900 text-white px-3 py-1 rounded-md text-xs font-bold">✏️編輯</button>
-                        <button @click="copyShareLink" class="bg-indigo-50 border border-indigo-300 text-indigo-700 px-2.5 py-1 rounded-md text-xs font-bold active:bg-indigo-100">🔗發給師傅</button>
+                        <button @click="enterEditMode(0)" class="bg-zinc-900 text-white px-2.5 py-1 rounded-md text-xs font-bold">✏️編輯</button>
+                        <button @click="copyShareLink" class="bg-white border border-zinc-300 text-blue-700 px-2.5 py-1 rounded-md text-xs font-bold active:bg-zinc-100">🔗發給師傅</button>
                         <button v-if="pages.length" @click="showPdfModal = true" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold">PDF</button>
                     </template>
                     <template v-else>
@@ -246,6 +246,19 @@
                 </div>
             </div>
         </main>
+
+        <!-- 🔗 專屬分享連結備援視窗 (當瀏覽器阻擋自動複製時顯示) -->
+        <div v-if="showShareFallbackModal" class="fixed inset-0 bg-black/50 z-[85] flex items-center justify-center p-4" @click.self="showShareFallbackModal = false">
+            <div class="bg-white border border-zinc-200 w-full max-w-sm rounded-xl p-4 flex flex-col gap-3 shadow-xl">
+                <div class="text-[15px] font-black text-zinc-900 border-b border-zinc-200 pb-2">🔗 專屬師傅檢視連結</div>
+                <textarea ref="shareTextareaRef" readonly :value="shareFallbackText" rows="4" class="w-full bg-zinc-50 border border-zinc-300 rounded-md p-2.5 text-xs font-bold text-zinc-800 focus:outline-none"></textarea>
+                <div class="flex gap-2">
+                    <button @click="manualSelectShareText" class="flex-1 bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-xs font-bold">📋 全選複製</button>
+                    <button v-if="canSystemShare" @click="triggerSystemShare" class="flex-1 bg-zinc-900 text-white py-2.5 rounded-md text-xs font-bold">📤 傳送 (WhatsApp)</button>
+                </div>
+                <button @click="showShareFallbackModal = false" class="w-full text-zinc-500 py-1 text-xs font-bold">關閉</button>
+            </div>
+        </div>
 
         <!-- 📄 PDF 排版選擇 Modal -->
         <div v-if="showPdfModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showPdfModal = false">
@@ -804,6 +817,31 @@
             const getTodayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
             const sanitizeFilename = (s) => String(s || '').trim().replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
 
+            const copyTextWithFallback = async (text) => {
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(text);
+                        return true;
+                    }
+                } catch (_) {}
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.setAttribute('readonly', '');
+                    ta.style.position = 'fixed';
+                    ta.style.top = '0';
+                    ta.style.left = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    ta.setSelectionRange(0, text.length);
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    if (ok) return true;
+                } catch (_) {}
+                return false;
+            };
+
             const buildWallSegments = (w) => {
                 if (!w) return [];
                 const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = Math.hypot(dx, dy);
@@ -847,6 +885,11 @@
                     const activeCanvas = computed(() => activePin.value || activePage.value);
                     const canvasW = computed(() => activeCanvas.value?.w || 1200);
                     const canvasH = computed(() => activeCanvas.value?.h || 900);
+
+                    const showShareFallbackModal = ref(false);
+                    const shareFallbackText = ref('');
+                    const shareTextareaRef = ref(null);
+                    const canSystemShare = computed(() => typeof navigator.share === 'function');
 
                     // SVG 原生鏡頭（viewBox）無走位縮放狀態
                     const zoomScale = ref(1);
@@ -935,20 +978,7 @@
                         });
                         return list;
                     });
-                        const copyShareLink = () => {
-                        const code = String(project.code || '').trim();
-                        if (!code) return;
-                        const link = window.location.href.split('index.html')[0] + 'view.html?code=' + code;
-                        const msg = `📋 工程度尺圖 (#${code})\n📍 地址：${project.name || '未標題'}\n👉 點擊檢視：\n${link}`;
-                        try {
-                            navigator.clipboard.writeText(msg);
-                            showToast('🔗 已複製 WhatsApp 專屬連結，可直接發送');
-                        } catch (_) {
-                            showToast('⚠️ 複製失敗，請手動複製連結');
-                        }
-                    };
 
-                    
                     const currentFullScreen = computed(() => (fullScreenIndex.value >= 0 && fullScreenIndex.value < fullScreenList.value.length) ? fullScreenList.value[fullScreenIndex.value] : null);
                     const fullScreenItem = computed(() => currentFullScreen.value?.item || null);
                     const fullScreenTitle = computed(() => currentFullScreen.value ? `${currentFullScreen.value.label} (${fullScreenIndex.value + 1}/${fullScreenList.value.length})` : '');
@@ -1021,7 +1051,7 @@
                     const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
                     const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-                    const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v9.3' }[cloudSyncState.value] || '☁️v9.3'));
+                    const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v9.4' }[cloudSyncState.value] || '☁️v9.4'));
                     const cloudStatusClass = computed(() =>
                         cloudSyncState.value === 'syncing' ? 'bg-amber-100 text-amber-900 border-amber-300' :
                         cloudSyncState.value === 'offline' ? 'bg-zinc-100 text-zinc-500 border-zinc-300' :
@@ -1045,7 +1075,7 @@
                     const showCloudDetail = () => {
                         if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                         else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                        else showToast('v9.3 雙指無走位縮放・擦膠一篤即刪・貼圖縮放');
+                        else showToast('v9.4 雙指無走位縮放・擦膠・師傅專屬連結');
                     };
 
                     const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -1078,7 +1108,6 @@
                         if (!navigator.onLine) cloudSyncState.value = 'offline';
                     };
 
-                    // Y鍵跨人複製分歧狀態
                     const showBranchPrompt = ref(false);
                     const branchOwner = ref('');
                     const branchInputValue = ref('');
@@ -1161,6 +1190,50 @@
                     const enterEditMode = (idx = 0) => { resetZoom(); activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; };
                     const switchToPreview = async () => { await saveAll(); resetZoom(); activePin.value = null; currentView.value = 'preview'; };
 
+                    const copyCode = async (code) => {
+                        await copyTextWithFallback(String(code));
+                        showToast('已複製工程碼：#' + code);
+                        showManageModal.value = false;
+                    };
+
+                    const copyShareLink = async () => {
+                        const code = String(project.code || '').trim();
+                        if (!code) return;
+                        const baseHref = window.location.href.split('?')[0].split('#')[0];
+                        const dirHref = baseHref.endsWith('.html')
+                            ? baseHref.slice(0, baseHref.lastIndexOf('/') + 1)
+                            : (baseHref.endsWith('/') ? baseHref : baseHref + '/');
+                        const link = `${dirHref}view.html?code=${encodeURIComponent(code)}`;
+                        const msg = `📋 工程度尺圖 (#${code})\n📍 地址：${project.name || '未標題'}\n👉 點擊檢視：\n${link}`;
+                        const ok = await copyTextWithFallback(msg);
+                        if (ok) {
+                            showToast('🔗 已複製 WhatsApp 專屬連結，可直接貼上發送');
+                        } else {
+                            shareFallbackText.value = msg;
+                            showShareFallbackModal.value = true;
+                        }
+                    };
+
+                    const manualSelectShareText = async () => {
+                        if (shareTextareaRef.value) {
+                            shareTextareaRef.value.focus();
+                            shareTextareaRef.value.select();
+                            shareTextareaRef.value.setSelectionRange(0, shareFallbackText.value.length);
+                        }
+                        const ok = await copyTextWithFallback(shareFallbackText.value);
+                        if (ok) {
+                            showShareFallbackModal.value = false;
+                            showToast('✅ 已複製連結訊息');
+                        }
+                    };
+
+                    const triggerSystemShare = async () => {
+                        try {
+                            await navigator.share({ title: `工程度尺圖 #${project.code}`, text: shareFallbackText.value });
+                            showShareFallbackModal.value = false;
+                        } catch (_) {}
+                    };
+
                     const mergeableGroups = computed(() => {
                         const map = new Map();
                         pages.value.forEach((pg, idx) => {
@@ -1203,7 +1276,6 @@
                     const hasUndoItems = computed(() => activeCanvas.value?.historyStack?.length > 0);
                     const hasRedoItems = computed(() => activeCanvas.value?.redoStack?.length > 0);
 
-                    // 雙指縮放／單指睇圖平移與冷卻鎖
                     let isPinching = false, pinchStartDist = 0, pinchStartScale = 1, pinchAnchorSvg = null;
                     let isPanningBrowse = false, panStartClient = { x: 0, y: 0 }, panStartVb = { x: 0, y: 0 };
 
@@ -1484,7 +1556,6 @@
                     const setPageSpace = (sp) => { checkBranchNeed(() => { if (activeCanvas.value) activeCanvas.value.space = sp; touchDirty(); showSpaceModal.value = false; saveAll(); }); };
                     const addCustomSpace = () => { const s = prompt('輸入空間名稱（例如：閣樓）')?.trim(); if (s) { if (!spaceList.value.includes(s)) spaceList.value.push(s); setPageSpace(s); } };
 
-                    // 🧽 擦膠一篤即刪（支援連動刪除度尺線＋文字並加入復原堆疊）
                     const onEraseTap = (targetType, item, e) => {
                         if (drawMode.value !== 'eraser') return;
                         if (e.touches?.length > 1 || isPinching || showBranchPrompt.value) return;
@@ -1773,7 +1844,6 @@
                     
                     const onMarkerTextInput = () => { ensureMarkerBranched(() => { updateMarkerSize(activeMarker.value); touchDirty(); }); };
 
-                    // 貼圖等比例縮小／放大
                     const resizeImageMarker = (factor) => {
                         if (!activeMarker.value || activeMarker.value.type !== 'image') return;
                         ensureMarkerBranched(() => {
@@ -2332,8 +2402,6 @@
                         currentView.value = 'proj'; await saveAll(); startRealtimeListener(project.code);
                     };
 
-                    const copyCode = (code) => { navigator.clipboard?.writeText(code); showToast('已複製工程碼：#' + code); showManageModal.value = false; };
-
                     const joinProjectByCode = async () => {
                         await checkAuthorName();
                         const code = String(inputJoinCode.value || '').trim();
@@ -2656,6 +2724,9 @@
                                         const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H;
                                         const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H);
                                         ctx.fillStyle = '#000'; ctx.font = 'bold 34px sans-serif'; ctx.fillText(`${project.name || '工程度尺'} (#${project.code})`, mx, 60);
+
+
+
                                         ctx.font = 'bold 21px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${headerDate}   |   共 ${validPages.length} 張   |   第 ${pIdx + 1} / ${totalPdf} 頁`, mx, 94);
                                         for (let j = 0; j < perPage; j++) {
                                             const pg = validPages[pIdx * perPage + j]; if (!pg) break;
