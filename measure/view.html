@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="度尺寶檢視器">
+    <title>工程單檢視器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js'"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh;
+            margin: 0; padding: 0; overflow: hidden; background: #ffffff; color: #111827;
+            -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+            overscroll-behavior: none; touch-action: manipulation;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", "Helvetica Neue", sans-serif;
+        }
+        input { font-size: 16px !important; -webkit-user-select: text; user-select: text; color: #111827; }
+        .canvas-touch-lock { touch-action: none !important; }
+        .touch-scrollable { touch-action: pan-y !important; -webkit-overflow-scrolling: touch; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .stamp-text {
+            font-weight: 900; font-size: 28px; paint-order: stroke fill; letter-spacing: 1px;
+            stroke: #000; stroke-width: 5px; stroke-linejoin: round; stroke-linecap: round;
+            pointer-events: none;
+        }
+        .wm-text {
+            font-weight: 900; font-size: 23px; paint-order: stroke fill; letter-spacing: 1px;
+            stroke: #ffffff; stroke-width: 6px; stroke-linejoin: round; stroke-linecap: round;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div id="boot-screen" style="position:fixed;inset:0;z-index:200;background:#ffffff;color:#111827;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
+        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在載入工程單檢視器...</div>
+    </div>
+    <script>
+        setTimeout(() => {
+            const bs = document.getElementById('boot-screen');
+            if (bs) document.getElementById('boot-msg').textContent = '⚠️ 載入逾時，請檢查網絡';
+        }, 6000);
+    </script>
+
+    <div id="app" class="fixed inset-0 w-full h-full flex flex-col overflow-hidden bg-zinc-50">
+        
+        <!-- 頂欄 (只在有工程時顯示) -->
+        <header v-if="project.code" class="shrink-0 h-11 w-full bg-white border-b border-zinc-200 px-2 flex justify-between items-center gap-1.5 z-30">
+            <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                <button @click="logout" class="bg-white border border-zinc-300 text-red-600 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 active:bg-red-50">🚪退出</button>
+                <span class="bg-amber-100 text-amber-900 border border-amber-300 text-xs font-mono font-black px-1.5 py-0.5 rounded-md shrink-0">#{{ project.code }}</span>
+                <span class="text-[15px] font-black text-zinc-900 truncate min-w-0">{{ project.name || '未標題' }}</span>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button @click="reloadCurrentProject" class="bg-white border border-zinc-300 text-zinc-800 px-2 py-1 rounded-md text-xs font-bold active:bg-zinc-100">🔄更新</button>
+                <button @click="copyShareLink" class="bg-white border border-zinc-300 text-zinc-800 px-2 py-1 rounded-md text-xs font-bold active:bg-zinc-100">🔗連結</button>
+                <button v-if="pages.length" @click="showPdfModal = true" class="bg-zinc-900 text-white px-2 py-1 rounded-md text-xs font-bold active:bg-zinc-700">📄PDF</button>
+            </div>
+        </header>
+
+        <div v-if="toastMsg" class="fixed top-12 left-1/2 -translate-x-1/2 z-[80] bg-zinc-900 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl border border-zinc-700 whitespace-nowrap">{{ toastMsg }}</div>
+
+        <!-- 鎖定畫面：輸入密碼 -->
+        <main v-if="!project.code" class="flex-1 flex flex-col items-center justify-center p-4 bg-white">
+            <div class="w-full max-w-sm p-6 bg-white border border-zinc-200 rounded-2xl shadow-xl flex flex-col items-center">
+                <div class="w-12 h-12 bg-zinc-100 text-zinc-800 rounded-full flex items-center justify-center text-2xl mb-4">🔒</div>
+                <h2 class="text-lg font-black text-zinc-900 mb-1">查閱工程單</h2>
+                <p class="text-xs font-bold text-zinc-500 mb-6">請輸入 6 位數字專屬工程碼</p>
+                <input type="text" inputmode="numeric" maxlength="6" v-model="inputCode" @keyup.enter="submitCode" placeholder="例如: 849201" class="w-full bg-zinc-50 border-2 border-zinc-300 rounded-xl p-3 text-center text-3xl font-mono font-black tracking-widest text-zinc-900 mb-4 focus:outline-none focus:border-blue-500">
+                <button @click="submitCode" class="w-full bg-zinc-900 text-white font-bold py-3.5 rounded-xl text-sm shadow-sm active:scale-95 transition-transform">立即查閱</button>
+            </div>
+        </main>
+
+        <!-- 圖紙總覽 (有工程時顯示) -->
+        <main v-else class="flex-1 min-h-0 w-full flex flex-col overflow-hidden bg-zinc-100">
+            <div class="bg-white border-b border-zinc-200 px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <div class="flex items-center gap-2 text-xs font-bold text-zinc-600">
+                    <span>共 <strong class="text-zinc-900">{{ pages.length }}</strong> 頁</span>
+                    <span v-if="project.date">｜ 📅 {{ project.date }}</span>
+                    <span v-if="project.lastModifiedBy" class="text-blue-600">｜ ✍️ {{ project.lastModifiedBy }}</span>
+                </div>
+                <div v-if="availableSpaces.length > 1" class="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full">
+                    <button @click="selectedSpace = ''" :class="selectedSpace === '' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2.5 py-0.5 rounded-md text-[11px] font-bold border shrink-0">全部 ({{ pages.length }})</button>
+                    <button v-for="sp in availableSpaces" :key="sp" @click="selectedSpace = sp" :class="selectedSpace === sp ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2.5 py-0.5 rounded-md text-[11px] font-bold border shrink-0">{{ sp }}</button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-2.5 touch-scrollable">
+                <div class="max-w-6xl mx-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                    <div v-for="item in displayedPages" :key="item.pg.id" class="bg-white border border-zinc-300 rounded-lg overflow-hidden shadow-sm flex flex-col justify-between">
+                        <div class="bg-zinc-50 px-2.5 py-1.5 border-b border-zinc-200 flex flex-col gap-0.5">
+                            <div class="flex items-center justify-between gap-1">
+                                <div class="flex items-center gap-1.5 min-w-0">
+                                    <span class="bg-white text-zinc-900 border border-zinc-300 text-[11px] font-black px-1.5 py-0.5 rounded shrink-0">P{{ item.origIdx + 1 }}</span>
+                                    <span class="text-zinc-900 font-black text-xs truncate">{{ item.pg.space || '未標空間' }}</span>
+                                </div>
+                                <button v-if="item.pg.photo" @click="openFullScreenPreview(item.pg)" class="bg-white border border-zinc-300 text-zinc-800 px-2 py-0.5 rounded text-[11px] font-bold shrink-0 active:bg-zinc-100">🔍大圖</button>
+                            </div>
+                        </div>
+
+                        <div v-if="item.pg.photo" @click="openFullScreenPreview(item.pg)" class="h-44 relative bg-zinc-100 cursor-pointer active:bg-zinc-200 overflow-hidden flex items-center justify-center">
+                            <div class="absolute inset-1 overflow-hidden flex items-center justify-center">
+                                <svg :view-box.camel="`0 0 ${item.pg.w || 1200} ${item.pg.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="pointer-events-none">
+                                    <rect x="0" y="0" :width="item.pg.w || 1200" :height="item.pg.h || 900" fill="#ffffff" />
+                                    <image :href="item.pg.photo" x="0" y="0" :width="item.pg.w || 1200" :height="item.pg.h || 900" preserveAspectRatio="none" />
+                                    
+                                    <g v-for="m in (item.pg.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
+                                        <template v-if="m.type === 'image'">
+                                            <image :href="m.data.b64" :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" preserveAspectRatio="none" />
+                                        </template>
+                                    </g>
+
+                                    <g v-for="w in (item.pg.walls || [])" :key="w.id">
+                                        <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" />
+                                    </g>
+                                    <line v-for="l in (item.pg.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 4 : 6" stroke-linecap="round" />
+                                    <path v-for="p in (item.pg.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
+                                    <g v-for="m in (item.pg.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
+                                        <template v-if="m.type !== 'image'">
+                                            <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
+                                                <tspan v-for="(line, lIdx) in getMarkerLines(m)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
+                                            </text>
+                                        </template>
+                                    </g>
+                                    <g v-for="(pin, pIdx) in (item.pg.pins || [])" :key="pin.id" :transform="`translate(${(pin.x / 100) * (item.pg.w || 1200)}, ${(pin.y / 100) * (item.pg.h || 900)})`">
+                                        <circle cx="0" cy="-22" r="20" fill="#dc2626" stroke="#ffffff" stroke-width="4" />
+                                        <text x="0" y="-21" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="22" font-weight="900">{{ pIdx + 1 }}</text>
+                                    </g>
+                                </svg>
+                            </div>
+                        </div>
+                        <div v-else class="h-44 flex items-center justify-center text-zinc-400 text-xs font-bold">無圖紙</div>
+
+                        <div class="bg-zinc-50 px-2.5 py-1.5 border-t border-zinc-200 flex items-center justify-between gap-1 flex-wrap">
+                            <div v-if="item.pg.pins?.length" class="flex items-center gap-1 flex-wrap">
+                                <button v-for="(pin, pIdx) in item.pg.pins" :key="pin.id"
+                                        @click.stop="pin.photo ? openFullScreenPreview(pin) : showToast('無詳情圖')"
+                                        :class="pin.photo ? 'bg-red-50 border-red-300 text-red-700 cursor-pointer' : 'bg-zinc-100 border-zinc-300 text-zinc-400 pointer-events-none'"
+                                        class="border text-[10px] font-bold px-1.5 py-0.5 rounded">📍釘#{{ pIdx + 1 }}
+                                </button>
+                            </div>
+                            <span v-else class="text-[11px] text-zinc-400 font-bold">無落釘</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 唯讀全螢幕檢視器 -->
+        <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-zinc-100 flex flex-col overflow-hidden">
+            <div class="h-11 bg-white border-b border-zinc-300 px-2 flex justify-between items-center gap-1 shrink-0 z-10">
+                <div class="flex items-center gap-1 min-w-0 flex-1">
+                    <button @click="prevFullScreen" :disabled="fullScreenIndex <= 0" :class="fullScreenIndex <= 0 ? 'opacity-30' : 'active:bg-zinc-100'" class="bg-white border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 shadow-sm">◀</button>
+                    <span class="text-[13px] font-black text-zinc-900 truncate min-w-0 px-1">{{ fullScreenTitle }}</span>
+                    <button @click="nextFullScreen" :disabled="fullScreenIndex >= fullScreenList.length - 1" :class="fullScreenIndex >= fullScreenList.length - 1 ? 'opacity-30' : 'active:bg-zinc-100'" class="bg-white border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 shadow-sm">▶</button>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                    <div class="hidden sm:flex items-center bg-white border border-zinc-300 rounded-md overflow-hidden shadow-sm">
+                        <button @click="stepFsZoom(-0.5)" :disabled="fsZoom <= 1" :class="fsZoom <= 1 ? 'opacity-30' : 'active:bg-zinc-100'" class="px-2 py-1 text-xs font-black border-r border-zinc-200">➖</button>
+                        <button @click="resetFsZoom" :class="fsZoom > 1 ? 'bg-blue-600 text-white' : 'text-zinc-700'" class="px-2 py-1 text-[11px] font-black min-w-[42px] text-center">{{ Math.round(fsZoom * 100) }}%</button>
+                        <button @click="stepFsZoom(0.5)" :disabled="fsZoom >= 5" :class="fsZoom >= 5 ? 'opacity-30' : 'active:bg-zinc-100'" class="px-2 py-1 text-xs font-black border-l border-zinc-200">➕</button>
+                    </div>
+                    <button @click="showWatermark = !showWatermark" :class="showWatermark ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-white text-zinc-500 border-zinc-300'" class="px-2 py-1 rounded-md text-[11px] font-bold border shadow-sm">🏷️水印:{{ showWatermark ? '開' : '關' }}</button>
+                    <button @click="downloadFullScreenImage" class="bg-white border border-zinc-300 text-zinc-900 px-2 py-1 rounded-md text-xs font-bold shadow-sm">⬇️下載</button>
+                    <button @click="closeFullScreen" class="bg-zinc-900 text-white px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">✕</button>
+                </div>
+            </div>
+            
+            <div class="flex-1 min-h-0 w-full relative bg-zinc-200 overflow-hidden">
+                <div class="absolute inset-1 overflow-hidden bg-white shadow-sm border border-zinc-300 rounded-lg">
+                    <svg ref="fsSvgRef" :view-box.camel="fsViewBox" preserveAspectRatio="xMidYMid meet"
+                         style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;"
+                         class="canvas-touch-lock cursor-grab active:cursor-grabbing"
+                         @wheel.prevent="onFsWheel"
+                         @touchstart="onFsTouchStart" @touchmove="onFsTouchMove" @touchend="onFsTouchEnd"
+                         @mousedown="onFsMouseDown" @mousemove="onFsMouseMove" @mouseup="onFsMouseUp">
+                        <defs>
+                            <marker id="fs-arrow-gray" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#9ca3af" /></marker>
+                            <marker id="fs-arrow-white" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#ffffff" /></marker>
+                            <marker id="fs-arrow-red" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#ef4444" /></marker>
+                        </defs>
+                        <rect x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" fill="#ffffff" />
+                        <image :href="fullScreenItem.photo" x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" preserveAspectRatio="none" />
+                        
+                        <g v-if="showWatermark && fullScreenWatermarkLines.length" transform="translate(22, 26)">
+                            <text v-for="(item, wIdx) in fullScreenWatermarkLines" :key="wIdx" x="0" :y="wIdx * 32" dominant-baseline="central" :fill="item.color" class="wm-text">{{ item.text }}</text>
+                        </g>
+
+                        <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
+                            <template v-if="m.type === 'image'">
+                                <image :href="m.data.b64" :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" preserveAspectRatio="none" />
+                            </template>
+                        </g>
+
+                        <g v-for="w in (fullScreenItem.walls || [])" :key="w.id">
+                            <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" />
+                        </g>
+                        <line v-for="l in (fullScreenItem.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
+                              :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 4 : 6" stroke-linecap="round"
+                              :marker-end="l.type === 'arrow-single' ? `url(#fs-arrow-${l.color})` : null" />
+                        <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
+                        <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
+                            <template v-if="m.type !== 'image'">
+                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
+                                    <tspan v-for="(line, lIdx) in getMarkerLines(m)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
+                                </text>
+                            </template>
+                        </g>
+                        <g v-for="(pin, pIdx) in (fullScreenItem.pins || [])" :key="pin.id" :transform="`translate(${(pin.x / 100) * (fullScreenItem.w || 1200)}, ${(pin.y / 100) * (fullScreenItem.h || 900)})`">
+                            <polygon points="-10,-10 10,-10 0,4" fill="#dc2626" />
+                            <circle cx="0" cy="-24" r="20" fill="#dc2626" stroke="#ffffff" stroke-width="3" />
+                            <text x="0" y="-23" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="20" font-weight="900">{{ pIdx + 1 }}</text>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- PDF Modal -->
+        <div v-if="showPdfModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showPdfModal = false">
+            <div class="bg-white border border-zinc-200 w-full max-w-xs rounded-xl p-4 flex flex-col gap-2.5 shadow-xl">
+                <div class="text-[15px] font-black text-center text-zinc-900 mb-1 border-b border-zinc-200 pb-2">📄 輸出 PDF 排版</div>
+                <button @click="exportPdfReport(1)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[13px] font-bold shadow-sm">🖼️ 每頁 1 張 (清晰版)</button>
+                <button @click="exportPdfReport(2)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[13px] font-bold shadow-sm">▯▯ 每頁 2 張 (上下版)</button>
+                <button @click="exportPdfReport(4)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[13px] font-bold shadow-sm">田 每頁 4 張 (總覽版)</button>
+                <button @click="showPdfModal = false" class="w-full text-zinc-500 py-2 text-xs font-bold mt-1">取消</button>
+            </div>
+        </div>
+
+        <!-- 載入中遮罩 -->
+        <div v-if="isLoading" class="fixed inset-0 z-[100] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center text-zinc-900 font-bold px-6 text-center">
+            <div class="w-10 h-10 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin mb-4 shadow-sm"></div>
+            <p class="text-[15px]">{{ loadingText }}</p>
+        </div>
+    </div>
+
+    <script>
+        if (!window.Vue) {
+            window.__showBootError('Vue 引擎載入失敗');
+        } else {
+            const { createApp, ref, reactive, computed, onMounted } = Vue;
+
+            let db = null;
+            try {
+                if (window.firebase) {
+                    firebase.initializeApp({
+                        apiKey: "AIzaSyCSRfZdAVh8ADPNtayW5lyDtmE0xDsJXNg",
+                        authDomain: "gen-lang-client-0208380044.firebaseapp.com",
+                        databaseURL: "https://gen-lang-client-0208380044-default-rtdb.firebaseio.com",
+                        projectId: "gen-lang-client-0208380044",
+                        storageBucket: "gen-lang-client-0208380044.firebasestorage.app",
+                        messagingSenderId: "17077391191",
+                        appId: "1:17077391191:web:f167a311052c56bd3d7812"
+                    });
+                    db = firebase.firestore();
+                    db.settings({ experimentalAutoDetectLongPolling: true, ignoreUndefinedProperties: true });
+                }
+            } catch (_) {}
+
+            const withTimeout = (p, ms = 15000, msg = '雲端連線逾時，請檢查網路') => {
+                let t;
+                return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); })]).finally(() => clearTimeout(t));
+            };
+
+            const getTodayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+            const sanitizeFilename = (s) => String(s || '').trim().replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
+
+            const buildWallSegments = (w) => {
+                if (!w) return [];
+                const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = Math.hypot(dx, dy);
+                if (L < 4) return [];
+                const ux = dx / L, uy = dy / L, nx = -uy, ny = ux, hw = 9;
+                const p1A = { x: w.x1 + nx * hw, y: w.y1 + ny * hw }, p2A = { x: w.x2 + nx * hw, y: w.y2 + ny * hw };
+                const p1B = { x: w.x1 - nx * hw, y: w.y1 - ny * hw }, p2B = { x: w.x2 - nx * hw, y: w.y2 - ny * hw };
+                const segs = [
+                    { x1: p1A.x, y1: p1A.y, x2: p2A.x, y2: p2A.y, isHatch: false },
+                    { x1: p1B.x, y1: p1B.y, x2: p2B.x, y2: p2B.y, isHatch: false },
+                    { x1: p1A.x, y1: p1A.y, x2: p1B.x, y2: p1B.y, isHatch: false },
+                    { x1: p2A.x, y1: p2A.y, x2: p2B.x, y2: p2B.y, isHatch: false }
+                ];
+                if (w.style === 'hatched') {
+                    for (let c = -hw + 14; c < L + hw; c += 14) {
+                        const t0 = Math.max(-hw, -c), t1 = Math.min(hw, L - c);
+                        if (t1 - t0 > 0.5) {
+                            segs.push({
+                                x1: w.x1 + (c + t0) * ux + t0 * nx, y1: w.y1 + (c + t0) * uy + t0 * ny,
+                                x2: w.x1 + (c + t1) * ux + t1 * nx, y2: w.y1 + (c + t1) * uy + t1 * ny,
+                                isHatch: true
+                            });
+                        }
+                    }
+                }
+                return segs;
+            };
+
+            const renderSketchDataUrl = (w, h, hasGrid) => {
+                const c = document.createElement('canvas'); c.width = w; c.height = h;
+                const ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
+                if (hasGrid) {
+                    ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 2;
+                    for (let x = 0; x <= w; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+                    for (let y = 0; y <= h; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+                }
+                return c.toDataURL('image/png');
+            };
+
+            createApp({
+                setup() {
+                    const inputCode = ref('');
+                    const showPdfModal = ref(false);
+                    const showWatermark = ref(true);
+
+                    const isLoading = ref(false);
+                    const loadingText = ref('');
+                    const toastMsg = ref('');
+                    const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
+
+                    const project = reactive({ code: '', name: '', date: '', lastModifiedBy: '' });
+                    const pages = ref([]);
+                    const selectedSpace = ref('');
+                    const spaceList = ['主人房', '睡房一', '睡房二', '客廳', '飯廳', '廚房', '客廁', '套廁', '儲物室', '玄關', '露台'];
+
+                    const availableSpaces = computed(() => {
+                        const set = new Set();
+                        pages.value.forEach(pg => { if (pg.space?.trim()) set.add(pg.space.trim()); });
+                        return [...set];
+                    });
+
+                    const displayedPages = computed(() => {
+                        const list = pages.value.map((pg, origIdx) => ({ pg, origIdx }));
+                        if (!selectedSpace.value) return list;
+                        return list.filter(x => (x.pg.space || '').trim() === selectedSpace.value);
+                    });
+
+                    const getLineStroke = (l, alpha = 0.7) => !l.type || l.type === 'measure' ? `rgba(255, 0, 68, ${alpha})` : ({ gray: '#9ca3af', white: '#ffffff' }[l.color] || '#ef4444');
+                    const getWallSegments = (w) => buildWallSegments(w);
+                    const getStampColor = (m) => {
+                        if (m.type !== 'stamp') return '#ffffff';
+                        const v = m.data.val;
+                        if (['需清拆','牆身斜','牆體不平','空鼓','滲水','局部凸出'].includes(v)) return '#ef4444';
+                        if (['開關','單蘇','孖蘇','燈曲','數據','燈線'].includes(v)) return '#eab308';
+                        if (['留通道','開門方向','可保留','實地台'].includes(v)) return '#3b82f6';
+                        if (['要收口','見光','開背板','生口位','避窗簾盒','留散熱','要分件'].includes(v)) return '#d97706';
+                        return spaceList.includes(v) ? '#a855f7' : '#ffffff';
+                    };
+
+                    const getTagFields = (t) => ({
+                        door: [{ key: 'w_in', label: '門闊' }, { key: 'h_in', label: '門高' }, { key: 't', label: '牆厚' }, { key: 't_frame', label: '門框厚' }, { key: 'h_top', label: '頂到天花' }, { key: 'w_side', label: '邊到牆' }],
+                        window: [{ key: 'w_in', label: '內闊' }, { key: 'h_in', label: '內高' }, { key: 'd_in', label: '內深' }, { key: 'h_bottom', label: '面到地' }, { key: 't_stone', label: '窗石厚' }, { key: 'd_stone', label: '窗石凸' }],
+                        beam: [{ key: 'w', label: '樑闊' }, { key: 'd', label: '樑深' }, { key: 'h_bottom', label: '底到地' }, { key: 'w_side', label: '樑邊到牆' }],
+                        column: [{ key: 'w', label: '柱闊' }, { key: 'd', label: '柱深' }, { key: 'h_top', label: '柱高' }, { key: 'd_out', label: '柱凸出' }]
+                    }[t] || []);
+
+                    const getMarkerLines = (m) => {
+                        if (['window','door','beam','column'].includes(m.type)) {
+                            return [{ window: '窗', door: '門洞', beam: '樑', column: '柱' }[m.type], ...getTagFields(m.type).filter(f => m.data[f.key]).map(f => `${f.label}:${m.data[f.key]}`)];
+                        }
+                        if (m.type === 'stamp' || m.type === 'text') return [m.data.val || ''];
+                        return [`${m.data.name ? m.data.name + ': ' : ''}${m.data.val || ''}`];
+                    };
+
+                    const resolveMediaDoc = async (doc) => {
+                        const d = doc.data();
+                        if (!d) return null;
+                        if (d.photo) return d.photo;
+                        if (d.chunked && d.totalChunks > 0) {
+                            const snap = await withTimeout(doc.ref.collection('chunks').get(), 15000);
+                            const list = snap.docs.map(c => c.data()).sort((a, b) => (a.index || 0) - (b.index || 0));
+                            if (list.length === d.totalChunks) return list.map(c => c.data || '').join('');
+                        }
+                        return null;
+                    };
+
+                    const openProject = async (code) => {
+                        code = String(code || '').trim();
+                        if (!code || !db) return;
+                        isLoading.value = true; loadingText.value = `正在下載工程單 #${code} 圖紙...`;
+                        try {
+                            const projRef = db.collection('site_projects').doc(code);
+                            const [projDoc, pagesSnap, mediaSnap] = await Promise.all([
+                                withTimeout(projRef.get(), 15000),
+                                withTimeout(projRef.collection('pages').get(), 15000),
+                                withTimeout(projRef.collection('media').get(), 20000)
+                            ]);
+                            if (!projDoc.exists) {
+                                alert(`找不到工程碼 #${code}，請確認是否輸入正確。`);
+                                return;
+                            }
+                            const pd = projDoc.data();
+                            const mediaMap = new Map();
+                            await Promise.all(mediaSnap.docs.map(async (m) => {
+                                const fullPhoto = await resolveMediaDoc(m);
+                                if (fullPhoto) mediaMap.set(String(m.id), fullPhoto);
+                            }));
+
+                            const deletedPages = new Set((pd.deletedPageIds || []).map(String));
+                            const globalDeletedPins = new Set((pd.deletedPinIds || []).map(String));
+                            const orderList = pd.pageIds || [];
+
+                            const loadedPages = pagesSnap.docs
+                                .filter(doc => !deletedPages.has(String(doc.id)))
+                                .map(doc => {
+                                    const r = doc.data();
+                                    const pageDeletedPins = new Set([...globalDeletedPins, ...((r.deletedPinIds || []).map(String))]);
+                                    let photo = (r.photoId && mediaMap.get(r.photoId)) || mediaMap.get('page_' + (r.id || doc.id)) || r.photo || null;
+                                    if (r.isSketch && !photo) photo = renderSketchDataUrl(r.w || 1200, r.h || 1500, !!r.hasGrid);
+
+                                    const pins = (r.pins || [])
+                                        .filter(pin => !pageDeletedPins.has(String(pin.id)))
+                                        .map(pin => {
+                                            let pPhoto = (pin.photoId && mediaMap.get(pin.photoId)) || mediaMap.get(String(pin.id)) || pin.photo || null;
+                                            if (pin.isSketch && !pPhoto) pPhoto = renderSketchDataUrl(pin.w || 1200, pin.h || 1500, !!pin.hasGrid);
+                                            return { ...pin, photo: pPhoto };
+                                        });
+
+                                    return {
+                                        id: doc.id,
+                                        ...r,
+                                        date: r.date || pd.date || getTodayStr(),
+                                        photo,
+                                        pins
+                                    };
+                                })
+                                .sort((a, b) => (orderList.indexOf(a.id) === -1 ? 9999 : orderList.indexOf(a.id)) - (orderList.indexOf(b.id) === -1 ? 9999 : orderList.indexOf(b.id)));
+
+                            Object.assign(project, { code, name: pd.name || '', date: pd.date || '', lastModifiedBy: pd.lastModifiedBy || '' });
+                            pages.value = loadedPages;
+                            selectedSpace.value = '';
+                            
+                            try {
+                                const u = new URL(window.location.href);
+                                u.searchParams.set('code', code);
+                                window.history.replaceState({}, '', u.toString());
+                            } catch (_) {}
+                        } catch (e) { alert('載入工程單失敗：' + e.message); }
+                        finally { isLoading.value = false; }
+                    };
+
+                    const reloadCurrentProject = async () => { if (project.code) { await openProject(project.code); showToast('✅ 已更新至最新雲端進度'); } };
+
+                    const submitCode = async () => {
+                        const c = inputCode.value.trim();
+                        if (c.length !== 6) return alert('請輸入 6 位數字工程碼');
+                        inputCode.value = '';
+                        await openProject(c);
+                    };
+
+                    const logout = () => {
+                        project.code = ''; pages.value = [];
+                        try {
+                            const u = new URL(window.location.href);
+                            u.searchParams.delete('code');
+                            window.history.replaceState({}, '', u.toString());
+                        } catch (_) {}
+                    };
+
+                    const copyShareLink = () => {
+                        try {
+                            const u = new URL(window.location.href);
+                            u.searchParams.set('code', project.code);
+                            const msg = `📋 工程度尺圖 (#${project.code})\n📍 地址：${project.name || '未標題'}\n👉 點擊檢視：\n${u.toString()}`;
+                            navigator.clipboard?.writeText(msg);
+                            showToast('🔗 已複製專屬 WhatsApp 檢視訊息，可直接貼上發送');
+                        } catch (_) { showToast('複製失敗'); }
+                    };
+
+                    // 全螢幕檢視器與縮放控制
+                    const fullScreenIndex = ref(-1);
+                    const fsSvgRef = ref(null);
+                    const fsZoom = ref(1);
+                    const fsVbX = ref(0);
+                    const fsVbY = ref(0);
+
+                    const fullScreenList = computed(() => {
+                        const list = [];
+                        pages.value.forEach((pg, pIdx) => {
+                            const pgDate = pg.date || project.date || getTodayStr();
+                            const pgAuthor = pg.author || project.lastModifiedBy || '';
+                            if (pg.photo) list.push({ item: pg, label: `P${pIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`, date: pgDate, author: pgAuthor });
+                            (pg.pins || []).forEach((pin, pinIdx) => {
+                                if (pin.photo) list.push({ item: pin, label: `P${pIdx + 1} 📍釘#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}`, date: pin.date || pgDate, author: pin.author || pgAuthor });
+                            });
+                        });
+                        return list;
+                    });
+
+                    const currentFullScreen = computed(() => (fullScreenIndex.value >= 0 && fullScreenIndex.value < fullScreenList.value.length) ? fullScreenList.value[fullScreenIndex.value] : null);
+                    const fullScreenItem = computed(() => currentFullScreen.value?.item || null);
+                    const fullScreenTitle = computed(() => currentFullScreen.value ? `${currentFullScreen.value.label} (${fullScreenIndex.value + 1}/${fullScreenList.value.length})` : '');
+                    const fullScreenDate = computed(() => currentFullScreen.value?.date || getTodayStr());
+                    const fullScreenAuthor = computed(() => currentFullScreen.value?.author || '');
+
+                    const fsViewBox = computed(() => {
+                        const it = fullScreenItem.value; if (!it) return '0 0 1200 900';
+                        const pw = it.w || 1200, ph = it.h || 900;
+                        const vw = Math.round((pw / fsZoom.value) * 10) / 10, vh = Math.round((ph / fsZoom.value) * 10) / 10;
+                        const vx = Math.max(0, Math.min(pw - vw, fsVbX.value)), vy = Math.max(0, Math.min(ph - vh, fsVbY.value));
+                        return `${vx} ${vy} ${vw} ${vh}`;
+                    });
+
+                    const resetFsZoom = () => { fsZoom.value = 1; fsVbX.value = 0; fsVbY.value = 0; };
+
+                    const applyFsZoom = (nextScale, clientX, clientY, anchorSvg) => {
+                        const it = fullScreenItem.value, svg = fsSvgRef.value;
+                        if (!it) return;
+                        const pw = it.w || 1200, ph = it.h || 900;
+                        const clamped = Math.max(1, Math.min(5, Math.round(nextScale * 100) / 100));
+                        if (clamped <= 1) { resetFsZoom(); return; }
+                        const vw = pw / clamped, vh = ph / clamped;
+                        if (svg && anchorSvg) {
+                            const r = svg.getBoundingClientRect(), baseFit = Math.min(r.width / pw, r.height / ph);
+                            const effScale = baseFit * clamped, offX = r.left + (r.width - pw * baseFit) / 2, offY = r.top + (r.height - ph * baseFit) / 2;
+                            fsZoom.value = clamped;
+                            fsVbX.value = Math.max(0, Math.min(pw - vw, anchorSvg.x - (clientX - offX) / effScale));
+                            fsVbY.value = Math.max(0, Math.min(ph - vh, anchorSvg.y - (clientY - offY) / effScale));
+                        } else {
+                            const curVw = pw / fsZoom.value, curVh = ph / fsZoom.value, cx = fsVbX.value + curVw / 2, cy = fsVbY.value + curVh / 2;
+                            fsZoom.value = clamped; fsVbX.value = Math.max(0, Math.min(pw - vw, cx - vw / 2)); fsVbY.value = Math.max(0, Math.min(ph - vh, cy - vh / 2));
+                        }
+                    };
+
+                    const stepFsZoom = (d) => applyFsZoom(fsZoom.value + d, null, null, null);
+
+                    const fsClientToSvg = (clientX, clientY) => {
+                        const svg = fsSvgRef.value, it = fullScreenItem.value;
+                        if (!svg || !it) return { x: 0, y: 0 };
+                        try {
+                            const ctm = svg.getScreenCTM();
+                            if (ctm) { const p = svg.createSVGPoint(); p.x = clientX; p.y = clientY; return p.matrixTransform(ctm.inverse()); }
+                        } catch (_) {}
+                        return { x: (it.w || 1200) / 2, y: (it.h || 900) / 2 };
+                    };
+
+                    let fsPinching = false, fsPinchDist = 0, fsPinchScale = 1, fsPinchAnchor = null;
+                    let fsPanning = false, fsPanStart = { x: 0, y: 0 }, fsPanVbStart = { x: 0, y: 0 };
+
+                    const onFsWheel = (e) => { const anchor = fsClientToSvg(e.clientX, e.clientY); applyFsZoom(fsZoom.value * (e.deltaY < 0 ? 1.2 : 0.82), e.clientX, e.clientY, anchor); };
+
+                    const onFsTouchStart = (e) => {
+                        if (e.touches.length >= 2) {
+                            e.preventDefault(); fsPinching = true; fsPanning = false;
+                            const t1 = e.touches[0], t2 = e.touches[1];
+                            fsPinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1;
+                            fsPinchScale = fsZoom.value; fsPinchAnchor = fsClientToSvg((t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2);
+                        } else if (e.touches.length === 1 && fsZoom.value > 1) {
+                            fsPanning = true; fsPanStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; fsPanVbStart = { x: fsVbX.value, y: fsVbY.value };
+                        }
+                    };
+
+                    const onFsTouchMove = (e) => {
+                        if (e.touches.length >= 2 && fsPinching) {
+                            e.preventDefault();
+                            const t1 = e.touches[0], t2 = e.touches[1], d = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1;
+                            applyFsZoom(fsPinchScale * (d / fsPinchDist), (t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2, fsPinchAnchor);
+                        } else if (e.touches.length === 1 && fsPanning) {
+                            e.preventDefault(); panFsByDelta(e.touches[0].clientX - fsPanStart.x, e.touches[0].clientY - fsPanStart.y);
+                        }
+                    };
+
+                    const onFsTouchEnd = (e) => { if (e.touches.length === 0) { fsPinching = false; fsPanning = false; } };
+                    const onFsMouseDown = (e) => { if (fsZoom.value > 1) { e.preventDefault(); fsPanning = true; fsPanStart = { x: e.clientX, y: e.clientY }; fsPanVbStart = { x: fsVbX.value, y: fsVbY.value }; } };
+                    const onFsMouseMove = (e) => { if (fsPanning) panFsByDelta(e.clientX - fsPanStart.x, e.clientY - fsPanStart.y); };
+                    const onFsMouseUp = () => { fsPanning = false; };
+
+                    const panFsByDelta = (dx, dy) => {
+                        const svg = fsSvgRef.value, it = fullScreenItem.value; if (!svg || !it) return;
+                        const pw = it.w || 1200, ph = it.h || 900, vw = pw / fsZoom.value, vh = ph / fsZoom.value, r = svg.getBoundingClientRect(), s = Math.min(r.width / vw, r.height / vh) || 1;
+                        fsVbX.value = Math.max(0, Math.min(pw - vw, fsPanVbStart.x - dx / s)); fsVbY.value = Math.max(0, Math.min(ph - vh, fsPanVbStart.y - dy / s));
+                    };
+
+                    const openFullScreenPreview = (targetItem) => { resetFsZoom(); const idx = fullScreenList.value.findIndex(x => x.item === targetItem || String(x.item.id) === String(targetItem.id)); if (idx !== -1) fullScreenIndex.value = idx; };
+                    const closeFullScreen = () => { resetFsZoom(); fullScreenIndex.value = -1; };
+                    const prevFullScreen = () => { if (fullScreenIndex.value > 0) { resetFsZoom(); fullScreenIndex.value--; } };
+                    const nextFullScreen = () => { if (fullScreenIndex.value < fullScreenList.value.length - 1) { resetFsZoom(); fullScreenIndex.value++; } };
+
+                    const buildWatermarkLines = (item, itemDate, itemAuthor) => {
+                        const lines = [];
+                        const dStr = itemDate || item?.date || project.date;
+                        const aStr = itemAuthor || item?.author || project.lastModifiedBy;
+                        if (dStr || aStr) lines.push({ text: `${dStr ? '📅 ' + dStr : ''}${aStr ? (dStr ? '  ' : '') + '✍️' + aStr : ''}`, color: '#111827' });
+                        if (project.name?.trim()) lines.push({ text: `📍 ${project.name.trim()}`, color: '#d97706' });
+                        if (item?.space?.trim()) lines.push({ text: `🏠 ${item.space.trim()}`, color: '#111827' });
+                        return lines;
+                    };
+                    const fullScreenWatermarkLines = computed(() => buildWatermarkLines(fullScreenItem.value, fullScreenDate.value, fullScreenAuthor.value));
+
+                    const renderAnnotatedCanvas = (canvasObj, includeStamp = true, itemDate = '', itemAuthor = '') => new Promise(async (resolve) => {
+                        const img = new Image(); img.src = canvasObj.photo;
+                        await new Promise(r => { img.onload = r; img.onerror = r; });
+                        const c = document.createElement('canvas'), w = canvasObj.w || 1200, h = canvasObj.h || 900; c.width = w; c.height = h;
+                        const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+
+                        if (includeStamp) {
+                            const wmLines = buildWatermarkLines(canvasObj, itemDate, itemAuthor);
+                            if (wmLines.length) {
+                                ctx.font = '900 23px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+                                wmLines.forEach((item, idx) => {
+                                    const y = 26 + idx * 32;
+                                    ctx.lineWidth = 6; ctx.strokeStyle = '#ffffff'; ctx.strokeText(item.text, 22, y);
+                                    ctx.fillStyle = item.color; ctx.fillText(item.text, 22, y);
+                                });
+                            }
+                        }
+
+                        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                        (canvasObj.walls || []).forEach(wObj => {
+                            ctx.strokeStyle = wObj.color || '#111827';
+                            buildWallSegments(wObj).forEach(seg => { ctx.lineWidth = seg.isHatch ? 2.5 : 3.5; ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke(); });
+                        });
+
+                        (canvasObj.lines || []).forEach(l => {
+                            if (l.type === 'arrow-single') {
+                                const hex = getLineStroke(l); ctx.strokeStyle = hex; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
+                                ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(Math.atan2(l.y2 - l.y1, l.x2 - l.x1));
+                                ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-9, 4.5); ctx.lineTo(-9, -4.5); ctx.closePath(); ctx.fill(); ctx.restore();
+                            } else { ctx.strokeStyle = getLineStroke(l, 0.55); ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }
+                        });
+
+                        (canvasObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 6; ctx.stroke(new Path2D(p.d)); });
+                        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                        (canvasObj.markers || []).forEach(m => {
+                            if (m.type === 'image') return; 
+                            const lines = getMarkerLines(m), color = getStampColor(m); ctx.font = '900 28px sans-serif';
+                            const startY = m.y - ((lines.length - 1) * 34) / 2;
+                            lines.forEach((line, i) => { const y = startY + i * 34; ctx.lineWidth = 7; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); });
+                        });
+                        (canvasObj.pins || []).forEach((pin, idx) => {
+                            const px = (pin.x / 100) * w, py = (pin.y / 100) * h;
+                            ctx.beginPath(); ctx.arc(px, py - 22, 20, 0, 2 * Math.PI); ctx.fillStyle = '#dc2626'; ctx.fill();
+                            ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(idx + 1, px, py - 22);
+                        });
+                        resolve(c);
+                    });
+
+                    const downloadFullScreenImage = async () => {
+                        if (!fullScreenItem.value?.photo) return;
+                        try {
+                            const dStr = sanitizeFilename(fullScreenDate.value || getTodayStr());
+                            const c = await renderAnnotatedCanvas(fullScreenItem.value, showWatermark.value, fullScreenDate.value, fullScreenAuthor.value);
+                            const url = URL.createObjectURL(await new Promise(res => c.toBlob(res, 'image/jpeg', 0.92)));
+                            const a = document.createElement('a'); a.href = url; a.download = `${sanitizeFilename(project.name || '工程')}_#${project.code}_${sanitizeFilename(currentFullScreen.value?.label || '圖紙')}_${dStr}.jpg`;
+                            document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000); showToast('✅ 已下載圖片');
+                        } catch (_) { alert('下載圖片失敗'); }
+                    };
+
+                    const exportPdfReport = async (perPage = 1) => {
+                        showPdfModal.value = false; isLoading.value = true; loadingText.value = `正在產生 PDF (每頁 ${perPage} 張)...`;
+                        setTimeout(async () => {
+                            try {
+                                const { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                                const PAGE_W = 1240, PAGE_H = 1754, validPages = [];
+                                pages.value.forEach((pg, pIdx) => {
+                                    const pgDate = pg.date || project.date || getTodayStr(), pgAuthor = pg.author || project.lastModifiedBy || '未知';
+                                    if (pg.photo) validPages.push({ ...pg, date: pgDate, author: pgAuthor, pdfLabel: `P${pIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}` });
+                                    (pg.pins || []).forEach((pin, pinIdx) => {
+                                        if (pin.photo) validPages.push({ ...pin, date: pgDate, author: pgAuthor, pdfLabel: `P${pIdx + 1} 📍釘選#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}` });
+                                    });
+                                });
+                                if (!validPages.length) return alert('沒有可輸出的圖紙！');
+
+                                const uniqueDates = [...new Set(validPages.map(p => p.date).filter(Boolean))];
+                                const headerDate = uniqueDates.length > 1 ? `${uniqueDates[0]} ~ ${uniqueDates[uniqueDates.length - 1]}` : (uniqueDates[0] || getTodayStr());
+                                const fileDateTag = sanitizeFilename(uniqueDates[uniqueDates.length - 1] || getTodayStr());
+
+                                if (perPage > 1) {
+                                    const cols = perPage === 4 ? 2 : 1, rows = 2;
+                                    const totalPdf = Math.ceil(validPages.length / perPage), mx = 45, topY = 115, gap = 24, cellW = Math.floor((PAGE_W - mx * 2 - (cols - 1) * gap) / cols), cellH = Math.floor((PAGE_H - topY - 45 - (rows - 1) * gap) / rows);
+                                    for (let pIdx = 0; pIdx < totalPdf; pIdx++) {
+                                        if (pIdx > 0) doc.addPage();
+                                        const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+                                        ctx.fillStyle = '#000'; ctx.font = 'bold 34px sans-serif'; ctx.fillText(`${project.name || '工程度尺'} (#${project.code})`, mx, 60);
+                                        ctx.font = 'bold 21px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${headerDate}   |   共 ${validPages.length} 張   |   第 ${pIdx + 1} / ${totalPdf} 頁`, mx, 94);
+                                        for (let j = 0; j < perPage; j++) {
+                                            const pg = validPages[pIdx * perPage + j]; if (!pg) break;
+                                            const cx = mx + (j % cols) * (cellW + gap), cy = topY + Math.floor(j / cols) * (cellH + gap);
+                                            ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 2; ctx.strokeRect(cx, cy, cellW, cellH); ctx.fillStyle = '#f3f4f6'; ctx.fillRect(cx + 1, cy + 1, cellW - 2, 44);
+                                            ctx.fillStyle = '#111827'; ctx.font = 'bold 20px sans-serif'; ctx.fillText(`${pg.pdfLabel} (${pg.date})`.slice(0, cols === 1 ? 56 : 32), cx + 14, cy + 30);
+                                            const im = await renderAnnotatedCanvas(pg, true, pg.date, pg.author);
+                                            const maxW = cellW - 20, maxH = cellH - 60; let dw = maxW, dh = (im.height / im.width) * dw;
+                                            if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; }
+                                            ctx.drawImage(im, cx + 10 + (maxW - dw) / 2, cy + 52 + (maxH - dh) / 2, dw, dh);
+                                        }
+                                        doc.addImage(c.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
+                                    }
+                                } else {
+                                    for (let i = 0; i < validPages.length; i++) {
+                                        if (i > 0) doc.addPage();
+                                        const pg = validPages[i], c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+                                        ctx.fillStyle = '#000'; ctx.font = 'bold 38px sans-serif'; ctx.fillText(`${project.name || '工程度尺'} (#${project.code}) — ${pg.pdfLabel}`, 50, 65);
+                                        ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${pg.date}   |   最後修改: ${pg.author}`, 50, 102);
+                                        const im = await renderAnnotatedCanvas(pg, true, pg.date, pg.author);
+                                        const maxW = PAGE_W - 100, maxH = PAGE_H - 180; let dw = maxW, dh = (im.height / im.width) * dw;
+                                        if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; }
+                                        ctx.drawImage(im, 50 + (maxW - dw) / 2, 130, dw, dh);
+                                        doc.addImage(c.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
+                                    }
+                                }
+                                const modeTag = perPage === 4 ? '4合1' : perPage === 2 ? '2合1' : '單頁';
+                                doc.save(`${sanitizeFilename(project.name || '工程')}_#${project.code}_${fileDateTag}_${modeTag}.pdf`);
+                            } catch (_) { alert('生成 PDF 失敗'); }
+                            finally { isLoading.value = false; }
+                        }, 50);
+                    };
+
+                    onMounted(async () => {
+                        const bs = document.getElementById('boot-screen');
+                        if (bs) bs.remove();
+                        window.addEventListener('keydown', (e) => {
+                            if (fullScreenIndex.value === -1) return;
+                            if (e.key === 'ArrowLeft') { e.preventDefault(); prevFullScreen(); }
+                            else if (e.key === 'ArrowRight') { e.preventDefault(); nextFullScreen(); }
+                            else if (e.key === 'Escape') { e.preventDefault(); closeFullScreen(); }
+                        });
+                        const params = new URLSearchParams(window.location.search);
+                        const urlCode = params.get('code');
+                        if (urlCode && urlCode.trim().length === 6) await openProject(urlCode.trim());
+                    });
+
+                    return {
+                        inputCode, showPdfModal, showWatermark, isLoading, loadingText, toastMsg, showToast, project, pages, selectedSpace, availableSpaces, displayedPages,
+                        getLineStroke, getWallSegments, getStampColor, getMarkerLines,
+                        openProject, reloadCurrentProject, submitCode, copyShareLink, logout,
+                        fullScreenIndex, fullScreenList, fullScreenItem, fullScreenTitle, fullScreenWatermarkLines,
+                        fsSvgRef, fsZoom, fsViewBox, stepFsZoom, resetFsZoom, onFsWheel,
+                        onFsTouchStart, onFsTouchMove, onFsTouchEnd, onFsMouseDown, onFsMouseMove, onFsMouseUp,
+                        openFullScreenPreview, closeFullScreen, prevFullScreen, nextFullScreen, downloadFullScreenImage, exportPdfReport
+                    };
+                }
+            }).mount('#app');
+        }
+    </script>
+</body>
+</html>
