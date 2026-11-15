@@ -1,4 +1,4 @@
-const CACHE_NAME = 'site-measure-pro-v9.2';
+const CACHE_NAME = 'site-measure-pro-v9.3';
 const PRECACHE_URLS = [
     './',
     './index.html',
