@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v8.1</title>
+    <title>度尺寶 Pro v8.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -151,7 +151,6 @@
             </div>
 
             <div v-show="previewTab === 'pages'" class="flex-1 overflow-y-auto p-2.5 touch-scrollable space-y-3">
-                <!-- 工程資訊及右上角水印設定卡片 -->
                 <div class="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 flex flex-col gap-2">
                     <div class="flex justify-between items-center gap-2">
                         <div class="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
@@ -282,7 +281,7 @@
             </div>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器 (右上角顯示日期及地址印章 + 開關) -->
+        <!-- 唯讀全螢幕大圖檢視器 -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col overflow-hidden">
             <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-2 flex justify-between items-center gap-1 shrink-0 z-10">
                 <span class="text-xs font-bold text-yellow-400 truncate min-w-0 flex-1">👁️ {{ fullScreenTitle }}</span>
@@ -306,13 +305,11 @@
                         <image :href="fullScreenItem.photo" x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" preserveAspectRatio="none" />
                         <rect x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" fill="none" stroke="#52525b" stroke-width="4" />
 
-                        <!-- 左上角空間標籤 (當開啟水印時同步顯示) -->
                         <g v-if="showWatermark && fullScreenItem.space" transform="translate(16, 16)">
                             <rect x="0" y="0" :width="measureBoxWidth(['🏠 ' + fullScreenItem.space], 24, 28)" height="44" rx="6" fill="rgba(0,0,0,0.82)" stroke="rgba(255,255,255,0.22)" stroke-width="1.5" />
                             <text x="14" y="23" dominant-baseline="central" fill="#facc15" font-size="24" font-weight="900">🏠 {{ fullScreenItem.space }}</text>
                         </g>
 
-                        <!-- 右上角日期及地址工程印章 -->
                         <g v-if="showWatermark && watermarkStamp.lines.length" :transform="`translate(${(fullScreenItem.w || 1200) - watermarkStamp.boxW - 16}, 16)`">
                             <rect x="0" y="0" :width="watermarkStamp.boxW" :height="watermarkStamp.boxH" rx="8" fill="rgba(0,0,0,0.82)" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" />
                             <text v-for="(item, wIdx) in watermarkStamp.lines" :key="wIdx" x="14" :y="24 + wIdx * 30" dominant-baseline="central" :fill="item.color" font-size="21" font-weight="900">{{ item.text }}</text>
@@ -504,7 +501,7 @@
         <div v-if="showCloudBrowser" class="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" @click.self="showCloudBrowser = false">
             <div class="bg-zinc-900 border border-zinc-700 w-full max-w-md rounded-xl p-4 flex flex-col text-white shadow-2xl max-h-[82vh]">
                 <div class="flex justify-between items-center border-b border-zinc-700 pb-2.5 mb-3">
-                    <h3 class="text-sm font-bold text-blue-400">☁️ 雲端工程庫</h3>
+                    <h3 class="text-sm font-bold text-blue-400">☁️ 雲端工程庫 ({{ cloudProjectList.length }})</h3>
                     <button @click="cleanCloudGarbage" class="bg-red-950 border border-red-700 text-red-200 px-2.5 py-1 rounded text-[11px] font-bold active:bg-red-800">
                         🧹 清理殘留垃圾
                     </button>
@@ -518,7 +515,7 @@
                                 <span class="text-sm font-bold truncate">{{ cp.name || '未命名工程' }}</span>
                             </div>
                             <div v-if="cp.address" class="text-[10px] text-amber-300 mt-0.5 truncate">📍 {{ cp.address }}</div>
-                            <div class="text-[10px] text-zinc-400 mt-0.5">更新: {{ new Date(cp.updatedAt).toLocaleString() }}</div>
+                            <div class="text-[10px] text-zinc-400 mt-0.5">更新: {{ cp.updatedAt ? new Date(cp.updatedAt).toLocaleString() : '未知' }}</div>
                             <div v-if="cp.lastModifiedBy" class="text-[10px] text-blue-300">✍️ 由 {{ cp.lastModifiedBy }} 修改</div>
                         </div>
                         <button @click="downloadFromCloudBrowser(cp.code)" class="bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold shrink-0">⬇️載入</button>
@@ -663,9 +660,11 @@
             </div>
         </div>
 
+        <!-- 載入中彈窗 (附帶隨時可按的取消按鈕，永不卡死) -->
         <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center text-white font-bold px-6 text-center">
             <div class="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-3"></div>
             <p class="text-sm">{{ processingText }}</p>
+            <button @click="isProcessing = false" class="mt-5 bg-zinc-800 active:bg-zinc-700 border border-zinc-600 text-zinc-200 px-4 py-1.5 rounded-full text-xs font-bold">✕ 取消等待</button>
         </div>
     </div>
 
@@ -673,7 +672,6 @@
         const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
         localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
-        // 註冊 PWA Service Worker，確保完全無網路也能開啟網頁度尺
         const offlineReady = ref(false);
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -699,17 +697,17 @@
             if (window.firebase) {
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
-                db.settings({ experimentalForceLongPolling: true, ignoreUndefinedProperties: true });
+                db.settings({ experimentalAutoDetectLongPolling: true, ignoreUndefinedProperties: true });
                 auth = firebase.auth();
             }
         } catch (e) {}
 
-        const withTimeout = (promise, ms = 30000, msg = '流動網絡連線逾時，系統自動重試中') => {
+        const withTimeout = (promise, ms = 15000, msg = '雲端連線逾時，請檢查網路後重試') => {
             let timer;
             return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(msg)), ms); })]).finally(() => clearTimeout(timer));
         };
 
-        const withRetry = async (fn, retries = 4, delayMs = 900) => {
+        const withRetry = async (fn, retries = 3, delayMs = 800) => {
             for (let i = 0; i <= retries; i++) {
                 try { return await fn(); } catch (e) { if (i === retries) throw e; await new Promise(r => setTimeout(r, delayMs * (i + 1))); }
             }
@@ -717,7 +715,6 @@
 
         const CHUNK_SIZE = 350000;
 
-        // 離屏測量文字寬度，確保右上角印章底框完美貼合文字長度
         const _measureCtx = document.createElement('canvas').getContext('2d');
         const measureBoxWidth = (texts, fontSize = 21, padX = 28) => {
             _measureCtx.font = `900 ${fontSize}px sans-serif`;
@@ -744,7 +741,6 @@
                 const canvasW = computed(() => activeCanvas.value?.w || 1200);
                 const canvasH = computed(() => activeCanvas.value?.h || 900);
 
-                // 右上角日期及地址印章內容計算
                 const watermarkStamp = computed(() => {
                     const lines = [];
                     if (project.name && project.name.trim()) lines.push({ text: `🏗️ ${project.name.trim()}`, color: '#ffffff' });
@@ -769,8 +765,8 @@
                     syncing: '☁️上傳中',
                     offline: '📴離線度尺中',
                     queued: '⏳待自動上傳',
-                    ready: '☁️v8.1連通'
-                }[cloudSyncState.value] || '☁️v8.1連通'));
+                    ready: '☁️v8.2連通'
+                }[cloudSyncState.value] || '☁️v8.2連通'));
                 const cloudStatusClass = computed(() =>
                     cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' :
                     cloudSyncState.value === 'offline' ? 'bg-amber-950 text-amber-300 border border-amber-700' :
@@ -788,17 +784,17 @@
                     if (!navigator.onLine) return '目前無網絡，所有度尺已安全鎖入本機，一有訊號會自動上傳。';
                     if (!db) return 'Firebase 套件未載入';
                     if (msg.includes('permission') || err?.code === 'permission-denied') return 'Firebase 讀寫權限被拒';
-                    if (msg.includes('offline') || msg.includes('network')) return '網絡不穩，已加入自動補傳隊列，訊號穩定即自動完成上傳。';
+                    if (msg.includes('offline') || msg.includes('network') || msg.includes('逾時')) return '網絡不穩或連線逾時，請稍後再試。';
                     return msg || '連線異常';
                 };
 
                 const showCloudDetail = () => {
                     if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號時自動上傳');
                     else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                    else showToast('v8.1 右上角日期及地址印章 ＋ 離線保護運作中');
+                    else showToast('v8.2 右上角日期及地址印章 ＋ 離線保護運作中');
                 };
 
-                const trySilentAuth = async () => { if (auth && !auth.currentUser) try { await withTimeout(auth.signInAnonymously(), 8000); } catch (e) {} };
+                const trySilentAuth = async () => { if (auth && !auth.currentUser) try { await withTimeout(auth.signInAnonymously(), 5000); } catch (e) {} };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
                 const getBaseImageKey = (pg) => pg?.photoId ? String(pg.photoId) : (pg?.photo && !pg.isSketch ? photoFingerprint(pg.photo) : '');
@@ -1077,7 +1073,7 @@
                     if (!d) return null;
                     if (d.photo) return d.photo;
                     if (d.chunked && d.totalChunks > 0) {
-                        const chunksSnap = await withRetry(() => withTimeout(doc.ref.collection('chunks').get(), 20000));
+                        const chunksSnap = await withRetry(() => withTimeout(doc.ref.collection('chunks').get(), 15000));
                         const list = [];
                         chunksSnap.forEach(c => list.push(c.data()));
                         list.sort((a, b) => (a.index || 0) - (b.index || 0));
@@ -1089,7 +1085,7 @@
                 };
 
                 const loadMediaMapFromRef = async (projRef) => {
-                    const mediaSnap = await withRetry(() => withTimeout(projRef.collection('media').get(), 25000));
+                    const mediaSnap = await withRetry(() => withTimeout(projRef.collection('media').get(), 20000));
                     const mediaMap = new Map();
                     const tasks = [];
                     mediaSnap.forEach(m => {
@@ -1106,31 +1102,34 @@
                     showAddPageModal.value = false;
                     photoPoolTarget.value = target;
                     isProcessing.value = true; processingText.value = '正在讀取工程底圖庫...';
-                    const seen = new Set(), list = [];
-                    const addUnique = (item) => {
-                        if (!item?.photo || item.isSketch) return;
-                        const fp = photoFingerprint(item.photo);
-                        if (seen.has(fp)) return;
-                        seen.add(fp);
-                        list.push({ id: item.id || ('pool_' + list.length), photo: item.photo, w: item.w || 1200, h: item.h || 900, author: item.author || '', updatedAt: item.updatedAt || 0 });
-                    };
-
                     try {
-                        if (db && navigator.onLine && project.code) {
-                            await trySilentAuth();
-                            const mediaMap = await loadMediaMapFromRef(db.collection('site_projects').doc(String(project.code)));
-                            mediaMap.forEach((val, docId) => {
-                                addUnique({ id: docId, photo: val.photo, w: val.data.w, h: val.data.h, author: val.data.author, updatedAt: val.data.updatedAt });
-                            });
-                        }
-                    } catch (e) {}
+                        const seen = new Set(), list = [];
+                        const addUnique = (item) => {
+                            if (!item?.photo || item.isSketch) return;
+                            const fp = photoFingerprint(item.photo);
+                            if (seen.has(fp)) return;
+                            seen.add(fp);
+                            list.push({ id: item.id || ('pool_' + list.length), photo: item.photo, w: item.w || 1200, h: item.h || 900, author: item.author || '', updatedAt: item.updatedAt || 0 });
+                        };
 
-                    (photoPool.value || []).forEach(addUnique);
-                    pages.value.forEach(pg => { addUnique({ id: pg.photoId || ('page_' + pg.id), photo: pg.photo, w: pg.w, h: pg.h, author: pg.author, isSketch: pg.isSketch }); (pg.pins || []).forEach(pin => addUnique({ id: pin.photoId || String(pin.id), photo: pin.photo, w: pin.w, h: pin.h, isSketch: pin.isSketch })); });
+                        try {
+                            if (db && navigator.onLine && project.code) {
+                                await trySilentAuth();
+                                const mediaMap = await loadMediaMapFromRef(db.collection('site_projects').doc(String(project.code)));
+                                mediaMap.forEach((val, docId) => {
+                                    addUnique({ id: docId, photo: val.photo, w: val.data.w, h: val.data.h, author: val.data.author, updatedAt: val.data.updatedAt });
+                                });
+                            }
+                        } catch (e) {}
 
-                    photoPoolList.value = list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-                    isProcessing.value = false;
-                    showPhotoPoolModal.value = true;
+                        (photoPool.value || []).forEach(addUnique);
+                        pages.value.forEach(pg => { addUnique({ id: pg.photoId || ('page_' + pg.id), photo: pg.photo, w: pg.w, h: pg.h, author: pg.author, isSketch: pg.isSketch }); (pg.pins || []).forEach(pin => addUnique({ id: pin.photoId || String(pin.id), photo: pin.photo, w: pin.w, h: pin.h, isSketch: pin.isSketch })); });
+
+                        photoPoolList.value = list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                        showPhotoPoolModal.value = true;
+                    } finally {
+                        isProcessing.value = false;
+                    }
                 };
 
                 const selectFromPhotoPool = (item) => {
@@ -1522,7 +1521,7 @@
                     const totalChunks = Math.ceil(photoB64.length / CHUNK_SIZE);
 
                     try {
-                        const existing = await withTimeout(mediaDocRef.get(), 12000);
+                        const existing = await withTimeout(mediaDocRef.get(), 10000);
                         if (existing.exists) {
                             const ed = existing.data();
                             if ((ed.chunked && ed.totalChunks === totalChunks && ed.byteLen === photoB64.length) || (!ed.chunked && ed.photo && ed.photo.length === photoB64.length)) {
@@ -1537,8 +1536,8 @@
                         const slice = photoB64.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
                         await withRetry(() => withTimeout(
                             mediaDocRef.collection('chunks').doc(String(i)).set({ index: i, data: slice }),
-                            25000
-                        ), 4, 900);
+                            20000
+                        ), 3, 800);
                     }
 
                     await withRetry(() => withTimeout(
@@ -1551,8 +1550,8 @@
                             author: meta.author || '',
                             updatedAt: meta.updatedAt || Date.now()
                         }, { merge: true }),
-                        20000
-                    ), 4, 900);
+                        15000
+                    ), 3, 800);
 
                     await localforage.setItem(cacheKey, true);
                 };
@@ -1585,7 +1584,7 @@
                         updatedAt: now
                     };
                     if (dirtyPages.length > 0 && authorName.value) projPatch.lastModifiedBy = authorName.value;
-                    await withRetry(() => withTimeout(projRef.set(projPatch, { merge: true }), 20000), 4, 900);
+                    await withRetry(() => withTimeout(projRef.set(projPatch, { merge: true }), 15000), 3, 800);
 
                     for (let idx = 0; idx < dirtyPages.length; idx++) {
                         const pg = dirtyPages[idx];
@@ -1615,8 +1614,8 @@
                         if (onProgress) onProgress(`正在核對並儲存第 ${idx + 1}/${dirtyPages.length} 頁標註...`);
                         await withRetry(() => withTimeout(
                             projRef.collection('pages').doc(pg.id).set({ ...restPage, updatedAt: now, hasPhoto: !!pagePhoto, pins: pinsMeta }, { merge: true }),
-                            20000
-                        ), 4, 900);
+                            15000
+                        ), 3, 800);
                     }
 
                     await removeFromPendingQueue(code);
@@ -1714,8 +1713,9 @@
                         showToast('✅ 100% 上傳成功並已同步雲端');
                     } catch (err) {
                         showToast('⚠️ 網絡波動，已加入自動補傳隊列（訊號穩定自動完成）');
+                    } finally {
+                        isProcessing.value = false;
                     }
-                    isProcessing.value = false;
                 };
 
                 const downloadNow = async () => {
@@ -1727,7 +1727,7 @@
                     isProcessing.value = true; processingText.value = '正在從雲端載入最新進度...';
                     try { await pullAndMergeFromCloud(project.code, true); showToast('✅ 已成功合併雲端最新資料'); }
                     catch (err) { alert('載入失敗：\n' + (err.message || '請檢查網路連線')); }
-                    isProcessing.value = false;
+                    finally { isProcessing.value = false; }
                 };
 
                 const createNewProject = async () => {
@@ -1750,11 +1750,11 @@
                     isProcessing.value = true; processingText.value = '正在連通工程 #' + code + '...';
                     try {
                         if (!db) throw new Error('資料庫未連線'); await trySilentAuth();
-                        const doc = await withRetry(() => withTimeout(db.collection('site_projects').doc(code).get()));
-                        if (!doc.exists) { alert('雲端找不到工程碼 #' + code); isProcessing.value = false; return; }
+                        const doc = await withRetry(() => withTimeout(db.collection('site_projects').doc(code).get(), 15000));
+                        if (!doc.exists) { alert('雲端找不到工程碼 #' + code); return; }
                         showJoinModal.value = false; inputJoinCode.value = ''; await loadProject(code, true); showToast('✅ 已連通工程 #' + code);
                     } catch (err) { alert('連線失敗：\n' + formatSyncError(err)); }
-                    isProcessing.value = false;
+                    finally { isProcessing.value = false; }
                 };
 
                 const loadProject = async (code, openAsPreview = true) => {
@@ -1803,9 +1803,9 @@
                 };
 
                 const deleteMediaSubcol = async (projRef) => {
-                    const snap = await projRef.collection('media').get();
+                    const snap = await withTimeout(projRef.collection('media').get(), 15000);
                     for (const d of snap.docs) {
-                        const cSnap = await d.ref.collection('chunks').get();
+                        const cSnap = await withTimeout(d.ref.collection('chunks').get(), 15000);
                         for (let i = 0; i < cSnap.docs.length; i += 400) {
                             const b = db.batch();
                             cSnap.docs.slice(i, i + 400).forEach(cd => b.delete(cd.ref));
@@ -1816,7 +1816,7 @@
                 };
 
                 const deleteSubcol = async (projRef, sub) => {
-                    const snap = await projRef.collection(sub).get();
+                    const snap = await withTimeout(projRef.collection(sub).get(), 15000);
                     for (let i = 0; i < snap.docs.length; i += 400) {
                         const batch = db.batch();
                         snap.docs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
@@ -1835,14 +1835,15 @@
                             await trySilentAuth();
                             const projRef = db.collection('site_projects').doc(String(code));
                             await Promise.all([deleteSubcol(projRef, 'pages'), deleteMediaSubcol(projRef), deleteSubcol(projRef, 'backups')]);
-                            await projRef.delete();
+                            await withTimeout(projRef.delete(), 15000);
                         }
                         showManageModal.value = false; await loadProjectList();
                         showToast('🗑️ 已徹底刪除工程及所有雲端照片');
                     } catch (e) {
                         alert('雲端清理異常：' + formatSyncError(e));
+                    } finally {
+                        isProcessing.value = false;
                     }
-                    isProcessing.value = false;
                 };
 
                 const cleanCloudGarbage = async () => {
@@ -1851,13 +1852,13 @@
                     isProcessing.value = true; processingText.value = '正在掃描並清理雲端殘留垃圾...';
                     try {
                         await trySilentAuth();
-                        const activeSnap = await withTimeout(db.collection('site_projects').get(), 20000);
+                        const activeSnap = await withTimeout(db.collection('site_projects').get(), 15000);
                         const activeIds = new Set();
                         activeSnap.forEach(d => activeIds.add(d.id));
 
                         let removed = 0;
                         for (const sub of ['chunks', 'media', 'pages', 'backups']) {
-                            const snap = await withTimeout(db.collectionGroup(sub).get(), 25000);
+                            const snap = await withTimeout(db.collectionGroup(sub).get(), 20000);
                             const orphans = snap.docs.filter(d => {
                                 const pathParts = d.ref.path.split('/');
                                 return pathParts[0] === 'site_projects' && pathParts[1] && !activeIds.has(pathParts[1]);
@@ -1872,24 +1873,33 @@
                         showToast(removed > 0 ? `🧹 已徹底清理 ${removed} 筆雲端殘留垃圾！` : '✨ 雲端非常乾淨，沒有殘留垃圾');
                     } catch (e) {
                         alert('清理失敗：' + formatSyncError(e));
+                    } finally {
+                        isProcessing.value = false;
                     }
-                    isProcessing.value = false;
                 };
 
                 const openBackupList = async () => {
                     showManageModal.value = false; isProcessing.value = true; processingText.value = '正在搜尋時光機紀錄...';
                     try {
-                        const snaps = await db.collection('site_projects').doc(manageProj.value.code).collection('backups').orderBy('timestamp', 'desc').get();
+                        await trySilentAuth();
+                        const snaps = await withTimeout(
+                            db.collection('site_projects').doc(manageProj.value.code).collection('backups').get(),
+                            15000
+                        );
                         const list = []; snaps.forEach(doc => list.push({ id: doc.id, ...doc.data() }));
+                        list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                         backupList.value = list; showBackupListModal.value = true;
                     } catch (e) { alert('讀取備份失敗：' + formatSyncError(e)); }
-                    isProcessing.value = false;
+                    finally { isProcessing.value = false; }
                 };
 
                 const restoreBackup = async (backupDocId) => {
                     isProcessing.value = true; processingText.value = '正在召喚並還原紀錄...';
                     try {
-                        const doc = await db.collection('site_projects').doc(manageProj.value.code).collection('backups').doc(backupDocId).get();
+                        const doc = await withTimeout(
+                            db.collection('site_projects').doc(manageProj.value.code).collection('backups').doc(backupDocId).get(),
+                            15000
+                        );
                         const bData = JSON.parse(doc.data().data), newCode = Math.floor(100000 + Math.random() * 900000).toString();
                         bData.code = newCode; bData.name = (bData.name || '工程') + ' (還原檔)'; bData.lastSyncAt = 0; bData.pendingUpload = true;
                         const curLocal = await localforage.getItem('proj_' + manageProj.value.code);
@@ -1901,18 +1911,29 @@
                         await addToPendingQueue(newCode);
                         showBackupListModal.value = false; await loadProjectList(); showToast('✅ 備份已安全還原為新檔案 #' + newCode);
                     } catch (e) { alert('還原失敗：' + formatSyncError(e)); }
-                    isProcessing.value = false;
+                    finally { isProcessing.value = false; }
                 };
 
                 const openCloudBrowser = async () => {
                     if (!db || !navigator.onLine) return alert('請檢查網路連線。');
                     isProcessing.value = true; processingText.value = '正在讀取雲端目錄...';
                     try {
-                        await trySilentAuth(); const snaps = await db.collection('site_projects').orderBy('updatedAt', 'desc').limit(50).get();
-                        const list = []; snaps.forEach(doc => list.push({ code: doc.id, ...doc.data() }));
-                        cloudProjectList.value = list; showCloudBrowser.value = true;
-                    } catch (e) { alert('讀取目錄失敗：' + formatSyncError(e)); }
-                    isProcessing.value = false;
+                        await trySilentAuth();
+                        const snaps = await withTimeout(
+                            db.collection('site_projects').limit(100).get(),
+                            15000,
+                            '讀取雲端目錄逾時，請檢查網路後重試'
+                        );
+                        const list = [];
+                        snaps.forEach(doc => list.push({ code: doc.id, ...doc.data() }));
+                        list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                        cloudProjectList.value = list;
+                        showCloudBrowser.value = true;
+                    } catch (e) {
+                        alert('讀取目錄失敗：' + formatSyncError(e));
+                    } finally {
+                        isProcessing.value = false;
+                    }
                 };
 
                 const downloadFromCloudBrowser = async (code) => { showCloudBrowser.value = false; await loadProject(code, true); showToast('✅ 已從雲端載入 #' + code); };
@@ -1997,14 +2018,12 @@
                     }, 15000);
                 });
 
-                // 合成底圖、左上空間標籤、右上日期及地址印章，以及所有標註（供複製、下載、PDF共用）
                 const renderAnnotatedCanvas = (canvasObj, includeStamp = true) => new Promise((resolve) => {
                     const img = new Image(); img.src = canvasObj.photo;
                     img.onload = () => {
                         const c = document.createElement('canvas'), w = canvasObj.w || 1200, h = canvasObj.h || 900; c.width = w; c.height = h;
                         const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
 
-                        // 左上角空間標籤
                         if (includeStamp && canvasObj.space) {
                             const labelTxt = `🏠 ${canvasObj.space}`;
                             const boxW = measureBoxWidth([labelTxt], 24, 28);
@@ -2016,7 +2035,6 @@
                             ctx.fillText(labelTxt, 30, 39);
                         }
 
-                        // 右上角日期及地址工程印章
                         if (includeStamp && watermarkStamp.value.lines.length) {
                             const wm = watermarkStamp.value;
                             const wx = w - wm.boxW - 16, wy = 16;
@@ -2193,7 +2211,7 @@
                             }
                             doc.save(`${project.name || '工程'}_#${project.code}_${perPage === 4 ? '4合1' : '單頁'}.pdf`);
                         } catch (err) { alert('生成 PDF 失敗，請重試。'); }
-                        isProcessing.value = false;
+                        finally { isProcessing.value = false; }
                     }, 50);
                 };
 
