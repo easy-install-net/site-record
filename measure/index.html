@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v8.5</title>
+    <title>度尺寶 Pro v8.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -149,7 +149,7 @@
             </div>
         </main>
 
-        <!-- 2. 全檔唯讀預覽總覽視圖（無日期選擇器，自動鎖定最後修改日期與修改人） -->
+        <!-- 2. 全檔唯讀預覽總覽視圖 -->
         <main v-show="currentView === 'preview'" class="flex-1 min-h-0 w-full bg-zinc-950 flex flex-col overflow-hidden">
             <div class="bg-zinc-900 border-b border-zinc-800 px-3 py-2 flex items-center justify-between shrink-0 gap-1">
                 <div class="flex gap-1.5">
@@ -263,7 +263,7 @@
             </div>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器（左上角無黑底水印：1.日期+修改人 2.地址 3.空間） -->
+        <!-- 唯讀全螢幕大圖檢視器 -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col overflow-hidden">
             <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-2 flex justify-between items-center gap-1 shrink-0 z-10">
                 <span class="text-xs font-bold text-yellow-400 truncate min-w-0 flex-1">👁️ {{ fullScreenTitle }}</span>
@@ -318,8 +318,8 @@
             <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                 <div v-if="activePin" class="text-yellow-400 font-bold text-sm mb-1">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
                 <label class="w-56 text-center bg-white text-black px-5 py-3 rounded-xl text-sm font-bold cursor-pointer shadow-lg">
-                    📷 拍照 / 揀相
-                    <input type="file" accept="image/*" class="hidden" @change="e => handleImageUpload(e, false)">
+                    📷 {{ activePin ? '拍照 / 揀相' : '拍照 / 多選圖自動分頁' }}
+                    <input type="file" accept="image/*" :multiple="!activePin" class="hidden" @change="e => handleImageUpload(e, false)">
                 </label>
                 <button @click="openPhotoPool('replaceCurrent')" class="w-56 bg-blue-600 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg">🖼️ 從工程底圖庫選圖</button>
                 <button @click="initSketchOnCurrent(true)" class="w-56 bg-amber-400 text-black px-5 py-3 rounded-xl text-sm font-bold shadow-lg">✏️ 空白手繪 (格線)</button>
@@ -428,8 +428,8 @@
                 </template>
                 <div class="border-t border-zinc-800 my-0.5"></div>
                 <label class="w-full text-center bg-white text-black py-2.5 rounded-lg text-sm font-bold cursor-pointer">
-                    📷 拍照 / 揀相
-                    <input type="file" accept="image/*" class="hidden" @change="e => handleImageUpload(e, true)">
+                    📷 拍照 / 一次多選圖自動分頁
+                    <input type="file" accept="image/*" multiple class="hidden" @change="e => handleImageUpload(e, true)">
                 </label>
                 <button @click="addNewSketchPage(true)" class="w-full bg-amber-400 text-black py-2.5 rounded-lg text-sm font-bold">✏️ 空白手繪 (格線)</button>
                 <button @click="addNewSketchPage(false)" class="w-full bg-zinc-800 text-white border border-zinc-600 py-2 rounded-lg text-xs font-bold">⬜ 空白手繪 (純白)</button>
@@ -676,7 +676,6 @@
         const getTodayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
         const sanitizeFilename = (s) => String(s || '').trim().replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
 
-        // 統一純數學牆線坐標引擎（SVG 與 Canvas 共用，100% 零對位誤差）
         const buildWallSegments = (w) => {
             if (!w) return [];
             const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = Math.hypot(dx, dy);
@@ -722,7 +721,6 @@
                 const canvasW = computed(() => activeCanvas.value?.w || 1200);
                 const canvasH = computed(() => activeCanvas.value?.h || 900);
 
-                // 左上角無黑底水印順序：1.日期+修改人 2.地址 3.空間
                 const buildWatermarkLines = (item, itemDate, itemAuthor) => {
                     const lines = [];
                     const dStr = itemDate || item?.date || project.date;
@@ -744,7 +742,7 @@
                 const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
                 const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-                const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v8.5' }[cloudSyncState.value] || '☁️v8.5'));
+                const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v8.6' }[cloudSyncState.value] || '☁️v8.6'));
                 const cloudStatusClass = computed(() =>
                     cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' :
                     cloudSyncState.value === 'offline' ? 'bg-amber-950 text-amber-300 border border-amber-700' :
@@ -768,7 +766,7 @@
                 const showCloudDetail = () => {
                     if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                     else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                    else showToast('v8.5 自動日期水印・牆線雙模式・精簡加速版');
+                    else showToast('v8.6 支援一次多選圖片自動分頁・離線保護運作中');
                 };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -787,7 +785,6 @@
                     if (!navigator.onLine) cloudSyncState.value = 'offline';
                 };
 
-                // 硬性自動更新當日日期 ＋ 修改人
                 const touchDirty = (targetPage = activePage.value) => {
                     const now = Date.now(), today = getTodayStr();
                     if (activePin.value) activePin.value.updatedAt = now;
@@ -808,16 +805,14 @@
                     const owner = String(pg.author || '').trim();
                     if (!owner || owner === me) return false;
 
-                    const cloned = JSON.parse(JSON.stringify(pg));
-                    const sharedPhotoId = pg.photoId || ('page_' + pg.id);
+                    const c = JSON.parse(JSON.stringify(pg)), sharedPhotoId = pg.photoId || ('page_' + pg.id);
                     pg.photoId = sharedPhotoId;
-
                     const oldPinId = activePin.value ? String(activePin.value.id) : null;
                     const newPg = makeEmptyPage({
-                        space: cloned.space || '', date: getTodayStr(), author: me,
-                        photo: pg.photo, photoId: sharedPhotoId, w: cloned.w || 1200, h: cloned.h || 900,
-                        isSketch: !!cloned.isSketch, hasGrid: !!cloned.hasGrid,
-                        markers: cloned.markers || [], lines: cloned.lines || [], walls: cloned.walls || [], paths: cloned.paths || [], pins: cloned.pins || []
+                        space: c.space || '', date: getTodayStr(), author: me,
+                        photo: pg.photo, photoId: sharedPhotoId, w: c.w || 1200, h: c.h || 900,
+                        isSketch: !!c.isSketch, hasGrid: !!c.hasGrid,
+                        markers: c.markers || [], lines: c.lines || [], walls: c.walls || [], paths: c.paths || [], pins: c.pins || []
                     });
                     pages.value.push(newPg);
                     activePageIndex.value = pages.value.length - 1;
@@ -934,7 +929,7 @@
 
                 const makeEmptyPage = (ov = {}) => {
                     const pg = {
-                        id: 'pg_' + Date.now() + '_' + Math.floor(Math.random() * 999),
+                        id: 'pg_' + Date.now() + '_' + Math.floor(Math.random() * 99999),
                         space: '', date: ov.date || getTodayStr(), author: authorName.value || '',
                         photo: null, photoId: '', w: 1200, h: 900, isSketch: false, hasGrid: false,
                         markers: [], lines: [], walls: [], paths: [], pins: [], historyStack: [], redoStack: [],
@@ -1307,19 +1302,45 @@
                     };
                 });
 
+                // 支援一次多選圖片，按檔名自然順序自動分頁
                 const handleImageUpload = async (e, asNewPage = false) => {
-                    const file = e.target.files[0]; if (!file) return; showAddPageModal.value = false;
-                    const res = await compressImage(file), photoId = 'img_' + Date.now() + '_' + Math.floor(Math.random() * 999);
-                    photoPool.value.push({ id: photoId, photo: res.b64, w: res.w, h: res.h, author: authorName.value || '', updatedAt: Date.now() });
-                    if (asNewPage) {
-                        const newPg = makeEmptyPage({ photo: res.b64, photoId, w: res.w, h: res.h });
-                        pages.value.push(newPg); activePageIndex.value = pages.value.length - 1;
-                        dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
-                    } else if (activeCanvas.value) {
-                        Object.assign(activeCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false });
-                        touchDirty();
+                    const rawFiles = Array.from(e.target.files || []);
+                    if (!rawFiles.length) return;
+                    showAddPageModal.value = false;
+
+                    // 依檔名自然排序 (如 頁面_01, 頁面_02 ... 頁面_16)
+                    const files = activePin.value ? [rawFiles[0]] : rawFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+                    const isBatch = files.length > 1;
+                    if (isBatch) { isProcessing.value = true; processingText.value = `準備匯入 ${files.length} 張圖紙...`; }
+
+                    let firstAddedIdx = -1;
+                    try {
+                        for (let i = 0; i < files.length; i++) {
+                            if (isBatch) processingText.value = `正在匯入第 ${i + 1} / ${files.length} 張圖紙...`;
+                            const res = await compressImage(files[i]);
+                            const photoId = `img_${Date.now()}_${i}_${Math.floor(Math.random() * 999)}`;
+                            photoPool.value.push({ id: photoId, photo: res.b64, w: res.w, h: res.h, author: authorName.value || '', updatedAt: Date.now() });
+
+                            if (i === 0 && !asNewPage && activeCanvas.value) {
+                                Object.assign(activeCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false });
+                                touchDirty();
+                                firstAddedIdx = activePageIndex.value;
+                            } else {
+                                const newPg = makeEmptyPage({ photo: res.b64, photoId, w: res.w, h: res.h });
+                                pages.value.push(newPg);
+                                dirtyPageIds.add(newPg.id);
+                                hasUnsavedCloudChanges.value = true;
+                                if (firstAddedIdx === -1) firstAddedIdx = pages.value.length - 1;
+                            }
+                        }
+                        if (firstAddedIdx !== -1 && !activePin.value) activePageIndex.value = firstAddedIdx;
+                        drawMode.value = 'browse';
+                        await saveAll();
+                        if (isBatch) showToast(`✅ 已一次匯入 ${files.length} 張圖紙並自動分頁`);
+                    } finally {
+                        isProcessing.value = false;
+                        e.target.value = '';
                     }
-                    drawMode.value = 'browse'; saveAll(); e.target.value = '';
                 };
 
                 const saveAll = async () => {
@@ -1603,6 +1624,14 @@
                     showManageModal.value = false; await loadProjectList(); showToast('✅ 已複製為 #' + newCode);
                 };
 
+                const batchDeleteDocs = async (docs) => {
+                    for (let i = 0; i < docs.length; i += 400) {
+                        const b = db.batch();
+                        docs.slice(i, i + 400).forEach(d => b.delete(d.ref));
+                        await b.commit();
+                    }
+                };
+
                 const deleteProject = async (code) => {
                     if (prompt('⚠️ 輸入 "dd" 確認刪除此工程：')?.trim().toLowerCase() !== 'dd') return;
                     isProcessing.value = true; processingText.value = '正在徹底刪除工程...';
@@ -1612,13 +1641,10 @@
                             const ref = db.collection('site_projects').doc(String(code));
                             const delCol = async (sub) => {
                                 const snap = await ref.collection(sub).get();
-                                for (const doc of snap.docs) {
-                                    if (sub === 'media') {
-                                        const cs = await doc.ref.collection('chunks').get();
-                                        for (let i = 0; i < cs.docs.length; i += 400) { const b = db.batch(); cs.docs.slice(i, i + 400).forEach(c => b.delete(c.ref)); await b.commit(); }
-                                    }
-                                    await doc.ref.delete();
+                                if (sub === 'media') {
+                                    for (const doc of snap.docs) await batchDeleteDocs((await doc.ref.collection('chunks').get()).docs);
                                 }
+                                await batchDeleteDocs(snap.docs);
                             };
                             await Promise.all([delCol('pages'), delCol('media'), delCol('backups')]);
                             await ref.delete();
@@ -1633,16 +1659,13 @@
                     if (!confirm('🧹 掃描並徹底清除已刪除工程的殘留碎片？')) return;
                     isProcessing.value = true; processingText.value = '正在清理雲端殘留垃圾...';
                     try {
-                        const activeSnap = await withTimeout(db.collection('site_projects').get(), 15000);
-                        const activeIds = new Set(activeSnap.docs.map(d => d.id));
+                        const activeIds = new Set((await withTimeout(db.collection('site_projects').get(), 15000)).docs.map(d => d.id));
                         let removed = 0;
                         for (const sub of ['chunks', 'media', 'pages', 'backups']) {
                             const snap = await withTimeout(db.collectionGroup(sub).get(), 20000);
                             const orphans = snap.docs.filter(d => { const p = d.ref.path.split('/'); return p[0] === 'site_projects' && p[1] && !activeIds.has(p[1]); });
-                            for (let i = 0; i < orphans.length; i += 400) {
-                                const b = db.batch(); orphans.slice(i, i + 400).forEach(d => b.delete(d.ref)); await b.commit();
-                                removed += orphans.slice(i, i + 400).length;
-                            }
+                            await batchDeleteDocs(orphans);
+                            removed += orphans.length;
                         }
                         showToast(removed > 0 ? `🧹 已清理 ${removed} 筆殘留垃圾` : '✨ 雲端非常乾淨');
                     } catch (e) { alert('清理失敗：' + e.message); }
@@ -1737,7 +1760,6 @@
                     setInterval(() => { if (navigator.onLine) processPendingUploadQueue(true); }, 15000);
                 });
 
-                // 統一畫布合成（左上角無黑底水印：1.日期+修改人 2.地址 3.空間）
                 const renderAnnotatedCanvas = (canvasObj, includeStamp = true, itemDate = '', itemAuthor = '') => new Promise((resolve) => {
                     const img = new Image(); img.src = canvasObj.photo;
                     img.onload = () => {
