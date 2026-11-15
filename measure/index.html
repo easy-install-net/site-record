@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v7.5</title>
+    <title>度尺寶 Pro v8.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -57,7 +57,7 @@
                     <button v-if="currentView !== 'dir'" @click="backToProjects" class="bg-zinc-800 px-2 py-1 rounded text-xs font-bold shrink-0">‹目錄</button>
                     <button v-if="currentView !== 'dir'" @click="downloadNow" class="bg-blue-600 active:bg-blue-800 text-white px-2 py-1 rounded text-xs font-bold shrink-0">⬇️載入</button>
                     <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer ml-1">{{ cloudStatusText }}</span>
-                    <input v-if="currentView === 'proj'" v-model="project.name" @input="hasUnsavedCloudChanges = true" @blur="saveAll" placeholder="輸入工程名稱..." class="ml-1 bg-transparent text-white text-xs font-bold min-w-0 flex-1 truncate focus:bg-zinc-900 focus:px-1.5 rounded focus:outline-none">
+                    <input v-if="currentView === 'proj'" v-model="project.name" @input="markProjectChanged" @blur="saveAll" placeholder="輸入工程名稱..." class="ml-1 bg-transparent text-white text-xs font-bold min-w-0 flex-1 truncate focus:bg-zinc-900 focus:px-1.5 rounded focus:outline-none">
                     <span v-if="currentView === 'preview'" class="ml-1 text-white text-xs font-bold truncate">{{ project.name || '未命名工程' }}</span>
                 </div>
                 
@@ -117,6 +117,7 @@
                     <div class="flex items-center gap-1.5">
                         <span class="bg-yellow-400 text-black text-xs font-black px-1.5 py-0.5 rounded shrink-0">#{{ proj.code }}</span>
                         <div class="font-bold text-sm text-white truncate">{{ proj.name || '未命名工程' }}</div>
+                        <span v-if="proj.pendingUpload" class="bg-purple-900/90 border border-purple-500 text-purple-200 text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0">⏳待上傳</span>
                     </div>
                     <div class="text-[10px] text-zinc-400 mt-1 flex flex-col gap-0.5">
                         <span>{{ proj.date }} ｜ {{ proj.pageCount || 1 }} 頁 ｜ {{ proj.pinCount || 0 }} 釘</span>
@@ -129,8 +130,9 @@
                     <button @click="openManageMenu(proj)" class="bg-zinc-800 border border-zinc-600 text-zinc-300 px-2 py-1.5 rounded text-xs font-bold">⚙️</button>
                 </div>
             </div>
-            <div class="mt-8 text-center">
+            <div class="mt-8 text-center flex flex-col items-center gap-2">
                 <button @click="changeAuthorName" class="text-xs text-zinc-500 underline">👤 目前設備稱呼: {{ authorName || '未設定' }}</button>
+                <span class="text-[10px] text-zinc-600">{{ offlineReady ? '🛡️ 已啟用完全離線保護（無網照常開網頁度尺）' : '⏳ 正在準備離線緩存...' }}</span>
             </div>
         </main>
 
@@ -171,7 +173,6 @@
                             </div>
                         </div>
 
-                        <!-- 絕對定位鎖死縮圖框，防止溢出 -->
                         <div v-if="pg.photo" @click="openFullScreenPreview(pg, `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''} (最後改: ${pg.author || project.lastModifiedBy || '未知'})`)" class="h-44 relative bg-zinc-950 cursor-pointer active:bg-zinc-800 overflow-hidden flex items-center justify-center">
                             <div class="absolute inset-1.5 overflow-hidden flex items-center justify-center">
                                 <svg :view-box.camel="`0 0 ${pg.w || 1200} ${pg.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="pointer-events-none select-none">
@@ -269,7 +270,7 @@
             </div>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器 (新增一鍵複製圖片 / 下載完整標註圖片) -->
+        <!-- 唯讀全螢幕大圖檢視器 -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-black flex flex-col overflow-hidden">
             <div class="h-11 bg-zinc-900 border-b border-zinc-800 px-2.5 flex justify-between items-center gap-1.5 shrink-0 z-10">
                 <span class="text-xs font-bold text-yellow-400 truncate min-w-0 flex-1">👁️ {{ fullScreenTitle }}</span>
@@ -310,7 +311,7 @@
             </div>
         </div>
 
-        <!-- 3. 畫布編輯視圖 (純 CSS 置中 + :view-box.camel，100% 睇曬全圖 + 零移位) -->
+        <!-- 3. 畫布編輯視圖 -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 w-full relative bg-zinc-950 overflow-hidden flex flex-col">
             <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                 <div v-if="activePin" class="text-yellow-400 font-bold text-sm mb-1">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
@@ -359,7 +360,7 @@
                     <div v-else-if="drawMode === 'pin'" class="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px] font-black shadow">📍 點畫面落釘</div>
                 </div>
 
-                <!-- 單一整合 SVG 畫布：:view-box.camel + preserveAspectRatio="xMidYMid meet"，任何螢幕尺寸即時等比例縮放置中 -->
+                <!-- 單一整合 SVG 畫布 -->
                 <div class="absolute inset-2.5 overflow-hidden">
                     <svg ref="svgCanvas" :view-box.camel="`0 0 ${canvasW} ${canvasH}`" preserveAspectRatio="xMidYMid meet"
                          style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;"
@@ -372,12 +373,10 @@
                             <marker id="arrow-end-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" /></marker>
                         </defs>
 
-                        <!-- 白底 + 底圖 + 外框 -->
                         <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="#ffffff" />
                         <image :href="activeCanvas.photo" x="0" y="0" :width="canvasW" :height="canvasH" preserveAspectRatio="none" />
                         <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="none" stroke="#52525b" stroke-width="4" />
 
-                        <!-- 度尺與單箭線條 -->
                         <line v-for="l in (activeCanvas.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
                               :stroke="getLineStroke(l, 0.55)" :stroke-width="l.type === 'arrow-single' ? 4 : 5" stroke-linecap="round"
                               :marker-end="l.type === 'arrow-single' ? `url(#arrow-end-${l.color})` : null" />
@@ -385,11 +384,9 @@
                               :stroke="drawMode === 'arrow-single' ? getLineStroke({type:'arrow-single', color:arrowColor}) : '#ff0044'"
                               stroke-width="4" stroke-dasharray="6" />
 
-                        <!-- 塗鴉筆跡 -->
                         <path v-for="p in (activeCanvas.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                         <path v-if="currentPath" :d="currentPath" :stroke="freehandColor" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 
-                        <!-- 印章與尺寸文字 (可拖曳與點擊編輯) -->
                         <g v-for="m in (activeCanvas.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`" class="cursor-move pointer-events-auto"
                            @touchstart.stop="e => startDrag(m, e)" @mousedown.stop="e => startDrag(m, e)">
                             <rect :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" fill="transparent" />
@@ -398,7 +395,6 @@
                             </text>
                         </g>
 
-                        <!-- 落釘標記 -->
                         <template v-if="!activePin">
                             <g v-for="(pin, index) in (activePage?.pins || [])" :key="pin.id"
                                :transform="`translate(${(pin.x / 100) * canvasW}, ${(pin.y / 100) * canvasH})`"
@@ -523,7 +519,7 @@
             </div>
         </div>
 
-        <!-- 文字輸入條 (點擊印章補備註用) -->
+        <!-- 文字輸入條 -->
         <div v-if="showTopTextBar && activeMarker" class="fixed top-0 left-0 w-full bg-white text-black border-b-4 border-blue-600 z-[60] shadow-2xl flex items-center gap-2 p-2 px-3" @touchstart.stop @mousedown.stop>
             <span class="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-1 rounded whitespace-nowrap">備註</span>
             <input ref="topTextInputRef" type="text" v-model="activeMarker.data.val" @input="onMarkerTextInput" @keyup.enter="closeTopTextBar" class="flex-1 min-w-0 bg-zinc-100 border border-zinc-300 p-2 text-base font-bold rounded focus:outline-none focus:border-blue-500 focus:bg-white" placeholder="補加備註(可留空)...">
@@ -558,7 +554,7 @@
             </div>
         </div>
 
-        <!-- 度尺與印章輸入面板 (徹底分家與緊湊版排版) -->
+        <!-- 度尺與印章輸入面板 -->
         <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/40 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
         <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-black border-b-2 border-black rounded-b-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[85dvh]" @touchstart.stop @mousedown.stop>
             <div class="px-3 py-2 bg-zinc-900 text-white flex justify-between items-center shrink-0">
@@ -569,7 +565,6 @@
                 </div>
             </div>
 
-            <!-- 【度尺面板】專屬頂部輸入區 -->
             <div v-if="activeMarker.type !== 'stamp'" class="p-1.5 bg-zinc-200 border-b border-zinc-300 shrink-0">
                 <div v-if="['general', 'door', 'window', 'beam', 'column'].includes(activeMarker.type)" class="flex items-center justify-center gap-1.5">
                     <input type="text" v-model="activeMarker.data.name" @input="onMarkerTextInput" @focus="focusedInput = 'name'" class="w-[5.5em] border-2 border-zinc-400 p-1 text-sm font-bold bg-white rounded text-center" placeholder="標籤">
@@ -583,7 +578,6 @@
             </div>
 
             <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[300px]">
-                <!-- 【印章面板】 -->
                 <div v-if="activeMarker.type === 'stamp'" class="flex flex-col gap-2.5">
                     <button @click="promptCustomStamp" class="w-full bg-blue-50 border border-blue-200 text-blue-700 py-1.5 rounded-lg text-xs font-bold mb-1 shadow-sm">➕ 新增自訂印章</button>
                     
@@ -614,7 +608,6 @@
                     </div>
                 </div>
 
-                <!-- 【度尺面板 - 網格與分類】 -->
                 <div v-else-if="['window', 'door'].includes(activeMarker.type)" class="grid grid-cols-3 gap-1.5">
                     <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
                         <label class="text-[10px] font-bold text-zinc-700 bg-zinc-200 px-1 py-0.5 text-center rounded-t">{{ field.label }}</label>
@@ -636,7 +629,6 @@
                 </div>
             </div>
 
-            <!-- 【縮小版 123 數字鍵盤】只在度尺面板顯示 -->
             <div v-if="activeMarker.type !== 'stamp'" class="bg-zinc-200 p-1.5 border-t border-zinc-300 grid grid-cols-4 gap-1 shrink-0 pb-3">
                 <button v-for="k in ['1','2','3','DEL','4','5','6','0','7','8','9','ENTER']" :key="k" @click.stop="handleKeypad(k)"
                         :class="k === 'DEL' ? 'bg-red-100 border-red-300 text-red-700 text-lg' : k === 'ENTER' ? 'bg-blue-600 text-white text-sm' : 'bg-white border-zinc-300 active:bg-zinc-300 text-lg'"
@@ -644,7 +636,7 @@
             </div>
         </div>
 
-        <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center text-white font-bold">
+        <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center text-white font-bold px-6 text-center">
             <div class="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-3"></div>
             <p class="text-sm">{{ processingText }}</p>
         </div>
@@ -653,6 +645,17 @@
     <script>
         const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
         localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
+
+        // 註冊 PWA Service Worker，確保完全無網路也能開啟網頁度尺
+        const offlineReady = ref(false);
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(() => { offlineReady.value = true; })
+                    .catch(() => {});
+            });
+            navigator.serviceWorker.ready.then(() => { offlineReady.value = true; }).catch(() => {});
+        }
 
         const firebaseConfig = {
             apiKey: "AIzaSyCSRfZdAVh8ADPNtayW5lyDtmE0xDsJXNg",
@@ -674,23 +677,25 @@
             }
         } catch (e) {}
 
-        const withTimeout = (promise, ms = 35000, msg = '流動網絡連線逾時，請移至訊號較佳位置重試') => {
+        const withTimeout = (promise, ms = 30000, msg = '流動網絡連線逾時，系統自動重試中') => {
             let timer;
             return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(msg)), ms); })]).finally(() => clearTimeout(timer));
         };
 
-        const withRetry = async (fn, retries = 2, delayMs = 800) => {
+        const withRetry = async (fn, retries = 4, delayMs = 900) => {
             for (let i = 0; i <= retries; i++) {
                 try { return await fn(); } catch (e) { if (i === retries) throw e; await new Promise(r => setTimeout(r, delayMs * (i + 1))); }
             }
         };
+
+        const CHUNK_SIZE = 350000; // 每片約 350KB，遠低於 Firebase 1MB 上限
 
         createApp({
             setup() {
                 const authorName = ref('');
                 const hasUnsavedCloudChanges = ref(false);
                 const dirtyPageIds = new Set();
-                let unsubscribePagesListener = null, isPushingRightNow = false;
+                let unsubscribePagesListener = null, isPushingRightNow = false, isAutoQueueRunning = false;
 
                 const currentView = ref('dir'), previewTab = ref('pages');
                 const fullScreenItem = ref(null), fullScreenTitle = ref('');
@@ -709,11 +714,21 @@
                 const showPhotoPoolModal = ref(false), photoPoolList = ref([]), photoPoolTarget = ref('newPage');
 
                 const arrowColor = ref('red'), freehandColor = ref('#3b82f6'), toastMsg = ref('');
-                const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
+                const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3200); };
 
-                const lastCloudError = ref(''), cloudSyncState = ref('ready');
-                const cloudStatusText = computed(() => ({ syncing: '☁️同步中', error: '☁️離線', ready: '☁️v7.5連通' }[cloudSyncState.value] || '☁️v7.5連通'));
-                const cloudStatusClass = computed(() => cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' : cloudSyncState.value === 'error' ? 'bg-zinc-800 text-zinc-400' : 'bg-emerald-950 text-emerald-300 border border-emerald-700');
+                const lastCloudError = ref(''), cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
+                const cloudStatusText = computed(() => ({
+                    syncing: '☁️上傳中',
+                    offline: '📴離線度尺中',
+                    queued: '⏳待自動上傳',
+                    ready: '☁️v8.0連通'
+                }[cloudSyncState.value] || '☁️v8.0連通'));
+                const cloudStatusClass = computed(() =>
+                    cloudSyncState.value === 'syncing' ? 'bg-yellow-900 text-yellow-200' :
+                    cloudSyncState.value === 'offline' ? 'bg-amber-950 text-amber-300 border border-amber-700' :
+                    cloudSyncState.value === 'queued' ? 'bg-purple-950 text-purple-200 border border-purple-600' :
+                    'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                );
 
                 const customStamps = ref([]);
                 const loadCustomStamps = async () => { const saved = await localforage.getItem('custom_stamps'); if (saved) customStamps.value = saved; };
@@ -722,18 +737,46 @@
 
                 const formatSyncError = (err) => {
                     const msg = String(err?.message || err || '');
-                    if (!navigator.onLine) return '手機目前離線，資料已安全儲存在本機。';
+                    if (!navigator.onLine) return '目前無網絡，所有度尺已安全鎖入本機，一有訊號會自動上傳。';
                     if (!db) return 'Firebase 套件未載入';
                     if (msg.includes('permission') || err?.code === 'permission-denied') return 'Firebase 讀寫權限被拒';
-                    if (msg.includes('offline') || msg.includes('network')) return '網絡不穩，資料已存本機，訊號穩定時再按上傳。';
+                    if (msg.includes('offline') || msg.includes('network')) return '網絡不穩，已加入自動補傳隊列，訊號穩定即自動完成上傳。';
                     return msg || '連線異常';
                 };
 
-                const showCloudDetail = () => cloudSyncState.value === 'error' && lastCloudError.value ? alert('離線原因：' + lastCloudError.value) : showToast('v7.5 支援 PDF 連同釘選子圖紙一齊輸出');
+                const showCloudDetail = () => {
+                    if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號時自動上傳');
+                    else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
+                    else showToast('v8.0 離線度尺 ＋ 分片必定上傳引擎運作中');
+                };
+
                 const trySilentAuth = async () => { if (auth && !auth.currentUser) try { await withTimeout(auth.signInAnonymously(), 8000); } catch (e) {} };
 
                 const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
                 const getBaseImageKey = (pg) => pg?.photoId ? String(pg.photoId) : (pg?.photo && !pg.isSketch ? photoFingerprint(pg.photo) : '');
+
+                // 待上傳隊列管理（確保斷網修改 100% 補傳成功）
+                const addToPendingQueue = async (code) => {
+                    code = String(code || '').trim();
+                    if (!code) return;
+                    const q = (await localforage.getItem('pending_upload_queue')) || [];
+                    if (!q.includes(code)) {
+                        q.push(code);
+                        await localforage.setItem('pending_upload_queue', q);
+                    }
+                };
+
+                const removeFromPendingQueue = async (code) => {
+                    code = String(code || '').trim();
+                    const q = (await localforage.getItem('pending_upload_queue')) || [];
+                    const next = q.filter(c => c !== code);
+                    await localforage.setItem('pending_upload_queue', next);
+                };
+
+                const markProjectChanged = () => {
+                    hasUnsavedCloudChanges.value = true;
+                    if (!navigator.onLine) cloudSyncState.value = 'offline';
+                };
 
                 const touchDirty = (targetPage = activePage.value) => {
                     const now = Date.now();
@@ -744,6 +787,7 @@
                         dirtyPageIds.add(targetPage.id);
                     }
                     hasUnsavedCloudChanges.value = true;
+                    if (!navigator.onLine) cloudSyncState.value = 'offline';
                 };
 
                 const autoBranchIfNeeded = () => {
@@ -981,6 +1025,37 @@
                     touchDirty(); deletePinConfirm.value = false; exitPinSubPage(); saveAll();
                 };
 
+                // 還原單張媒體文件（兼容舊版整張與新版分片）
+                const resolveMediaDoc = async (doc) => {
+                    const d = doc.data();
+                    if (!d) return null;
+                    if (d.photo) return d.photo;
+                    if (d.chunked && d.totalChunks > 0) {
+                        const chunksSnap = await withRetry(() => withTimeout(doc.ref.collection('chunks').get(), 20000));
+                        const list = [];
+                        chunksSnap.forEach(c => list.push(c.data()));
+                        list.sort((a, b) => (a.index || 0) - (b.index || 0));
+                        if (list.length === d.totalChunks) {
+                            return list.map(c => c.data || '').join('');
+                        }
+                    }
+                    return null;
+                };
+
+                const loadMediaMapFromRef = async (projRef) => {
+                    const mediaSnap = await withRetry(() => withTimeout(projRef.collection('media').get(), 25000));
+                    const mediaMap = new Map();
+                    const tasks = [];
+                    mediaSnap.forEach(m => {
+                        tasks.push((async () => {
+                            const fullPhoto = await resolveMediaDoc(m);
+                            if (fullPhoto) mediaMap.set(String(m.id), { photo: fullPhoto, data: m.data() });
+                        })());
+                    });
+                    await Promise.all(tasks);
+                    return mediaMap;
+                };
+
                 const openPhotoPool = async (target = 'newPage') => {
                     showAddPageModal.value = false;
                     photoPoolTarget.value = target;
@@ -997,8 +1072,10 @@
                     try {
                         if (db && navigator.onLine && project.code) {
                             await trySilentAuth();
-                            const snap = await withTimeout(db.collection('site_projects').doc(String(project.code)).collection('media').get(), 15000);
-                            snap.forEach(doc => { const d = doc.data(); addUnique({ id: doc.id, photo: d.photo, w: d.w, h: d.h, author: d.author, updatedAt: d.updatedAt }); });
+                            const mediaMap = await loadMediaMapFromRef(db.collection('site_projects').doc(String(project.code)));
+                            mediaMap.forEach((val, docId) => {
+                                addUnique({ id: docId, photo: val.photo, w: val.data.w, h: val.data.h, author: val.data.author, updatedAt: val.data.updatedAt });
+                            });
                         }
                     } catch (e) {}
 
@@ -1032,7 +1109,11 @@
                     photoPoolList.value = photoPoolList.value.filter(x => photoFingerprint(x.photo) !== fp);
                     photoPool.value = photoPool.value.filter(x => photoFingerprint(x.photo) !== fp);
                     await saveAll();
-                    if (db && project.code && item.id) db.collection('site_projects').doc(String(project.code)).collection('media').doc(String(item.id)).delete().catch(() => {});
+                    if (db && project.code && item.id) {
+                        const mRef = db.collection('site_projects').doc(String(project.code)).collection('media').doc(String(item.id));
+                        mRef.collection('chunks').get().then(snap => snap.forEach(c => c.ref.delete())).catch(() => {});
+                        mRef.delete().catch(() => {});
+                    }
                     showToast('🗑️ 已從底圖庫移除');
                 };
 
@@ -1249,11 +1330,11 @@
                     reader.onload = (e) => {
                         const img = new Image(); img.src = e.target.result;
                         img.onload = () => {
-                            const c = document.createElement('canvas'), MAX = 1080;
+                            const c = document.createElement('canvas'), MAX = 1280;
                             let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
                             if (w > MAX || h > MAX) { if (w > h) { h = Math.round((h * MAX) / w); w = MAX; } else { w = Math.round((w * MAX) / h); h = MAX; } }
                             c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
-                            resolve({ b64: c.toDataURL('image/jpeg', 0.6), w, h });
+                            resolve({ b64: c.toDataURL('image/jpeg', 0.72), w, h });
                         };
                     };
                 });
@@ -1275,11 +1356,21 @@
                     drawMode.value = 'browse'; saveAll(); e.target.value = '';
                 };
 
+                // 0.5 秒秒存本機保險箱，並自動標記待上傳隊列
                 const saveAll = async () => {
                     const code = String(project.code || '').trim(); if (!code) return;
                     const cleanPages = JSON.parse(JSON.stringify(pages.value || [])).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
                     const cleanPool = JSON.parse(JSON.stringify(photoPool.value || []));
-                    await localforage.setItem('proj_' + code, { code, name: String(project.name || ''), date: String(project.date || ''), pages: cleanPages, photoPool: cleanPool, deletedPageIds: JSON.parse(JSON.stringify(project.deletedPageIds || [])), updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0), lastModifiedBy: String(project.lastModifiedBy || authorName.value || '') });
+                    const hasPending = hasUnsavedCloudChanges.value || dirtyPageIds.size > 0;
+                    await localforage.setItem('proj_' + code, {
+                        code, name: String(project.name || ''), date: String(project.date || ''),
+                        pages: cleanPages, photoPool: cleanPool,
+                        deletedPageIds: JSON.parse(JSON.stringify(project.deletedPageIds || [])),
+                        updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0),
+                        lastModifiedBy: String(project.lastModifiedBy || authorName.value || ''),
+                        pendingUpload: hasPending
+                    });
+                    if (hasPending) await addToPendingQueue(code);
                 };
 
                 const mergePagesSmart = (localList, cloudList, deletedSet, orderList) => {
@@ -1303,24 +1394,42 @@
 
                 const pullAndMergeFromCloud = async (code, throwOnError = false) => {
                     code = String(code || '').trim();
-                    if (!navigator.onLine) { lastCloudError.value = formatSyncError(new Error('offline')); cloudSyncState.value = 'error'; if (throwOnError) throw new Error(lastCloudError.value); return; }
+                    if (!navigator.onLine) {
+                        lastCloudError.value = formatSyncError(new Error('offline'));
+                        cloudSyncState.value = 'offline';
+                        if (throwOnError) throw new Error(lastCloudError.value);
+                        return;
+                    }
                     if (!db) throw new Error('雲端資料庫未初始化');
                     cloudSyncState.value = 'syncing';
                     try {
                         await trySilentAuth(); const projRef = db.collection('site_projects').doc(code);
-                        const [projDoc, pagesSnap, mediaSnap] = await withRetry(() => withTimeout(Promise.all([projRef.get(), projRef.collection('pages').get(), projRef.collection('media').get()])));
-                        if (!projDoc.exists) { lastCloudError.value = ''; cloudSyncState.value = 'ready'; return; }
+                        const [projDoc, pagesSnap, mediaMap] = await Promise.all([
+                            withRetry(() => withTimeout(projRef.get())),
+                            withRetry(() => withTimeout(projRef.collection('pages').get())),
+                            loadMediaMapFromRef(projRef)
+                        ]);
+                        if (!projDoc.exists) {
+                            lastCloudError.value = '';
+                            cloudSyncState.value = hasUnsavedCloudChanges.value ? 'queued' : 'ready';
+                            return;
+                        }
 
                         const pd = projDoc.data();
                         if (pd.name) project.name = pd.name; if (pd.date) project.date = pd.date; if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy;
-                        const mediaMap = new Map(); mediaSnap.forEach(m => mediaMap.set(String(m.id), m.data().photo));
                         const deletedSet = new Set([...(project.deletedPageIds || []), ...(pd.deletedPageIds || [])]); project.deletedPageIds = Array.from(deletedSet);
 
                         const cloudPages = [];
                         pagesSnap.forEach(doc => {
                             const r = doc.data();
-                            const pgPhoto = (r.photoId && mediaMap.get(r.photoId)) || mediaMap.get('page_' + (r.id || doc.id)) || r.photo || null;
-                            cloudPages.push(makeEmptyPage({ id: doc.id, ...r, photo: pgPhoto, pins: (r.pins || []).map(pin => ({ ...pin, photo: (pin.photoId && mediaMap.get(pin.photoId)) || mediaMap.get(String(pin.id)) || pin.photo || null })) }));
+                            const pgPhoto = (r.photoId && mediaMap.get(r.photoId)?.photo) || mediaMap.get('page_' + (r.id || doc.id))?.photo || r.photo || null;
+                            cloudPages.push(makeEmptyPage({
+                                id: doc.id, ...r, photo: pgPhoto,
+                                pins: (r.pins || []).map(pin => ({
+                                    ...pin,
+                                    photo: (pin.photoId && mediaMap.get(pin.photoId)?.photo) || mediaMap.get(String(pin.id))?.photo || pin.photo || null
+                                }))
+                            }));
                         });
 
                         const merged = mergePagesSmart(pages.value, cloudPages, deletedSet, [...(pd.pageIds || []), ...pages.value.map(p => p.id)]);
@@ -1332,8 +1441,13 @@
                         project.lastSyncAt = Date.now();
                         if (dirtyPageIds.size === 0) hasUnsavedCloudChanges.value = false;
                         await saveAll();
-                        lastCloudError.value = ''; cloudSyncState.value = 'ready';
-                    } catch (e) { lastCloudError.value = formatSyncError(e); cloudSyncState.value = 'error'; if (throwOnError) throw new Error(lastCloudError.value); }
+                        lastCloudError.value = '';
+                        cloudSyncState.value = hasUnsavedCloudChanges.value ? 'queued' : 'ready';
+                    } catch (e) {
+                        lastCloudError.value = formatSyncError(e);
+                        cloudSyncState.value = navigator.onLine ? 'queued' : 'offline';
+                        if (throwOnError) throw new Error(lastCloudError.value);
+                    }
                 };
 
                 const startRealtimeListener = (code) => {
@@ -1350,45 +1464,151 @@
 
                 const stopRealtimeListener = () => { if (unsubscribePagesListener) { unsubscribePagesListener(); unsubscribePagesListener = null; } };
 
-                const pushToCloud = async (throwOnError = false) => {
+                // 核心必定上傳引擎：分片傳送 + 斷點跳過 + 逐片重試 + 完整性核對
+                const uploadMediaWithChunks = async (projRef, code, docKey, photoB64, meta, onStatus) => {
+                    if (!photoB64) return;
+                    const cacheKey = `synced_media_${code}_${docKey}_${photoB64.length}`;
+                    const alreadyDone = await localforage.getItem(cacheKey);
+                    if (alreadyDone) return;
+
+                    const mediaDocRef = projRef.collection('media').doc(docKey);
+                    const totalChunks = Math.ceil(photoB64.length / CHUNK_SIZE);
+
+                    // 檢查雲端是否已經完整存在此相片（斷點續傳）
+                    try {
+                        const existing = await withTimeout(mediaDocRef.get(), 12000);
+                        if (existing.exists) {
+                            const ed = existing.data();
+                            if ((ed.chunked && ed.totalChunks === totalChunks && ed.byteLen === photoB64.length) || (!ed.chunked && ed.photo && ed.photo.length === photoB64.length)) {
+                                await localforage.setItem(cacheKey, true);
+                                return;
+                            }
+                        }
+                    } catch (e) {}
+
+                    // 逐片穩定上傳（每片獨立重試最多 5 次）
+                    for (let i = 0; i < totalChunks; i++) {
+                        if (onStatus) onStatus(`切片 ${i + 1}/${totalChunks}`);
+                        const slice = photoB64.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+                        await withRetry(() => withTimeout(
+                            mediaDocRef.collection('chunks').doc(String(i)).set({ index: i, data: slice }),
+                            25000
+                        ), 4, 900);
+                    }
+
+                    // 全部切片到達後寫入主索引解鎖
+                    await withRetry(() => withTimeout(
+                        mediaDocRef.set({
+                            chunked: true,
+                            totalChunks,
+                            byteLen: photoB64.length,
+                            w: meta.w || 1200,
+                            h: meta.h || 900,
+                            author: meta.author || '',
+                            updatedAt: meta.updatedAt || Date.now()
+                        }, { merge: true }),
+                        20000
+                    ), 4, 900);
+
+                    await localforage.setItem(cacheKey, true);
+                };
+
+                const pushProjectPayload = async (projObj, isCurrentOpen = true, onProgress = null) => {
+                    const code = String(projObj.code || '').trim();
+                    if (!db || !code || !navigator.onLine) return false;
+                    await trySilentAuth();
+
+                    const projRef = db.collection('site_projects').doc(code);
+                    const now = Date.now();
+                    const lastSync = projObj.lastSyncAt || 0;
+                    const rawPages = projObj.pages || [];
+
+                    const targetList = isCurrentOpen
+                        ? rawPages.filter(pg => dirtyPageIds.has(pg.id) || (pg.updatedAt || 0) > lastSync || !pg.lastSyncedAt)
+                        : rawPages;
+
+                    const dirtyPages = JSON.parse(JSON.stringify(targetList)).map(pg => {
+                        delete pg.historyStack; delete pg.redoStack;
+                        (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; });
+                        return pg;
+                    });
+                    const myDeletedIds = JSON.parse(JSON.stringify(projObj.deletedPageIds || []));
+
+                    const projPatch = {
+                        code, name: projObj.name || '', date: projObj.date || '',
+                        pageIds: firebase.firestore.FieldValue.arrayUnion(...rawPages.map(p => p.id)),
+                        deletedPageIds: myDeletedIds.length ? firebase.firestore.FieldValue.arrayUnion(...myDeletedIds) : [],
+                        updatedAt: now
+                    };
+                    if (dirtyPages.length > 0 && authorName.value) projPatch.lastModifiedBy = authorName.value;
+                    await withRetry(() => withTimeout(projRef.set(projPatch, { merge: true }), 20000), 4, 900);
+
+                    for (let idx = 0; idx < dirtyPages.length; idx++) {
+                        const pg = dirtyPages[idx];
+                        const { photo: pagePhoto, pins, ...restPage } = pg;
+                        if (pagePhoto && !pg.isSketch) {
+                            const docKey = pg.photoId || ('page_' + pg.id);
+                            await uploadMediaWithChunks(projRef, code, docKey, pagePhoto, {
+                                w: pg.w, h: pg.h, author: pg.author || authorName.value || '', updatedAt: now
+                            }, (chunkText) => {
+                                if (onProgress) onProgress(`正在上傳第 ${idx + 1}/${dirtyPages.length} 頁 (${chunkText})...`);
+                            });
+                        }
+                        const pinsMeta = [];
+                        for (let pIdx = 0; pIdx < (pins || []).length; pIdx++) {
+                            const pin = pins[pIdx];
+                            const { photo: pinPhoto, ...restPin } = pin;
+                            pinsMeta.push({ ...restPin, hasPhoto: !!pinPhoto });
+                            if (pinPhoto && !pin.isSketch) {
+                                const pinKey = pin.photoId || String(pin.id);
+                                await uploadMediaWithChunks(projRef, code, pinKey, pinPhoto, {
+                                    w: pin.w, h: pin.h, author: authorName.value || '', updatedAt: now
+                                }, (chunkText) => {
+                                    if (onProgress) onProgress(`正在上傳 P${idx + 1} 釘選#${pIdx + 1} (${chunkText})...`);
+                                });
+                            }
+                        }
+                        if (onProgress) onProgress(`正在核對並儲存第 ${idx + 1}/${dirtyPages.length} 頁標註...`);
+                        await withRetry(() => withTimeout(
+                            projRef.collection('pages').doc(pg.id).set({ ...restPage, updatedAt: now, hasPhoto: !!pagePhoto, pins: pinsMeta }, { merge: true }),
+                            20000
+                        ), 4, 900);
+                    }
+
+                    await removeFromPendingQueue(code);
+                    return now;
+                };
+
+                const pushToCloud = async (throwOnError = false, onProgress = null) => {
                     const code = String(project.code || '').trim(); if (!db || !code) return;
-                    if (!navigator.onLine) { lastCloudError.value = formatSyncError(new Error('offline')); cloudSyncState.value = 'error'; if (throwOnError) throw new Error(lastCloudError.value); return; }
+                    if (!navigator.onLine) {
+                        await saveAll();
+                        lastCloudError.value = formatSyncError(new Error('offline'));
+                        cloudSyncState.value = 'offline';
+                        if (throwOnError) throw new Error(lastCloudError.value);
+                        return;
+                    }
                     isPushingRightNow = true; cloudSyncState.value = 'syncing';
                     try {
-                        await trySilentAuth(); const projRef = db.collection('site_projects').doc(code), now = Date.now(), lastSync = project.lastSyncAt || 0;
-                        const targetList = pages.value.filter(pg => dirtyPageIds.has(pg.id) || (pg.updatedAt || 0) > lastSync);
-                        const dirtyPages = JSON.parse(JSON.stringify(targetList)).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
-                        const myDeletedIds = JSON.parse(JSON.stringify(project.deletedPageIds || []));
-
-                        const projPatch = {
-                            code, name: project.name || '', date: project.date || '',
-                            pageIds: firebase.firestore.FieldValue.arrayUnion(...pages.value.map(p => p.id)),
-                            deletedPageIds: myDeletedIds.length ? firebase.firestore.FieldValue.arrayUnion(...myDeletedIds) : [],
-                            updatedAt: now
-                        };
-                        if (dirtyPages.length > 0 && authorName.value) projPatch.lastModifiedBy = authorName.value;
-                        await withRetry(() => withTimeout(projRef.set(projPatch, { merge: true })));
-
-                        for (const pg of dirtyPages) {
-                            const { photo: pagePhoto, pins, ...restPage } = pg;
-                            if (pagePhoto && !pg.isSketch) {
-                                const docKey = pg.photoId || ('page_' + pg.id);
-                                await withRetry(() => withTimeout(projRef.collection('media').doc(docKey).set({ photo: pagePhoto, w: pg.w || 1200, h: pg.h || 900, author: pg.author || authorName.value || '', updatedAt: now }, { merge: true })));
-                            }
-                            const pinsMeta = [];
-                            for (const pin of (pins || [])) {
-                                const { photo: pinPhoto, ...restPin } = pin; pinsMeta.push({ ...restPin, hasPhoto: !!pinPhoto });
-                                if (pinPhoto && !pin.isSketch) {
-                                    const pinKey = pin.photoId || String(pin.id);
-                                    await withRetry(() => withTimeout(projRef.collection('media').doc(pinKey).set({ photo: pinPhoto, w: pin.w || 1200, h: pin.h || 900, author: authorName.value || '', updatedAt: now }, { merge: true })));
-                                }
-                            }
-                            await withRetry(() => withTimeout(projRef.collection('pages').doc(pg.id).set({ ...restPage, updatedAt: now, hasPhoto: !!pagePhoto, pins: pinsMeta }, { merge: true })));
-                        }
+                        const now = await pushProjectPayload({
+                            code, name: project.name, date: project.date,
+                            pages: pages.value, deletedPageIds: project.deletedPageIds,
+                            lastSyncAt: project.lastSyncAt
+                        }, true, onProgress);
                         dirtyPageIds.clear();
-                        project.lastSyncAt = now; lastCloudError.value = ''; cloudSyncState.value = 'ready'; hasUnsavedCloudChanges.value = false; await saveAll();
-                    } catch (e) { lastCloudError.value = formatSyncError(e); cloudSyncState.value = 'error'; if (throwOnError) throw new Error(lastCloudError.value); }
-                    finally { setTimeout(() => { isPushingRightNow = false; }, 1000); }
+                        project.lastSyncAt = now;
+                        lastCloudError.value = '';
+                        cloudSyncState.value = 'ready';
+                        hasUnsavedCloudChanges.value = false;
+                        await saveAll();
+                    } catch (e) {
+                        await saveAll();
+                        lastCloudError.value = formatSyncError(e);
+                        cloudSyncState.value = navigator.onLine ? 'queued' : 'offline';
+                        if (throwOnError) throw new Error(lastCloudError.value);
+                    } finally {
+                        setTimeout(() => { isPushingRightNow = false; }, 1000);
+                    }
                 };
 
                 const createCloudBackup = async (projCode) => {
@@ -1401,16 +1621,67 @@
                     if (snaps.size > 5) { let i = 0; snaps.forEach(d => { if (++i > 5) d.ref.delete(); }); }
                 };
 
+                // 背景自動補傳隊列（一有訊號自動上傳所有離線紀錄）
+                const processPendingUploadQueue = async (silent = true) => {
+                    if (isAutoQueueRunning || !navigator.onLine || !db) return;
+                    if (isDrawing.value || showTopSheet.value || showTopTextBar.value) return;
+                    const queue = (await localforage.getItem('pending_upload_queue')) || [];
+                    if (!queue.length) return;
+
+                    isAutoQueueRunning = true;
+                    try {
+                        for (const qCode of [...queue]) {
+                            if (!navigator.onLine) break;
+                            if (currentView.value !== 'dir' && String(project.code) === String(qCode)) {
+                                await pullAndMergeFromCloud(qCode, false);
+                                await pushToCloud(true);
+                                await createCloudBackup(qCode);
+                                if (!silent) showToast(`✅ 工程 #${qCode} 已自動上傳並同步雲端`);
+                            } else {
+                                const saved = await localforage.getItem('proj_' + qCode);
+                                if (!saved) { await removeFromPendingQueue(qCode); continue; }
+                                const now = await pushProjectPayload(saved, false, null);
+                                saved.lastSyncAt = now;
+                                saved.pendingUpload = false;
+                                await localforage.setItem('proj_' + qCode, saved);
+                                await createCloudBackup(qCode);
+                                showToast(`✅ 網絡已恢復，工程 #${qCode} 已自動上傳雲端`);
+                            }
+                        }
+                        if (currentView.value === 'dir') await loadProjectList();
+                    } catch (e) {
+                        // 若途中再斷線，留待下次有訊號繼續自動補傳
+                    } finally {
+                        isAutoQueueRunning = false;
+                    }
+                };
+
                 const uploadNow = async () => {
                     if (!project.code) return;
-                    isProcessing.value = true; processingText.value = '正在智能合併並上傳...';
-                    try { await pullAndMergeFromCloud(project.code, false); await pushToCloud(true); await createCloudBackup(project.code); showToast('✅ 成功推送到雲端並同步其他設備'); }
-                    catch (err) { alert('上傳失敗：\n' + (err.message || '請檢查網路連線')); }
+                    await saveAll();
+                    if (!navigator.onLine) {
+                        cloudSyncState.value = 'offline';
+                        showToast('📴 目前無網絡，已鎖入本機保險箱，一有訊號自動上傳！');
+                        return;
+                    }
+                    isProcessing.value = true; processingText.value = '正在智能合併並分片上傳...';
+                    try {
+                        await pullAndMergeFromCloud(project.code, false);
+                        await pushToCloud(true, (statusTxt) => { processingText.value = statusTxt; });
+                        await createCloudBackup(project.code);
+                        showToast('✅ 100% 上傳成功並已同步雲端');
+                    } catch (err) {
+                        showToast('⚠️ 網絡波動，已加入自動補傳隊列（訊號穩定自動完成）');
+                    }
                     isProcessing.value = false;
                 };
 
                 const downloadNow = async () => {
                     if (!project.code) return;
+                    if (!navigator.onLine) {
+                        showToast('📴 目前無網絡，顯示本機最新保險箱資料');
+                        return;
+                    }
                     isProcessing.value = true; processingText.value = '正在從雲端載入最新進度...';
                     try { await pullAndMergeFromCloud(project.code, true); showToast('✅ 已成功合併雲端最新資料'); }
                     catch (err) { alert('載入失敗：\n' + (err.message || '請檢查網路連線')); }
@@ -1423,7 +1694,9 @@
                     Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: new Date().toISOString().split('T')[0], deletedPageIds: [], lastSyncAt: 0, lastModifiedBy: authorName.value });
                     pages.value = [firstPg]; photoPool.value = []; activePageIndex.value = 0; activePin.value = null;
                     dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id);
-                    hasUnsavedCloudChanges.value = true; currentView.value = 'proj'; await saveAll(); startRealtimeListener(project.code);
+                    hasUnsavedCloudChanges.value = true;
+                    cloudSyncState.value = navigator.onLine ? 'queued' : 'offline';
+                    currentView.value = 'proj'; await saveAll(); startRealtimeListener(project.code);
                 };
 
                 const copyCode = (code) => { navigator.clipboard?.writeText(code); showToast('已複製工程碼：#' + code); showManageModal.value = false; };
@@ -1431,6 +1704,7 @@
                 const joinProjectByCode = async () => {
                     await checkAuthorName();
                     const code = String(inputJoinCode.value || '').trim(); if (code.length !== 6) return alert('請輸入 6 位數字工程碼');
+                    if (!navigator.onLine) return alert('連通新工程碼需要網絡連線，請連網後再試。');
                     isProcessing.value = true; processingText.value = '正在連通工程 #' + code + '...';
                     try {
                         if (!db) throw new Error('資料庫未連線'); await trySilentAuth();
@@ -1448,9 +1722,12 @@
                         Object.assign(project, { name: d.name || '', date: d.date || '', deletedPageIds: d.deletedPageIds || [], lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' });
                         if (Array.isArray(d.pages) && d.pages.length) pages.value = d.pages.map(pg => makeEmptyPage(pg));
                         if (Array.isArray(d.photoPool)) photoPool.value = d.photoPool;
+                        hasUnsavedCloudChanges.value = !!d.pendingUpload;
+                    } else {
+                        hasUnsavedCloudChanges.value = false;
                     }
                     activePageIndex.value = 0; activePin.value = null; previewTab.value = 'pages';
-                    currentView.value = openAsPreview ? 'preview' : 'proj'; hasUnsavedCloudChanges.value = false;
+                    currentView.value = openAsPreview ? 'preview' : 'proj';
                     await pullAndMergeFromCloud(code, false);
                     if (!pages.value.length) pages.value = [makeEmptyPage()];
                     drawMode.value = 'browse'; startRealtimeListener(code);
@@ -1464,7 +1741,7 @@
                         const trimmed = newName.trim();
                         const code = String(manageProj.value.code);
                         const d = await localforage.getItem('proj_' + code);
-                        if (d) { d.name = trimmed; await localforage.setItem('proj_' + code, d); }
+                        if (d) { d.name = trimmed; d.pendingUpload = true; await localforage.setItem('proj_' + code, d); await addToPendingQueue(code); }
                         manageProj.value.name = trimmed;
                         if (db && navigator.onLine) {
                             db.collection('site_projects').doc(code).set({ name: trimmed, updatedAt: Date.now() }, { merge: true }).catch(() => {});
@@ -1477,8 +1754,23 @@
                 const duplicateProject = async () => {
                     const d = await localforage.getItem('proj_' + manageProj.value.code); if (!d) return;
                     const newCode = Math.floor(100000 + Math.random() * 900000).toString();
-                    d.code = newCode; d.name = (d.name || '工程') + ' (副本)'; d.lastSyncAt = 0;
-                    await localforage.setItem('proj_' + newCode, d); showManageModal.value = false; await loadProjectList(); showToast('✅ 已複製為新工程 #' + newCode);
+                    d.code = newCode; d.name = (d.name || '工程') + ' (副本)'; d.lastSyncAt = 0; d.pendingUpload = true;
+                    await localforage.setItem('proj_' + newCode, d);
+                    await addToPendingQueue(newCode);
+                    showManageModal.value = false; await loadProjectList(); showToast('✅ 已複製為新工程 #' + newCode);
+                };
+
+                const deleteMediaSubcol = async (projRef) => {
+                    const snap = await projRef.collection('media').get();
+                    for (const d of snap.docs) {
+                        const cSnap = await d.ref.collection('chunks').get();
+                        for (let i = 0; i < cSnap.docs.length; i += 400) {
+                            const b = db.batch();
+                            cSnap.docs.slice(i, i + 400).forEach(cd => b.delete(cd.ref));
+                            await b.commit();
+                        }
+                        await d.ref.delete();
+                    }
                 };
 
                 const deleteSubcol = async (projRef, sub) => {
@@ -1496,10 +1788,11 @@
                     isProcessing.value = true; processingText.value = '正在徹底刪除工程與雲端照片...';
                     try {
                         await localforage.removeItem('proj_' + code);
+                        await removeFromPendingQueue(code);
                         if (db && navigator.onLine) {
                             await trySilentAuth();
                             const projRef = db.collection('site_projects').doc(String(code));
-                            await Promise.all([deleteSubcol(projRef, 'pages'), deleteSubcol(projRef, 'media'), deleteSubcol(projRef, 'backups')]);
+                            await Promise.all([deleteSubcol(projRef, 'pages'), deleteMediaSubcol(projRef), deleteSubcol(projRef, 'backups')]);
                             await projRef.delete();
                         }
                         showManageModal.value = false; await loadProjectList();
@@ -1521,9 +1814,12 @@
                         activeSnap.forEach(d => activeIds.add(d.id));
 
                         let removed = 0;
-                        for (const sub of ['media', 'pages', 'backups']) {
+                        for (const sub of ['chunks', 'media', 'pages', 'backups']) {
                             const snap = await withTimeout(db.collectionGroup(sub).get(), 25000);
-                            const orphans = snap.docs.filter(d => d.ref.parent?.parent && !activeIds.has(d.ref.parent.parent.id));
+                            const orphans = snap.docs.filter(d => {
+                                const pathParts = d.ref.path.split('/');
+                                return pathParts[0] === 'site_projects' && pathParts[1] && !activeIds.has(pathParts[1]);
+                            });
                             for (let i = 0; i < orphans.length; i += 400) {
                                 const batch = db.batch();
                                 orphans.slice(i, i + 400).forEach(d => batch.delete(d.ref));
@@ -1553,13 +1849,15 @@
                     try {
                         const doc = await db.collection('site_projects').doc(manageProj.value.code).collection('backups').doc(backupDocId).get();
                         const bData = JSON.parse(doc.data().data), newCode = Math.floor(100000 + Math.random() * 900000).toString();
-                        bData.code = newCode; bData.name = (bData.name || '工程') + ' (還原檔)'; bData.lastSyncAt = 0;
+                        bData.code = newCode; bData.name = (bData.name || '工程') + ' (還原檔)'; bData.lastSyncAt = 0; bData.pendingUpload = true;
                         const curLocal = await localforage.getItem('proj_' + manageProj.value.code);
                         if (curLocal) {
                             const pMap = new Map(); curLocal.pages.forEach(p => { if (p.photo) pMap.set(p.id, p.photo); (p.pins || []).forEach(pin => { if (pin.photo) pMap.set(pin.id, pin.photo); }); });
                             bData.pages.forEach(p => { p.photo = pMap.get(p.id) || null; (p.pins || []).forEach(pin => { pin.photo = pMap.get(pin.id) || null; }); });
                         }
-                        await localforage.setItem('proj_' + newCode, bData); showBackupListModal.value = false; await loadProjectList(); showToast('✅ 備份已安全還原為新檔案 #' + newCode);
+                        await localforage.setItem('proj_' + newCode, bData);
+                        await addToPendingQueue(newCode);
+                        showBackupListModal.value = false; await loadProjectList(); showToast('✅ 備份已安全還原為新檔案 #' + newCode);
                     } catch (e) { alert('還原失敗：' + formatSyncError(e)); }
                     isProcessing.value = false;
                 };
@@ -1579,12 +1877,20 @@
 
                 const loadProjectList = async () => {
                     const keys = await localforage.keys(), list = [];
+                    const q = (await localforage.getItem('pending_upload_queue')) || [];
                     for (const k of keys) {
                         if (k.startsWith('proj_')) {
                             const d = await localforage.getItem(k);
                             if (d?.code) {
                                 const pgs = d.pages || [];
-                                list.push({ code: d.code, name: d.name, date: d.date, pageCount: pgs.length || 1, pinCount: pgs.reduce((s, p) => s + (p.pins?.length || 0), 0), updatedAt: d.updatedAt || 0, lastModifiedBy: d.lastModifiedBy || '' });
+                                list.push({
+                                    code: d.code, name: d.name, date: d.date,
+                                    pageCount: pgs.length || 1,
+                                    pinCount: pgs.reduce((s, p) => s + (p.pins?.length || 0), 0),
+                                    updatedAt: d.updatedAt || 0,
+                                    lastModifiedBy: d.lastModifiedBy || '',
+                                    pendingUpload: !!d.pendingUpload || q.includes(String(d.code))
+                                });
                             }
                         }
                     }
@@ -1597,17 +1903,17 @@
                     const needUpload = (hasUnsavedCloudChanges.value || dirtyPageIds.size > 0) && project.code && db;
                     if (needUpload) {
                         if (!navigator.onLine) {
-                            showToast('📴 目前離線，修改已儲存在手機本機');
+                            showToast('📴 無網絡模式：修改已鎖入本機，有訊號自動上傳');
                         } else {
                             isProcessing.value = true;
                             processingText.value = '正在自動上傳並返回目錄...';
                             try {
                                 await pullAndMergeFromCloud(project.code, false);
-                                await pushToCloud(true);
+                                await pushToCloud(true, (st) => { processingText.value = st; });
                                 await createCloudBackup(project.code);
                                 showToast('✅ 已自動同步上傳至雲端');
                             } catch (err) {
-                                showToast('⚠️ 網絡不穩未完成上傳，資料已存本機');
+                                showToast('⚠️ 網絡波動，已排入自動補傳隊列');
                             } finally {
                                 isProcessing.value = false;
                             }
@@ -1628,10 +1934,25 @@
 
                 onMounted(async () => {
                     await loadCustomStamps();
-                    await checkAuthorName(); await loadProjectList();
-                    window.addEventListener('online', () => { cloudSyncState.value = 'ready'; lastCloudError.value = ''; });
-                    window.addEventListener('offline', () => { cloudSyncState.value = 'error'; lastCloudError.value = formatSyncError(new Error('offline')); });
-                    trySilentAuth();
+                    await checkAuthorName();
+                    await loadProjectList();
+                    window.addEventListener('online', () => {
+                        cloudSyncState.value = 'ready';
+                        lastCloudError.value = '';
+                        showToast('🌐 網絡已恢復，檢查自動補傳...');
+                        processPendingUploadQueue(false);
+                    });
+                    window.addEventListener('offline', () => {
+                        cloudSyncState.value = 'offline';
+                        lastCloudError.value = formatSyncError(new Error('offline'));
+                    });
+                    if (navigator.onLine) {
+                        trySilentAuth();
+                        setTimeout(() => processPendingUploadQueue(false), 1500);
+                    }
+                    setInterval(() => {
+                        if (navigator.onLine) processPendingUploadQueue(true);
+                    }, 15000);
                 });
 
                 const renderAnnotatedCanvas = (canvasObj) => new Promise((resolve) => {
@@ -1729,7 +2050,6 @@
                             const { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
                             const PAGE_W = 1240, PAGE_H = 1754;
                             
-                            // 掃描所有主圖紙及其內部已拍攝的釘選子圖紙，展平為獨立 PDF 頁面
                             const validPages = [];
                             pages.value.forEach((pg, pIdx) => {
                                 const pageNumStr = `P${pIdx + 1}`;
@@ -1812,12 +2132,12 @@
                 };
 
                 return {
-                    currentView, previewTab, fullScreenItem, fullScreenTitle, bomSummary, getLineStroke,
+                    offlineReady, currentView, previewTab, fullScreenItem, fullScreenTitle, bomSummary, getLineStroke,
                     openFullScreenPreview, copyFullScreenImage, downloadFullScreenImage, enterEditMode, switchToPreview, duplicateCurrentPage,
                     showMergeModal, mergeableGroups, mergePageGroup, showPdfModal,
                     showPhotoPoolModal, photoPoolList, photoPoolTarget, openPhotoPool, selectFromPhotoPool, deleteFromPhotoPool,
                     projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH,
-                    showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges,
+                    showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges, markProjectChanged,
                     showManageModal, manageProj, openManageMenu, renameProject, duplicateProject,
                     showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
                     showBackupListModal, backupList, openBackupList, restoreBackup,
