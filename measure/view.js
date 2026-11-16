@@ -7,15 +7,18 @@ if (!window.Vue) {
     let db = null;
     try {
         if (window.firebase) {
-            firebase.initializeApp({
-                apiKey: "AIzaSyCSRfZdAVh8ADPNtayW5lyDtmE0xDsJXNg",
-                authDomain: "gen-lang-client-0208380044.firebaseapp.com",
-                databaseURL: "https://gen-lang-client-0208380044-default-rtdb.firebaseio.com",
-                projectId: "gen-lang-client-0208380044",
-                storageBucket: "gen-lang-client-0208380044.firebasestorage.app",
-                messagingSenderId: "17077391191",
-                appId: "1:17077391191:web:f167a311052c56bd3d7812"
-            });
+            // 修正 Firebase 衝突：確保未啟動過先啟動
+            if (!firebase.apps.length) {
+                firebase.initializeApp({
+                    apiKey: "AIzaSyCSRfZdAVh8ADPNtayW5lyDtmE0xDsJXNg",
+                    authDomain: "gen-lang-client-0208380044.firebaseapp.com",
+                    databaseURL: "https://gen-lang-client-0208380044-default-rtdb.firebaseio.com",
+                    projectId: "gen-lang-client-0208380044",
+                    storageBucket: "gen-lang-client-0208380044.firebasestorage.app",
+                    messagingSenderId: "17077391191",
+                    appId: "1:17077391191:web:f167a311052c56bd3d7812"
+                });
+            }
             db = firebase.firestore();
         }
     } catch (_) {}
@@ -34,7 +37,6 @@ if (!window.Vue) {
 
             const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
-            // UI 渲染輔助函數 (與主程式同步)
             const getLineStroke = (l, alpha = 0.55) => !l.type || l.type === 'measure' ? `rgba(255, 0, 68, ${alpha})` : ({ gray: '#9ca3af', white: '#ffffff' }[l.color] || '#ef4444');
             const getWallSegments = (w) => {
                 if (!w) return [];
@@ -82,32 +84,35 @@ if (!window.Vue) {
                 return '#a855f7';
             };
 
-            // 核心功能：切片下載與本機快取 (Lazy Load)
             const fetchMediaData = async (projCode, photoId) => {
-                if (!photoId) return null;
+                if (!photoId || !db) return null;
                 const cacheKey = `img_${projCode}_${photoId}`;
                 try {
                     const cached = await localforage.getItem(cacheKey);
                     if (cached) return cached;
                 } catch (_) {}
 
-                const docRef = db.collection('site_projects').doc(projCode).collection('media').doc(photoId);
-                const doc = await docRef.get();
-                if (!doc.exists) return null;
-                const d = doc.data();
-                
-                let photoB64 = null;
-                if (d.photo) {
-                    photoB64 = d.photo;
-                } else if (d.chunked && d.totalChunks > 0) {
-                    const snap = await docRef.collection('chunks').get();
-                    const chunks = snap.docs.map(c => c.data()).sort((a, b) => (a.index || 0) - (b.index || 0));
-                    if (chunks.length === d.totalChunks) photoB64 = chunks.map(c => c.data || '').join('');
-                }
-                
-                if (photoB64) {
-                    await localforage.setItem(cacheKey, photoB64);
-                    return photoB64;
+                try {
+                    const docRef = db.collection('site_projects').doc(projCode).collection('media').doc(photoId);
+                    const doc = await docRef.get();
+                    if (!doc.exists) return null;
+                    const d = doc.data();
+                    
+                    let photoB64 = null;
+                    if (d.photo) {
+                        photoB64 = d.photo;
+                    } else if (d.chunked && d.totalChunks > 0) {
+                        const snap = await docRef.collection('chunks').get();
+                        const chunks = snap.docs.map(c => c.data()).sort((a, b) => (a.index || 0) - (b.index || 0));
+                        if (chunks.length === d.totalChunks) photoB64 = chunks.map(c => c.data || '').join('');
+                    }
+                    
+                    if (photoB64) {
+                        await localforage.setItem(cacheKey, photoB64);
+                        return photoB64;
+                    }
+                } catch (e) {
+                    console.error("Fetch media failed:", e);
                 }
                 return null;
             };
@@ -138,6 +143,7 @@ if (!window.Vue) {
                 if (bs) bs.style.display = 'flex';
                 
                 try {
+                    if (!db) throw new Error("資料庫未能成功連線");
                     const projRef = db.collection('site_projects').doc(code);
                     const [projDoc, pagesSnap] = await Promise.all([projRef.get(), projRef.collection('pages').get()]);
                     
@@ -152,12 +158,11 @@ if (!window.Vue) {
                     project.date = pd.date || getTodayStr();
                     project.lastModifiedBy = pd.lastModifiedBy || '';
 
-                    // 1. 先極速組合 UI 骨架與標註 (不等待圖片下載)
                     let loadedPages = pagesSnap.docs.map(doc => {
                         const r = doc.data();
                         return {
                             id: doc.id, ...r, date: r.date || pd.date || getTodayStr(),
-                            photo: r.photo || null, // 若果直接有細圖就顯示，無就等 Lazy Load
+                            photo: r.photo || null,
                             photoId: r.photoId || ('page_' + doc.id),
                             pins: (r.pins || []).map(pin => ({ 
                                 ...pin, 
@@ -167,7 +172,6 @@ if (!window.Vue) {
                         };
                     });
 
-                    // 排序
                     if (pd.pageIds && pd.pageIds.length) {
                         loadedPages.sort((a, b) => {
                             let idxA = pd.pageIds.indexOf(a.id); let idxB = pd.pageIds.indexOf(b.id);
@@ -175,11 +179,9 @@ if (!window.Vue) {
                         });
                     }
                     
-                    // 過濾已刪除的圖紙
                     const delPages = new Set(pd.deletedPageIds || []);
                     pages.value = loadedPages.filter(p => !delPages.has(p.id));
 
-                    // URL 帶上密碼方便分享
                     const url = new URL(window.location);
                     url.searchParams.set('code', code);
                     window.history.replaceState({}, '', url);
@@ -187,7 +189,6 @@ if (!window.Vue) {
                     if (bs) bs.style.display = 'none';
                     showToast('✅ 標註載入完成，正自動下載高清圖...');
 
-                    // 2. 背景非同步載入圖片 (Lazy Load)
                     lazyLoadImages(code);
 
                 } catch (e) {
@@ -207,7 +208,6 @@ if (!window.Vue) {
                 } else prompt("請複製:", msg);
             };
 
-            // 全螢幕檢視邏輯
             const fullScreenIndex = ref(-1);
             const fullScreenList = computed(() => {
                 const list = [];
@@ -237,7 +237,6 @@ if (!window.Vue) {
                 else if (e.key === 'Escape') { e.preventDefault(); fullScreenIndex.value = -1; }
             };
 
-            // PDF 及匯出功能 (省略具體 Canvas 畫圖代碼以保持精簡，實際操作與 app.js 相同)
             const exportPdfReport = async (perPage) => {
                 showToast('正在準備 PDF，請稍候...');
                 showPdfModal.value = false;
@@ -264,7 +263,7 @@ if (!window.Vue) {
                 inputCode, project, pages, toastMsg, showPdfModal, showWatermark,
                 submitCode, reloadCurrentProject, logout, copyShareLink, exportPdfReport,
                 getLineStroke, getWallSegments, getMarkerLines, getStampColor,
-                fullScreenIndex, fullScreenItem, fullScreenTitle, openFullScreenPreview, prevFullScreen, nextFullScreen, copyFullScreenImage, downloadFullScreenImage
+                fullScreenIndex, fullScreenList, fullScreenItem, fullScreenTitle, openFullScreenPreview, prevFullScreen, nextFullScreen, copyFullScreenImage, downloadFullScreenImage
             };
         }
     }).mount('#app');
