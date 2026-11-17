@@ -1,10 +1,11 @@
-if (!window.Vue || !window.MEASURE_DATA) {
-    const msg = !window.Vue ? 'Vue 引擎載入失敗，請檢查網絡連線' : '資料檔 data.js 載入失敗，請重新整理';
+if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
+    const msg = !window.Vue ? 'Vue 引擎載入失敗，請檢查網絡連線' : (!window.MEASURE_DATA ? '資料檔 data.js 載入失敗' : '圖塊檔 cad.js 載入失敗');
     if (window.__showBootError) window.__showBootError(msg);
     else alert(msg);
 } else {
     const { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick } = Vue;
     const { TAG_DEFS, TEMPLATE_ROWS, DIM_QUICK_ROWS, KEYPAD_KEYS, DEFAULT_SPACES, STAMP_GROUPS, STAMP_COLOR_MAP } = window.MEASURE_DATA;
+    const { CAD_CATEGORIES, CAD_DEFS, CAD_LIST, drawOnCanvas: drawCadOnCanvas } = window.MEASURE_CAD;
 
     localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
@@ -98,21 +99,60 @@ if (!window.Vue || !window.MEASURE_DATA) {
             const authorName = ref(''), hasUnsavedCloudChanges = ref(false), dirtyPageIds = new Set();
             let unsubPages = null, unsubFeedback = null, isPushing = false, isAutoQueueing = false;
 
-            // 預設「細字體」(0.6) 及 預設字體顏色 (#ffffff)
             const currentView = ref('dir'), showWatermark = ref(true), globalFontScale = ref(0.6);
             const defaultTextColor = ref('#ffffff');
             const stampFilter = ref('all');
             const filteredStampGroups = computed(() => stampFilter.value === 'all' ? STAMP_GROUPS : STAMP_GROUPS.filter(g => g.id === stampFilter.value));
 
+            // AutoCAD 圖塊狀態
+            const cadCategory = ref('arch'), selectedCadType = ref('door_single');
+            const filteredCadList = computed(() => CAD_LIST.filter(x => x.cat === cadCategory.value));
+            const getCadDef = (type) => CAD_DEFS[type] || null;
+            const getCadTransform = (m) => `translate(${m.x}, ${m.y}) rotate(${m.rot || 0}) scale(${(m.scale || 1) * (m.flipX || 1)}, ${(m.scale || 1) * (m.flipY || 1)})`;
+
             const projectList = ref([]);
             const project = reactive({ code: '', name: '', date: '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '' });
-            const pages = ref([]), photoPool = ref([]), activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
+            const pages = ref([]), photoPool = ref([]);
+
+            // ⊞ 雙頁分屏並排狀態 (Pane A = 主畫布, Pane B = 副畫布)
+            const splitMode = ref(false), activePane = ref('A');
+            const activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
+            const pageIndexB = ref(0), pinB = ref(null), pinIndexB = ref(0);
+
             const activePage = computed(() => pages.value[activePageIndex.value] || null);
             const activeCanvas = computed(() => activePin.value || activePage.value);
             const canvasW = computed(() => activeCanvas.value?.w || 1200);
             const canvasH = computed(() => activeCanvas.value?.h || 900);
 
-            // 💬 外部師傅/業主雲端意見箱 (完全隔離主圖數據)
+            const pageB = computed(() => pages.value[pageIndexB.value] || null);
+            const canvasB = computed(() => pinB.value || pageB.value);
+            const canvasWB = computed(() => canvasB.value?.w || 1200);
+            const canvasHB = computed(() => canvasB.value?.h || 900);
+
+            // 當前操作目標畫布 (自動跟隨 activePane A 或 B)
+            const targetPage = computed(() => (splitMode.value && activePane.value === 'B') ? pageB.value : activePage.value);
+            const targetPin = computed(() => (splitMode.value && activePane.value === 'B') ? pinB.value : activePin.value);
+            const targetCanvas = computed(() => (splitMode.value && activePane.value === 'B') ? canvasB.value : activeCanvas.value);
+            const targetCanvasW = computed(() => targetCanvas.value?.w || 1200);
+            const targetCanvasH = computed(() => targetCanvas.value?.h || 900);
+
+            const focusPane = (pane) => { if (activePane.value !== pane) activePane.value = pane; };
+            const toggleSplitMode = () => {
+                splitMode.value = !splitMode.value;
+                if (splitMode.value) {
+                    if (pages.value.length > 1 && pageIndexB.value === activePageIndex.value) {
+                        pageIndexB.value = activePageIndex.value === 0 ? 1 : 0;
+                    }
+                    pinB.value = null;
+                    resetZoomB();
+                    activePane.value = 'A';
+                    showToast('⊞ 已開啟雙頁並排編輯（點選任一邊即可繪畫）');
+                } else {
+                    activePane.value = 'A';
+                }
+            };
+
+            // 💬 外部師傅/業主雲端意見箱
             const feedbackList = ref([]), showFeedbackOverlay = ref(true), showFeedbackModal = ref(false);
             const currentCanvasFeedbacks = computed(() => {
                 const pgId = String(activePage.value?.id || '');
@@ -120,24 +160,24 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 if (!pgId) return [];
                 return feedbackList.value.filter(f => String(f.pageId || '') === pgId && String(f.pinId || '') === pinId);
             });
+            const canvasBFeedbacks = computed(() => {
+                const pgId = String(pageB.value?.id || '');
+                const pinId = pinB.value ? String(pinB.value.id) : '';
+                if (!pgId) return [];
+                return feedbackList.value.filter(f => String(f.pageId || '') === pgId && String(f.pinId || '') === pinId);
+            });
             const pageFeedbackCount = (pgId) => feedbackList.value.filter(f => String(f.pageId || '') === String(pgId)).length;
             const jumpToFeedback = (fb) => {
-                showFeedbackModal.value = false;
-                resetZoom();
-                showQuickPageNav.value = false;
+                showFeedbackModal.value = false; resetZoom(); showQuickPageNav.value = false; activePane.value = 'A';
                 const pIdx = pages.value.findIndex(p => String(p.id) === String(fb.pageId));
                 if (pIdx === -1) { showToast('⚠️ 該意見所屬頁面已不存在'); return; }
                 activePageIndex.value = pIdx;
                 if (fb.pinId) {
                     const targetPinIdx = (pages.value[pIdx].pins || []).findIndex(x => String(x.id) === String(fb.pinId));
-                    if (targetPinIdx !== -1) openPinSubPage(pages.value[pIdx].pins[targetPinIdx], targetPinIdx);
+                    if (targetPinIdx !== -1) openPinSubPage(pages.value[pIdx].pins[targetPinIdx], targetPinIdx, 'A');
                     else activePin.value = null;
-                } else {
-                    activePin.value = null;
-                }
-                showFeedbackOverlay.value = true;
-                drawMode.value = 'browse';
-                currentView.value = 'proj';
+                } else activePin.value = null;
+                showFeedbackOverlay.value = true; drawMode.value = 'browse'; currentView.value = 'proj';
             };
             const resolveFeedback = async (fbId) => {
                 if (!db || !project.code || !fbId) return;
@@ -146,29 +186,31 @@ if (!window.Vue || !window.MEASURE_DATA) {
                     await db.collection('site_projects').doc(String(project.code)).collection('feedback').doc(String(fbId)).delete();
                     feedbackList.value = feedbackList.value.filter(x => x.id !== fbId);
                     showToast('✅ 已跟進並清除該條意見');
-                } catch (_) {
-                    showToast('⚠️ 清除失敗，請稍後再試');
-                }
+                } catch (_) { showToast('⚠️ 清除失敗，請稍後再試'); }
             };
 
             // 總圖清單與快速跳頁目錄
             const masterPages = computed(() => pages.value.map((pg, idx) => ({ pg, idx })).filter(x => x.pg.space === '總圖'));
-            const showQuickPageNav = ref(false);
-            const jumpToPage = (idx) => { showQuickPageNav.value = false; switchPage(idx); };
-            const jumpToPageById = (targetId) => {
+            const showQuickPageNav = ref(false), showQuickPageNavB = ref(false);
+            const jumpToPage = (idx) => { showQuickPageNav.value = false; switchPage(idx, 'A'); };
+            const jumpToPageB = (idx) => { showQuickPageNavB.value = false; switchPage(idx, 'B'); };
+            const jumpToPageById = (targetId, pane = activePane.value) => {
                 if (!targetId) return;
                 const idx = pages.value.findIndex(p => String(p.id) === String(targetId));
                 if (idx !== -1) {
-                    switchPage(idx);
+                    switchPage(idx, pane);
                     showToast(`↪️ 已跳轉至 P${idx + 1}${pages.value[idx].space ? ' [' + pages.value[idx].space + ']' : ''}`);
-                } else {
-                    showToast('⚠️ 連結的目標頁面已不存在');
-                }
+                } else showToast('⚠️ 連結的目標頁面已不存在');
             };
-            const goToMasterPlan = () => {
+            const goToMasterPlan = (pane = 'A') => {
                 if (!masterPages.value.length) return;
-                if (masterPages.value.length === 1) jumpToPage(masterPages.value[0].idx);
-                else showQuickPageNav.value = !showQuickPageNav.value;
+                if (masterPages.value.length === 1) {
+                    if (pane === 'B') jumpToPageB(masterPages.value[0].idx);
+                    else jumpToPage(masterPages.value[0].idx);
+                } else {
+                    if (pane === 'B') showQuickPageNavB.value = !showQuickPageNavB.value;
+                    else showQuickPageNav.value = !showQuickPageNav.value;
+                }
             };
 
             // 中上方懸浮工具膠囊位置與收合狀態
@@ -181,16 +223,11 @@ if (!window.Vue || !window.MEASURE_DATA) {
                     capsuleOffset.x = Math.max(-maxX, Math.min(maxX, ox + (ev.clientX - sx)));
                     capsuleOffset.y = Math.max(-6, Math.min(window.innerHeight - 130, oy + (ev.clientY - sy)));
                 };
-                const onUp = () => {
-                    window.removeEventListener('pointermove', onMove);
-                    window.removeEventListener('pointerup', onUp);
-                    window.removeEventListener('pointercancel', onUp);
-                };
-                window.addEventListener('pointermove', onMove);
-                window.addEventListener('pointerup', onUp);
-                window.addEventListener('pointercancel', onUp);
+                const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); };
+                window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
             };
 
+            // 獨立縮放與視口 (Pane A & Pane B)
             const zoomScale = ref(1), vbX = ref(0), vbY = ref(0);
             const invZoom = computed(() => 1 / Math.pow(zoomScale.value, 0.65));
             const svgViewBox = computed(() => {
@@ -200,34 +237,55 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 return `${vx} ${vy} ${vw} ${vh}`;
             });
 
+            const zoomScaleB = ref(1), vbXB = ref(0), vbYB = ref(0);
+            const invZoomB = computed(() => 1 / Math.pow(zoomScaleB.value, 0.65));
+            const svgViewBoxB = computed(() => {
+                const pw = canvasWB.value, ph = canvasHB.value;
+                const vw = Math.round((pw / zoomScaleB.value) * 10) / 10, vh = Math.round((ph / zoomScaleB.value) * 10) / 10;
+                const vx = Math.max(0, Math.min(pw - vw, vbXB.value)), vy = Math.max(0, Math.min(ph - vh, vbYB.value));
+                return `${vx} ${vy} ${vw} ${vh}`;
+            });
+
             const resetZoom = () => { zoomScale.value = 1; vbX.value = 0; vbY.value = 0; };
+            const resetZoomB = () => { zoomScaleB.value = 1; vbXB.value = 0; vbYB.value = 0; };
+
             const toggleFontScale = () => {
                 globalFontScale.value = globalFontScale.value === 0.6 ? 0.8 : (globalFontScale.value === 0.8 ? 1.0 : 0.6);
-                (activeCanvas.value?.markers || []).forEach(m => updateMarkerSize(m));
+                (targetCanvas.value?.markers || []).forEach(m => updateMarkerSize(m));
                 saveAll();
                 showToast(`🔠 字體：${globalFontScale.value === 1.0 ? '大' : (globalFontScale.value === 0.8 ? '中' : '細')}`);
             };
 
-            const applyZoomAtClientPoint = (nextScale, clientX, clientY, anchorSvg) => {
-                const svg = svgCanvas.value, pw = canvasW.value, ph = canvasH.value;
+            const applyZoomAtClientPoint = (nextScale, clientX, clientY, anchorSvg, pane = 'A') => {
+                const isB = pane === 'B';
+                const svg = isB ? svgCanvasB.value : svgCanvas.value;
+                const pw = isB ? canvasWB.value : canvasW.value;
+                const ph = isB ? canvasHB.value : canvasH.value;
+                const zRef = isB ? zoomScaleB : zoomScale;
+                const xRef = isB ? vbXB : vbX;
+                const yRef = isB ? vbYB : vbY;
                 const clampedScale = Math.max(1, Math.min(5, Math.round(nextScale * 100) / 100));
-                if (clampedScale <= 1) { resetZoom(); return; }
+                if (clampedScale <= 1) { isB ? resetZoomB() : resetZoom(); return; }
                 const vw = pw / clampedScale, vh = ph / clampedScale;
                 if (svg && anchorSvg) {
                     const r = svg.getBoundingClientRect(), baseFit = Math.min(r.width / pw, r.height / ph);
                     const effScale = baseFit * clampedScale, offX = r.left + (r.width - pw * baseFit) / 2, offY = r.top + (r.height - ph * baseFit) / 2;
-                    zoomScale.value = clampedScale;
-                    vbX.value = Math.max(0, Math.min(pw - vw, anchorSvg.x - (clientX - offX) / effScale));
-                    vbY.value = Math.max(0, Math.min(ph - vh, anchorSvg.y - (clientY - offY) / effScale));
+                    zRef.value = clampedScale;
+                    xRef.value = Math.max(0, Math.min(pw - vw, anchorSvg.x - (clientX - offX) / effScale));
+                    yRef.value = Math.max(0, Math.min(ph - vh, anchorSvg.y - (clientY - offY) / effScale));
                 } else {
-                    const cx = vbX.value + (pw / zoomScale.value) / 2, cy = vbY.value + (ph / zoomScale.value) / 2;
-                    zoomScale.value = clampedScale;
-                    vbX.value = Math.max(0, Math.min(pw - vw, cx - vw / 2));
-                    vbY.value = Math.max(0, Math.min(ph - vh, cy - vh / 2));
+                    const cx = xRef.value + (pw / zRef.value) / 2, cy = yRef.value + (ph / zRef.value) / 2;
+                    zRef.value = clampedScale;
+                    xRef.value = Math.max(0, Math.min(pw - vw, cx - vw / 2));
+                    yRef.value = Math.max(0, Math.min(ph - vh, cy - vh / 2));
                 }
             };
-            const stepZoom = (delta) => applyZoomAtClientPoint(zoomScale.value + delta, null, null, null);
-            const onStageWheel = (e) => { if (svgCanvas.value && activeCanvas.value?.photo) applyZoomAtClientPoint(zoomScale.value * (e.deltaY < 0 ? 1.2 : 0.82), e.clientX, e.clientY, getCoords(e)); };
+            const stepZoom = (delta, pane = 'A') => applyZoomAtClientPoint((pane === 'B' ? zoomScaleB.value : zoomScale.value) + delta, null, null, null, pane);
+            const onStageWheel = (e, pane = 'A') => {
+                const svg = pane === 'B' ? svgCanvasB.value : svgCanvas.value;
+                const cObj = pane === 'B' ? canvasB.value : activeCanvas.value;
+                if (svg && cObj?.photo) applyZoomAtClientPoint((pane === 'B' ? zoomScaleB.value : zoomScale.value) * (e.deltaY < 0 ? 1.2 : 0.82), e.clientX, e.clientY, getCoords(e, pane), pane);
+            };
 
             const fullScreenIndex = ref(-1);
             const fullScreenList = computed(() => {
@@ -252,16 +310,12 @@ if (!window.Vue || !window.MEASURE_DATA) {
             const editFromFullScreen = () => {
                 const target = fullScreenItem.value; if (!target) return;
                 const tid = String(target.id);
-                fullScreenIndex.value = -1; resetZoom(); showQuickPageNav.value = false;
+                fullScreenIndex.value = -1; resetZoom(); showQuickPageNav.value = false; activePane.value = 'A';
                 for (let i = 0; i < pages.value.length; i++) {
                     const pg = pages.value[i];
-                    if (String(pg.id) === tid) {
-                        activePageIndex.value = i; activePin.value = null; drawMode.value = 'line'; currentView.value = 'proj'; return;
-                    }
+                    if (String(pg.id) === tid) { activePageIndex.value = i; activePin.value = null; drawMode.value = 'line'; currentView.value = 'proj'; return; }
                     const pIdx = (pg.pins || []).findIndex(p => String(p.id) === tid);
-                    if (pIdx !== -1) {
-                        activePageIndex.value = i; openPinSubPage(pg.pins[pIdx], pIdx); drawMode.value = 'line'; currentView.value = 'proj'; return;
-                    }
+                    if (pIdx !== -1) { activePageIndex.value = i; openPinSubPage(pg.pins[pIdx], pIdx, 'A'); drawMode.value = 'line'; currentView.value = 'proj'; return; }
                 }
             };
 
@@ -283,21 +337,23 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
             };
 
-            const buildWatermarkBox = (item, itemDate, itemAuthor) => {
+            // 單行正中上方・高通透 CAD 圖籤膠囊
+            const buildWatermarkBox = (item, itemDate, itemAuthor, canvasWidth = 1200) => {
                 const pName = project.name?.trim() || '';
                 const spName = item?.space?.trim() || '';
-                const title = [pName, spName].filter(Boolean).join(' · ');
+                const leftPart = [pName, spName].filter(Boolean).join(' · ');
                 const dStr = itemDate || item?.date || project.date || '';
                 const aStr = itemAuthor || item?.author || project.lastModifiedBy || '';
-                const sub = [dStr, aStr].filter(Boolean).join(' · ');
-                if (!title && !sub) return null;
-                const w1 = title ? measureStrWidth(title, 15) : 0;
-                const w2 = sub ? measureStrWidth(sub, 12) : 0;
-                const w = Math.max(96, Math.ceil(Math.max(w1, w2) + 22));
-                const h = title && sub ? 44 : 26;
-                return { x: 14, y: 14, w, h, title, sub };
+                const rightPart = [dStr, aStr].filter(Boolean).join(' · ');
+                const text = [leftPart, rightPart].filter(Boolean).join('  ｜  ');
+                if (!text) return null;
+                const w = Math.min(canvasWidth - 20, Math.max(120, Math.ceil(measureStrWidth(text, 13) + 24)));
+                const h = 26;
+                const x = Math.max(10, Math.round((canvasWidth - w) / 2));
+                const y = 8;
+                return { x, y, w, h, text };
             };
-            const fullScreenWatermarkBox = computed(() => buildWatermarkBox(fullScreenItem.value, fullScreenDate.value, fullScreenAuthor.value));
+            const fullScreenWatermarkBox = computed(() => buildWatermarkBox(fullScreenItem.value, fullScreenDate.value, fullScreenAuthor.value, fullScreenItem.value?.w || 1200));
 
             const showJoinModal = ref(false), inputJoinCode = ref(''), showAddPageModal = ref(false), showSpaceModal = ref(false), showMergeModal = ref(false), showPdfModal = ref(false);
             const spaceList = ref([...DEFAULT_SPACES]);
@@ -308,7 +364,7 @@ if (!window.Vue || !window.MEASURE_DATA) {
             const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
             const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v9.8' }[cloudSyncState.value] || '☁️v9.8'));
+            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v9.9' }[cloudSyncState.value] || '☁️v9.9'));
             const cloudStatusClass = computed(() =>
                 cloudSyncState.value === 'syncing' ? 'bg-amber-100 text-amber-900 border-amber-300' :
                 cloudSyncState.value === 'offline' ? 'bg-zinc-100 text-zinc-500 border-zinc-300' :
@@ -328,7 +384,7 @@ if (!window.Vue || !window.MEASURE_DATA) {
             const showCloudDetail = () => {
                 if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                 else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                else showToast('v9.8 細字預設・白紅黃三色・雲端意見箱');
+                else showToast('v9.9 雙頁分屏・AutoCAD圖塊・頂置通透圖籤');
             };
 
             const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -341,10 +397,10 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 await localforage.setItem('pending_upload_queue', next);
             };
             const markProjectChanged = () => { hasUnsavedCloudChanges.value = true; if (!navigator.onLine) cloudSyncState.value = 'offline'; };
-            const touchDirty = (targetPage = activePage.value) => {
+            const touchDirty = (pg = targetPage.value) => {
                 const now = Date.now(), today = getTodayStr();
-                if (activePin.value) activePin.value.updatedAt = now;
-                if (targetPage) { targetPage.updatedAt = now; targetPage.date = today; if (authorName.value) targetPage.author = authorName.value; dirtyPageIds.add(targetPage.id); }
+                if (targetPin.value) targetPin.value.updatedAt = now;
+                if (pg) { pg.updatedAt = now; pg.date = today; if (authorName.value) pg.author = authorName.value; dirtyPageIds.add(pg.id); }
                 project.date = today; hasUnsavedCloudChanges.value = true;
                 if (!navigator.onLine) cloudSyncState.value = 'offline';
             };
@@ -358,20 +414,27 @@ if (!window.Vue || !window.MEASURE_DATA) {
             };
             const doBranchCopy = (pg, me) => {
                 const c = JSON.parse(JSON.stringify(pg)), sharedPhotoId = pg.photoId || ('page_' + pg.id); pg.photoId = sharedPhotoId;
-                const oldPinId = activePin.value ? String(activePin.value.id) : null;
+                const isB = splitMode.value && activePane.value === 'B';
+                const oldPinId = (isB ? pinB.value : activePin.value) ? String((isB ? pinB.value : activePin.value).id) : null;
                 const newPg = makeEmptyPage({
                     space: c.space || '', date: getTodayStr(), author: me, photo: pg.photo, photoId: sharedPhotoId, w: c.w || 1200, h: c.h || 900,
                     isSketch: !!c.isSketch, hasGrid: !!c.hasGrid, markers: c.markers || [], lines: c.lines || [], walls: c.walls || [], paths: c.paths || [], pins: c.pins || [], deletedPinIds: c.deletedPinIds || []
                 });
-                pages.value.push(newPg); activePageIndex.value = pages.value.length - 1;
-                if (oldPinId) activePin.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null;
+                pages.value.push(newPg);
+                if (isB) {
+                    pageIndexB.value = pages.value.length - 1;
+                    if (oldPinId) pinB.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null;
+                } else {
+                    activePageIndex.value = pages.value.length - 1;
+                    if (oldPinId) activePin.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null;
+                }
                 dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
                 showToast(`📋 已複製為 P${pages.value.length} (保留 [${branchOwner.value}] 原圖)`);
             };
             const confirmBranch = () => { if (branchInputValue.value.trim().toUpperCase() === 'Y') doBranchCopy(branchTargetPage.value, String(authorName.value || '').trim()); const cb = pendingBranchAction.value; showBranchPrompt.value = false; pendingBranchAction.value = null; branchTargetPage.value = null; if (cb) cb(); };
             const cancelBranch = () => { const cb = pendingBranchAction.value; showBranchPrompt.value = false; pendingBranchAction.value = null; branchTargetPage.value = null; if (cb) cb(); };
             const checkBranchNeed = (actionCb) => {
-                const pg = activePage.value, me = String(authorName.value || '').trim();
+                const pg = targetPage.value, me = String(authorName.value || '').trim();
                 if (!pg || !pg.photo || !me) return actionCb();
                 const owner = String(pg.author || '').trim();
                 if (!owner || owner === me) return actionCb();
@@ -379,64 +442,45 @@ if (!window.Vue || !window.MEASURE_DATA) {
             };
 
             const drawMode = ref('browse'), showTopSheet = ref(false), showTopTextBar = ref(false), activeMarker = ref(null);
-            const isProcessing = ref(false), processingText = ref(''), focusedInput = ref('val'), topTextInputRef = ref(null), svgCanvas = ref(null);
+            const isProcessing = ref(false), processingText = ref(''), focusedInput = ref('val'), topTextInputRef = ref(null), svgCanvas = ref(null), svgCanvasB = ref(null);
 
             // 📝 編 (空間 / 編號索引專用彈窗狀態)
             const showIndexModal = ref(false), indexDraftPos = ref({ x: 0, y: 0 }), indexCustomCode = ref(''), editingIndexMarker = ref(null);
             const openIndexModalAt = (x, y, existing = null) => {
-                indexDraftPos.value = { x, y };
-                editingIndexMarker.value = existing;
-                indexCustomCode.value = existing?.data?.customCode || '';
-                showIndexModal.value = true;
+                indexDraftPos.value = { x, y }; editingIndexMarker.value = existing; indexCustomCode.value = existing?.data?.customCode || ''; showIndexModal.value = true;
             };
             const placeSpaceTag = (sp) => {
                 checkBranchNeed(() => {
-                    const c = activeCanvas.value; if (!c) return;
+                    const c = targetCanvas.value; if (!c) return;
                     c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                     if (editingIndexMarker.value) {
                         const target = c.markers.find(m => m.id === editingIndexMarker.value.id);
-                        if (target) {
-                            target.type = 'space_tag';
-                            target.textColor = defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null;
-                            target.data = { ...makeBlankMarkerData(), val: sp };
-                            updateMarkerSize(target);
-                        }
+                        if (target) { target.type = 'space_tag'; target.textColor = defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null; target.data = { ...makeBlankMarkerData(), val: sp }; updateMarkerSize(target); }
                     } else {
                         const markerId = Date.now();
                         const newMarker = { id: markerId, lineId: null, x: indexDraftPos.value.x, y: indexDraftPos.value.y, w: 140, h: 56, type: 'space_tag', textColor: defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null, data: { ...makeBlankMarkerData(), val: sp } };
-                        updateMarkerSize(newMarker);
-                        c.markers.push(newMarker);
-                        c.historyStack.push({ type: 'marker', markerId });
+                        updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
                     }
                     touchDirty(); saveAll(); showIndexModal.value = false; editingIndexMarker.value = null;
                 });
             };
             const addCustomSpaceTag = () => {
                 const s = prompt('輸入空間或標籤名稱：')?.trim();
-                if (s) {
-                    if (!spaceList.value.includes(s)) spaceList.value.push(s);
-                    placeSpaceTag(s);
-                }
+                if (s) { if (!spaceList.value.includes(s)) spaceList.value.push(s); placeSpaceTag(s); }
             };
             const placePageLink = (targetPg, targetIdx) => {
                 checkBranchNeed(() => {
-                    const c = activeCanvas.value; if (!c) return;
+                    const c = targetCanvas.value; if (!c) return;
                     c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                     const code = String(indexCustomCode.value || '').trim();
                     const label = code ? `${code} ➔ P${targetIdx + 1}` : `P${targetIdx + 1}${targetPg.space ? ' ' + targetPg.space : ''}`;
                     if (editingIndexMarker.value) {
                         const target = c.markers.find(m => m.id === editingIndexMarker.value.id);
-                        if (target) {
-                            target.type = 'page_link';
-                            target.data = { ...makeBlankMarkerData(), val: label, customCode: code, targetPageId: targetPg.id };
-                            updateMarkerSize(target);
-                        }
+                        if (target) { target.type = 'page_link'; target.data = { ...makeBlankMarkerData(), val: label, customCode: code, targetPageId: targetPg.id }; updateMarkerSize(target); }
                     } else {
                         const markerId = Date.now();
                         const newMarker = { id: markerId, lineId: null, x: indexDraftPos.value.x, y: indexDraftPos.value.y, w: 160, h: 56, type: 'page_link', data: { ...makeBlankMarkerData(), val: label, customCode: code, targetPageId: targetPg.id } };
-                        updateMarkerSize(newMarker);
-                        c.markers.push(newMarker);
-                        c.historyStack.push({ type: 'marker', markerId });
+                        updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
                     }
                     touchDirty(); saveAll(); showIndexModal.value = false; editingIndexMarker.value = null;
                     showToast(`🔗 已連結至 P${targetIdx + 1}`);
@@ -444,24 +488,17 @@ if (!window.Vue || !window.MEASURE_DATA) {
             };
             const deleteEditingIndexMarker = () => {
                 if (!editingIndexMarker.value) return;
-                activeMarker.value = editingIndexMarker.value;
-                showIndexModal.value = false;
-                editingIndexMarker.value = null;
-                deleteMarkerTop();
+                activeMarker.value = editingIndexMarker.value; showIndexModal.value = false; editingIndexMarker.value = null; deleteMarkerTop();
             };
 
             const setMarkerTextColor = (colorHex) => {
                 defaultTextColor.value = colorHex;
                 if (activeMarker.value) {
-                    ensureMarkerBranched(() => {
-                        activeMarker.value.textColor = colorHex;
-                        touchDirty();
-                        saveAll();
-                    });
+                    ensureMarkerBranched(() => { activeMarker.value.textColor = colorHex; touchDirty(); saveAll(); });
                 }
             };
 
-            const getArrowMarkerId = (c) => 'arrow-end-' + String(c || '#ef4444').replace('#', 'hex_');
+            const getArrowMarkerId = (c, suffix = '') => 'arrow-end-' + suffix + String(c || '#ef4444').replace('#', 'hex_');
             const getFsArrowMarkerId = (c) => 'fs-arrow-' + String(c || '#ef4444').replace('#', 'hex_');
 
             const getLineStroke = (l, alpha = 0.75) => {
@@ -471,8 +508,8 @@ if (!window.Vue || !window.MEASURE_DATA) {
             };
             const getWallSegments = (w) => buildWallSegments(w);
 
-            const enterEditMode = (idx = 0) => { resetZoom(); showQuickPageNav.value = false; activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; };
-            const switchToPreview = async () => { await saveAll(); resetZoom(); showQuickPageNav.value = false; activePin.value = null; currentView.value = 'preview'; };
+            const enterEditMode = (idx = 0) => { resetZoom(); showQuickPageNav.value = false; splitMode.value = false; activePane.value = 'A'; activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; };
+            const switchToPreview = async () => { await saveAll(); resetZoom(); showQuickPageNav.value = false; splitMode.value = false; activePane.value = 'A'; activePin.value = null; currentView.value = 'preview'; };
 
             const mergeableGroups = computed(() => {
                 const map = new Map();
@@ -495,30 +532,36 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 pages.value.push(mergedPg); dirtyPageIds.add(mergedPg.id); hasUnsavedCloudChanges.value = true; showMergeModal.value = false; await saveAll(); showToast(`✅ 已智能合併為 P${pages.value.length}`);
             };
 
-            const isDrawing = ref(false), startPos = ref({ x: 0, y: 0 }), currentLine = ref(null), currentWall = ref(null), currentPath = ref('');
+            const isDrawing = ref(false), drawingPane = ref('A'), startPos = ref({ x: 0, y: 0 }), currentLine = ref(null), currentWall = ref(null), currentPath = ref('');
             let tempPoints = [];
             const draggedMarker = ref(null), dragOrigin = ref({ x: 0, y: 0 }), markerOrigin = ref({ x: 0, y: 0 });
-            const hasUndoItems = computed(() => activeCanvas.value?.historyStack?.length > 0);
-            const hasRedoItems = computed(() => activeCanvas.value?.redoStack?.length > 0);
+            const hasUndoItems = computed(() => targetCanvas.value?.historyStack?.length > 0);
+            const hasRedoItems = computed(() => targetCanvas.value?.redoStack?.length > 0);
 
-            let isPinching = false, pinchStartDist = 0, pinchStartScale = 1, pinchAnchorSvg = null;
-            let isPanningBrowse = false, panStartClient = { x: 0, y: 0 }, panStartVb = { x: 0, y: 0 };
+            let isPinching = false, pinchPane = 'A', pinchStartDist = 0, pinchStartScale = 1, pinchAnchorSvg = null;
+            let isPanningBrowse = false, panPane = 'A', panStartClient = { x: 0, y: 0 }, panStartVb = { x: 0, y: 0 };
             let touchStartTime = 0, touchMoved = false, pendingTapMarker = null;
             let isSpaceDown = false;
 
             const getClientPoint = (e) => e.touches?.[0] || e.changedTouches?.[0] || e;
-            const clientToSvgPoint = (clientX, clientY) => {
-                const svg = svgCanvas.value; if (!svg || !activeCanvas.value) return { x: 0, y: 0 };
-                const pw = canvasW.value, ph = canvasH.value;
+            const clientToSvgPoint = (clientX, clientY, pane = 'A') => {
+                const isB = pane === 'B';
+                const svg = isB ? svgCanvasB.value : svgCanvas.value;
+                const cObj = isB ? canvasB.value : activeCanvas.value;
+                if (!svg || !cObj) return { x: 0, y: 0 };
+                const pw = cObj.w || 1200, ph = cObj.h || 900;
                 try {
                     const ctm = svg.getScreenCTM();
                     if (ctm) { const p = svg.createSVGPoint(); p.x = clientX; p.y = clientY; const loc = p.matrixTransform(ctm.inverse()); return { x: Math.round(Math.max(0, Math.min(pw, loc.x))), y: Math.round(Math.max(0, Math.min(ph, loc.y))) }; }
                 } catch (_) {}
-                const vw = pw / zoomScale.value, vh = ph / zoomScale.value, vx = Math.max(0, Math.min(pw - vw, vbX.value)), vy = Math.max(0, Math.min(ph - vh, vbY.value));
+                const zVal = isB ? zoomScaleB.value : zoomScale.value;
+                const xVal = isB ? vbXB.value : vbX.value;
+                const yVal = isB ? vbYB.value : vbY.value;
+                const vw = pw / zVal, vh = ph / zVal, vx = Math.max(0, Math.min(pw - vw, xVal)), vy = Math.max(0, Math.min(ph - vh, yVal));
                 const r = svg.getBoundingClientRect(), s = Math.min(r.width / vw, r.height / vh);
                 return { x: Math.round(Math.max(0, Math.min(pw, vx + (clientX - r.left - (r.width - vw * s) / 2) / s))), y: Math.round(Math.max(0, Math.min(ph, vy + (clientY - r.top - (r.height - vh * s) / 2) / s))) };
             };
-            const getCoords = (e) => { const pt = getClientPoint(e); return clientToSvgPoint(pt.clientX, pt.clientY); };
+            const getCoords = (e, pane = activePane.value) => { const pt = getClientPoint(e); return clientToSvgPoint(pt.clientX, pt.clientY, pane); };
 
             const snapWallEnd = (x1, y1, x2, y2) => {
                 if (Math.hypot(x2 - x1, y2 - y1) < 10) return { x: x2, y: y2 };
@@ -545,53 +588,89 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 return pg;
             };
 
-            const initSketchOnCurrent = () => { if (!activeCanvas.value) return; resetZoom(); const size = getAdaptiveCanvasSize(); Object.assign(activeCanvas.value, { photo: renderSketchDataUrl(size.w, size.h, true), w: size.w, h: size.h, isSketch: true, hasGrid: true }); touchDirty(); drawMode.value = 'browse'; saveAll(); };
+            const initSketchOnCurrent = () => { if (!targetCanvas.value) return; targetPaneResetZoom(); const size = getAdaptiveCanvasSize(); Object.assign(targetCanvas.value, { photo: renderSketchDataUrl(size.w, size.h, true), w: size.w, h: size.h, isSketch: true, hasGrid: true }); touchDirty(); drawMode.value = 'browse'; saveAll(); };
             const addNewSketchPage = (hasGrid) => { showAddPageModal.value = false; resetZoom(); const size = getAdaptiveCanvasSize(); const newPg = makeEmptyPage({ photo: renderSketchDataUrl(size.w, size.h, hasGrid), w: size.w, h: size.h, isSketch: true, hasGrid }); pages.value.push(newPg); activePageIndex.value = pages.value.length - 1; dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; drawMode.value = 'browse'; saveAll(); };
             const duplicateCurrentPage = (keepAnnotations = false) => {
-                showAddPageModal.value = false; const src = activePage.value; if (!src?.photo) return;
+                showAddPageModal.value = false; const src = targetPage.value; if (!src?.photo) return;
                 resetZoom(); const sharedPhotoId = src.photoId || ('page_' + src.id); src.photoId = sharedPhotoId; const c = JSON.parse(JSON.stringify(src));
                 const newPg = makeEmptyPage({
                     space: src.space || '', photo: src.photo, photoId: sharedPhotoId, w: src.w || 1200, h: src.h || 900, isSketch: !!src.isSketch, hasGrid: !!src.hasGrid,
                     markers: keepAnnotations ? (c.markers || []) : [], lines: keepAnnotations ? (c.lines || []) : [], walls: keepAnnotations ? (c.walls || []) : [], paths: keepAnnotations ? (c.paths || []) : [], pins: []
                 });
-                pages.value.push(newPg); activePageIndex.value = pages.value.length - 1; dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; drawMode.value = 'browse'; saveAll();
+                pages.value.push(newPg);
+                if (splitMode.value && activePane.value === 'B') pageIndexB.value = pages.value.length - 1;
+                else activePageIndex.value = pages.value.length - 1;
+                dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; drawMode.value = 'browse'; saveAll();
                 showToast(keepAnnotations ? `📑 已複製整頁為 P${pages.value.length}` : `📄 已複製純淨底圖為 P${pages.value.length}`);
             };
-            const toggleSketchGrid = () => { if (!activeCanvas.value) return; checkBranchNeed(() => { activeCanvas.value.hasGrid = !activeCanvas.value.hasGrid; activeCanvas.value.photo = renderSketchDataUrl(activeCanvas.value.w || 1200, activeCanvas.value.h || 1500, activeCanvas.value.hasGrid); touchDirty(); saveAll(); }); };
+            const toggleSketchGrid = () => { if (!targetCanvas.value) return; checkBranchNeed(() => { targetCanvas.value.hasGrid = !targetCanvas.value.hasGrid; targetCanvas.value.photo = renderSketchDataUrl(targetCanvas.value.w || 1200, targetCanvas.value.h || 1500, targetCanvas.value.hasGrid); touchDirty(); saveAll(); }); };
+            const targetPaneResetZoom = () => { if (splitMode.value && activePane.value === 'B') resetZoomB(); else resetZoom(); };
 
-            const switchPage = (idx) => { resetZoom(); showQuickPageNav.value = false; activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; };
-            const prevPage = () => { if (activePageIndex.value > 0) switchPage(activePageIndex.value - 1); };
-            const nextPage = () => { if (activePageIndex.value < pages.value.length - 1) switchPage(activePageIndex.value + 1); };
+            const switchPage = (idx, pane = 'A') => {
+                if (pane === 'B') {
+                    resetZoomB(); showQuickPageNavB.value = false; pageIndexB.value = idx; pinB.value = null;
+                } else {
+                    resetZoom(); showQuickPageNav.value = false; activePageIndex.value = idx; activePin.value = null;
+                }
+                drawMode.value = 'browse';
+            };
+            const prevPage = (pane = 'A') => {
+                const cur = pane === 'B' ? pageIndexB.value : activePageIndex.value;
+                if (cur > 0) switchPage(cur - 1, pane);
+            };
+            const nextPage = (pane = 'A') => {
+                const cur = pane === 'B' ? pageIndexB.value : activePageIndex.value;
+                if (cur < pages.value.length - 1) switchPage(cur + 1, pane);
+            };
 
             const deleteCurrentPage = () => {
                 if (pages.value.length <= 1) return;
                 if (prompt(`⚠️ 確認刪除 P${activePageIndex.value + 1}？\n請輸入 "d" 確認：`)?.trim().toLowerCase() !== 'd') return;
                 resetZoom(); showQuickPageNav.value = false; const delId = activePage.value.id; project.deletedPageIds ||= [];
                 if (!project.deletedPageIds.includes(delId)) project.deletedPageIds.push(delId);
-                dirtyPageIds.delete(delId); pages.value.splice(activePageIndex.value, 1); activePageIndex.value = Math.max(0, activePageIndex.value - 1);
+                dirtyPageIds.delete(delId); pages.value.splice(activePageIndex.value, 1);
+                activePageIndex.value = Math.max(0, activePageIndex.value - 1);
+                pageIndexB.value = Math.min(pageIndexB.value, pages.value.length - 1);
                 project.pageOrderUpdatedAt = Date.now(); hasUnsavedCloudChanges.value = true; saveAll();
                 if (db && project.code) { const ref = db.collection('site_projects').doc(String(project.code)); ref.collection('pages').doc(delId).delete().catch(() => {}); ref.set({ deletedPageIds: firebase.firestore.FieldValue.arrayUnion(delId), updatedAt: Date.now() }, { merge: true }).catch(() => {}); }
                 showToast('🗑️ 已刪除頁面');
             };
 
-            const openPinSubPage = (pin, idx) => {
-                resetZoom(); showQuickPageNav.value = false;
-                Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], walls: pin.walls || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || activePage.value?.space || '' });
+            const openPinSubPage = (pin, idx, pane = 'A') => {
+                const isB = pane === 'B';
+                isB ? resetZoomB() : resetZoom();
+                showQuickPageNav.value = false; showQuickPageNavB.value = false;
+                const parentPg = isB ? pageB.value : activePage.value;
+                Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], walls: pin.walls || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || parentPg?.space || '' });
                 if (pin.isSketch && !pin.photo) { const size = getAdaptiveCanvasSize(); pin.photo = renderSketchDataUrl(size.w, size.h, !!pin.hasGrid); pin.w = size.w; pin.h = size.h; }
-                activePin.value = pin; activePinIndex.value = idx; drawMode.value = 'browse';
+                if (isB) { pinB.value = pin; pinIndexB.value = idx; }
+                else { activePin.value = pin; activePinIndex.value = idx; }
+                drawMode.value = 'browse';
             };
-            const exitPinSubPage = () => { resetZoom(); activePin.value = null; drawMode.value = 'browse'; };
-            const onPinTap = (pin, index) => { if (drawMode.value === 'eraser') { showToast('📍 落釘受保護，請點入內按「🗑️刪釘」移除'); return; } openPinSubPage(pin, index); };
-            const deleteActivePin = async () => {
-                if (!activePin.value || !activePage.value) return;
+            const exitPinSubPage = (pane = 'A') => {
+                if (pane === 'B') { resetZoomB(); pinB.value = null; }
+                else { resetZoom(); activePin.value = null; }
+                drawMode.value = 'browse';
+            };
+            const onPinTap = (pin, index, pane = 'A') => {
+                focusPane(pane);
+                if (drawMode.value === 'eraser') { showToast('📍 落釘受保護，請點入內按「🗑️刪釘」移除'); return; }
+                openPinSubPage(pin, index, pane);
+            };
+            const deleteActivePin = async (pane = activePane.value) => {
+                const isB = pane === 'B';
+                const pObj = isB ? pinB.value : activePin.value;
+                const pg = isB ? pageB.value : activePage.value;
+                if (!pObj || !pg) return;
+                activePane.value = pane;
                 checkBranchNeed(async () => {
-                    const pinId = String(activePin.value.id), pg = activePage.value, idx = (pg.pins || []).findIndex(p => String(p.id) === pinId);
+                    const pinId = String(pObj.id), idx = (pg.pins || []).findIndex(p => String(p.id) === pinId);
                     if (idx !== -1) {
                         const removedPin = JSON.parse(JSON.stringify(pg.pins[idx])); pg.pins.splice(idx, 1); pg.deletedPinIds ||= [];
                         if (!pg.deletedPinIds.includes(pinId)) pg.deletedPinIds.push(pinId); project.deletedPinIds ||= []; if (!project.deletedPinIds.includes(pinId)) project.deletedPinIds.push(pinId);
                         pg.historyStack ||= []; pg.redoStack = []; pg.historyStack.push({ type: 'delete_pin', pin: removedPin, index: idx });
                     }
-                    touchDirty(pg); exitPinSubPage(); await saveAll(); showToast('🗑️ 已刪釘（按 ↶ 可復原）');
+                    touchDirty(pg); exitPinSubPage(pane); await saveAll(); showToast('🗑️ 已刪釘（按 ↶ 可復原）');
                 });
             };
 
@@ -624,12 +703,12 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 } finally { isProcessing.value = false; }
             };
             const selectFromPhotoPool = (item) => {
-                showPhotoPoolModal.value = false; resetZoom();
+                showPhotoPoolModal.value = false; targetPaneResetZoom();
                 if (photoPoolTarget.value === 'newPage') {
                     const newPg = makeEmptyPage({ photo: item.photo, photoId: item.id, w: item.w || 1200, h: item.h || 900 });
                     pages.value.push(newPg); activePageIndex.value = pages.value.length - 1; dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; showToast(`✅ 已建立 P${pages.value.length}`); drawMode.value = 'browse'; saveAll();
-                } else if (activeCanvas.value) {
-                    checkBranchNeed(() => { Object.assign(activeCanvas.value, { photo: item.photo, photoId: item.id, w: item.w || 1200, h: item.h || 900, isSketch: false }); touchDirty(); drawMode.value = 'browse'; saveAll(); });
+                } else if (targetCanvas.value) {
+                    checkBranchNeed(() => { Object.assign(targetCanvas.value, { photo: item.photo, photoId: item.id, w: item.w || 1200, h: item.h || 900, isSketch: false }); touchDirty(); drawMode.value = 'browse'; saveAll(); });
                 }
             };
             const deleteFromPhotoPool = async (item) => {
@@ -638,15 +717,16 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 if (db && project.code && item.id) { const mRef = db.collection('site_projects').doc(String(project.code)).collection('media').doc(String(item.id)); mRef.collection('chunks').get().then(s => s.forEach(c => c.ref.delete())).catch(() => {}); mRef.delete().catch(() => {}); }
             };
 
-            const setPageSpace = (sp) => { checkBranchNeed(() => { if (activeCanvas.value) activeCanvas.value.space = sp; touchDirty(); showSpaceModal.value = false; saveAll(); }); };
+            const setPageSpace = (sp) => { checkBranchNeed(() => { if (targetCanvas.value) targetCanvas.value.space = sp; touchDirty(); showSpaceModal.value = false; saveAll(); }); };
             const addCustomSpace = () => { const s = prompt('輸入空間名稱（例如：閣樓）')?.trim(); if (s) { if (!spaceList.value.includes(s)) spaceList.value.push(s); setPageSpace(s); } };
 
-            const onEraseTap = (targetType, item, e) => {
+            const onEraseTap = (targetType, item, e, pane = activePane.value) => {
+                focusPane(pane);
                 if (drawMode.value !== 'eraser') return;
                 if (e.touches?.length > 1 || isPinching || showBranchPrompt.value) return;
                 e.preventDefault(); e.stopPropagation(); const targetId = item.id;
                 checkBranchNeed(() => {
-                    const c = activeCanvas.value; if (!c) return; c.historyStack ||= []; c.redoStack = [];
+                    const c = targetCanvas.value; if (!c) return; c.historyStack ||= []; c.redoStack = [];
                     if (targetType === 'wall') { const idx = (c.walls || []).findIndex(x => x.id === targetId); if (idx === -1) return; const removed = c.walls.splice(idx, 1)[0]; c.historyStack.push({ type: 'erase', targetType: 'wall', item: removed }); }
                     else if (targetType === 'path') { const idx = (c.paths || []).findIndex(x => x.id === targetId); if (idx === -1) return; const removed = c.paths.splice(idx, 1)[0]; c.historyStack.push({ type: 'erase', targetType: 'path', item: removed }); }
                     else if (targetType === 'line') {
@@ -662,11 +742,11 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 });
             };
 
-            const makeBlankMarkerData = () => ({ val: '', name: '', customCode: '', targetPageId: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' });
+            const makeBlankMarkerData = () => ({ val: '', name: '', customCode: '', targetPageId: '', cadType: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' });
 
             const createPointMarker = (x, y, forceType) => {
                 checkBranchNeed(() => {
-                    const c = activeCanvas.value; if (!c) return;
+                    const c = targetCanvas.value; if (!c) return;
                     c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                     const markerId = Date.now();
                     const newMarker = {
@@ -682,21 +762,42 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 });
             };
 
-            const onMarkerPointerStart = (marker, e) => {
+            // 放置 AutoCAD 矢量圖塊
+            const placeCadBlockAt = (x, y) => {
+                const def = CAD_DEFS[selectedCadType.value];
+                if (!def) return;
+                checkBranchNeed(() => {
+                    const c = targetCanvas.value; if (!c) return;
+                    c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
+                    const markerId = Date.now();
+                    const newMarker = {
+                        id: markerId, lineId: null, x, y, w: def.w, h: def.h,
+                        type: 'cad', color: drawColor.value, rot: 0, scale: 1, flipX: 1, flipY: 1,
+                        data: { ...makeBlankMarkerData(), cadType: selectedCadType.value }
+                    };
+                    c.markers.push(newMarker);
+                    c.historyStack.push({ type: 'marker', markerId });
+                    activeMarker.value = newMarker;
+                    showTopTextBar.value = true;
+                    touchDirty(); saveAll();
+                });
+            };
+
+            const onMarkerPointerStart = (marker, e, pane = activePane.value) => {
+                focusPane(pane);
                 if (e.touches?.length > 1 || isPinching || showBranchPrompt.value) return;
                 if (showQuickPageNav.value) showQuickPageNav.value = false;
-                if (drawMode.value === 'eraser') { onEraseTap('marker', marker, e); return; }
+                if (showQuickPageNavB.value) showQuickPageNavB.value = false;
+                if (drawMode.value === 'eraser') { onEraseTap('marker', marker, e, pane); return; }
                 const pt = getClientPoint(e);
                 if (drawMode.value === 'move') {
                     e.preventDefault(); e.stopPropagation();
                     checkBranchNeed(() => {
-                        const target = (activeCanvas.value.markers || []).find(m => m.id === marker.id) || marker;
+                        const target = (targetCanvas.value.markers || []).find(m => m.id === marker.id) || marker;
                         if (showBranchPrompt.value) return;
-                        draggedMarker.value = target;
-                        activeMarker.value = target;
-                        const p = getCoords(e);
-                        dragOrigin.value = { x: p.x, y: p.y };
-                        markerOrigin.value = { x: target.x, y: target.y };
+                        draggedMarker.value = target; activeMarker.value = target;
+                        const p = getCoords(e, pane);
+                        dragOrigin.value = { x: p.x, y: p.y }; markerOrigin.value = { x: target.x, y: target.y };
                     });
                     return;
                 }
@@ -706,13 +807,14 @@ if (!window.Vue || !window.MEASURE_DATA) {
                     return;
                 }
                 if (drawMode.value === 'browse') {
-                    pendingTapMarker = { marker, clientX: pt.clientX, clientY: pt.clientY };
+                    pendingTapMarker = { marker, pane, clientX: pt.clientX, clientY: pt.clientY };
                 }
             };
 
-            const openMarkerEditor = (m) => {
+            const openMarkerEditor = (m, pane = activePane.value) => {
+                focusPane(pane);
                 if (m.type === 'page_link' && m.data?.targetPageId) {
-                    jumpToPageById(m.data.targetPageId);
+                    jumpToPageById(m.data.targetPageId, pane);
                     return;
                 }
                 if (m.type === 'space_tag') {
@@ -720,118 +822,131 @@ if (!window.Vue || !window.MEASURE_DATA) {
                     return;
                 }
                 activeMarker.value = m;
-                if (['text', 'image'].includes(m.type)) {
+                if (['text', 'image', 'cad'].includes(m.type)) {
                     showTopTextBar.value = true;
-                    if (m.type !== 'image') nextTick(() => topTextInputRef.value?.focus());
+                    if (m.type === 'text') nextTick(() => topTextInputRef.value?.focus());
                 } else {
                     showTopSheet.value = true;
                     focusedInput.value = TAG_DEFS[m.type]?.fields[0]?.key || 'val';
                 }
             };
 
-            const beginPinch = (t1, t2) => {
-                isPinching = true; isDrawing.value = false; isPanningBrowse = false; pendingTapMarker = null; currentLine.value = null; currentWall.value = null; currentPath.value = '';
+            const beginPinch = (t1, t2, pane = 'A') => {
+                isPinching = true; pinchPane = pane; isDrawing.value = false; isPanningBrowse = false; pendingTapMarker = null; currentLine.value = null; currentWall.value = null; currentPath.value = '';
                 if (draggedMarker.value) { draggedMarker.value.x = markerOrigin.value.x; draggedMarker.value.y = markerOrigin.value.y; draggedMarker.value = null; }
-                pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1; pinchStartScale = zoomScale.value;
-                pinchAnchorSvg = clientToSvgPoint((t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2);
+                pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1;
+                pinchStartScale = pane === 'B' ? zoomScaleB.value : zoomScale.value;
+                pinchAnchorSvg = clientToSvgPoint((t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2, pane);
             };
 
-            const onStageTouchStart = (e) => {
+            const onStageTouchStart = (e, pane = 'A') => {
+                focusPane(pane);
                 if (showQuickPageNav.value) showQuickPageNav.value = false;
+                if (showQuickPageNavB.value) showQuickPageNavB.value = false;
                 if (showTopSheet.value || showTopTextBar.value || showIndexModal.value || showBranchPrompt.value) return;
-                if (e.touches.length >= 2) { e.preventDefault(); beginPinch(e.touches[0], e.touches[1]); return; }
+                if (e.touches.length >= 2) { e.preventDefault(); beginPinch(e.touches[0], e.touches[1], pane); return; }
                 if (isPinching) return;
                 touchStartTime = Date.now(); touchMoved = false;
                 if (e.touches.length === 1 && !draggedMarker.value) {
                     if (drawMode.value === 'browse') {
-                        isPanningBrowse = true; panStartClient = { x: e.touches[0].clientX, y: e.touches[0].clientY }; panStartVb = { x: vbX.value, y: vbY.value };
+                        isPanningBrowse = true; panPane = pane;
+                        panStartClient = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                        panStartVb = pane === 'B' ? { x: vbXB.value, y: vbYB.value } : { x: vbX.value, y: vbY.value };
                     } else if (!['eraser', 'move'].includes(drawMode.value)) {
-                        beginStroke(e);
+                        beginStroke(e, pane);
                     }
                 }
             };
 
-            const onStageTouchMove = (e) => {
+            const onStageTouchMove = (e, pane = 'A') => {
                 if (showBranchPrompt.value) return;
                 if (e.touches.length >= 2) {
-                    e.preventDefault(); if (!isPinching) { beginPinch(e.touches[0], e.touches[1]); return; }
+                    e.preventDefault(); if (!isPinching) { beginPinch(e.touches[0], e.touches[1], pane); return; }
                     const t1 = e.touches[0], t2 = e.touches[1], curDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1;
-                    applyZoomAtClientPoint(pinchStartScale * (curDist / pinchStartDist), (t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2, pinchAnchorSvg);
+                    applyZoomAtClientPoint(pinchStartScale * (curDist / pinchStartDist), (t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2, pinchAnchorSvg, pinchPane);
                     return;
                 }
                 if (isPinching) return;
                 if (e.touches.length === 1) {
-                    if (pendingTapMarker && Math.hypot(e.touches[0].clientX - pendingTapMarker.clientX, e.touches[0].clientY - pendingTapMarker.clientY) > 6) {
-                        pendingTapMarker = null;
-                    }
+                    if (pendingTapMarker && Math.hypot(e.touches[0].clientX - pendingTapMarker.clientX, e.touches[0].clientY - pendingTapMarker.clientY) > 6) pendingTapMarker = null;
                     touchMoved = true;
-                    if (isPanningBrowse) { e.preventDefault(); panByClientDelta(e.touches[0].clientX - panStartClient.x, e.touches[0].clientY - panStartClient.y); }
-                    else { moveStroke(e); }
+                    if (isPanningBrowse) { e.preventDefault(); panByClientDelta(e.touches[0].clientX - panStartClient.x, e.touches[0].clientY - panStartClient.y, panPane); }
+                    else moveStroke(e, pane);
                 }
             };
 
-            const onStageTouchEnd = (e) => {
+            const onStageTouchEnd = (e, pane = 'A') => {
                 if (e.touches.length === 0) {
                     if (isPinching) { isPinching = false; pinchAnchorSvg = null; return; }
                     if (isPanningBrowse) {
                         isPanningBrowse = false;
-                        if (pendingTapMarker) { const m = pendingTapMarker.marker; pendingTapMarker = null; openMarkerEditor(m); }
+                        if (pendingTapMarker) { const { marker, pane: p } = pendingTapMarker; pendingTapMarker = null; openMarkerEditor(marker, p); }
                         return;
                     }
                 }
                 if (isPinching || showBranchPrompt.value) return;
                 if (drawMode.value === 'line' && !touchMoved && (Date.now() - touchStartTime < 260) && e.touches.length === 0) {
                     isDrawing.value = false; currentLine.value = null;
-                    const endPos = getCoords(e); createPointMarker(endPos.x, endPos.y, 'stamp'); return;
+                    const endPos = getCoords(e, pane); createPointMarker(endPos.x, endPos.y, 'stamp'); return;
                 }
-                if (e.touches.length === 0) endStroke(e);
+                if (e.touches.length === 0) endStroke(e, pane);
             };
 
-            const panByClientDelta = (dxClient, dyClient) => {
-                const svg = svgCanvas.value; if (!svg) return;
-                const pw = canvasW.value, ph = canvasH.value, vw = pw / zoomScale.value, vh = ph / zoomScale.value;
+            const panByClientDelta = (dxClient, dyClient, pane = 'A') => {
+                const isB = pane === 'B';
+                const svg = isB ? svgCanvasB.value : svgCanvas.value; if (!svg) return;
+                const pw = isB ? canvasWB.value : canvasW.value, ph = isB ? canvasHB.value : canvasH.value;
+                const zVal = isB ? zoomScaleB.value : zoomScale.value;
+                const vw = pw / zVal, vh = ph / zVal;
                 const r = svg.getBoundingClientRect(), fitScale = Math.min(r.width / vw, r.height / vh) || 1;
-                vbX.value = Math.max(0, Math.min(pw - vw, panStartVb.x - dxClient / fitScale));
-                vbY.value = Math.max(0, Math.min(ph - vh, panStartVb.y - dyClient / fitScale));
+                const nextX = Math.max(0, Math.min(pw - vw, panStartVb.x - dxClient / fitScale));
+                const nextY = Math.max(0, Math.min(ph - vh, panStartVb.y - dyClient / fitScale));
+                if (isB) { vbXB.value = nextX; vbYB.value = nextY; }
+                else { vbX.value = nextX; vbY.value = nextY; }
             };
 
-            const onStageMouseDown = (e) => {
+            const onStageMouseDown = (e, pane = 'A') => {
+                focusPane(pane);
                 if (showQuickPageNav.value) showQuickPageNav.value = false;
+                if (showQuickPageNavB.value) showQuickPageNavB.value = false;
                 if (showTopSheet.value || showTopTextBar.value || showIndexModal.value || showBranchPrompt.value) return;
                 if (e.button === 1 || isSpaceDown || (drawMode.value === 'browse' && !draggedMarker.value)) {
-                    e.preventDefault(); isPanningBrowse = true; panStartClient = { x: e.clientX, y: e.clientY }; panStartVb = { x: vbX.value, y: vbY.value }; return;
-                }
-                if (!draggedMarker.value && !['browse', 'eraser', 'move'].includes(drawMode.value)) beginStroke(e);
-            };
-            const onStageMouseMove = (e) => {
-                if (showBranchPrompt.value) return;
-                if (pendingTapMarker && Math.hypot(e.clientX - pendingTapMarker.clientX, e.clientY - pendingTapMarker.clientY) > 6) pendingTapMarker = null;
-                if (isPanningBrowse) { panByClientDelta(e.clientX - panStartClient.x, e.clientY - panStartClient.y); return; }
-                moveStroke(e);
-            };
-            const onStageMouseUp = (e) => {
-                if (isPanningBrowse) {
-                    isPanningBrowse = false;
-                    if (pendingTapMarker) { const m = pendingTapMarker.marker; pendingTapMarker = null; openMarkerEditor(m); }
+                    e.preventDefault(); isPanningBrowse = true; panPane = pane;
+                    panStartClient = { x: e.clientX, y: e.clientY };
+                    panStartVb = pane === 'B' ? { x: vbXB.value, y: vbYB.value } : { x: vbX.value, y: vbY.value };
                     return;
                 }
-                if (!showBranchPrompt.value) endStroke(e);
+                if (!draggedMarker.value && !['browse', 'eraser', 'move'].includes(drawMode.value)) beginStroke(e, pane);
+            };
+            const onStageMouseMove = (e, pane = 'A') => {
+                if (showBranchPrompt.value) return;
+                if (pendingTapMarker && Math.hypot(e.clientX - pendingTapMarker.clientX, e.clientY - pendingTapMarker.clientY) > 6) pendingTapMarker = null;
+                if (isPanningBrowse) { panByClientDelta(e.clientX - panStartClient.x, e.clientY - panStartClient.y, panPane); return; }
+                moveStroke(e, pane);
+            };
+            const onStageMouseUp = (e, pane = 'A') => {
+                if (isPanningBrowse) {
+                    isPanningBrowse = false;
+                    if (pendingTapMarker) { const { marker, pane: p } = pendingTapMarker; pendingTapMarker = null; openMarkerEditor(marker, p); }
+                    return;
+                }
+                if (!showBranchPrompt.value) endStroke(e, pane);
             };
 
-            const beginStroke = (e) => {
-                isDrawing.value = true; startPos.value = getCoords(e);
+            const beginStroke = (e, pane = 'A') => {
+                isDrawing.value = true; drawingPane.value = pane; startPos.value = getCoords(e, pane);
                 if (['line', 'arrow-single', 'straight'].includes(drawMode.value)) currentLine.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y };
                 else if (drawMode.value === 'wall') currentWall.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y, style: wallStyle.value, color: drawColor.value };
                 else if (drawMode.value === 'freehand') { tempPoints = [[startPos.value.x, startPos.value.y]]; currentPath.value = `M ${startPos.value.x} ${startPos.value.y}`; }
             };
 
-            const moveStroke = (e) => {
+            const moveStroke = (e, pane = activePane.value) => {
                 if (draggedMarker.value) {
-                    e.preventDefault(); const p = getCoords(e), dx = p.x - dragOrigin.value.x, dy = p.y - dragOrigin.value.y;
-                    draggedMarker.value.x = Math.round(Math.max(0, Math.min(canvasW.value, markerOrigin.value.x + dx)));
-                    draggedMarker.value.y = Math.round(Math.max(0, Math.min(canvasH.value, markerOrigin.value.y + dy)));
+                    e.preventDefault(); const p = getCoords(e, pane), dx = p.x - dragOrigin.value.x, dy = p.y - dragOrigin.value.y;
+                    draggedMarker.value.x = Math.round(Math.max(0, Math.min(targetCanvasW.value, markerOrigin.value.x + dx)));
+                    draggedMarker.value.y = Math.round(Math.max(0, Math.min(targetCanvasH.value, markerOrigin.value.y + dy)));
                 } else if (isDrawing.value) {
-                    e.preventDefault(); const p = getCoords(e);
+                    e.preventDefault(); const p = getCoords(e, drawingPane.value);
                     if (drawMode.value === 'line' || drawMode.value === 'arrow-single') { currentLine.value.x2 = p.x; currentLine.value.y2 = p.y; }
                     else if (drawMode.value === 'straight' && currentLine.value) { const snapped = snapWallEnd(currentLine.value.x1, currentLine.value.y1, p.x, p.y); currentLine.value.x2 = snapped.x; currentLine.value.y2 = snapped.y; }
                     else if (drawMode.value === 'wall' && currentWall.value) { const snapped = snapWallEnd(currentWall.value.x1, currentWall.value.y1, p.x, p.y); currentWall.value.x2 = snapped.x; currentWall.value.y2 = snapped.y; }
@@ -839,7 +954,7 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 }
             };
 
-            const endStroke = (e) => {
+            const endStroke = (e, pane = drawingPane.value) => {
                 if (draggedMarker.value) {
                     const moved = Math.hypot(draggedMarker.value.x - markerOrigin.value.x, draggedMarker.value.y - markerOrigin.value.y) > 2;
                     draggedMarker.value = null;
@@ -847,7 +962,13 @@ if (!window.Vue || !window.MEASURE_DATA) {
                     return;
                 }
                 if (!isDrawing.value) return;
-                isDrawing.value = false; const endPos = getCoords(e);
+                isDrawing.value = false; const endPos = getCoords(e, drawingPane.value);
+
+                if (drawMode.value === 'cad') {
+                    currentLine.value = null; currentWall.value = null; currentPath.value = '';
+                    placeCadBlockAt(endPos.x, endPos.y);
+                    return;
+                }
 
                 if (drawMode.value === 'index') {
                     currentLine.value = null; currentWall.value = null; currentPath.value = '';
@@ -855,13 +976,14 @@ if (!window.Vue || !window.MEASURE_DATA) {
                     return;
                 }
 
-                if (!activePin.value && drawMode.value === 'pin') {
+                if (!targetPin.value && drawMode.value === 'pin') {
                     currentLine.value = null; currentWall.value = null; currentPath.value = '';
                     checkBranchNeed(() => {
-                        const pw = activePage.value.w || 1200, ph = activePage.value.h || 900; activePage.value.pins ||= []; activePage.value.historyStack ||= []; activePage.value.redoStack = [];
-                        const newPin = { id: 'pin_' + Date.now(), name: `位置 ${activePage.value.pins.length + 1}`, x: parseFloat(((endPos.x / pw) * 100).toFixed(2)), y: parseFloat(((endPos.y / ph) * 100).toFixed(2)), photo: null, photoId: '', w: 1200, h: 900, space: activePage.value.space || '', markers: [], lines: [], walls: [], paths: [], historyStack: [], redoStack: [], updatedAt: Date.now() };
-                        activePage.value.pins.push(newPin); activePage.value.historyStack.push({ type: 'pin', pinId: newPin.id });
-                        touchDirty(); openPinSubPage(newPin, activePage.value.pins.length - 1); saveAll();
+                        const pg = targetPage.value; if (!pg) return;
+                        const pw = pg.w || 1200, ph = pg.h || 900; pg.pins ||= []; pg.historyStack ||= []; pg.redoStack = [];
+                        const newPin = { id: 'pin_' + Date.now(), name: `位置 ${pg.pins.length + 1}`, x: parseFloat(((endPos.x / pw) * 100).toFixed(2)), y: parseFloat(((endPos.y / ph) * 100).toFixed(2)), photo: null, photoId: '', w: 1200, h: 900, space: pg.space || '', markers: [], lines: [], walls: [], paths: [], historyStack: [], redoStack: [], updatedAt: Date.now() };
+                        pg.pins.push(newPin); pg.historyStack.push({ type: 'pin', pinId: newPin.id });
+                        touchDirty(); openPinSubPage(newPin, pg.pins.length - 1, activePane.value); saveAll();
                     });
                     return;
                 }
@@ -869,7 +991,7 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 if (drawMode.value === 'wall' && currentWall.value) {
                     if (Math.hypot(currentWall.value.x2 - currentWall.value.x1, currentWall.value.y2 - currentWall.value.y1) >= 12) {
                         const wSnap = { ...currentWall.value };
-                        checkBranchNeed(() => { const c = activeCanvas.value; c.walls ||= []; c.historyStack ||= []; c.redoStack = []; const wallId = Date.now(); c.walls.push({ ...wSnap, id: wallId }); c.historyStack.push({ type: 'wall', wallId }); touchDirty(); saveAll(); });
+                        checkBranchNeed(() => { const c = targetCanvas.value; c.walls ||= []; c.historyStack ||= []; c.redoStack = []; const wallId = Date.now(); c.walls.push({ ...wSnap, id: wallId }); c.historyStack.push({ type: 'wall', wallId }); touchDirty(); saveAll(); });
                     }
                     currentWall.value = null;
                 } else if (['line', 'arrow-single', 'straight'].includes(drawMode.value) && currentLine.value) {
@@ -879,7 +1001,7 @@ if (!window.Vue || !window.MEASURE_DATA) {
                     }
                     if (Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 10) return;
                     checkBranchNeed(() => {
-                        const c = activeCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
+                        const c = targetCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                         const lineId = Date.now(), markerId = lineId + 1;
                         const lineType = drawMode.value === 'line' ? 'measure' : drawMode.value;
                         c.lines.push({ ...lSnap, id: lineId, type: lineType, color: lineType === 'measure' ? null : drawColor.value });
@@ -896,17 +1018,57 @@ if (!window.Vue || !window.MEASURE_DATA) {
                     });
                 } else if (drawMode.value === 'freehand' && currentPath.value) {
                     const pSnap = currentPath.value; currentPath.value = '';
-                    checkBranchNeed(() => { const c = activeCanvas.value; c.paths ||= []; c.historyStack ||= []; c.redoStack = []; const pathId = Date.now(); c.paths.push({ id: pathId, d: pSnap, color: drawColor.value }); c.historyStack.push({ type: 'freehand', pathId }); touchDirty(); saveAll(); });
+                    checkBranchNeed(() => { const c = targetCanvas.value; c.paths ||= []; c.historyStack ||= []; c.redoStack = []; const pathId = Date.now(); c.paths.push({ id: pathId, d: pSnap, color: drawColor.value }); c.historyStack.push({ type: 'freehand', pathId }); touchDirty(); saveAll(); });
                 }
             };
 
-            const ensureMarkerBranched = (cb) => { if (activeMarker.value) { checkBranchNeed(() => { activeMarker.value = (activeCanvas.value.markers || []).find(m => m.id === activeMarker.value.id) || activeMarker.value; if (cb) cb(); }); } else if (cb) cb(); };
+            const ensureMarkerBranched = (cb) => { if (activeMarker.value) { checkBranchNeed(() => { activeMarker.value = (targetCanvas.value.markers || []).find(m => m.id === activeMarker.value.id) || activeMarker.value; if (cb) cb(); }); } else if (cb) cb(); };
             const onMarkerTextInput = () => ensureMarkerBranched(() => { updateMarkerSize(activeMarker.value); touchDirty(); });
-            const resizeImageMarker = (factor) => { if (!activeMarker.value || activeMarker.value.type !== 'image') return; ensureMarkerBranched(() => { const m = activeMarker.value, minSide = 40, maxSide = Math.max(canvasW.value, canvasH.value) * 1.5; const nextW = Math.round(m.w * factor), nextH = Math.round(m.h * factor); if (nextW < minSide || nextH < minSide || nextW > maxSide || nextH > maxSide) return; m.w = nextW; m.h = nextH; touchDirty(); saveAll(); }); };
+
+            // 貼圖 & CAD 圖塊縮放、旋轉、鏡像操控
+            const setMarkerScale = (val) => {
+                if (!activeMarker.value) return;
+                const s = Math.max(0.3, Math.min(3.5, Math.round(Number(val) * 100) / 100));
+                ensureMarkerBranched(() => {
+                    const m = activeMarker.value;
+                    m.scale = s;
+                    if (m.type === 'image') {
+                        if (!m.baseW) { m.baseW = m.w; m.baseH = m.h; }
+                        m.w = Math.round(m.baseW * s);
+                        m.h = Math.round(m.baseH * s);
+                    }
+                    touchDirty(); saveAll();
+                });
+            };
+            const resizeImageMarker = (factor) => {
+                if (!activeMarker.value) return;
+                const cur = activeMarker.value.scale || 1;
+                setMarkerScale(cur * factor);
+            };
+            const rotateMarker = (deg) => {
+                if (!activeMarker.value) return;
+                ensureMarkerBranched(() => {
+                    activeMarker.value.rot = ((activeMarker.value.rot || 0) + deg + 360) % 360;
+                    touchDirty(); saveAll();
+                });
+            };
+            const flipMarker = (axis) => {
+                if (!activeMarker.value) return;
+                ensureMarkerBranched(() => {
+                    if (axis === 'x') activeMarker.value.flipX = (activeMarker.value.flipX || 1) * -1;
+                    else activeMarker.value.flipY = (activeMarker.value.flipY || 1) * -1;
+                    touchDirty(); saveAll();
+                });
+            };
+            const setCadMarkerColor = (hex) => {
+                drawColor.value = hex;
+                if (!activeMarker.value || activeMarker.value.type !== 'cad') return;
+                ensureMarkerBranched(() => { activeMarker.value.color = hex; touchDirty(); saveAll(); });
+            };
 
             const undoLastAction = () => {
                 checkBranchNeed(() => {
-                    const c = activeCanvas.value; if (!c?.historyStack?.length) return; c.redoStack ||= [];
+                    const c = targetCanvas.value; if (!c?.historyStack?.length) return; c.redoStack ||= [];
                     const act = c.historyStack.pop(), u = { type: act.type };
                     if (act.type === 'line_marker') { const li = c.lines.findIndex(l => l.id === act.lineId); if (li !== -1) u.line = c.lines.splice(li, 1)[0]; if (act.markerId) { const mi = c.markers.findIndex(m => m.id === act.markerId); if (mi !== -1) u.marker = c.markers.splice(mi, 1)[0]; } }
                     else if (act.type === 'marker') { const mi = c.markers.findIndex(m => m.id === act.markerId); if (mi !== -1) u.marker = c.markers.splice(mi, 1)[0]; }
@@ -925,7 +1087,7 @@ if (!window.Vue || !window.MEASURE_DATA) {
 
             const redoAction = () => {
                 checkBranchNeed(() => {
-                    const c = activeCanvas.value; if (!c?.redoStack?.length) return; const u = c.redoStack.pop(), act = { type: u.type };
+                    const c = targetCanvas.value; if (!c?.redoStack?.length) return; const u = c.redoStack.pop(), act = { type: u.type };
                     if (u.type === 'erase') {
                         act.targetType = u.targetType; act.item = u.item; act.linkedMarker = u.linkedMarker || null; act.linkedLine = u.linkedLine || null;
                         if (u.targetType === 'wall') c.walls = (c.walls || []).filter(x => x.id !== u.item.id); else if (u.targetType === 'path') c.paths = (c.paths || []).filter(x => x.id !== u.item.id);
@@ -941,14 +1103,12 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 });
             };
 
-            const deleteMarkerTop = () => ensureMarkerBranched(() => { const c = activeCanvas.value, m = activeMarker.value; if (!m || !c) return; if (m.lineId) c.lines = (c.lines || []).filter(l => l.id !== m.lineId); c.markers = (c.markers || []).filter(x => x.id !== m.id); if (c.historyStack) c.historyStack = c.historyStack.filter(h => h.markerId !== m.id); c.redoStack = []; touchDirty(); showTopSheet.value = false; showTopTextBar.value = false; activeMarker.value = null; saveAll(); });
+            const deleteMarkerTop = () => ensureMarkerBranched(() => { const c = targetCanvas.value, m = activeMarker.value; if (!m || !c) return; if (m.lineId) c.lines = (c.lines || []).filter(l => l.id !== m.lineId); c.markers = (c.markers || []).filter(x => x.id !== m.id); if (c.historyStack) c.historyStack = c.historyStack.filter(h => h.markerId !== m.id); c.redoStack = []; touchDirty(); showTopSheet.value = false; showTopTextBar.value = false; activeMarker.value = null; saveAll(); });
             const switchMarkerType = (t, fKey) => ensureMarkerBranched(() => {
                 activeMarker.value.type = t;
                 if (t === 'stamp') activeMarker.value.textColor = null;
                 else if (!activeMarker.value.textColor) activeMarker.value.textColor = defaultTextColor.value;
-                focusedInput.value = fKey;
-                updateMarkerSize(activeMarker.value);
-                touchDirty();
+                focusedInput.value = fKey; updateMarkerSize(activeMarker.value); touchDirty();
             });
             const closeTopTextBar = () => { if (['stamp', 'text'].includes(activeMarker.value?.type) && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
             const closeTopSheet = () => { if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopSheet.value = false; saveAll(); };
@@ -973,19 +1133,17 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 if (activeMarker.value) {
                     ensureMarkerBranched(() => {
                         if (activeMarker.value.lineId) {
-                            activeCanvas.value.lines = (activeCanvas.value.lines || []).filter(l => l.id !== activeMarker.value.lineId);
+                            targetCanvas.value.lines = (targetCanvas.value.lines || []).filter(l => l.id !== activeMarker.value.lineId);
                             activeMarker.value.lineId = null;
                         }
-                        activeMarker.value.type = 'stamp';
-                        activeMarker.value.textColor = null;
-                        activeMarker.value.data.val = txt;
+                        activeMarker.value.type = 'stamp'; activeMarker.value.textColor = null; activeMarker.value.data.val = txt;
                         updateMarkerSize(activeMarker.value); touchDirty(); closeTopSheet();
                     });
                 }
             };
 
             const updateMarkerSize = (m) => {
-                if (m.type === 'image') return;
+                if (m.type === 'image' || m.type === 'cad') return;
                 const lines = getMarkerLines(m), maxLen = Math.max(0, ...lines.map(l => l.length));
                 m.w = Math.max(110, (maxLen * 30 + 34) * globalFontScale.value);
                 m.h = Math.max(50, (lines.length * 36 + 16) * globalFontScale.value);
@@ -1017,8 +1175,8 @@ if (!window.Vue || !window.MEASURE_DATA) {
 
             const handleImageUpload = async (e, asNewPage = false) => {
                 const rawFiles = Array.from(e.target.files || []); if (!rawFiles.length) return;
-                showAddPageModal.value = false; resetZoom();
-                const files = activePin.value ? [rawFiles[0]] : rawFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+                showAddPageModal.value = false; targetPaneResetZoom();
+                const files = targetPin.value ? [rawFiles[0]] : rawFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
                 const isBatch = files.length > 1; if (isBatch) { isProcessing.value = true; processingText.value = `準備匯入 ${files.length} 張圖紙...`; }
                 let firstAddedIdx = -1;
                 try {
@@ -1026,8 +1184,8 @@ if (!window.Vue || !window.MEASURE_DATA) {
                         if (isBatch) processingText.value = `正在匯入第 ${i + 1} / ${files.length} 張圖紙...`;
                         const res = await compressImage(files[i]); const photoId = `img_${Date.now()}_${i}_${Math.floor(Math.random() * 999)}`;
                         photoPool.value.push({ id: photoId, photo: res.b64, w: res.w, h: res.h, author: authorName.value || '', updatedAt: Date.now() });
-                        if (i === 0 && !asNewPage && activeCanvas.value && !activeCanvas.value.photo) {
-                            checkBranchNeed(() => { Object.assign(activeCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false }); touchDirty(); firstAddedIdx = activePageIndex.value; });
+                        if (i === 0 && !asNewPage && targetCanvas.value && !targetCanvas.value.photo) {
+                            checkBranchNeed(() => { Object.assign(targetCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false }); touchDirty(); firstAddedIdx = (splitMode.value && activePane.value === 'B') ? pageIndexB.value : activePageIndex.value; });
                             if (showBranchPrompt.value) await new Promise(r => { const timer = setInterval(() => { if (!showBranchPrompt.value) { clearInterval(timer); r(); } }, 200); });
                         } else {
                             const newPg = makeEmptyPage({ photo: res.b64, photoId, w: res.w, h: res.h });
@@ -1035,7 +1193,11 @@ if (!window.Vue || !window.MEASURE_DATA) {
                             if (firstAddedIdx === -1) firstAddedIdx = pages.value.length - 1;
                         }
                     }
-                    if (firstAddedIdx !== -1 && !activePin.value) activePageIndex.value = firstAddedIdx; drawMode.value = 'browse'; await saveAll(); if (isBatch) showToast(`✅ 已匯入 ${files.length} 張圖紙`);
+                    if (firstAddedIdx !== -1 && !targetPin.value) {
+                        if (splitMode.value && activePane.value === 'B') pageIndexB.value = firstAddedIdx;
+                        else activePageIndex.value = firstAddedIdx;
+                    }
+                    drawMode.value = 'browse'; await saveAll(); if (isBatch) showToast(`✅ 已匯入 ${files.length} 張圖紙`);
                 } finally { isProcessing.value = false; e.target.value = ''; }
             };
 
@@ -1044,19 +1206,24 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 try {
                     const res = await compressImage(blob), photoId = 'img_' + Date.now() + '_' + Math.floor(Math.random() * 999);
                     photoPool.value.push({ id: photoId, photo: res.b64, w: res.w, h: res.h, author: authorName.value || '', updatedAt: Date.now() });
-                    if (forceNewPage || !activeCanvas.value?.photo) {
-                        resetZoom();
-                        if (!forceNewPage && !activeCanvas.value?.photo) checkBranchNeed(() => { Object.assign(activeCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false }); touchDirty(); });
+                    if (forceNewPage || !targetCanvas.value?.photo) {
+                        targetPaneResetZoom();
+                        if (!forceNewPage && !targetCanvas.value?.photo) checkBranchNeed(() => { Object.assign(targetCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false }); touchDirty(); });
                         else { const newPg = makeEmptyPage({ photo: res.b64, photoId, w: res.w, h: res.h }); pages.value.push(newPg); activePageIndex.value = pages.value.length - 1; dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; }
                         showToast('✅ 貼上為底圖');
                     } else {
                         checkBranchNeed(() => {
-                            const c = activeCanvas.value; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
-                            let tw = res.w, th = res.h; const maxS = Math.min(canvasW.value, canvasH.value) * 0.7;
+                            const c = targetCanvas.value; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
+                            let tw = res.w, th = res.h; const maxS = Math.min(targetCanvasW.value, targetCanvasH.value) * 0.7;
                             if (tw > maxS || th > maxS) { if (tw > th) { th = Math.round(th * maxS / tw); tw = maxS; } else { tw = Math.round(tw * maxS / th); th = maxS; } }
-                            const vw = canvasW.value / zoomScale.value, vh = canvasH.value / zoomScale.value;
-                            const markerId = Date.now(), newMarker = { id: markerId, x: Math.round(vbX.value + vw / 2), y: Math.round(vbY.value + vh / 2), w: tw, h: th, type: 'image', data: { b64: res.b64 } };
-                            c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId }); activeMarker.value = newMarker; showTopTextBar.value = true; touchDirty(); showToast('✅ 貼圖成功');
+                            const isB = splitMode.value && activePane.value === 'B';
+                            const zVal = isB ? zoomScaleB.value : zoomScale.value;
+                            const vx = isB ? vbXB.value : vbX.value;
+                            const vy = isB ? vbYB.value : vbY.value;
+                            const vw = targetCanvasW.value / zVal, vh = targetCanvasH.value / zVal;
+                            const markerId = Date.now();
+                            const newMarker = { id: markerId, x: Math.round(vx + vw / 2), y: Math.round(vy + vh / 2), w: tw, h: th, baseW: tw, baseH: th, scale: 1, rot: 0, type: 'image', data: { b64: res.b64 } };
+                            c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId }); activeMarker.value = newMarker; showTopTextBar.value = true; touchDirty(); showToast('✅ 貼圖成功（可用滑桿調大細）');
                         });
                     }
                     drawMode.value = 'browse'; await saveAll();
@@ -1112,7 +1279,13 @@ if (!window.Vue || !window.MEASURE_DATA) {
                     const localOrderNewer = (project.pageOrderUpdatedAt || 0) > (pd.pageOrderUpdatedAt || 0); if (!localOrderNewer && pd.pageOrderUpdatedAt) project.pageOrderUpdatedAt = pd.pageOrderUpdatedAt;
                     const orderList = localOrderNewer ? [...pages.value.map(p => p.id), ...(pd.pageIds || [])] : [...(pd.pageIds || []), ...pages.value.map(p => p.id)];
                     const merged = mergePagesSmart(pages.value, cloudPages, deletedSet, orderList);
-                    if (merged.length) { pages.value = merged; if (activePageIndex.value >= pages.value.length) activePageIndex.value = pages.value.length - 1; if (activePin.value && activePage.value) activePin.value = (activePage.value.pins || []).find(p => String(p.id) === String(activePin.value.id)) || null; }
+                    if (merged.length) {
+                        pages.value = merged;
+                        if (activePageIndex.value >= pages.value.length) activePageIndex.value = pages.value.length - 1;
+                        if (pageIndexB.value >= pages.value.length) pageIndexB.value = pages.value.length - 1;
+                        if (activePin.value && activePage.value) activePin.value = (activePage.value.pins || []).find(p => String(p.id) === String(activePin.value.id)) || null;
+                        if (pinB.value && pageB.value) pinB.value = (pageB.value.pins || []).find(p => String(p.id) === String(pinB.value.id)) || null;
+                    }
                     project.lastSyncAt = Date.now(); if (dirtyPageIds.size === 0 && !hasUnsavedCloudChanges.value) hasUnsavedCloudChanges.value = false;
                     await saveAll(); cloudSyncState.value = hasUnsavedCloudChanges.value ? 'queued' : 'ready';
                 } catch (e) { cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; if (throwErr) throw e; }
@@ -1132,9 +1305,7 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 let fbFirst = true;
                 unsubFeedback = db.collection('site_projects').doc(String(code)).collection('feedback').orderBy('createdAt', 'desc').onSnapshot((snap) => {
                     feedbackList.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    if (!fbFirst && snap.docChanges().some(c => c.type === 'added')) {
-                        showToast('💬 收到師傅/業主新留言批註！');
-                    }
+                    if (!fbFirst && snap.docChanges().some(c => c.type === 'added')) showToast('💬 收到師傅/業主新留言批註！');
                     fbFirst = false;
                 }, () => {});
             };
@@ -1215,7 +1386,7 @@ if (!window.Vue || !window.MEASURE_DATA) {
             const createNewProject = async () => {
                 await checkAuthorName(); resetZoom(); const today = getTodayStr(), firstPg = makeEmptyPage({ date: today });
                 Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: today, deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
-                pages.value = [firstPg]; photoPool.value = []; feedbackList.value = []; activePageIndex.value = 0; activePin.value = null; dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id); hasUnsavedCloudChanges.value = true;
+                pages.value = [firstPg]; photoPool.value = []; feedbackList.value = []; activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; splitMode.value = false; activePane.value = 'A'; dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id); hasUnsavedCloudChanges.value = true;
                 cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; currentView.value = 'proj'; await saveAll(); startRealtimeListener(project.code);
             };
             const copyCode = (code) => { navigator.clipboard?.writeText(code); showToast('已複製工程碼：#' + code); showManageModal.value = false; };
@@ -1225,10 +1396,10 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 try { const doc = await withRetry(() => withTimeout(db.collection('site_projects').doc(code).get(), 15000)); if (!doc.exists) return alert('雲端找不到工程碼 #' + code); showJoinModal.value = false; inputJoinCode.value = ''; await loadProject(code, true); showToast('✅ 已連通 #' + code); } catch (e) { alert('連線失敗：' + e.message); } finally { isProcessing.value = false; }
             };
             const loadProject = async (code, openAsPreview = true) => {
-                resetZoom(); showQuickPageNav.value = false; code = String(code); project.code = code; project.deletedPageIds = []; project.deletedPinIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; feedbackList.value = []; dirtyPageIds.clear();
+                resetZoom(); showQuickPageNav.value = false; splitMode.value = false; activePane.value = 'A'; code = String(code); project.code = code; project.deletedPageIds = []; project.deletedPinIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; feedbackList.value = []; dirtyPageIds.clear();
                 const d = await localforage.getItem('proj_' + code);
                 if (d) { Object.assign(project, { name: d.name || '', date: d.date || '', deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' }); if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg)); if (d.photoPool) photoPool.value = d.photoPool; hasUnsavedCloudChanges.value = !!d.pendingUpload; } else hasUnsavedCloudChanges.value = false;
-                activePageIndex.value = 0; activePin.value = null; currentView.value = openAsPreview ? 'preview' : 'proj';
+                activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; currentView.value = openAsPreview ? 'preview' : 'proj';
                 await pullAndMergeFromCloud(code, false); if (!pages.value.length) pages.value = [makeEmptyPage()]; drawMode.value = 'browse'; startRealtimeListener(code);
             };
 
@@ -1263,7 +1434,7 @@ if (!window.Vue || !window.MEASURE_DATA) {
             const openCloudBrowser = async () => { if (!db || !navigator.onLine) return alert('請檢查網路連線'); isProcessing.value = true; processingText.value = '正在讀取雲端目錄...'; try { const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(30).get(), 10000); cloudProjectList.value = snaps.docs.map(d => ({ code: d.id, ...d.data() })).filter(d => d.name || d.updatedAt); showCloudBrowser.value = true; } catch (e) { alert('讀取目錄失敗：' + e.message); } finally { isProcessing.value = false; } };
             const downloadFromCloudBrowser = async (code) => { showCloudBrowser.value = false; await loadProject(code, true); showToast('✅ 已載入 #' + code); };
             const loadProjectList = async () => { const keys = await localforage.keys(), q = (await localforage.getItem('pending_upload_queue')) || [], list = []; for (const k of keys) { if (k.startsWith('proj_')) { const d = await localforage.getItem(k); if (d?.code) { const pgs = d.pages || []; list.push({ code: d.code, name: d.name, date: d.date, pageCount: pgs.length || 1, pinCount: pgs.reduce((s, p) => s + (p.pins?.length || 0), 0), updatedAt: d.updatedAt || 0, lastModifiedBy: d.lastModifiedBy || '', pendingUpload: !!d.pendingUpload || q.includes(String(d.code)) }); } } } projectList.value = list.sort((a, b) => b.updatedAt - a.updatedAt); };
-            const backToProjects = async () => { resetZoom(); showQuickPageNav.value = false; if (unsubPages) { unsubPages(); unsubPages = null; } if (unsubFeedback) { unsubFeedback(); unsubFeedback = null; } await saveAll(); if ((hasUnsavedCloudChanges.value || dirtyPageIds.size > 0) && project.code && db) { if (!navigator.onLine) showToast('📴 無網絡模式：已鎖入本機，有訊號自動上傳'); else { isProcessing.value = true; processingText.value = '正在自動上傳並返回目錄...'; try { await pullAndMergeFromCloud(project.code, false); await pushToCloud(true, (st) => { processingText.value = st; }); await createCloudBackup(project.code); showToast('✅ 已自動同步雲端'); } catch (_) { showToast('⚠️ 已排入自動補傳隊列'); } finally { isProcessing.value = false; } } } dirtyPageIds.clear(); hasUnsavedCloudChanges.value = false; feedbackList.value = []; await loadProjectList(); currentView.value = 'dir'; };
+            const backToProjects = async () => { resetZoom(); showQuickPageNav.value = false; splitMode.value = false; activePane.value = 'A'; if (unsubPages) { unsubPages(); unsubPages = null; } if (unsubFeedback) { unsubFeedback(); unsubFeedback = null; } await saveAll(); if ((hasUnsavedCloudChanges.value || dirtyPageIds.size > 0) && project.code && db) { if (!navigator.onLine) showToast('📴 無網絡模式：已鎖入本機，有訊號自動上傳'); else { isProcessing.value = true; processingText.value = '正在自動上傳並返回目錄...'; try { await pullAndMergeFromCloud(project.code, false); await pushToCloud(true, (st) => { processingText.value = st; }); await createCloudBackup(project.code); showToast('✅ 已自動同步雲端'); } catch (_) { showToast('⚠️ 已排入自動補傳隊列'); } finally { isProcessing.value = false; } } } dirtyPageIds.clear(); hasUnsavedCloudChanges.value = false; feedbackList.value = []; await loadProjectList(); currentView.value = 'dir'; };
             const checkAuthorName = async () => { let name = await localforage.getItem('measure_author_name'); if (!name) { name = prompt('👤 請輸入您的稱呼或設備名稱 (例: 明哥、強哥iPad)：')?.trim(); if (name) await localforage.setItem('measure_author_name', name); } authorName.value = name || ''; };
             const changeAuthorName = async () => { const name = prompt('👤 更新設備稱呼：', authorName.value)?.trim(); if (name) { authorName.value = name; await localforage.setItem('measure_author_name', name); } };
 
@@ -1297,27 +1468,20 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 const c = document.createElement('canvas'), w = canvasObj.w || 1200, h = canvasObj.h || 900; c.width = w; c.height = h; const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
                 const markerImages = {}; for (const m of (canvasObj.markers || [])) { if (m.type === 'image' && m.data.b64) { const im = new Image(); im.src = m.data.b64; await new Promise(r => { im.onload = r; im.onerror = r; }); markerImages[m.id] = im; } }
                 if (includeStamp) {
-                    const wm = buildWatermarkBox(canvasObj, itemDate, itemAuthor);
+                    const wm = buildWatermarkBox(canvasObj, itemDate, itemAuthor, w);
                     if (wm) {
                         ctx.save();
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.56)';
                         drawRoundRect(ctx, wm.x, wm.y, wm.w, wm.h, 6);
                         ctx.fill();
-                        ctx.lineWidth = 1.5;
-                        ctx.strokeStyle = '#cbd5e1';
+                        ctx.lineWidth = 1.2;
+                        ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
                         ctx.stroke();
-                        ctx.textAlign = 'left';
+                        ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
-                        if (wm.title) {
-                            ctx.font = 'bold 15px sans-serif';
-                            ctx.fillStyle = '#0f172a';
-                            ctx.fillText(wm.title, wm.x + 11, wm.sub ? wm.y + 15 : wm.y + wm.h / 2);
-                        }
-                        if (wm.sub) {
-                            ctx.font = '600 12px sans-serif';
-                            ctx.fillStyle = '#64748b';
-                            ctx.fillText(wm.sub, wm.x + 11, wm.title ? wm.y + 32 : wm.y + wm.h / 2);
-                        }
+                        ctx.font = 'bold 13px sans-serif';
+                        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+                        ctx.fillText(wm.text, wm.x + wm.w / 2, wm.y + wm.h / 2);
                         ctx.restore();
                     }
                 }
@@ -1335,7 +1499,21 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 });
                 (canvasObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 6; ctx.stroke(new Path2D(p.d)); });
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                (canvasObj.markers || []).forEach(m => { if (m.type === 'image') { if (markerImages[m.id]) ctx.drawImage(markerImages[m.id], m.x - m.w / 2, m.y - m.h / 2, m.w, m.h); } else { const lines = getMarkerLines(m), color = getStampColor(m); ctx.font = `900 ${28 * globalFontScale.value}px sans-serif`; const startY = m.y - ((lines.length - 1) * 34 * globalFontScale.value) / 2; lines.forEach((line, i) => { const y = startY + i * 34 * globalFontScale.value; ctx.lineWidth = 7 * globalFontScale.value; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); }); } });
+                (canvasObj.markers || []).forEach(m => {
+                    if (m.type === 'cad') {
+                        drawCadOnCanvas(ctx, m);
+                    } else if (m.type === 'image') {
+                        if (markerImages[m.id]) {
+                            ctx.save();
+                            ctx.translate(m.x, m.y);
+                            ctx.rotate(((m.rot || 0) * Math.PI) / 180);
+                            ctx.drawImage(markerImages[m.id], -m.w / 2, -m.h / 2, m.w, m.h);
+                            ctx.restore();
+                        }
+                    } else {
+                        const lines = getMarkerLines(m), color = getStampColor(m); ctx.font = `900 ${28 * globalFontScale.value}px sans-serif`; const startY = m.y - ((lines.length - 1) * 34 * globalFontScale.value) / 2; lines.forEach((line, i) => { const y = startY + i * 34 * globalFontScale.value; ctx.lineWidth = 7 * globalFontScale.value; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); });
+                    }
+                });
                 (canvasObj.pins || []).forEach((pin, idx) => { const px = (pin.x / 100) * w, py = (pin.y / 100) * h; ctx.beginPath(); ctx.arc(px, py - 22, 20, 0, 2 * Math.PI); ctx.fillStyle = '#dc2626'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(idx + 1, px, py - 22); });
                 resolve(c);
             });
@@ -1375,7 +1553,11 @@ if (!window.Vue || !window.MEASURE_DATA) {
 
             return {
                 offlineReady, currentView, TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_GROUPS, stampFilter, filteredStampGroups,
+                CAD_CATEGORIES, cadCategory, selectedCadType, filteredCadList, getCadDef, getCadTransform, setMarkerScale, rotateMarker, flipMarker, setCadMarkerColor,
                 defaultTextColor, setMarkerTextColor, getArrowMarkerId, getFsArrowMarkerId,
+                splitMode, activePane, focusPane, toggleSplitMode,
+                pageIndexB, pinB, pinIndexB, pageB, canvasB, canvasWB, canvasHB, zoomScaleB, invZoomB, svgViewBoxB, resetZoomB,
+                showQuickPageNavB, jumpToPageB, canvasBFeedbacks, svgCanvasB,
                 feedbackList, showFeedbackOverlay, showFeedbackModal, currentCanvasFeedbacks, pageFeedbackCount, jumpToFeedback, resolveFeedback,
                 capsuleOffset, capsuleCollapsed, startCapsuleDrag,
                 masterPages, showQuickPageNav, jumpToPage, jumpToPageById, goToMasterPlan,
@@ -1388,7 +1570,7 @@ if (!window.Vue || !window.MEASURE_DATA) {
                 showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges, markProjectChanged,
                 showManageModal, manageProj, openManageMenu, renameProject, duplicateProject, showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
                 showBackupListModal, backupList, openBackupList, restoreBackup, drawColor, wallStyle, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg, copyShareLink,
-                customStamps, promptCustomStamp, drawMode, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
+                customStamps, promptCustomStamp, drawMode, drawingPane, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
                 showBranchPrompt, branchOwner, branchInputValue, confirmBranch, cancelBranch, svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
                 createNewProject, loadProject, deleteProject, backToProjects, copyCode, joinProjectByCode, saveAll, downloadNow, uploadNow, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, onPinTap, deleteActivePin,
                 setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload, pasteFromClipboard,
