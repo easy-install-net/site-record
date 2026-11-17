@@ -4,7 +4,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
     else alert(msg);
 } else {
     const { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick } = Vue;
-    const { TAG_DEFS, TEMPLATE_ROWS, DIM_QUICK_ROWS, KEYPAD_KEYS, DEFAULT_SPACES, STAMP_GROUPS, STAMP_COLOR_MAP } = window.MEASURE_DATA;
+    const { TAG_DEFS, TEMPLATE_ROWS, DIM_QUICK_ROWS, KEYPAD_KEYS, DEFAULT_SPACES, STAMP_PALETTE, DEFAULT_STAMP_SEED } = window.MEASURE_DATA;
     const { CAD_CATEGORIES, CAD_DEFS, CAD_LIST, drawOnCanvas: drawCadOnCanvas } = window.MEASURE_CAD;
 
     localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
@@ -101,10 +101,279 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
 
             const currentView = ref('dir'), showWatermark = ref(true), globalFontScale = ref(0.6);
             const defaultTextColor = ref('#ffffff');
-            const stampFilter = ref('all');
-            const filteredStampGroups = computed(() => stampFilter.value === 'all' ? STAMP_GROUPS : STAMP_GROUPS.filter(g => g.id === stampFilter.value));
 
+            // =========================================================================
+            // 🏷️ 全動態印章管理引擎 (出廠種子自動匯入 + 熱門排行 + 釘選 + 增減改色 + 雲端同步)
+            // =========================================================================
+            const stampCategories = ref([]);
+            const stampItems = ref([]);
+            const stampUpdatedAt = ref(0);
+            const stampFilter = ref('hot'); // 預設打開 'hot' (🔥 熱門)
+            const showStampManagerModal = ref(false);
+            const managerCatFilter = ref('all');
+            const managerSearch = ref('');
+
+            // 新增分類與新增印章表單狀態
+            const newCatName = ref(''), newCatIcon = ref('🏷️'), newCatColor = ref('#38bdf8');
+            const newStampText = ref(''), newStampCatId = ref(''), newStampColor = ref('#ffffff');
+            const showQuickAddStamp = ref(false);
+
+            const saveStampStore = async () => {
+                stampUpdatedAt.value = Date.now();
+                await localforage.setItem('dynamic_stamp_store_v1', {
+                    categories: JSON.parse(JSON.stringify(stampCategories.value || [])),
+                    items: JSON.parse(JSON.stringify(stampItems.value || [])),
+                    updatedAt: stampUpdatedAt.value
+                });
+            };
+
+            const buildSeedStampData = () => {
+                const cats = [], items = [];
+                (DEFAULT_STAMP_SEED || []).forEach((g, gIdx) => {
+                    cats.push({ id: g.id, icon: g.icon || '🏷️', name: g.name, defaultColor: g.defaultColor || '#ffffff' });
+                    (g.items || []).forEach((txt, iIdx) => {
+                        items.push({
+                            id: `st_${g.id}_${iIdx}_${gIdx}`,
+                            catId: g.id,
+                            text: txt,
+                            color: g.defaultColor || '#ffffff',
+                            count: 0,
+                            pinned: false
+                        });
+                    });
+                });
+                return { cats, items };
+            };
+
+            const loadStampStore = async () => {
+                const saved = await localforage.getItem('dynamic_stamp_store_v1');
+                if (saved && Array.isArray(saved.categories) && Array.isArray(saved.items) && saved.categories.length) {
+                    stampCategories.value = saved.categories;
+                    stampItems.value = saved.items;
+                    stampUpdatedAt.value = saved.updatedAt || Date.now();
+                } else {
+                    const { cats, items } = buildSeedStampData();
+                    // 兼容遷移舊版自訂印章
+                    const legacyCustom = (await localforage.getItem('custom_stamps')) || [];
+                    if (legacyCustom.length) {
+                        cats.unshift({ id: 'cat_custom', icon: '⭐', name: '自訂', defaultColor: '#ffffff' });
+                        legacyCustom.forEach((txt, idx) => {
+                            if (!items.some(x => x.text === txt)) {
+                                items.unshift({ id: `st_legacy_${idx}`, catId: 'cat_custom', text: txt, color: '#ffffff', count: 1, pinned: true });
+                            }
+                        });
+                    }
+                    stampCategories.value = cats;
+                    stampItems.value = items;
+                    await saveStampStore();
+                }
+                if (!newStampCatId.value && stampCategories.value.length) {
+                    newStampCatId.value = stampCategories.value[0].id;
+                }
+            };
+
+            // 🔥 熱門印章自動計算 (手動加星 ⭐ 置頂 + 使用次數最高前 18 個)
+            const hotStamps = computed(() => {
+                const active = stampItems.value.filter(x => x.pinned || (x.count || 0) > 0);
+                if (active.length > 0) {
+                    return [...active]
+                        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.count || 0) - (a.count || 0))
+                        .slice(0, 18);
+                }
+                // 首次使用尚未有任何計數時，預設顯示前 12 個（例如「📐 收口」常用印）
+                return stampItems.value.slice(0, 12);
+            });
+
+            // 畫布內工藝印章面板分類清單
+            const filteredCanvasStampGroups = computed(() => {
+                return stampCategories.value
+                    .filter(c => stampFilter.value === 'all' || stampFilter.value === c.id)
+                    .map(c => ({
+                        ...c,
+                        items: stampItems.value.filter(it => it.catId === c.id)
+                    }))
+                    .filter(g => g.items.length > 0);
+            });
+
+            // 首頁「🏷️ 印章管理」篩選與搜尋結果
+            const managerFilteredItems = computed(() => {
+                const kw = String(managerSearch.value || '').trim().toLowerCase();
+                return stampItems.value.filter(it => {
+                    if (managerCatFilter.value === 'pinned' && !it.pinned) return false;
+                    if (managerCatFilter.value !== 'all' && managerCatFilter.value !== 'pinned' && it.catId !== managerCatFilter.value) return false;
+                    if (kw && !String(it.text || '').toLowerCase().includes(kw)) return false;
+                    return true;
+                });
+            });
+
+            const getCategoryById = (catId) => stampCategories.value.find(c => c.id === catId) || { id: catId, icon: '🏷️', name: '未分類', defaultColor: '#ffffff' };
+
+            const openStampManager = () => {
+                managerCatFilter.value = 'all';
+                managerSearch.value = '';
+                if (!newStampCatId.value && stampCategories.value.length) {
+                    newStampCatId.value = stampCategories.value[0].id;
+                    newStampColor.value = stampCategories.value[0].defaultColor || '#ffffff';
+                }
+                showStampManagerModal.value = true;
+            };
+
+            const onSelectNewStampCat = () => {
+                const cat = getCategoryById(newStampCatId.value);
+                if (cat?.defaultColor) newStampColor.value = cat.defaultColor;
+            };
+
+            const addStampCategory = async () => {
+                const name = String(newCatName.value || '').trim();
+                if (!name) return showToast('請輸入分類名稱（例如：收口、燈槽）');
+                if (stampCategories.value.some(c => c.name === name)) return showToast('此分類名稱已存在');
+                const id = 'cat_' + Date.now();
+                stampCategories.value.unshift({ id, icon: newCatIcon.value || '🏷️', name, defaultColor: newCatColor.value || '#ffffff' });
+                newCatName.value = '';
+                newStampCatId.value = id;
+                newStampColor.value = newCatColor.value || '#ffffff';
+                await saveStampStore();
+                showToast(`✅ 已新增分類「${name}」`);
+            };
+
+            const deleteStampCategory = async (catId) => {
+                const cat = getCategoryById(catId);
+                const count = stampItems.value.filter(x => x.catId === catId).length;
+                if (!confirm(`確定要刪除分類「${cat.name}」${count ? `及其內 ${count} 個印章` : ''}嗎？`)) return;
+                stampCategories.value = stampCategories.value.filter(c => c.id !== catId);
+                stampItems.value = stampItems.value.filter(it => it.catId !== catId);
+                if (managerCatFilter.value === catId) managerCatFilter.value = 'all';
+                if (stampFilter.value === catId) stampFilter.value = 'hot';
+                if (newStampCatId.value === catId) newStampCatId.value = stampCategories.value[0]?.id || '';
+                await saveStampStore();
+                showToast(`🗑️ 已刪除分類「${cat.name}」`);
+            };
+
+            const addStampItem = async (applyImmediately = false) => {
+                const txt = String(newStampText.value || '').trim();
+                if (!txt) return showToast('請輸入印章字眼');
+                const catId = newStampCatId.value || stampCategories.value[0]?.id || 'cat_finishing';
+                const color = newStampColor.value || '#ffffff';
+                let existing = stampItems.value.find(it => it.text === txt && it.catId === catId);
+                if (!existing) {
+                    existing = {
+                        id: 'st_' + Date.now() + '_' + Math.floor(Math.random() * 999),
+                        catId,
+                        text: txt,
+                        color,
+                        count: applyImmediately ? 0 : 0,
+                        pinned: false
+                    };
+                    stampItems.value.unshift(existing);
+                } else {
+                    existing.color = color;
+                }
+                newStampText.value = '';
+                showQuickAddStamp.value = false;
+                await saveStampStore();
+                if (applyImmediately && activeMarker.value) {
+                    applyStamp(existing);
+                } else {
+                    showToast(`✅ 已加入印章「${txt}」`);
+                }
+            };
+
+            const toggleStampPin = async (item) => {
+                item.pinned = !item.pinned;
+                await saveStampStore();
+                showToast(item.pinned ? `⭐ 已將「${item.text}」置頂到熱門` : `已取消「${item.text}」置頂`);
+            };
+
+            const setStampItemColor = async (item, hex) => {
+                item.color = hex;
+                await saveStampStore();
+            };
+
+            const editStampItemText = async (item) => {
+                const next = prompt('修改印章字眼：', item.text)?.trim();
+                if (next && next !== item.text) {
+                    item.text = next;
+                    await saveStampStore();
+                    showToast('✅ 已更新印章字眼');
+                }
+            };
+
+            const deleteStampItem = async (itemId) => {
+                stampItems.value = stampItems.value.filter(x => x.id !== itemId);
+                await saveStampStore();
+            };
+
+            const resetStampCounts = async () => {
+                if (!confirm('確定要將所有印章的使用次數歸零嗎？（手動加星 ⭐ 置頂會保留）')) return;
+                stampItems.value.forEach(it => { it.count = 0; });
+                await saveStampStore();
+                showToast('🔄 已重置熱門使用計數');
+            };
+
+            const restoreDefaultStamps = async () => {
+                if (!confirm('補回所有出廠預設分類與印章？（你自建的印章與計數會完整保留）')) return;
+                const { cats, items } = buildSeedStampData();
+                cats.forEach(c => {
+                    if (!stampCategories.value.some(x => x.id === c.id)) stampCategories.value.push(c);
+                });
+                items.forEach(it => {
+                    if (!stampItems.value.some(x => x.text === it.text && x.catId === it.catId)) stampItems.value.push(it);
+                });
+                await saveStampStore();
+                showToast('✅ 已補回全部出廠預設印章');
+            };
+
+            const syncStampLibraryCloud = async () => {
+                if (!db || !navigator.onLine) return alert('請檢查網絡連線後再同步印章庫');
+                await checkAuthorName();
+                const libKey = sanitizeFilename(authorName.value || 'shared_team') || 'shared_team';
+                isProcessing.value = true; processingText.value = `正在同步 [${authorName.value || '團隊'}] 的印章庫...`;
+                try {
+                    const docRef = db.collection('stamp_libraries').doc(libKey);
+                    const snap = await withTimeout(docRef.get(), 15000);
+                    if (snap.exists) {
+                        const cloud = snap.data() || {};
+                        const cCats = Array.isArray(cloud.categories) ? cloud.categories : [];
+                        const cItems = Array.isArray(cloud.items) ? cloud.items : [];
+                        const catMap = new Map();
+                        [...cCats, ...stampCategories.value].forEach(c => { if (c?.id) catMap.set(c.id, c); });
+                        stampCategories.value = Array.from(catMap.values());
+
+                        const itemMap = new Map();
+                        cItems.forEach(it => { if (it?.text) itemMap.set(`${it.catId}__${it.text}`, { ...it }); });
+                        stampItems.value.forEach(it => {
+                            const k = `${it.catId}__${it.text}`;
+                            const ex = itemMap.get(k);
+                            if (ex) {
+                                itemMap.set(k, {
+                                    ...it,
+                                    count: Math.max(it.count || 0, ex.count || 0),
+                                    pinned: !!(it.pinned || ex.pinned)
+                                });
+                            } else {
+                                itemMap.set(k, { ...it });
+                            }
+                        });
+                        stampItems.value = Array.from(itemMap.values());
+                    }
+                    await saveStampStore();
+                    await withTimeout(docRef.set({
+                        owner: authorName.value || '團隊',
+                        categories: JSON.parse(JSON.stringify(stampCategories.value)),
+                        items: JSON.parse(JSON.stringify(stampItems.value)),
+                        updatedAt: Date.now()
+                    }, { merge: true }), 15000);
+                    showToast(`☁️ 已雙向同步 ${stampItems.value.length} 個印章`);
+                } catch (e) {
+                    alert('印章庫同步失敗：' + e.message);
+                } finally {
+                    isProcessing.value = false;
+                }
+            };
+
+            // =========================================================================
             // AutoCAD 圖塊狀態
+            // =========================================================================
             const cadCategory = ref('arch'), selectedCadType = ref('door_single');
             const filteredCadList = computed(() => CAD_LIST.filter(x => x.cat === cadCategory.value));
             const getCadDef = (type) => CAD_DEFS[type] || null;
@@ -369,27 +638,17 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
             const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v10.0' }[cloudSyncState.value] || '☁️v10.0'));
+            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v10.1' }[cloudSyncState.value] || '☁️v10.1'));
             const cloudStatusClass = computed(() =>
                 cloudSyncState.value === 'syncing' ? 'bg-amber-100 text-amber-900 border-amber-300' :
                 cloudSyncState.value === 'offline' ? 'bg-zinc-100 text-zinc-500 border-zinc-300' :
                 cloudSyncState.value === 'queued' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-emerald-50 text-emerald-700 border-emerald-300'
             );
 
-            const customStamps = ref([]);
-            const loadCustomStamps = async () => { customStamps.value = (await localforage.getItem('custom_stamps')) || []; };
-            const promptCustomStamp = async () => {
-                const txt = prompt('輸入自訂印章字眼：')?.trim();
-                if (txt) {
-                    if (!customStamps.value.includes(txt)) { customStamps.value.push(txt); await localforage.setItem('custom_stamps', customStamps.value); }
-                    applyStamp(txt);
-                }
-            };
-
             const showCloudDetail = () => {
                 if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                 else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                else showToast('v10.0 總號合拼・選圖轉檔・垃圾徹底除蟲');
+                else showToast('v10.1 全動態印章管理・熱門自動排行');
             };
 
             const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -752,8 +1011,15 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     };
                     updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
                     touchDirty(); activeMarker.value = newMarker;
-                    if (forceType === 'stamp') { focusedInput.value = 'stamp'; showTopSheet.value = true; }
-                    else { showTopTextBar.value = true; nextTick(() => topTextInputRef.value?.focus()); }
+                    if (forceType === 'stamp') {
+                        stampFilter.value = 'hot';
+                        showQuickAddStamp.value = false;
+                        focusedInput.value = 'stamp';
+                        showTopSheet.value = true;
+                    } else {
+                        showTopTextBar.value = true;
+                        nextTick(() => topTextInputRef.value?.focus());
+                    }
                     saveAll();
                 });
             };
@@ -815,6 +1081,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     showTopTextBar.value = true;
                     if (m.type === 'text') nextTick(() => topTextInputRef.value?.focus());
                 } else {
+                    if (m.type === 'stamp') { stampFilter.value = 'hot'; showQuickAddStamp.value = false; }
                     showTopSheet.value = true;
                     focusedInput.value = TAG_DEFS[m.type]?.fields[0]?.key || 'val';
                 }
@@ -1066,8 +1333,12 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const deleteMarkerTop = () => ensureMarkerBranched(() => { const c = targetCanvas.value, m = activeMarker.value; if (!m || !c) return; if (m.lineId) c.lines = (c.lines || []).filter(l => l.id !== m.lineId); c.markers = (c.markers || []).filter(x => x.id !== m.id); if (c.historyStack) c.historyStack = c.historyStack.filter(h => h.markerId !== m.id); c.redoStack = []; touchDirty(); showTopSheet.value = false; showTopTextBar.value = false; activeMarker.value = null; saveAll(); });
             const switchMarkerType = (t, fKey) => ensureMarkerBranched(() => {
                 activeMarker.value.type = t;
-                if (t === 'stamp') activeMarker.value.textColor = null;
-                else if (!activeMarker.value.textColor) activeMarker.value.textColor = defaultTextColor.value;
+                if (t === 'stamp') {
+                    stampFilter.value = 'hot';
+                    showQuickAddStamp.value = false;
+                } else if (!activeMarker.value.textColor) {
+                    activeMarker.value.textColor = defaultTextColor.value;
+                }
                 focusedInput.value = fKey; updateMarkerSize(activeMarker.value); touchDirty();
             });
             const closeTopTextBar = () => { if (['stamp', 'text'].includes(activeMarker.value?.type) && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
@@ -1089,17 +1360,31 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const applyTag = (name) => { if (activeMarker.value) ensureMarkerBranched(() => { activeMarker.value.data.name = name; focusedInput.value = 'val'; updateMarkerSize(activeMarker.value); touchDirty(); }); };
-            const applyStamp = (txt) => {
-                if (activeMarker.value) {
-                    ensureMarkerBranched(() => {
-                        if (activeMarker.value.lineId) {
-                            targetCanvas.value.lines = (targetCanvas.value.lines || []).filter(l => l.id !== activeMarker.value.lineId);
-                            activeMarker.value.lineId = null;
-                        }
-                        activeMarker.value.type = 'stamp'; activeMarker.value.textColor = null; activeMarker.value.data.val = txt;
-                        updateMarkerSize(activeMarker.value); touchDirty(); closeTopSheet();
-                    });
+
+            const applyStamp = (stampOrText) => {
+                if (!activeMarker.value) return;
+                const isObj = typeof stampOrText === 'object' && stampOrText !== null;
+                const txt = isObj ? stampOrText.text : String(stampOrText || '');
+                const col = isObj ? (stampOrText.color || '#ffffff') : (stampItems.value.find(x => x.text === txt)?.color || '#ffffff');
+
+                if (isObj) {
+                    stampOrText.count = (stampOrText.count || 0) + 1;
+                    saveStampStore();
+                } else {
+                    const matched = stampItems.value.find(x => x.text === txt);
+                    if (matched) { matched.count = (matched.count || 0) + 1; saveStampStore(); }
                 }
+
+                ensureMarkerBranched(() => {
+                    if (activeMarker.value.lineId) {
+                        targetCanvas.value.lines = (targetCanvas.value.lines || []).filter(l => l.id !== activeMarker.value.lineId);
+                        activeMarker.value.lineId = null;
+                    }
+                    activeMarker.value.type = 'stamp';
+                    activeMarker.value.textColor = col;
+                    activeMarker.value.data.val = txt;
+                    updateMarkerSize(activeMarker.value); touchDirty(); closeTopSheet();
+                });
             };
 
             const updateMarkerSize = (m) => {
@@ -1113,10 +1398,10 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (m.textColor) return m.textColor;
                 if (m.type === 'space_tag') return '#a855f7';
                 if (m.type === 'page_link') return '#38bdf8';
-                if (m.type !== 'stamp') return '#ffffff';
-                const v = m.data.val;
-                if (STAMP_COLOR_MAP[v]) return STAMP_COLOR_MAP[v];
-                if (customStamps.value.includes(v)) return '#e4e4e7';
+                if (m.type === 'stamp') {
+                    const found = stampItems.value.find(x => x.text === m.data?.val);
+                    if (found?.color) return found.color;
+                }
                 return '#ffffff';
             };
 
@@ -1380,7 +1665,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 try { await localforage.removeItem('proj_' + code); await clearLocalMediaCacheForCode(code); await updateQueue(code, false); if (db && navigator.onLine) { const ref = db.collection('site_projects').doc(String(code)); const delCol = async (sub) => { const snap = await ref.collection(sub).get(); if (sub === 'media') { for (const doc of snap.docs) await batchDeleteDocs((await doc.ref.collection('chunks').get()).docs); } await batchDeleteDocs(snap.docs); }; await Promise.all([delCol('pages'), delCol('media'), delCol('backups'), delCol('feedback')]); await ref.delete(); } showManageModal.value = false; await loadProjectList(); showToast('🗑️ 已徹底刪除'); } catch (e) { alert('清理異常：' + e.message); } finally { isProcessing.value = false; }
             };
 
-            // 🧹 修復「清理殘留垃圾」超時與孤兒相片 Bug
             const cleanCloudGarbage = async () => {
                 if (!db || !navigator.onLine) return alert('請檢查網路連線');
                 if (!confirm('🧹 掃描並徹底清除已刪除工程的殘留碎片及無用孤兒相片？')) return;
@@ -1390,7 +1674,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     const activeIds = new Set(projSnap.docs.map(d => d.id));
                     let removedDocs = 0, removedOrphanMedia = 0;
 
-                    // 1. 只掃描輕量索引集合 (pages / media / backups / feedback)，絕不直接 collectionGroup('chunks') 導致超時
                     for (const sub of ['pages', 'media', 'backups', 'feedback']) {
                         processingText.value = `正在清理殘留 ${sub}...`;
                         const snap = await withTimeout(db.collectionGroup(sub).get(), 20000);
@@ -1410,7 +1693,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         }
                     }
 
-                    // 2. 掃描現存工程中，因刪頁/刪釘而遺留的無引用孤兒相片
                     const safeCutoff = Date.now() - 5 * 60 * 1000;
                     for (let i = 0; i < projSnap.docs.length; i++) {
                         const pDoc = projSnap.docs[i];
@@ -1440,7 +1722,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         }
                     }
 
-                    // 3. 順手清理本機過期 synced_media 緩存
                     const lKeys = await localforage.keys();
                     for (const k of lKeys) {
                         if (k.startsWith('synced_media_')) {
@@ -1646,10 +1927,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             // ↗️ 工程內選圖轉檔 (複製或移動至另一工程)
-            const toggleSelectMode = () => {
-                selectMode.value = !selectMode.value;
-                selectedPageIds.value = [];
-            };
+            const toggleSelectMode = () => { selectMode.value = !selectMode.value; selectedPageIds.value = []; };
             const togglePageSelection = (pgId) => {
                 const idStr = String(pgId);
                 const idx = selectedPageIds.value.indexOf(idStr);
@@ -1720,7 +1998,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         }
                     }
 
-                    // 若為「移動」，從目前工程移除已轉出的分頁
                     if (transferMode.value === 'move') {
                         project.deletedPageIds ||= [];
                         pickedRaw.forEach(pg => {
@@ -1772,7 +2049,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
 
             onMounted(async () => {
                 const bs = document.getElementById('boot-screen'); if (bs) bs.remove(); document.getElementById('app').style.display = 'flex';
-                await loadCustomStamps(); await checkAuthorName(); await loadProjectList();
+                await loadStampStore(); await checkAuthorName(); await loadProjectList();
                 window.addEventListener('online', () => { cloudSyncState.value = 'ready'; showToast('🌐 網絡已恢復'); processPendingUploadQueue(false); });
                 window.addEventListener('offline', () => { cloudSyncState.value = 'offline'; });
                 window.addEventListener('paste', handleGlobalPaste);
@@ -1874,7 +2151,10 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             return {
-                offlineReady, currentView, TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_GROUPS, stampFilter, filteredStampGroups,
+                offlineReady, currentView, TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_PALETTE,
+                stampCategories, stampItems, stampFilter, hotStamps, filteredCanvasStampGroups, showStampManagerModal, managerCatFilter, managerSearch, managerFilteredItems,
+                newCatName, newCatIcon, newCatColor, newStampText, newStampCatId, newStampColor, showQuickAddStamp,
+                getCategoryById, openStampManager, onSelectNewStampCat, addStampCategory, deleteStampCategory, addStampItem, toggleStampPin, setStampItemColor, editStampItemText, deleteStampItem, resetStampCounts, restoreDefaultStamps, syncStampLibraryCloud,
                 CAD_CATEGORIES, cadCategory, selectedCadType, filteredCadList, getCadDef, getCadTransform, setMarkerScale, rotateMarker, flipMarker, setCadMarkerColor,
                 defaultTextColor, setMarkerTextColor, getArrowMarkerId, getFsArrowMarkerId,
                 allProjectOptions, otherProjectOptions, showMergeProjectsModal, mergeProjCodeA, mergeProjCodeB, mergeProjNewName, openMergeProjectsModal, updateMergeDefaultName, executeMergeProjects,
@@ -1894,7 +2174,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges, markProjectChanged,
                 showManageModal, manageProj, openManageMenu, renameProject, duplicateProject, showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
                 showBackupListModal, backupList, openBackupList, restoreBackup, drawColor, wallStyle, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg, copyShareLink,
-                customStamps, promptCustomStamp, drawMode, drawingPane, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
+                drawMode, drawingPane, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
                 showBranchPrompt, branchOwner, branchInputValue, confirmBranch, cancelBranch, svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
                 createNewProject, loadProject, deleteProject, backToProjects, copyCode, joinProjectByCode, saveAll, downloadNow, uploadNow, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, onPinTap, deleteActivePin,
                 setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload, pasteFromClipboard,
