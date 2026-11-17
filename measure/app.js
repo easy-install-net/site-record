@@ -449,7 +449,11 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (CAD_DEFS[type]) return CAD_DEFS[type];
                 return customCadBlocks.value.find(x => x.id === type) || null;
             };
-            const getCadTransform = (m) => `translate(${m.x}, ${m.y}) rotate(${m.rot || 0}) scale(${(m.scale || 1) * (m.flipX || 1)}, ${(m.scale || 1) * (m.flipY || 1)})`;
+           const getCadTransform = (m) => {
+                const sx = (m.scale || 1) * (m.scaleX || 1) * (m.flipX || 1);
+                const sy = (m.scale || 1) * (m.scaleY || 1) * (m.flipY || 1);
+                return `translate(${m.x}, ${m.y}) rotate(${m.rot || 0}) scale(${sx}, ${sy})`;
+            };
 
             const openCadManager = () => { cadMgrFilter.value = 'all'; newCadLabel.value = ''; newCadImgB64.value = ''; showCadManager.value = true; };
             const addCustomCadBlock = async () => {
@@ -1322,12 +1326,35 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const ensureMarkerBranched = (cb) => { if (activeMarker.value) { checkBranchNeed(() => { activeMarker.value = (targetCanvas.value.markers || []).find(m => m.id === activeMarker.value.id) || activeMarker.value; if (cb) cb(); }); } else if (cb) cb(); };
             const onMarkerTextInput = () => ensureMarkerBranched(() => { updateMarkerSize(activeMarker.value); touchDirty(); });
 
+
+            
+            const applyImageDimensions = (m) => {
+                if (m.type !== 'image') return;
+                if (!m.baseW) { m.baseW = m.w; m.baseH = m.h; }
+                m.w = Math.round(m.baseW * (m.scale || 1) * (m.scaleX || 1));
+                m.h = Math.round(m.baseH * (m.scale || 1) * (m.scaleY || 1));
+            };
             const setMarkerScale = (val) => {
                 if (!activeMarker.value) return;
-                const s = Math.max(0.3, Math.min(3.5, Math.round(Number(val) * 100) / 100));
+                const s = Math.max(0.25, Math.min(4.0, Math.round(Number(val) * 100) / 100));
+                ensureMarkerBranched(() => { activeMarker.value.scale = s; applyImageDimensions(activeMarker.value); touchDirty(); saveAll(); });
+            };
+            const setMarkerScaleX = (val) => {
+                if (!activeMarker.value) return;
+                const sx = Math.max(0.25, Math.min(4.0, Math.round(Number(val) * 100) / 100));
+                ensureMarkerBranched(() => { activeMarker.value.scaleX = sx; applyImageDimensions(activeMarker.value); touchDirty(); saveAll(); });
+            };
+            const setMarkerScaleY = (val) => {
+                if (!activeMarker.value) return;
+                const sy = Math.max(0.25, Math.min(4.0, Math.round(Number(val) * 100) / 100));
+                ensureMarkerBranched(() => { activeMarker.value.scaleY = sy; applyImageDimensions(activeMarker.value); touchDirty(); saveAll(); });
+            };
+            const nudgeMarker = (dx, dy) => {
+                if (!activeMarker.value) return;
                 ensureMarkerBranched(() => {
-                    const m = activeMarker.value; m.scale = s;
-                    if (m.type === 'image') { if (!m.baseW) { m.baseW = m.w; m.baseH = m.h; } m.w = Math.round(m.baseW * s); m.h = Math.round(m.baseH * s); }
+                    const m = activeMarker.value;
+                    m.x = Math.round(Math.max(0, Math.min(targetCanvasW.value, (m.x || 0) + dx)));
+                    m.y = Math.round(Math.max(0, Math.min(targetCanvasH.value, (m.y || 0) + dy)));
                     touchDirty(); saveAll();
                 });
             };
@@ -1336,6 +1363,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const flipMarker = (axis) => { if (!activeMarker.value) return; ensureMarkerBranched(() => { if (axis === 'x') activeMarker.value.flipX = (activeMarker.value.flipX || 1) * -1; else activeMarker.value.flipY = (activeMarker.value.flipY || 1) * -1; touchDirty(); saveAll(); }); };
             const setCadMarkerColor = (hex) => { drawColor.value = hex; if (!activeMarker.value || activeMarker.value.type !== 'cad') return; ensureMarkerBranched(() => { activeMarker.value.color = hex; touchDirty(); saveAll(); }); };
 
+            
+            
             const undoLastAction = () => {
                 checkBranchNeed(() => {
                     const c = targetCanvas.value; if (!c?.historyStack?.length) return; c.redoStack ||= [];
@@ -1714,104 +1743,57 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 overlay.querySelector('#gp-confirm').onclick = async () => { overlay.remove(); await onConfirm(); };
             };
 
-            const cleanCloudGarbage = async () => {
+const cleanCloudGarbage = async () => {
                 if (!db || !navigator.onLine) return alert('請檢查網路連線');
-                isProcessing.value = true; processingText.value = '正在掃描雲端垃圾清單...';
+                isProcessing.value = true; processingText.value = '正在逐個工程掃描雲端垃圾清單...';
                 try {
-                    const [projSnap, pagesGroup, mediaGroup, backupsGroup, feedbackGroup] = await Promise.all([
-                        withTimeout(db.collection('site_projects').get(), 15000),
-                        withTimeout(db.collectionGroup('pages').get(), 20000),
-                        withTimeout(db.collectionGroup('media').get(), 20000),
-                        withTimeout(db.collectionGroup('backups').get(), 15000),
-                        withTimeout(db.collectionGroup('feedback').get(), 15000)
-                    ]);
-
+                    const projSnap = await withTimeout(db.collection('site_projects').get(), 15000);
                     const activeProjMap = new Map();
                     projSnap.docs.forEach(d => activeProjMap.set(d.id, d.data() || {}));
 
                     const previewItems = [];
-                    const orphanDocsToDelete = [];
                     const orphanMediaDocs = [];
                     let totalBytes = 0;
+                    const safeCutoff = Date.now() - 5 * 60 * 1000;
 
-                    // 1. 檢查已刪除工程的殘留碎片
-                    const deadProjGroups = new Map();
-                    const collectDead = (docs, label) => {
-                        docs.forEach(d => {
-                            const p = d.ref.path.split('/');
-                            const code = p[1];
-                            if (p[0] === 'site_projects' && code && !activeProjMap.has(code)) {
-                                if (!deadProjGroups.has(code)) deadProjGroups.set(code, { code, pages: 0, media: 0, backups: 0, feedback: 0, bytes: 0 });
-                                const g = deadProjGroups.get(code);
-                                g[label]++;
-                                if (label === 'media') {
-                                    orphanMediaDocs.push(d);
-                                    g.bytes += (d.data()?.byteLen || 150000);
-                                } else {
-                                    orphanDocsToDelete.push(d);
-                                    g.bytes += 4000;
-                                }
+                    for (let i = 0; i < projSnap.docs.length; i++) {
+                        const pDoc = projSnap.docs[i];
+                        const code = pDoc.id;
+                        const pName = pDoc.data()?.name || `#${code}`;
+                        processingText.value = `正在掃描 (${i + 1}/${projSnap.docs.length})：${pName}...`;
+
+                        const [pgSnap, mSnap] = await Promise.all([
+                            withTimeout(pDoc.ref.collection('pages').get(), 12000),
+                            withTimeout(pDoc.ref.collection('media').get(), 12000)
+                        ]);
+
+                        const usedSet = new Set();
+                        pgSnap.docs.forEach(pgDoc => {
+                            const pg = pgDoc.data() || {};
+                            if (pg.photoId) usedSet.add(String(pg.photoId));
+                            usedSet.add('page_' + (pg.id || pgDoc.id));
+                            (pg.pins || []).forEach(pin => {
+                                if (pin.photoId) usedSet.add(String(pin.photoId));
+                                if (pin.id) usedSet.add(String(pin.id));
+                            });
+                        });
+
+                        mSnap.docs.forEach(mDoc => {
+                            const mData = mDoc.data() || {};
+                            if (!usedSet.has(String(mDoc.id)) && (!mData.updatedAt || mData.updatedAt < safeCutoff)) {
+                                const bLen = mData.byteLen || 150000;
+                                totalBytes += bLen;
+                                orphanMediaDocs.push(mDoc);
+                                const dt = mData.updatedAt ? new Date(mData.updatedAt).toLocaleDateString() : '舊相片';
+                                previewItems.push({
+                                    title: `🖼️ 無用舊底圖 (${pName})`,
+                                    desc: `建立於 ${dt} · 現存頁面均未引用`,
+                                    sizeLabel: `${Math.max(1, Math.round(bLen / 1024))} KB`
+                                });
                             }
                         });
-                    };
-                    collectDead(pagesGroup.docs, 'pages');
-                    collectDead(mediaGroup.docs, 'media');
-                    collectDead(backupsGroup.docs, 'backups');
-                    collectDead(feedbackGroup.docs, 'feedback');
+                    }
 
-                    deadProjGroups.forEach(g => {
-                        totalBytes += g.bytes;
-                        const parts = [];
-                        if (g.pages) parts.push(`${g.pages} 頁標註`);
-                        if (g.media) parts.push(`${g.media} 張相片碎片`);
-                        if (g.backups) parts.push(`${g.backups} 份備份`);
-                        if (g.feedback) parts.push(`${g.feedback} 條留言`);
-                        previewItems.push({
-                            title: `🗂️ 已刪除工程殘留 (#${g.code})`,
-                            desc: `包含：${parts.join('、')}`,
-                            sizeLabel: `${Math.max(1, Math.round(g.bytes / 1024))} KB`
-                        });
-                    });
-
-                    // 2. 檢查現存工程內的無用孤兒相片
-                    const usedMediaByProj = new Map();
-                    pagesGroup.docs.forEach(pgDoc => {
-                        const p = pgDoc.ref.path.split('/');
-                        const code = p[1];
-                        if (!activeProjMap.has(code)) return;
-                        if (!usedMediaByProj.has(code)) usedMediaByProj.set(code, new Set());
-                        const usedSet = usedMediaByProj.get(code);
-                        const pg = pgDoc.data() || {};
-                        if (pg.photoId) usedSet.add(String(pg.photoId));
-                        usedSet.add('page_' + (pg.id || pgDoc.id));
-                        (pg.pins || []).forEach(pin => {
-                            if (pin.photoId) usedSet.add(String(pin.photoId));
-                            if (pin.id) usedSet.add(String(pin.id));
-                        });
-                    });
-
-                    const safeCutoff = Date.now() - 5 * 60 * 1000;
-                    mediaGroup.docs.forEach(mDoc => {
-                        const p = mDoc.ref.path.split('/');
-                        const code = p[1];
-                        if (!activeProjMap.has(code)) return;
-                        const usedSet = usedMediaByProj.get(code) || new Set();
-                        const mData = mDoc.data() || {};
-                        if (!usedSet.has(String(mDoc.id)) && (!mData.updatedAt || mData.updatedAt < safeCutoff)) {
-                            const bLen = mData.byteLen || 150000;
-                            totalBytes += bLen;
-                            orphanMediaDocs.push(mDoc);
-                            const pName = activeProjMap.get(code)?.name || `#${code}`;
-                            const dt = mData.updatedAt ? new Date(mData.updatedAt).toLocaleDateString() : '舊相片';
-                            previewItems.push({
-                                title: `🖼️ 無用舊底圖 (${pName})`,
-                                desc: `建立於 ${dt} · 任何現存頁面均未引用`,
-                                sizeLabel: `${Math.max(1, Math.round(bLen / 1024))} KB`
-                            });
-                        }
-                    });
-
-                    // 3. 檢查本機無效快取
                     const lKeys = await localforage.keys();
                     const deadLocalKeys = [];
                     for (const k of lKeys) {
@@ -1848,7 +1830,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                                 if (cSnap.docs.length) await batchDeleteDocs(cSnap.docs);
                                 await mDoc.ref.delete();
                             }
-                            if (orphanDocsToDelete.length) await batchDeleteDocs(orphanDocsToDelete);
                             for (const k of deadLocalKeys) await localforage.removeItem(k);
                             showToast(`🧹 已徹底清理 ${previewItems.length} 項垃圾，釋放約 ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
                         } catch (err) {
@@ -2143,7 +2124,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 stampCategories, stampItems, stampFilter, showStampManagerModal, managerCatFilter, managerFilteredItems, pinnedStampList,
                 newCatName, newStampText, newStampCatId, newStampColor, getCategoryById, openStampManager, onSelectNewStampCat, addStampCategory, addStampItem, toggleStampPin, setStampItemColor, editStampItemText, deleteStampItem, restoreDefaultStamps, syncStampLibraryCloud,
                 STAMP_GROUPS, filteredStampGroups, promptCustomStamp,
-                CAD_CATEGORIES, cadCategory, selectedCadType, filteredCadList, getCadDef, getCadTransform, setMarkerScale, rotateMarker, flipMarker, setCadMarkerColor,
+               CAD_CATEGORIES, cadCategory, selectedCadType, filteredCadList, getCadDef, getCadTransform, setMarkerScale, setMarkerScaleX, setMarkerScaleY, nudgeMarker, rotateMarker, flipMarker, setCadMarkerColor,
                 showCadManager, cadMgrFilter, newCadCat, newCadShape, newCadLabel, newCadImgB64, previewNewCadShapes, getCadPreviewViewBox, handleNewCadImage, allCadManageList, filteredCadManageList,
                 openCadManager, addCustomCadBlock, deleteCustomCadBlock, togglePinCad, toggleHideCad,
                 defaultTextColor, setMarkerTextColor, getArrowMarkerId, getFsArrowMarkerId,
