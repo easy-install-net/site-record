@@ -2,7 +2,7 @@ if (!window.Vue) {
     if (window.__showBootError) window.__showBootError('Vue 引擎載入失敗，請檢查網絡連線');
     else alert('Vue 引擎載入失敗，請檢查網絡連線');
 } else {
-    const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
+    const { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick } = Vue;
     localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
     const offlineReady = ref(false);
@@ -31,7 +31,8 @@ if (!window.Vue) {
     } catch (_) {}
 
     const withTimeout = (p, ms = 15000, msg = '雲端連線逾時，請檢查網路') => {
-        let t; return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); })]).finally(() => clearTimeout(t));
+        let t;
+        return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); })]).finally(() => clearTimeout(t));
     };
     const withRetry = async (fn, retries = 3, delay = 800) => {
         for (let i = 0; i <= retries; i++) {
@@ -121,18 +122,31 @@ if (!window.Vue) {
             const canvasW = computed(() => activeCanvas.value?.w || 1200);
             const canvasH = computed(() => activeCanvas.value?.h || 900);
 
-            // 懸浮工具膠囊位置與收合狀態
+            // 快速點圖跳頁目錄彈窗
+            const showQuickPageNav = ref(false);
+            const jumpToPage = (idx) => {
+                showQuickPageNav.value = false;
+                switchPage(idx);
+            };
+
+            // 中上方懸浮工具膠囊位置與收合狀態
             const capsuleOffset = reactive({ x: 0, y: 0 });
             const capsuleCollapsed = ref(false);
             const startCapsuleDrag = (e) => {
                 const sx = e.clientX, sy = e.clientY, ox = capsuleOffset.x, oy = capsuleOffset.y;
                 const onMove = (ev) => {
-                    const maxX = Math.max(80, window.innerWidth / 2 - 60);
+                    const maxX = Math.max(60, window.innerWidth / 2 - 50);
                     capsuleOffset.x = Math.max(-maxX, Math.min(maxX, ox + (ev.clientX - sx)));
-                    capsuleOffset.y = Math.max(-(window.innerHeight - 140), Math.min(10, oy + (ev.clientY - sy)));
+                    capsuleOffset.y = Math.max(-6, Math.min(window.innerHeight - 130, oy + (ev.clientY - sy)));
                 };
-                const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); };
-                window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
+                const onUp = () => {
+                    window.removeEventListener('pointermove', onMove);
+                    window.removeEventListener('pointerup', onUp);
+                    window.removeEventListener('pointercancel', onUp);
+                };
+                window.addEventListener('pointermove', onMove);
+                window.addEventListener('pointerup', onUp);
+                window.addEventListener('pointercancel', onUp);
             };
 
             const zoomScale = ref(1), vbX = ref(0), vbY = ref(0);
@@ -197,7 +211,7 @@ if (!window.Vue) {
             const editFromFullScreen = () => {
                 const target = fullScreenItem.value; if (!target) return;
                 const tid = String(target.id);
-                fullScreenIndex.value = -1; resetZoom();
+                fullScreenIndex.value = -1; resetZoom(); showQuickPageNav.value = false;
                 for (let i = 0; i < pages.value.length; i++) {
                     const pg = pages.value[i];
                     if (String(pg.id) === tid) {
@@ -246,7 +260,7 @@ if (!window.Vue) {
             const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
             const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v9.5' }[cloudSyncState.value] || '☁️v9.5'));
+            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v9.6' }[cloudSyncState.value] || '☁️v9.6'));
             const cloudStatusClass = computed(() =>
                 cloudSyncState.value === 'syncing' ? 'bg-amber-100 text-amber-900 border-amber-300' :
                 cloudSyncState.value === 'offline' ? 'bg-zinc-100 text-zinc-500 border-zinc-300' :
@@ -266,7 +280,7 @@ if (!window.Vue) {
             const showCloudDetail = () => {
                 if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                 else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                else showToast('v9.5 懸浮工具列・12格結構模板');
+                else showToast('v9.6 審圖跳頁目錄・獨立移字');
             };
 
             const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -317,14 +331,13 @@ if (!window.Vue) {
             };
 
             const drawMode = ref('browse'), showTopSheet = ref(false), showTopTextBar = ref(false), activeMarker = ref(null);
-            const movingMarkerId = ref(null); // 專屬移位鎖定 ID
             const isProcessing = ref(false), processingText = ref(''), focusedInput = ref('val'), topTextInputRef = ref(null), svgCanvas = ref(null);
 
             const getLineStroke = (l, alpha = 0.55) => !l.type || l.type === 'measure' ? `rgba(255, 0, 68, ${alpha})` : ({ gray: '#9ca3af', white: '#ffffff' }[l.color] || '#ef4444');
             const getWallSegments = (w) => buildWallSegments(w);
 
-            const enterEditMode = (idx = 0) => { resetZoom(); activePageIndex.value = idx; activePin.value = null; movingMarkerId.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; };
-            const switchToPreview = async () => { await saveAll(); resetZoom(); activePin.value = null; movingMarkerId.value = null; currentView.value = 'preview'; };
+            const enterEditMode = (idx = 0) => { resetZoom(); showQuickPageNav.value = false; activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; };
+            const switchToPreview = async () => { await saveAll(); resetZoom(); showQuickPageNav.value = false; activePin.value = null; currentView.value = 'preview'; };
 
             const mergeableGroups = computed(() => {
                 const map = new Map();
@@ -356,6 +369,7 @@ if (!window.Vue) {
             let isPinching = false, pinchStartDist = 0, pinchStartScale = 1, pinchAnchorSvg = null;
             let isPanningBrowse = false, panStartClient = { x: 0, y: 0 }, panStartVb = { x: 0, y: 0 };
             let touchStartTime = 0, touchMoved = false, pendingTapMarker = null;
+            let isSpaceDown = false;
 
             const getClientPoint = (e) => e.touches?.[0] || e.changedTouches?.[0] || e;
             const clientToSvgPoint = (clientX, clientY) => {
@@ -410,14 +424,14 @@ if (!window.Vue) {
             };
             const toggleSketchGrid = () => { if (!activeCanvas.value) return; checkBranchNeed(() => { activeCanvas.value.hasGrid = !activeCanvas.value.hasGrid; activeCanvas.value.photo = renderSketchDataUrl(activeCanvas.value.w || 1200, activeCanvas.value.h || 1500, activeCanvas.value.hasGrid); touchDirty(); saveAll(); }); };
 
-            const switchPage = (idx) => { resetZoom(); activePageIndex.value = idx; activePin.value = null; movingMarkerId.value = null; drawMode.value = 'browse'; };
+            const switchPage = (idx) => { resetZoom(); showQuickPageNav.value = false; activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; };
             const prevPage = () => { if (activePageIndex.value > 0) switchPage(activePageIndex.value - 1); };
             const nextPage = () => { if (activePageIndex.value < pages.value.length - 1) switchPage(activePageIndex.value + 1); };
 
             const deleteCurrentPage = () => {
                 if (pages.value.length <= 1) return;
                 if (prompt(`⚠️ 確認刪除 P${activePageIndex.value + 1}？\n請輸入 "d" 確認：`)?.trim().toLowerCase() !== 'd') return;
-                resetZoom(); const delId = activePage.value.id; project.deletedPageIds ||= [];
+                resetZoom(); showQuickPageNav.value = false; const delId = activePage.value.id; project.deletedPageIds ||= [];
                 if (!project.deletedPageIds.includes(delId)) project.deletedPageIds.push(delId);
                 dirtyPageIds.delete(delId); pages.value.splice(activePageIndex.value, 1); activePageIndex.value = Math.max(0, activePageIndex.value - 1);
                 project.pageOrderUpdatedAt = Date.now(); hasUnsavedCloudChanges.value = true; saveAll();
@@ -426,11 +440,12 @@ if (!window.Vue) {
             };
 
             const openPinSubPage = (pin, idx) => {
-                resetZoom(); Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], walls: pin.walls || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || activePage.value?.space || '' });
+                resetZoom(); showQuickPageNav.value = false;
+                Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], walls: pin.walls || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || activePage.value?.space || '' });
                 if (pin.isSketch && !pin.photo) { const size = getAdaptiveCanvasSize(); pin.photo = renderSketchDataUrl(size.w, size.h, !!pin.hasGrid); pin.w = size.w; pin.h = size.h; }
-                activePin.value = pin; activePinIndex.value = idx; movingMarkerId.value = null; drawMode.value = 'browse';
+                activePin.value = pin; activePinIndex.value = idx; drawMode.value = 'browse';
             };
-            const exitPinSubPage = () => { resetZoom(); activePin.value = null; movingMarkerId.value = null; drawMode.value = 'browse'; };
+            const exitPinSubPage = () => { resetZoom(); activePin.value = null; drawMode.value = 'browse'; };
             const onPinTap = (pin, index) => { if (drawMode.value === 'eraser') { showToast('📍 落釘受保護，請點入內按「🗑️刪釘」移除'); return; } openPinSubPage(pin, index); };
             const deleteActivePin = async () => {
                 if (!activePin.value || !activePage.value) return;
@@ -528,24 +543,26 @@ if (!window.Vue) {
                 });
             };
 
-            // 開啟專屬移位模式
-            const startMoveMarker = () => {
-                if (!activeMarker.value) return;
-                movingMarkerId.value = activeMarker.value.id;
-                showTopSheet.value = false;
-                showTopTextBar.value = false;
-                showToast('✥ 按住標註拖拉移動，放開即鎖定');
-            };
-
-            // 標註點擊/拖拉處理 (在睇圖模式下防誤觸：拖拉只移動鏡頭，輕點才開啟面板)
+            // 標註觸控/滑鼠起始處理：
+            // 1) move 模式 -> 直接開始拖拉移動（無需多按步驟）
+            // 2) browse 模式 -> 記錄點擊座標，若手指無移動則打開修改面板，若移動則平移畫面
+            // 3) eraser 模式 -> 刪除該標註
             const onMarkerPointerStart = (marker, e) => {
                 if (e.touches?.length > 1 || isPinching || showBranchPrompt.value) return;
+                if (showQuickPageNav.value) showQuickPageNav.value = false;
                 if (drawMode.value === 'eraser') { onEraseTap('marker', marker, e); return; }
                 const pt = getClientPoint(e);
-                if (movingMarkerId.value === marker.id) {
+                if (drawMode.value === 'move') {
                     e.preventDefault(); e.stopPropagation();
-                    draggedMarker.value = marker;
-                    const p = getCoords(e); dragOrigin.value = { x: p.x, y: p.y }; markerOrigin.value = { x: marker.x, y: marker.y };
+                    checkBranchNeed(() => {
+                        const target = (activeCanvas.value.markers || []).find(m => m.id === marker.id) || marker;
+                        if (showBranchPrompt.value) return;
+                        draggedMarker.value = target;
+                        activeMarker.value = target;
+                        const p = getCoords(e);
+                        dragOrigin.value = { x: p.x, y: p.y };
+                        markerOrigin.value = { x: target.x, y: target.y };
+                    });
                     return;
                 }
                 if (drawMode.value === 'browse') {
@@ -572,6 +589,7 @@ if (!window.Vue) {
             };
 
             const onStageTouchStart = (e) => {
+                if (showQuickPageNav.value) showQuickPageNav.value = false;
                 if (showTopSheet.value || showTopTextBar.value || showBranchPrompt.value) return;
                 if (e.touches.length >= 2) { e.preventDefault(); beginPinch(e.touches[0], e.touches[1]); return; }
                 if (isPinching) return;
@@ -579,7 +597,7 @@ if (!window.Vue) {
                 if (e.touches.length === 1 && !draggedMarker.value) {
                     if (drawMode.value === 'browse') {
                         isPanningBrowse = true; panStartClient = { x: e.touches[0].clientX, y: e.touches[0].clientY }; panStartVb = { x: vbX.value, y: vbY.value };
-                    } else if (drawMode.value !== 'eraser') {
+                    } else if (!['eraser', 'move'].includes(drawMode.value)) {
                         beginStroke(e);
                     }
                 }
@@ -630,11 +648,12 @@ if (!window.Vue) {
             };
 
             const onStageMouseDown = (e) => {
+                if (showQuickPageNav.value) showQuickPageNav.value = false;
                 if (showTopSheet.value || showTopTextBar.value || showBranchPrompt.value) return;
-                if (e.button === 1 || (drawMode.value === 'browse' && !draggedMarker.value)) {
+                if (e.button === 1 || isSpaceDown || (drawMode.value === 'browse' && !draggedMarker.value)) {
                     e.preventDefault(); isPanningBrowse = true; panStartClient = { x: e.clientX, y: e.clientY }; panStartVb = { x: vbX.value, y: vbY.value }; return;
                 }
-                if (!draggedMarker.value && drawMode.value !== 'browse' && drawMode.value !== 'eraser') beginStroke(e);
+                if (!draggedMarker.value && !['browse', 'eraser', 'move'].includes(drawMode.value)) beginStroke(e);
             };
             const onStageMouseMove = (e) => {
                 if (showBranchPrompt.value) return;
@@ -673,8 +692,10 @@ if (!window.Vue) {
 
             const endStroke = (e) => {
                 if (draggedMarker.value) {
-                    checkBranchNeed(() => { touchDirty(); saveAll(); });
-                    draggedMarker.value = null; movingMarkerId.value = null; showToast('✅ 已鎖定新位置'); return;
+                    const moved = Math.hypot(draggedMarker.value.x - markerOrigin.value.x, draggedMarker.value.y - markerOrigin.value.y) > 2;
+                    draggedMarker.value = null;
+                    if (moved) { touchDirty(); saveAll(); }
+                    return;
                 }
                 if (!isDrawing.value) return;
                 isDrawing.value = false; const endPos = getCoords(e);
@@ -875,7 +896,14 @@ if (!window.Vue) {
 
             const pasteFromClipboard = async (forceNewPage = false) => { try { const items = await navigator.clipboard.read(); for (const item of items) { if (item.types.some(t => t.startsWith('image/'))) { await processPastedBlob(await item.getType(item.types.find(t => t.startsWith('image/'))), forceNewPage); return; } } showToast('剪貼簿內無圖片'); } catch (_) { showToast('請使用 Ctrl+V (或 Cmd+V) 貼上'); } };
             const handleGlobalPaste = async (e) => { if (currentView.value !== 'proj' || ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return; const items = e.clipboardData?.items; if (!items) return; for (let i = 0; i < items.length; i++) { if (items[i].type.indexOf('image') !== -1) { e.preventDefault(); await processPastedBlob(items[i].getAsFile(), false); return; } } };
-            const handleGlobalKeydown = (e) => { if (fullScreenIndex.value === -1) return; if (e.key === 'ArrowLeft') { e.preventDefault(); prevFullScreen(); } else if (e.key === 'ArrowRight') { e.preventDefault(); nextFullScreen(); } else if (e.key === 'Escape') { e.preventDefault(); fullScreenIndex.value = -1; } };
+            const handleGlobalKeydown = (e) => {
+                if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) isSpaceDown = true;
+                if (fullScreenIndex.value === -1) return;
+                if (e.key === 'ArrowLeft') { e.preventDefault(); prevFullScreen(); }
+                else if (e.key === 'ArrowRight') { e.preventDefault(); nextFullScreen(); }
+                else if (e.key === 'Escape') { e.preventDefault(); fullScreenIndex.value = -1; }
+            };
+            const handleGlobalKeyup = (e) => { if (e.code === 'Space') isSpaceDown = false; };
 
             const saveAll = async () => {
                 const code = String(project.code || '').trim(); if (!code) return;
@@ -1017,7 +1045,7 @@ if (!window.Vue) {
                 try { const doc = await withRetry(() => withTimeout(db.collection('site_projects').doc(code).get(), 15000)); if (!doc.exists) return alert('雲端找不到工程碼 #' + code); showJoinModal.value = false; inputJoinCode.value = ''; await loadProject(code, true); showToast('✅ 已連通 #' + code); } catch (e) { alert('連線失敗：' + e.message); } finally { isProcessing.value = false; }
             };
             const loadProject = async (code, openAsPreview = true) => {
-                resetZoom(); code = String(code); project.code = code; project.deletedPageIds = []; project.deletedPinIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; dirtyPageIds.clear();
+                resetZoom(); showQuickPageNav.value = false; code = String(code); project.code = code; project.deletedPageIds = []; project.deletedPinIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; dirtyPageIds.clear();
                 const d = await localforage.getItem('proj_' + code);
                 if (d) { Object.assign(project, { name: d.name || '', date: d.date || '', deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' }); if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg)); if (d.photoPool) photoPool.value = d.photoPool; hasUnsavedCloudChanges.value = !!d.pendingUpload; } else hasUnsavedCloudChanges.value = false;
                 activePageIndex.value = 0; activePin.value = null; currentView.value = openAsPreview ? 'preview' : 'proj';
@@ -1055,7 +1083,7 @@ if (!window.Vue) {
             const openCloudBrowser = async () => { if (!db || !navigator.onLine) return alert('請檢查網路連線'); isProcessing.value = true; processingText.value = '正在讀取雲端目錄...'; try { const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(30).get(), 10000); cloudProjectList.value = snaps.docs.map(d => ({ code: d.id, ...d.data() })).filter(d => d.name || d.updatedAt); showCloudBrowser.value = true; } catch (e) { alert('讀取目錄失敗：' + e.message); } finally { isProcessing.value = false; } };
             const downloadFromCloudBrowser = async (code) => { showCloudBrowser.value = false; await loadProject(code, true); showToast('✅ 已載入 #' + code); };
             const loadProjectList = async () => { const keys = await localforage.keys(), q = (await localforage.getItem('pending_upload_queue')) || [], list = []; for (const k of keys) { if (k.startsWith('proj_')) { const d = await localforage.getItem(k); if (d?.code) { const pgs = d.pages || []; list.push({ code: d.code, name: d.name, date: d.date, pageCount: pgs.length || 1, pinCount: pgs.reduce((s, p) => s + (p.pins?.length || 0), 0), updatedAt: d.updatedAt || 0, lastModifiedBy: d.lastModifiedBy || '', pendingUpload: !!d.pendingUpload || q.includes(String(d.code)) }); } } } projectList.value = list.sort((a, b) => b.updatedAt - a.updatedAt); };
-            const backToProjects = async () => { resetZoom(); if (unsubPages) { unsubPages(); unsubPages = null; } await saveAll(); if ((hasUnsavedCloudChanges.value || dirtyPageIds.size > 0) && project.code && db) { if (!navigator.onLine) showToast('📴 無網絡模式：已鎖入本機，有訊號自動上傳'); else { isProcessing.value = true; processingText.value = '正在自動上傳並返回目錄...'; try { await pullAndMergeFromCloud(project.code, false); await pushToCloud(true, (st) => { processingText.value = st; }); await createCloudBackup(project.code); showToast('✅ 已自動同步雲端'); } catch (_) { showToast('⚠️ 已排入自動補傳隊列'); } finally { isProcessing.value = false; } } } dirtyPageIds.clear(); hasUnsavedCloudChanges.value = false; await loadProjectList(); currentView.value = 'dir'; };
+            const backToProjects = async () => { resetZoom(); showQuickPageNav.value = false; if (unsubPages) { unsubPages(); unsubPages = null; } await saveAll(); if ((hasUnsavedCloudChanges.value || dirtyPageIds.size > 0) && project.code && db) { if (!navigator.onLine) showToast('📴 無網絡模式：已鎖入本機，有訊號自動上傳'); else { isProcessing.value = true; processingText.value = '正在自動上傳並返回目錄...'; try { await pullAndMergeFromCloud(project.code, false); await pushToCloud(true, (st) => { processingText.value = st; }); await createCloudBackup(project.code); showToast('✅ 已自動同步雲端'); } catch (_) { showToast('⚠️ 已排入自動補傳隊列'); } finally { isProcessing.value = false; } } } dirtyPageIds.clear(); hasUnsavedCloudChanges.value = false; await loadProjectList(); currentView.value = 'dir'; };
             const checkAuthorName = async () => { let name = await localforage.getItem('measure_author_name'); if (!name) { name = prompt('👤 請輸入您的稱呼或設備名稱 (例: 明哥、強哥iPad)：')?.trim(); if (name) await localforage.setItem('measure_author_name', name); } authorName.value = name || ''; };
             const changeAuthorName = async () => { const name = prompt('👤 更新設備稱呼：', authorName.value)?.trim(); if (name) { authorName.value = name; await localforage.setItem('measure_author_name', name); } };
 
@@ -1071,9 +1099,17 @@ if (!window.Vue) {
                 await loadCustomStamps(); await checkAuthorName(); await loadProjectList();
                 window.addEventListener('online', () => { cloudSyncState.value = 'ready'; showToast('🌐 網絡已恢復'); processPendingUploadQueue(false); });
                 window.addEventListener('offline', () => { cloudSyncState.value = 'offline'; });
-                window.addEventListener('paste', handleGlobalPaste); window.addEventListener('keydown', handleGlobalKeydown);
+                window.addEventListener('paste', handleGlobalPaste);
+                window.addEventListener('keydown', handleGlobalKeydown);
+                window.addEventListener('keyup', handleGlobalKeyup);
                 if (navigator.onLine) setTimeout(() => processPendingUploadQueue(false), 1500);
                 setInterval(() => { if (navigator.onLine) processPendingUploadQueue(true); }, 15000);
+            });
+
+            onUnmounted(() => {
+                window.removeEventListener('paste', handleGlobalPaste);
+                window.removeEventListener('keydown', handleGlobalKeydown);
+                window.removeEventListener('keyup', handleGlobalKeyup);
             });
 
             const renderAnnotatedCanvas = (canvasObj, includeStamp = true, itemDate = '', itemAuthor = '') => new Promise(async (resolve) => {
@@ -1129,6 +1165,7 @@ if (!window.Vue) {
 
             return {
                 offlineReady, currentView, TEMPLATE_ROWS, TAG_DEFS, capsuleOffset, capsuleCollapsed, startCapsuleDrag,
+                showQuickPageNav, jumpToPage,
                 fullScreenIndex, fullScreenList, fullScreenItem, fullScreenTitle, fullScreenWatermarkLines, showWatermark, getLineStroke, getWallSegments,
                 zoomScale, invZoom, svgViewBox, stepZoom, resetZoom, onStageWheel, draggingPageIdx, dragOverPageIdx, startPageDrag,
                 openFullScreenPreview, prevFullScreen, nextFullScreen, editFromFullScreen, copyFullScreenImage, downloadFullScreenImage, enterEditMode, switchToPreview, duplicateCurrentPage,
@@ -1137,7 +1174,7 @@ if (!window.Vue) {
                 showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges, markProjectChanged,
                 showManageModal, manageProj, openManageMenu, renameProject, duplicateProject, showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
                 showBackupListModal, backupList, openBackupList, restoreBackup, arrowColor, freehandColor, wallStyle, wallColor, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg, copyShareLink,
-                customStamps, promptCustomStamp, drawMode, showTopSheet, showTopTextBar, activeMarker, movingMarkerId, startMoveMarker, isProcessing, processingText, focusedInput, topTextInputRef,
+                customStamps, promptCustomStamp, drawMode, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
                 showBranchPrompt, branchOwner, branchInputValue, confirmBranch, cancelBranch, svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
                 createNewProject, loadProject, deleteProject, backToProjects, copyCode, joinProjectByCode, saveAll, downloadNow, uploadNow, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, onPinTap, deleteActivePin,
                 setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload, pasteFromClipboard,
