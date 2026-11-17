@@ -1730,13 +1730,22 @@ const forceSyncToCloud = async () => {
             };
 const openProjectMap = async (proj) => {
                 if (!proj) return;
-                if (proj.mapUrl) { window.open(proj.mapUrl, '_blank', 'noopener'); return; }
+                const launch = (url) => {
+                    showToast('🗺️ 正在開啟 Google Maps...');
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                };
+                if (proj.mapUrl) { launch(proj.mapUrl); return; }
                 const rawName = String(proj.name || '').trim();
-                if (/^https?:\/\//i.test(rawName)) { window.open(rawName, '_blank', 'noopener'); return; }
-                // 自動略過開頭 6~8 位日期編號（例如 261115海翠花園二座A室 -> 海翠花園二座A室）
+                if (/^https?:\/\//i.test(rawName)) { launch(rawName); return; }
                 const cleanAddr = rawName.replace(/^\d{6,8}[\s\-_]*/, '').trim();
                 if (cleanAddr) {
-                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanAddr)}`, '_blank', 'noopener');
+                    launch(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanAddr)}`);
                     return;
                 }
                 const input = prompt('此工程尚未輸入地址，請輸入地址或貼上 Google Maps 連結：')?.trim();
@@ -1745,11 +1754,11 @@ const openProjectMap = async (proj) => {
                 if (/^https?:\/\//i.test(input)) {
                     proj.mapUrl = input;
                     if (d) { d.mapUrl = input; await localforage.setItem('proj_' + code, d); }
-                    window.open(input, '_blank', 'noopener');
+                    launch(input);
                 } else {
                     proj.name = input;
                     if (d) { d.name = input; d.pendingUpload = true; await localforage.setItem('proj_' + code, d); await updateQueue(code, true); }
-                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(input)}`, '_blank', 'noopener');
+                    launch(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(input)}`);
                 }
             };
             const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
