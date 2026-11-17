@@ -1728,7 +1728,30 @@ const forceSyncToCloud = async () => {
                 activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; currentView.value = openAsPreview ? 'preview' : 'proj';
                 await pullAndMergeFromCloud(code, false); if (!pages.value.length) pages.value = [makeEmptyPage()]; drawMode.value = 'browse'; startRealtimeListener(code);
             };
-
+const openProjectMap = async (proj) => {
+                if (!proj) return;
+                if (proj.mapUrl) { window.open(proj.mapUrl, '_blank', 'noopener'); return; }
+                const rawName = String(proj.name || '').trim();
+                if (/^https?:\/\//i.test(rawName)) { window.open(rawName, '_blank', 'noopener'); return; }
+                // 自動略過開頭 6~8 位日期編號（例如 261115海翠花園二座A室 -> 海翠花園二座A室）
+                const cleanAddr = rawName.replace(/^\d{6,8}[\s\-_]*/, '').trim();
+                if (cleanAddr) {
+                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanAddr)}`, '_blank', 'noopener');
+                    return;
+                }
+                const input = prompt('此工程尚未輸入地址，請輸入地址或貼上 Google Maps 連結：')?.trim();
+                if (!input) return;
+                const code = String(proj.code), d = await localforage.getItem('proj_' + code);
+                if (/^https?:\/\//i.test(input)) {
+                    proj.mapUrl = input;
+                    if (d) { d.mapUrl = input; await localforage.setItem('proj_' + code, d); }
+                    window.open(input, '_blank', 'noopener');
+                } else {
+                    proj.name = input;
+                    if (d) { d.name = input; d.pendingUpload = true; await localforage.setItem('proj_' + code, d); await updateQueue(code, true); }
+                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(input)}`, '_blank', 'noopener');
+                }
+            };
             const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
             const renameProject = async () => {
                 const newName = prompt('請輸入新的地址 / 名稱：', manageProj.value.name);
@@ -2195,7 +2218,7 @@ const cleanCloudGarbage = async () => {
                 showMergeModal, mergeableGroups, mergePageGroup, showPdfModal, showPhotoPoolModal, photoPoolList, openPhotoPool, selectFromPhotoPool, deleteFromPhotoPool,
                 projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH,
                 showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges, markProjectChanged,
-                showManageModal, manageProj, openManageMenu, renameProject, duplicateProject, showCloudBrowser, cloudProjectList, unclaimedCloudProjects, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
+                showManageModal, manageProj, openManageMenu, openProjectMap,renameProject, duplicateProject, showCloudBrowser, cloudProjectList, unclaimedCloudProjects, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
                 showBackupListModal, backupList, openBackupList, restoreBackup, drawColor, wallStyle, cloudStatusText, cloudStatusClass, showCloudDetail, forceSyncToCloud,toastMsg, copyShareLink,
                 drawMode, drawingPane, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
                 showBranchPrompt, branchOwner, branchInputValue, confirmBranch, cancelBranch, svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
