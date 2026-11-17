@@ -281,6 +281,167 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD || !window.MEASUR
             const getFsArrowMarkerId = (c) => 'fs-arrow-' + String(c || '#ef4444').replace('#', 'hex_');
             const getWallSegments = (w) => buildWallSegments(w);
 
+            // =========================================================================
+            // ⚠️ 補回遺失的合拼、轉檔及資料拉取核心邏輯
+            // =========================================================================
+            const fetchCompleteProjectData = async (code) => {
+                code = String(code || '').trim();
+                const localObj = await localforage.getItem('proj_' + code);
+                let result = localObj ? JSON.parse(JSON.stringify(localObj)) : null;
+                if (db && navigator.onLine) {
+                    try {
+                        const projRef = db.collection('site_projects').doc(code);
+                        const [projDoc, pagesSnap, mediaMap] = await Promise.all([withRetry(() => withTimeout(projRef.get(), 15000)), withRetry(() => withTimeout(projRef.collection('pages').get(), 15000)), loadMediaMapFromRef(projRef)]);
+                        if (projDoc.exists) {
+                            const pd = projDoc.data();
+                            const cloudPages = pagesSnap.docs.map(doc => {
+                                const r = doc.data();
+                                return makeEmptyPage({ id: doc.id, ...r, date: r.date || pd.date || getTodayStr(), photo: (r.photoId && mediaMap.get(r.photoId)?.photo) || mediaMap.get('page_' + (r.id || doc.id))?.photo || r.photo || null, pins: (r.pins || []).map(pin => ({ ...pin, photo: (pin.photoId && mediaMap.get(pin.photoId)?.photo) || mediaMap.get(String(pin.id))?.photo || pin.photo || null })) });
+                            });
+                            if (!result) {
+                                const delSet = new Set(pd.deletedPageIds || []);
+                                result = { code, name: pd.name || '', nameUpdatedAt: pd.nameUpdatedAt || 0, date: pd.date || getTodayStr(), pages: cloudPages.filter(p => !delSet.has(p.id)).sort((a, b) => ((pd.pageIds || []).indexOf(a.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(a.id)) - ((pd.pageIds || []).indexOf(b.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(b.id))), photoPool: [], deletedPageIds: pd.deletedPageIds || [], deletedPinIds: pd.deletedPinIds || [], pageOrderUpdatedAt: pd.pageOrderUpdatedAt || 0, lastSyncAt: Date.now(), lastModifiedBy: pd.lastModifiedBy || '' };
+                            } else {
+                                const delSet = new Set([...(result.deletedPageIds || []), ...(pd.deletedPageIds || [])]);
+                                const orderList = [...(pd.pageIds || []), ...(result.pages || []).map(p => p.id)];
+                                result.pages = mergePagesSmart(result.pages || [], cloudPages, delSet, orderList);
+                                if (!result.name && pd.name) result.name = pd.name;
+                            }
+                        }
+                    } catch (_) {}
+                }
+                return result;
+            };
+
+            const clonePagesWithFreshIds = (rawPages) => {
+                const cloned = JSON.parse(JSON.stringify(rawPages || [])), idMap = new Map(), now = Date.now();
+                cloned.forEach((pg, idx) => idMap.set(String(pg.id), `pg_${now}_${idx}_${Math.floor(Math.random() * 99999)}`));
+                return cloned.map((pg, idx) => {
+                    const newId = idMap.get(String(pg.id)); delete pg.historyStack; delete pg.redoStack;
+                    (pg.markers || []).forEach(m => { if (m.type === 'page_link' && m.data?.targetPageId && idMap.has(String(m.data.targetPageId))) m.data.targetPageId = idMap.get(String(m.data.targetPageId)); });
+                    (pg.pins || []).forEach((pin, pIdx) => { pin.id = `pin_${now}_${idx}_${pIdx}_${Math.floor(Math.random() * 99999)}`; delete pin.historyStack; delete pin.redoStack; });
+                    return makeEmptyPage({ ...pg, id: newId, updatedAt: now });
+                });
+            };
+
+            const refreshAllProjectOptions = async () => {
+                await loadProjectList();
+                const map = new Map();
+                projectList.value.forEach(p => map.set(String(p.code), { ...p }));
+                if (db && navigator.onLine) {
+                    try {
+                        const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(50).get(), 10000);
+                        snaps.docs.forEach(d => {
+                            const data = d.data() || {}, c = String(d.id);
+                            if (data.name || data.updatedAt) {
+                                const ex = map.get(c);
+                                map.set(c, { code: c, name: data.name || ex?.name || '', date: data.date || ex?.date || '', pageCount: (data.pageIds?.length) || ex?.pageCount || 1, updatedAt: Math.max(data.updatedAt || 0, ex?.updatedAt || 0) });
+                            }
+                        });
+                    } catch (_) {}
+                }
+                allProjectOptions.value = Array.from(map.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+            };
+
+            const openMergeProjectsModal = async () => {
+                isProcessing.value = true; processingText.value = '正在讀取工程清單...';
+                try {
+                    await refreshAllProjectOptions();
+                    if (allProjectOptions.value.length < 2) { alert('至少需要 2 個工程才能合拼'); return; }
+                    mergeProjCodeA.value = allProjectOptions.value[0]?.code || '';
+                    mergeProjCodeB.value = allProjectOptions.value[1]?.code || '';
+                    updateMergeDefaultName();
+                    showMergeProjectsModal.value = true;
+                } finally { isProcessing.value = false; }
+            };
+            
+            const updateMergeDefaultName = () => {
+                const a = allProjectOptions.value.find(x => String(x.code) === String(mergeProjCodeA.value));
+                const b = allProjectOptions.value.find(x => String(x.code) === String(mergeProjCodeB.value));
+                mergeProjNewName.value = (mergeProjCodeA.value && mergeProjCodeB.value) ? `${a?.name?.trim() || '#' + mergeProjCodeA.value} + ${b?.name?.trim() || '#' + mergeProjCodeB.value}` : '';
+            };
+            
+            const executeMergeProjects = async () => {
+                const cA = String(mergeProjCodeA.value || '').trim(), cB = String(mergeProjCodeB.value || '').trim();
+                if (!cA || !cB) return alert('請選擇兩個要合拼的工程');
+                if (cA === cB) return alert('請選擇兩個不同的工程總號');
+                showMergeProjectsModal.value = false; isProcessing.value = true; processingText.value = `正在讀取 #${cA} 與 #${cB} 圖紙...`;
+                try {
+                    const [dataA, dataB] = await Promise.all([fetchCompleteProjectData(cA), fetchCompleteProjectData(cB)]);
+                    if (!dataA || !dataB) throw new Error('無法讀取其中一份工程資料，請檢查網絡連線');
+                    const mergedPages = [...clonePagesWithFreshIds(dataA.pages), ...clonePagesWithFreshIds(dataB.pages)];
+                    if (!mergedPages.length) mergedPages.push(makeEmptyPage());
+                    const seenFp = new Set(), mergedPool = [];
+                    [...(dataA.photoPool || []), ...(dataB.photoPool || [])].forEach(item => { if (item?.photo) { const fp = photoFingerprint(item.photo); if (!seenFp.has(fp)) { seenFp.add(fp); mergedPool.push(item); } } });
+                    const existingCodes = new Set(allProjectOptions.value.map(x => String(x.code)));
+                    let newCode = '';
+                    do { newCode = Math.floor(100000 + Math.random() * 900000).toString(); } while (existingCodes.has(newCode));
+                    const finalName = mergeProjNewName.value.trim() || `${dataA.name || '#' + cA} + ${dataB.name || '#' + cB}`, now = Date.now();
+                    const newProjObj = { code: newCode, name: finalName, nameUpdatedAt: now, date: getTodayStr(), pages: mergedPages, photoPool: mergedPool, deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: now, updatedAt: now, lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true };
+                    await localforage.setItem('proj_' + newCode, newProjObj); await updateQueue(newCode, true);
+                    if (db && navigator.onLine) {
+                        try { const syncTs = await pushProjectPayload(newProjObj, false, (st) => { processingText.value = st; }); if (syncTs) { newProjObj.lastSyncAt = syncTs; newProjObj.pendingUpload = false; await localforage.setItem('proj_' + newCode, newProjObj); } } catch (_) {}
+                    }
+                    await loadProjectList();
+                    showToast(`✅ 已合拼為新總號 #${newCode}（共 ${mergedPages.length} 頁）`);
+                } catch (e) { alert('合拼失敗：' + e.message); } finally { isProcessing.value = false; }
+            };
+
+            const toggleSelectMode = () => { selectMode.value = !selectMode.value; selectedPageIds.value = []; };
+            const togglePageSelection = (pgId) => { const idStr = String(pgId), idx = selectedPageIds.value.indexOf(idStr); if (idx === -1) selectedPageIds.value.push(idStr); else selectedPageIds.value.splice(idx, 1); };
+            const selectAllPages = () => { selectedPageIds.value = selectedPageIds.value.length === pages.value.length ? [] : pages.value.map(p => String(p.id)); };
+            
+            const openTransferModal = async (singlePageId = null) => {
+                if (singlePageId) selectedPageIds.value = [String(singlePageId)];
+                if (!selectedPageIds.value.length) { showToast('請先點選要轉檔的圖紙'); return; }
+                isProcessing.value = true; processingText.value = '正在讀取工程選列...';
+                try { await refreshAllProjectOptions(); transferTargetCode.value = otherProjectOptions.value[0]?.code || '__NEW__'; transferMode.value = 'copy'; transferNewProjName.value = ''; showTransferModal.value = true; }
+                finally { isProcessing.value = false; }
+            };
+            
+            const executeTransferPages = async () => {
+                if (!selectedPageIds.value.length || !transferTargetCode.value) return;
+                const selectedSet = new Set(selectedPageIds.value.map(String)), pickedRaw = pages.value.filter(p => selectedSet.has(String(p.id)));
+                if (!pickedRaw.length) return;
+                if (transferMode.value === 'move' && !confirm(`確定要將選中的 ${pickedRaw.length} 頁「移動」過去嗎？\n（移動後將從目前工程 #${project.code} 移除）`)) return;
+                showTransferModal.value = false; isProcessing.value = true; processingText.value = `正在轉移 ${pickedRaw.length} 頁圖紙...`;
+                try {
+                    const clonedPages = clonePagesWithFreshIds(pickedRaw), now = Date.now();
+                    let targetCode = String(transferTargetCode.value);
+                    if (targetCode === '__NEW__') {
+                        const existingCodes = new Set(allProjectOptions.value.map(x => String(x.code)));
+                        do { targetCode = Math.floor(100000 + Math.random() * 900000).toString(); } while (existingCodes.has(targetCode));
+                        const targetName = transferNewProjName.value.trim() || `${project.name || '工程'} (分拆)`;
+                        const newProjObj = { code: targetCode, name: targetName, nameUpdatedAt: now, date: getTodayStr(), pages: clonedPages, photoPool: [], deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: now, updatedAt: now, lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true };
+                        await localforage.setItem('proj_' + targetCode, newProjObj); await updateQueue(targetCode, true);
+                        if (db && navigator.onLine) { try { const syncTs = await pushProjectPayload(newProjObj, false, (st) => { processingText.value = st; }); if (syncTs) { newProjObj.lastSyncAt = syncTs; newProjObj.pendingUpload = false; await localforage.setItem('proj_' + targetCode, newProjObj); } } catch (_) {} }
+                    } else {
+                        const targetProj = await fetchCompleteProjectData(targetCode);
+                        if (!targetProj) throw new Error(`找不到目標工程 #${targetCode}`);
+                        targetProj.pages = [...(targetProj.pages || []), ...clonedPages]; targetProj.updatedAt = now; targetProj.pendingUpload = true;
+                        await localforage.setItem('proj_' + targetCode, targetProj); await updateQueue(targetCode, true);
+                        if (db && navigator.onLine) { try { const syncTs = await pushProjectPayload(targetProj, false, (st) => { processingText.value = st; }); if (syncTs) { targetProj.lastSyncAt = syncTs; targetProj.pendingUpload = false; await localforage.setItem('proj_' + targetCode, targetProj); } } catch (_) {} }
+                    }
+                    if (transferMode.value === 'move') {
+                        project.deletedPageIds ||= [];
+                        pickedRaw.forEach(pg => { if (!project.deletedPageIds.includes(pg.id)) project.deletedPageIds.push(pg.id); dirtyPageIds.delete(pg.id); });
+                        pages.value = pages.value.filter(p => !selectedSet.has(String(p.id)));
+                        if (!pages.value.length) pages.value = [makeEmptyPage()];
+                        activePageIndex.value = Math.min(activePageIndex.value, pages.value.length - 1);
+                        pageIndexB.value = Math.min(pageIndexB.value, pages.value.length - 1);
+                        project.pageOrderUpdatedAt = Date.now(); hasUnsavedCloudChanges.value = true; await saveAll();
+                        if (db && navigator.onLine && project.code) {
+                            const curRef = db.collection('site_projects').doc(String(project.code));
+                            pickedRaw.forEach(pg => curRef.collection('pages').doc(pg.id).delete().catch(() => {}));
+                            curRef.set({ pageIds: pages.value.map(p => p.id), deletedPageIds: firebase.firestore.FieldValue.arrayUnion(...pickedRaw.map(p => p.id)), updatedAt: Date.now() }, { merge: true }).catch(() => {});
+                        }
+                    }
+                    selectMode.value = false; selectedPageIds.value = [];
+                    showToast(`✅ 已${transferMode.value === 'move' ? '移動' : '複製'} ${clonedPages.length} 頁至 #${targetCode}`);
+                } catch (e) { alert('轉檔失敗：' + e.message); } finally { isProcessing.value = false; }
+            };
+            // =========================================================================
+
             const showJoinModal = ref(false), inputJoinCode = ref(''), showAddPageModal = ref(false), showSpaceModal = ref(false), showMergeModal = ref(false), showPdfModal = ref(false);
             const spaceList = ref([...DEFAULT_SPACES]);
             const showManageModal = ref(false), manageProj = ref({}), showCloudBrowser = ref(false), cloudProjectList = ref([]), showBackupListModal = ref(false), backupList = ref([]);
