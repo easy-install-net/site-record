@@ -1,5 +1,4 @@
 window.MEASURE_DATA = (() => {
-    // 12 個獨立結構/設備模板定義 (連同「尺寸」共 13 格)
     const TAG_DEFS = {
         door: { title: '門洞', fields: [{ key: 'w_in', label: '門闊' }, { key: 'h_in', label: '門高' }, { key: 't', label: '牆厚' }, { key: 't_frame', label: '門框厚' }, { key: 'h_top', label: '頂到天花' }, { key: 'w_side', label: '邊到牆' }] },
         window: { title: '窗', fields: [{ key: 'w_in', label: '內闊' }, { key: 'h_in', label: '內高' }, { key: 'd_in', label: '內深' }, { key: 'h_bottom', label: '面到地' }, { key: 't_stone', label: '窗石厚' }, { key: 'd_stone', label: '窗石凸' }] },
@@ -17,81 +16,75 @@ window.MEASURE_DATA = (() => {
 
     const TEMPLATE_ROWS = [
         [
-            { id: 'general', l: '尺寸', f: 'val' },
-            { id: 'door', l: '門洞', f: 'w_in' },
-            { id: 'window', l: '窗', f: 'w_in' },
-            { id: 'beam', l: '樑', f: 'w' },
-            { id: 'column', l: '柱', f: 'w' },
-            { id: 'protrusion', l: '凸', f: 'w' }
+            { id: 'general', l: '一般', f: 'val' }, { id: 'door', l: '門洞', f: 'w_in' }, { id: 'window', l: '窗', f: 'w_in' },
+            { id: 'beam', l: '樑', f: 'w' }, { id: 'column', l: '柱', f: 'w' }, { id: 'protrusion', l: '凸', f: 'w' },
+            { id: 'pipe', l: '包喉', f: 'w' }
         ],
         [
-            { id: 'pipe', l: '包喉', f: 'w' },
-            { id: 'elec_box', l: '電箱', f: 'w' },
-            { id: 'ac', l: '冷氣', f: 'w' },
-            { id: 'fridge', l: '雪柜', f: 'w' },
-            { id: 'skirting', l: '地腳線', f: 'h' },
-            { id: 'reserve', l: '留位', f: 'w' },
-            { id: 'avoid', l: '避', f: 'w' }
+            { id: 'elec_box', l: '電箱', f: 'w' }, { id: 'ac', l: '冷氣', f: 'w' }, { id: 'fridge', l: '雪柜', f: 'w' },
+            { id: 'skirting', l: '地腳線', f: 'h' }, { id: 'reserve', l: '留位', f: 'w' }, { id: 'avoid', l: '避', f: 'w' }
         ]
     ];
 
-    // 「尺寸」快捷標籤排位
     const DIM_QUICK_ROWS = [
-        { label: '', items: ['闊', '高', '深'] },
-        { label: '', items: ['全闊', '全高', '全深'] },
-        { label: '預位', items: ['中>地', '中>邊'] },
-        { label: '預位', items: ['底>地', '頂>頂', '邊>邊'] }
+        { label: '方位', items: ['闊', '高', '深', '厚', '長'] },
+        { label: '離地/頂', items: ['離地', '底到地', '面到地', '頂到天花', '淨高', '完成面'] },
+        { label: '邊距', items: ['邊到牆', '左到牆', '右到牆', '中心距', '內空', '外計'] }
     ];
 
-    // 3x4 寬版數字鍵盤
-    const KEYPAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'DEL', '0', 'ENTER'];
+    const KEYPAD_KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', 'ENTER', 'DEL'];
+    const DEFAULT_SPACES = ['總圖', '客廳', '飯廳', '玄關', '走廊', '廚房', '主人房', '睡房1', '睡房2', '書房', '工人房', '主廁', '客廁', '露台', '工作平台'];
 
-    // 預設空間名稱清單
-    const DEFAULT_SPACES = ['總圖', '主人房', '睡房一', '睡房二', '客廳', '飯廳', '廚房', '客廁', '套廁', '儲物室', '玄關', '露台'];
+    const STAMP_PALETTE = [
+        { hex: '#ffffff', name: '白' },
+        { hex: '#facc15', name: '黃' },
+        { hex: '#ef4444', name: '紅' },
+        { hex: '#38bdf8', name: '青' },
+        { hex: '#a855f7', name: '紫' },
+        { hex: '#34d399', name: '綠' },
+        { hex: '#fb923c', name: '橙' }
+    ];
 
-    // 8 大工種 87 個工藝印章
-    const STAMP_GROUPS = [
+    // 首次啟動時自動匯入「印章管理」的初始種子字庫 (匯入後全部可自由增減、改色、加星、刪除)
+    const DEFAULT_STAMP_SEED = [
         {
-            id: 'elec', icon: '⚡', name: '水電', color: '#eab308', badgeClass: 'text-amber-700 bg-amber-50 border-amber-200', btnClass: 'border-amber-300 text-amber-900',
-            rows: [['開關', '單蘇', '孖蘇', '燈曲', '數據', '燈線', '預埋50管', '火牛通風', '防水插', '2way', '電力路軌', '13A獨立電源', '過路箱生口', '電箱90°開合']]
+            id: 'cat_finishing', icon: '📐', name: '收口', defaultColor: '#38bdf8',
+            items: ['留收口位', '鋁條收口', '玻璃膠收邊', '木線收口', '陰角平齊', '收口不見光', '假天花收口', '地腳線收口', '不銹鋼收邊', '雲石收口', '門套收口', '櫃邊封口條']
         },
         {
-            id: 'light', icon: '💡', name: '燈冷', color: '#facc15', badgeClass: 'text-yellow-700 bg-yellow-50 border-yellow-300', btnClass: 'border-yellow-300 text-yellow-900',
-            rows: [['燈路軌', 'LED暖', 'LED白', 'LED中性', '分體頂迴風']]
+            id: 'cat_demo', icon: '🔨', name: '清拆', defaultColor: '#ef4444',
+            items: ['清拆', '打拆', '保留', '做新', '改位', '封死', '拉平', '剷底', '清走', '見磚', '見石屎']
         },
         {
-            id: 'masonry', icon: '🧱', name: '泥水', color: '#ef4444', badgeClass: 'text-red-600 bg-red-50 border-red-200', btnClass: 'border-red-200 text-red-700',
-            rows: [
-                ['需清拆', '可保留', '實地台', '石屎座'],
-                ['牆體不平', '空鼓', '滲水', '局部凸出'],
-                ['暗牆加固', '磁磚碰角', '石屎墩防水', '地漏坡度', '馬桶去水']
-            ]
+            id: 'cat_masonry', icon: '🧱', name: '泥水', defaultColor: '#fb923c',
+            items: ['批盪', '盪平', '找平', '防水', '試水', '企缸級嘴', '地台去水', '斜水', '鋪磚', '掃口', '對縫', '雲石門檻', '窗台石', '英泥沙', '磚牆', '輕磚牆']
         },
         {
-            id: 'wood', icon: '🪵', name: '木工', color: '#f97316', badgeClass: 'text-orange-600 bg-orange-50 border-orange-200', btnClass: 'border-orange-300 text-orange-800',
-            rows: [['收口', '見光', '開背板', '生口板', '避窗簾盒', '留散熱', '要分件', '櫃眉內通', '避柱切角', '生側板', '吊柜頂加固', '分開柜座', '現場生柴']]
+            id: 'cat_wood', icon: '🪵', name: '木工', defaultColor: '#facc15',
+            items: ['包喉', '生口', '維修口', '假天花', '燈槽', '窗簾盒', '冷氣殼', '木器', '現場造', '廠造', '見光面', '暗門', '趟門', '掩門', '地腳線', '收口線', '加厚板', '封板']
         },
         {
-            id: 'doorwin', icon: '🚪', name: '門窗', color: '#3b82f6', badgeClass: 'text-blue-600 bg-blue-50 border-blue-200', btnClass: 'border-blue-200 text-blue-700',
-            rows: [['留通道', '開門方向', '門洞預留', '暗門平齊', '避開窗手掣', '窗紗門動位', '鎖避位', '門套線厚度', '窗台石切平', '雙軌窗簾盒', '單軌窗簾盒']]
+            id: 'cat_elec', icon: '⚡', name: '電工', defaultColor: '#38bdf8',
+            items: ['13A蘇', '雙位蘇', '孖蘇', '防水蘇', 'USB蘇', '單掣', '雙掣', '三掣', '燈位', '筒燈', '燈帶', '火牛位', '網線', 'TV天線', '電話線', '電箱', '曲架掣', '暗喉', '明喉', '入牆']
         },
         {
-            id: 'kitchen', icon: '🍳', name: '廚房', color: '#22c55e', badgeClass: 'text-emerald-700 bg-emerald-50 border-emerald-200', btnClass: 'border-emerald-300 text-emerald-800',
-            rows: [['煙管孔', '止閥開合', '嵌入式水電後移', '雪櫃散熱', '油煙機高度', '轉角拉籃避位', '下水器避管', '檯面擋水條', '吊櫃底燈線', '吊櫃到頂', '爐邊牆距', '洗碗機排管', '背縮避喉']]
+            id: 'cat_plumb', icon: '🚰', name: '水喉', defaultColor: '#60a5fa',
+            items: ['來水', '去水', '冷熱水', '曲尺掣', '總掣', '減壓掣', '地漏', '隔氣', '煤氣喉', '熱水爐位', '洗衣機位', '星盆位', '座廁位', '洗手盆位', '花灑位', '暗喉']
         },
         {
-            id: 'bath', icon: '🚽', name: '浴室', color: '#06b6d4', badgeClass: 'text-cyan-700 bg-cyan-50 border-cyan-200', btnClass: 'border-cyan-300 text-cyan-800',
-            rows: [['鏡櫃到頂', '避水龍頭', '熱水爐檢修', '企缸擋水石埁', '浴屏避馬桶', '抽氣扇通屋外', '掛牆加固', '面盆高度', '浴櫃抽屜避隔氣']]
+            id: 'cat_paint', icon: '🖌️', name: '油漆', defaultColor: '#34d399',
+            items: ['批灰', '油漆', '乳膠漆', '防潮底漆', '手掃漆', '焗漆', '木紋', '牆紙', '藝術漆', '執漏', '修補', '保護']
         },
         {
-            id: 'living', icon: '🛋️', name: '廳房', color: '#c084fc', badgeClass: 'text-purple-700 bg-purple-50 border-purple-200', btnClass: 'border-purple-300 text-purple-800',
-            rows: [['走廊淨闊度', '電視牆加固', '弱電牛箱', '掃地機充電位', '書枱穿線孔', '大角度門鉸(165°)', '避軟包', '床褥厚度避', '避燈撞門']]
+            id: 'cat_hvac', icon: '❄️', name: '冷氣', defaultColor: '#a855f7',
+            items: ['冷氣機位', '雪種喉', '去水喉', '散熱器', '風口', '回風口', '抽氣扇', '抽油煙機喉', '穿牆窿', '鋁窗封板']
+        },
+        {
+            id: 'cat_warn', icon: '⚠️', name: '警示', defaultColor: '#ef4444',
+            items: ['主力牆', '主力柱', '橫樑', '不可拆', '不可鑽', '避開喉管', '避開電線', '現場覆尺', '待定', '業主自購', '後補']
         }
     ];
 
-    const STAMP_COLOR_MAP = {};
-    STAMP_GROUPS.forEach(g => g.rows.forEach(r => r.forEach(item => { STAMP_COLOR_MAP[item] = g.color; })));
-
-    return { TAG_DEFS, TEMPLATE_ROWS, DIM_QUICK_ROWS, KEYPAD_KEYS, DEFAULT_SPACES, STAMP_GROUPS, STAMP_COLOR_MAP };
+    return { TAG_DEFS, TEMPLATE_ROWS, DIM_QUICK_ROWS, KEYPAD_KEYS, DEFAULT_SPACES, STAMP_PALETTE, DEFAULT_STAMP_SEED };
 })();
 // === END OF data.js ===
