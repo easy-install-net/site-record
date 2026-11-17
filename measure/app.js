@@ -1715,33 +1715,48 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 const overlay = document.createElement('div');
                 overlay.id = 'garbage-preview-modal';
                 overlay.style.cssText = 'position:fixed;inset:0;z-index:110;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:16px;';
-                const rowsHtml = items.map(it => `
-                    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-                        <div style="min-width:0;flex:1;">
-                            <div style="font-size:12px;font-weight:900;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.title}</div>
-                            <div style="font-size:11px;color:#6b7280;font-weight:700;margin-top:2px;">${it.desc}</div>
-                        </div>
-                        <span style="font-size:11px;font-weight:900;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:2px 6px;border-radius:6px;white-space:nowrap;">${it.sizeLabel}</span>
-                    </div>
-                `).join('');
-                overlay.innerHTML = `
-                    <div style="background:#fff;border:1px solid #d1d5db;border-radius:14px;width:100%;max-width:420px;max-height:82vh;display:flex;flex-direction:column;padding:16px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.2);">
-                        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5e7eb;padding-bottom:8px;margin-bottom:10px;">
-                            <div style="font-size:15px;font-weight:900;color:#111827;">🧹 雲端垃圾庫清單 (${items.length} 項)</div>
-                            <span style="font-size:11px;font-weight:900;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:99px;">可釋放約 ${mb} MB</span>
-                        </div>
-                        <div style="font-size:11px;color:#4b5563;font-weight:700;margin-bottom:8px;">以下均為已刪除工程的殘留碎片，或所有現存圖紙均無使用的廢棄舊相片：</div>
-                        <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px;">${rowsHtml}</div>
-                        <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;">
-                            <button id="gp-cancel" style="flex:1;background:#fff;border:1px solid #d1d5db;color:#374151;padding:10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">取消 (保留不動)</button>
-                            <button id="gp-confirm" style="flex:1;background:#dc2626;border:none;color:#fff;padding:10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">🗑️ 確認徹底清除</button>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(overlay);
-                overlay.querySelector('#gp-cancel').onclick = () => overlay.remove();
-                overlay.querySelector('#gp-confirm').onclick = async () => { overlay.remove(); await onConfirm(); };
-            };
+              const rowsHtml = items.map((it, idx) => `
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            ${it.thumbUrl ? `<img data-zoom-idx="${idx}" src="${it.thumbUrl}" title="點擊放大預覽" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #d1d5db;background:#fff;flex-shrink:0;cursor:zoom-in;">` : ''}
+            <div style="min-width:0;flex:1;">
+                <div style="font-size:12px;font-weight:900;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.title}</div>
+                <div style="font-size:11px;color:#6b7280;font-weight:700;margin-top:2px;">${it.desc}${it.thumbUrl ? ' · <span style="color:#2563eb;">撳圖放大</span>' : ''}</div>
+            </div>
+            <span style="font-size:11px;font-weight:900;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:2px 6px;border-radius:6px;white-space:nowrap;">${it.sizeLabel}</span>
+        </div>
+    `).join('');
+    overlay.innerHTML = `
+        <div style="background:#fff;border:1px solid #d1d5db;border-radius:14px;width:100%;max-width:420px;max-height:82vh;display:flex;flex-direction:column;padding:16px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.2);">
+            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5e7eb;padding-bottom:8px;margin-bottom:10px;">
+                <div style="font-size:15px;font-weight:900;color:#111827;">🧹 雲端垃圾庫清單 (${items.length} 項)</div>
+                <span style="font-size:11px;font-weight:900;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:99px;">可釋放約 ${mb} MB</span>
+            </div>
+            <div style="font-size:11px;color:#4b5563;font-weight:700;margin-bottom:8px;">以下均為已刪除工程的殘留碎片，或所有現存圖紙均無使用的廢棄舊相片：</div>
+            <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px;">${rowsHtml}</div>
+            <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;">
+                <button id="gp-cancel" style="flex:1;background:#fff;border:1px solid #d1d5db;color:#374151;padding:10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">取消 (保留不動)</button>
+                <button id="gp-confirm" style="flex:1;background:#dc2626;border:none;color:#fff;padding:10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">🗑️ 確認徹底清除</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#gp-cancel').onclick = () => overlay.remove();
+    overlay.querySelector('#gp-confirm').onclick = async () => { overlay.remove(); await onConfirm(); };
+    overlay.querySelectorAll('img[data-zoom-idx]').forEach(img => {
+        img.onclick = () => {
+            const zoom = document.createElement('div');
+            zoom.style.cssText = 'position:fixed;inset:0;z-index:120;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;cursor:zoom-out;';
+            zoom.innerHTML = `<img src="${img.src}" style="max-width:95vw;max-height:82vh;border-radius:8px;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,0.5);"><div style="color:#fff;font-size:12px;font-weight:700;margin-top:10px;">點擊任意位置關閉預覽</div>`;
+            zoom.onclick = () => zoom.remove();
+            document.body.appendChild(zoom);
+        };
+    });
+};
+
+
+
+
+                
 
 const cleanCloudGarbage = async () => {
                 if (!db || !navigator.onLine) return alert('請檢查網路連線');
