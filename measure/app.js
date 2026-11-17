@@ -1,1353 +1,767 @@
-if (!window.Vue || !window.MEASURE_DATA) {
-    const msg = !window.Vue ? 'Vue 引擎載入失敗，請檢查網絡連線' : '資料檔 data.js 載入失敗，請重新整理';
-    if (window.__showBootError) window.__showBootError(msg);
-    else alert(msg);
-} else {
-    const { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick } = Vue;
-    const { TAG_DEFS, TEMPLATE_ROWS, DIM_QUICK_ROWS, KEYPAD_KEYS, DEFAULT_SPACES, STAMP_GROUPS, STAMP_COLOR_MAP } = window.MEASURE_DATA;
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <title>度尺寶 Pro — 圖紙檢視與意見回饋</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh;
+            margin: 0; padding: 0; overflow: hidden; background: #f4f4f5; color: #111827;
+            -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+            overscroll-behavior: none; touch-action: manipulation;
+            padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", "Helvetica Neue", sans-serif;
+        }
+        input, textarea { font-size: 16px !important; -webkit-user-select: text; user-select: text; color: #111827; }
+        .canvas-touch-lock { touch-action: none !important; }
+        .touch-scrollable { touch-action: pan-y !important; -webkit-overflow-scrolling: touch; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .stamp-text {
+            font-weight: 900; paint-order: stroke fill; letter-spacing: 1px;
+            stroke: #000; stroke-width: 5px; stroke-linejoin: round; stroke-linecap: round;
+            pointer-events: none;
+        }
+        .fb-text {
+            font-weight: 900; paint-order: stroke fill; letter-spacing: 0.5px;
+            stroke: #ffffff; stroke-width: 6px; stroke-linejoin: round; stroke-linecap: round;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div id="app" class="fixed inset-0 w-full h-full flex flex-col overflow-hidden bg-zinc-100">
 
-    localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
+        <!-- 頂部導航欄 -->
+        <header class="shrink-0 min-h-[44px] py-1 w-full bg-white border-b border-zinc-200 px-2 flex justify-between items-center gap-1.5 z-30">
+            <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                <span class="bg-amber-100 text-amber-900 border border-amber-300 text-xs font-mono font-black px-1.5 py-0.5 rounded shrink-0">#{{ project.code || '------' }}</span>
+                <span class="font-black text-sm text-zinc-900 truncate">{{ project.name || '工程圖紙檢視' }}</span>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button v-if="activeCanvas?.photo" @click="downloadAnnotatedImage" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">⬇️存圖</button>
+                <button v-if="activeCanvas?.photo" @click="submitFeedback" :disabled="isSubmitting"
+                        :class="hasDraft ? 'bg-blue-600 text-white border-blue-600 animate-pulse' : 'bg-zinc-900 text-white border-zinc-900'"
+                        class="px-3 py-1 rounded-md text-xs font-bold border shadow-sm">
+                    📤 提交意見{{ draftCount ? `(${draftCount})` : '' }}
+                </button>
+            </div>
+        </header>
 
-    const offlineReady = ref(false);
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').then(() => { offlineReady.value = true; }).catch(() => {}));
-        navigator.serviceWorker.ready.then(() => { offlineReady.value = true; }).catch(() => {});
-    }
+        <div v-if="toastMsg" class="fixed top-14 left-1/2 -translate-x-1/2 z-[80] bg-zinc-900 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl border border-zinc-700 whitespace-nowrap">{{ toastMsg }}</div>
 
-    let db = null;
-    try {
-        if (window.firebase) {
-            if (!firebase.apps.length) {
-                firebase.initializeApp({
-                    apiKey: "AIzaSyCSRfZdAVh8ADPNtayW5lyDtmE0xDsJXNg",
-                    authDomain: "gen-lang-client-0208380044.firebaseapp.com",
-                    databaseURL: "https://gen-lang-client-0208380044-default-rtdb.firebaseio.com",
-                    projectId: "gen-lang-client-0208380044",
-                    storageBucket: "gen-lang-client-0208380044.firebasestorage.app",
-                    messagingSenderId: "17077391191",
-                    appId: "1:17077391191:web:f167a311052c56bd3d7812"
-                });
+        <!-- 無工程碼輸入畫面 -->
+        <div v-if="!project.code && !isLoading" class="flex-1 flex items-center justify-center p-4">
+            <div class="bg-white border border-zinc-300 w-full max-w-xs rounded-xl p-5 shadow-lg text-center">
+                <div class="text-base font-black text-zinc-900 mb-1">📋 檢視工程度尺圖</div>
+                <p class="text-xs text-zinc-500 font-bold mb-4">請輸入 6 位數工程碼開啟圖紙</p>
+                <input type="text" inputmode="numeric" maxlength="6" v-model="inputCode" @keyup.enter="loadByInputCode" placeholder="849201" class="w-full bg-zinc-50 border-2 border-zinc-300 rounded-lg p-2.5 text-center text-2xl font-mono font-bold tracking-widest mb-3 focus:outline-none focus:border-blue-500">
+                <button @click="loadByInputCode" class="w-full bg-zinc-900 text-white font-bold py-2.5 rounded-lg text-sm">開啟圖紙</button>
+            </div>
+        </div>
+
+        <!-- 載入中畫面 -->
+        <div v-else-if="isLoading" class="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <div class="w-10 h-10 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin mb-3"></div>
+            <div class="text-sm font-bold text-zinc-700">{{ loadingText }}</div>
+        </div>
+
+        <!-- 主畫布視圖 -->
+        <main v-else class="flex-1 min-h-0 w-full relative overflow-hidden flex flex-col">
+            <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center text-zinc-400 text-sm font-bold gap-2">
+                <span>此頁面暫無底圖</span>
+                <button v-if="activePin" @click="exitPinSubPage" class="bg-white border border-zinc-300 text-zinc-800 px-3 py-1.5 rounded-md text-xs font-bold">‹ 返回主頁</button>
+            </div>
+
+            <div v-else class="flex-1 min-h-0 w-full relative overflow-hidden">
+                <!-- 左上浮動：頁碼切換 + 總圖快捷 -->
+                <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
+                    <div v-if="!activePin" class="bg-white/95 border border-zinc-300 rounded-md flex items-center px-1 py-1 shadow-sm">
+                        <button @click="prevPage" :class="{ 'opacity-30': activePageIndex === 0 }" class="px-2 py-0.5 text-zinc-700 font-black text-xs">◀</button>
+                        <button @click="showQuickNav = !showQuickNav" class="px-2 py-0.5 text-zinc-900 font-black text-xs flex items-center gap-1">
+                            <span>P{{ activePageIndex + 1 }}/{{ pages.length }}</span>
+                            <span class="text-[10px] text-blue-600">▾</span>
+                        </button>
+                        <button @click="nextPage" :class="{ 'opacity-30': activePageIndex === pages.length - 1 }" class="px-2 py-0.5 text-zinc-700 font-black text-xs">▶</button>
+                    </div>
+                    <div v-else class="bg-red-50 border border-red-300 rounded-md flex items-center px-2.5 py-1 shadow-sm">
+                        <button @click="exitPinSubPage" class="text-red-700 text-xs font-black">‹ 返回 P{{ activePageIndex + 1 }}</button>
+                        <span class="mx-1.5 text-red-300">|</span>
+                        <span class="text-red-900 font-black text-xs">📍 細節釘 #{{ activePinIndex + 1 }}</span>
+                    </div>
+
+                    <!-- 快速跳頁縮圖目錄 -->
+                    <div v-if="showQuickNav && !activePin" class="w-72 max-w-[85vw] max-h-[55vh] bg-white/95 backdrop-blur-md border border-zinc-300 rounded-xl p-2 shadow-2xl overflow-y-auto touch-scrollable z-40">
+                        <div class="flex justify-between items-center px-1 pb-1.5 mb-1.5 border-b border-zinc-200">
+                            <span class="text-[11px] font-black text-zinc-800">📑 選擇圖紙頁數 ({{ pages.length }}頁)</span>
+                            <button @click="showQuickNav = false" class="text-xs font-bold text-zinc-400 px-1.5">✕</button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-1.5">
+                            <button v-for="(pg, idx) in pages" :key="pg.id" @click="switchPage(idx)"
+                                    :class="idx === activePageIndex ? 'ring-2 ring-blue-600 bg-blue-50 border-blue-500' : 'bg-zinc-50 border-zinc-200'"
+                                    class="border rounded-lg p-1 flex flex-col items-center text-left overflow-hidden">
+                                <div class="w-full h-12 bg-white rounded overflow-hidden flex items-center justify-center border border-zinc-200">
+                                    <img v-if="pg.photo" :src="pg.photo" class="w-full h-full object-cover">
+                                    <span v-else class="text-[10px] text-zinc-400 font-bold">空白</span>
+                                </div>
+                                <div class="w-full mt-1 flex items-center justify-between gap-0.5">
+                                    <span class="text-[11px] font-black text-zinc-900 shrink-0">P{{ idx + 1 }}</span>
+                                    <span class="text-[10px] text-zinc-500 truncate">{{ pg.space || '' }}</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-else class="flex items-center gap-1 flex-wrap">
+                        <span v-if="activeCanvas.space" class="bg-white/95 border border-zinc-300 text-zinc-800 px-2 py-0.5 rounded-md text-[11px] font-black shadow-sm">🏠 {{ activeCanvas.space }}</span>
+                        <button v-if="!activePin && masterPages.length && activePage?.space !== '總圖'" @click="switchPage(masterPages[0].idx)" class="bg-purple-50 text-purple-800 border border-purple-300 px-2 py-0.5 rounded-md text-[11px] font-black shadow-sm">🗺️ 返總圖</button>
+                    </div>
+                </div>
+
+                <!-- 右上浮動：畫布縮放 + 當前模式提示 -->
+                <div class="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end" @touchstart.stop @mousedown.stop>
+                    <div class="flex items-center bg-white/95 border border-zinc-300 rounded-md shadow-sm overflow-hidden">
+                        <button @click="stepZoom(-0.5)" :disabled="zoomScale <= 1" :class="zoomScale <= 1 ? 'opacity-30' : ''" class="px-2 py-1 text-xs font-black text-zinc-900 border-r border-zinc-200">➖</button>
+                        <button @click="resetZoom" :class="zoomScale > 1 ? 'bg-blue-600 text-white' : 'text-zinc-700'" class="px-1.5 py-1 text-[11px] font-black min-w-[40px] text-center">{{ Math.round(zoomScale * 100) }}%</button>
+                        <button @click="stepZoom(0.5)" :disabled="zoomScale >= 5" :class="zoomScale >= 5 ? 'opacity-30' : ''" class="px-2 py-1 text-xs font-black text-zinc-900 border-l border-zinc-200">➕</button>
+                    </div>
+                    <div class="pointer-events-none">
+                        <div v-if="mode === 'browse'" class="bg-zinc-900/90 text-white px-2 py-0.5 rounded-md text-[11px] font-bold shadow-sm">👆 睇圖 (點藍牌跳頁 / 點紅釘睇相)</div>
+                        <div v-else-if="mode === 'circle'" class="bg-red-600 text-white px-2 py-0.5 rounded-md text-[11px] font-bold shadow-sm">⭕ 手指或滑鼠直接圈出問題位</div>
+                        <div v-else-if="mode === 'text'" class="bg-blue-600 text-white px-2 py-0.5 rounded-md text-[11px] font-bold shadow-sm">💬 點一下圖紙位置寫留言</div>
+                        <div v-else-if="mode === 'move'" class="bg-amber-600 text-white px-2 py-0.5 rounded-md text-[11px] font-bold shadow-sm">✥ 拖拉你嘅留言或附圖擺位</div>
+                    </div>
+                </div>
+
+                <!-- 底部懸浮極簡批註工具列 -->
+                <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 max-w-[96vw]" @touchstart.stop @mousedown.stop>
+                    <!-- 顏色子列 (畫圈或留言時顯示) -->
+                    <div v-if="mode === 'circle' || mode === 'text'" class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full px-3 py-1 shadow-lg flex items-center gap-2">
+                        <span class="text-[11px] font-bold text-zinc-600">標記顏色：</span>
+                        <button v-for="c in ['#ef4444','#eab308','#2563eb']" :key="c" @click="fbColor = c"
+                                :style="{ backgroundColor: c }"
+                                :class="fbColor === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-70'"
+                                class="w-4 h-4 rounded-full border border-zinc-400 transition-transform"></button>
+                    </div>
+
+                    <!-- 主工具膠囊 -->
+                    <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-xl flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full">
+                        <button @click="mode = 'browse'" :class="mode === 'browse' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">👆 睇</button>
+                        <button @click="mode = 'circle'" :class="mode === 'circle' ? 'bg-red-600 text-white' : 'text-red-600 hover:bg-red-50'" class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">⭕ 畫圈</button>
+                        <button @click="mode = 'text'" :class="mode === 'text' ? 'bg-blue-600 text-white' : 'text-blue-700 hover:bg-blue-50'" class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">💬 留言</button>
+                        <label class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 text-emerald-700 hover:bg-emerald-50 cursor-pointer flex items-center gap-0.5">
+                            📷 影/貼圖
+                            <input type="file" accept="image/*" class="hidden" @change="handleAttachPhoto">
+                        </label>
+                        <button @click="mode = 'move'" :class="mode === 'move' ? 'bg-amber-600 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✥ 移</button>
+                        <div class="w-px h-4 bg-zinc-300 mx-0.5 shrink-0"></div>
+                        <button @click="undoDraft" :disabled="!fbHistory.length" :class="fbHistory.length ? 'text-zinc-900' : 'text-zinc-300'" class="px-2 py-1 rounded-full text-sm font-black shrink-0">↶</button>
+                        <button v-if="hasDraft" @click="clearDraft" class="px-2 py-1 rounded-full text-xs font-bold text-red-600 shrink-0">🗑️清空</button>
+                    </div>
+                </div>
+
+                <!-- 畫布區 -->
+                <div class="absolute inset-1 overflow-hidden bg-white shadow-sm border border-zinc-300 rounded-lg">
+                    <svg ref="svgCanvas" :view-box.camel="svgViewBox" preserveAspectRatio="xMidYMid meet"
+                         style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="canvas-touch-lock"
+                         @wheel.prevent="onStageWheel" @touchstart="onStageTouchStart" @touchmove="onStageTouchMove" @touchend="onStageTouchEnd" @touchcancel="onStageTouchEnd"
+                         @mousedown="onStageMouseDown" @mousemove="onStageMouseMove" @mouseup="onStageMouseUp">
+                        <defs>
+                            <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowId(c)" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                                <path d="M 0 0.6 L 6 3 L 0 5.4 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
+                            </marker>
+                        </defs>
+
+                        <!-- 底圖與主工程唯讀圖層 -->
+                        <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="#ffffff" />
+                        <image :href="activeCanvas.photo" x="0" y="0" :width="canvasW" :height="canvasH" preserveAspectRatio="none" />
+
+                        <g v-for="m in (activeCanvas.markers || [])" :key="'img-'+m.id" :transform="`translate(${m.x}, ${m.y})`" class="pointer-events-none">
+                            <image v-if="m.type === 'image'" :href="m.data.b64" :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" preserveAspectRatio="none" />
+                        </g>
+                        <g v-for="w in (activeCanvas.walls || [])" :key="'w-'+w.id" class="pointer-events-none">
+                            <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" />
+                        </g>
+                        <line v-for="l in (activeCanvas.lines || [])" :key="'l-'+l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
+                              :stroke="getLineStroke(l, 0.75)" :stroke-width="(!l.type || l.type === 'measure') ? 5 : 4"
+                              :stroke-dasharray="(!l.type || l.type === 'measure') ? '14 10' : null" stroke-linecap="round"
+                              :marker-end="l.type === 'arrow-single' ? `url(#${getArrowId(l.color)})` : null" class="pointer-events-none" />
+                        <path v-for="p in (activeCanvas.paths || [])" :key="'p-'+p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" class="pointer-events-none" />
+
+                        <!-- 主工程文字標註 (支援點擊藍色跳頁傳送門) -->
+                        <g v-for="m in (activeCanvas.markers || [])" :key="'m-'+m.id" :transform="`translate(${m.x}, ${m.y})`"
+                           :class="(mode === 'browse' && m.type === 'page_link') ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'"
+                           @click.stop="onMasterMarkerClick(m)" @touchend.stop="onMasterMarkerClick(m)">
+                            <rect v-if="m.type === 'page_link'" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="14" fill="rgba(14,165,233,0.18)" stroke="#38bdf8" stroke-width="2.5" />
+                            <template v-if="m.type !== 'image'">
+                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text" style="font-size: 17px;">
+                                    <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
+                                </text>
+                            </template>
+                        </g>
+
+                        <!-- 主工程紅釘 (點擊進入細節相) -->
+                        <template v-if="!activePin">
+                            <g v-for="(pin, index) in (activePage?.pins || [])" :key="'pin-'+pin.id" :transform="`translate(${(pin.x / 100) * canvasW}, ${(pin.y / 100) * canvasH})`"
+                               class="cursor-pointer pointer-events-auto" @touchstart.stop @mousedown.stop @click.stop="openPinSubPage(pin, index)">
+                                <circle cx="0" cy="-20" r="34" fill="transparent" />
+                                <polygon points="-11,-11 11,-11 0,5" fill="#dc2626" />
+                                <circle cx="0" cy="-26" r="22" fill="#dc2626" stroke="#ffffff" stroke-width="3.5" />
+                                <text x="0" y="-25" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="22" font-weight="900">{{ index + 1 }}</text>
+                            </g>
+                        </template>
+
+                        <!-- 師傅/業主新增嘅批註層 (圈圈 + 留言 + 附圖) -->
+                        <path v-for="fp in fbPaths" :key="fp.id" :d="fp.d" :stroke="fp.color" :stroke-width="7 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none" />
+                        <path v-if="currentFbPath" :d="currentFbPath" :stroke="fbColor" :stroke-width="7 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none" />
+
+                        <g v-for="fm in fbMarkers" :key="fm.id" :transform="`translate(${fm.x}, ${fm.y})`"
+                           :class="mode === 'move' ? 'cursor-move pointer-events-auto' : (mode === 'browse' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none')"
+                           @touchstart="e => onFbMarkerStart(fm, e)" @mousedown="e => onFbMarkerStart(fm, e)">
+                            <rect v-if="mode === 'move'" :x="-fm.w/2 - 8" :y="-fm.h/2 - 8" :width="fm.w + 16" :height="fm.h + 16" rx="8" fill="rgba(217,119,6,0.12)" stroke="#d97706" :stroke-width="3 * invZoom" stroke-dasharray="6 4" />
+                            <template v-if="fm.type === 'image'">
+                                <rect :x="-fm.w/2 - 3" :y="-fm.h/2 - 3" :width="fm.w + 6" :height="fm.h + 6" rx="6" fill="#ffffff" stroke="#ef4444" :stroke-width="3 * invZoom" />
+                                <image :href="fm.b64" :x="-fm.w/2" :y="-fm.h/2" :width="fm.w" :height="fm.h" preserveAspectRatio="none" />
+                            </template>
+                            <template v-else>
+                                <rect :x="-fm.w/2 - 6" :y="-fm.h/2 - 4" :width="fm.w + 12" :height="fm.h + 8" rx="8" fill="rgba(255,255,255,0.92)" :stroke="fm.color" :stroke-width="2.5 * invZoom" />
+                                <text text-anchor="middle" dominant-baseline="central" :fill="fm.color" font-size="22" font-weight="900">{{ fm.text }}</text>
+                            </template>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+        </main>
+
+        <!-- 留言 / 附圖編輯彈窗 -->
+        <div v-if="editingFbMarker" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="confirmEditFbMarker" @touchstart.stop @mousedown.stop>
+            <div class="bg-white border border-zinc-300 w-full max-w-xs rounded-xl p-4 shadow-2xl flex flex-col gap-3">
+                <div class="flex justify-between items-center border-b border-zinc-200 pb-2">
+                    <span class="text-sm font-black text-zinc-900">{{ editingFbMarker.type === 'image' ? '🖼️ 調整附圖大小' : '💬 輸入留言內容' }}</span>
+                    <button @click="deleteFbMarker(editingFbMarker.id)" class="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded">🗑️刪除</button>
+                </div>
+                <template v-if="editingFbMarker.type === 'image'">
+                    <div class="flex gap-2 justify-center py-2">
+                        <button @click="resizeFbImage(0.8)" class="flex-1 bg-zinc-100 border border-zinc-300 py-2 rounded-lg text-xs font-bold">➖ 縮小</button>
+                        <button @click="resizeFbImage(1.25)" class="flex-1 bg-zinc-100 border border-zinc-300 py-2 rounded-lg text-xs font-bold">➕ 放大</button>
+                    </div>
+                </template>
+                <template v-else>
+                    <input ref="fbTextInputRef" type="text" v-model="editingFbMarker.text" @input="updateFbTextSize(editingFbMarker)" @keyup.enter="confirmEditFbMarker" placeholder="例：呢度有條喉頂住 / 改 850mm" class="w-full bg-zinc-50 border-2 border-blue-500 rounded-lg p-2.5 text-sm font-bold focus:outline-none">
+                </template>
+                <button @click="confirmEditFbMarker" class="w-full bg-zinc-900 text-white py-2.5 rounded-lg text-xs font-bold">確定</button>
+            </div>
+        </div>
+
+        <!-- 提交成功提示彈窗 -->
+        <div v-if="showSubmitSuccess" class="fixed inset-0 bg-black/50 z-[90] flex items-center justify-center p-4">
+            <div class="bg-white border border-zinc-300 w-full max-w-xs rounded-xl p-5 text-center shadow-2xl flex flex-col gap-3">
+                <div class="text-3xl">✅</div>
+                <div class="text-base font-black text-zinc-900">意見已成功提交！</div>
+                <p class="text-xs text-zinc-600 font-bold leading-relaxed">設計師打開工程圖紙即可直接看到您圈出的位置與附圖並進行跟進。</p>
+                <button @click="clearDraft(); showSubmitSuccess = false" class="w-full bg-zinc-900 text-white py-2.5 rounded-lg text-xs font-bold">清空本頁草稿並繼續睇圖</button>
+                <button @click="showSubmitSuccess = false" class="w-full bg-white border border-zinc-300 text-zinc-700 py-2 rounded-lg text-xs font-bold">保留畫面標記</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp({
+                apiKey: "AIzaSyCSRfZdAVh8ADPNtayW5lyDtmE0xDsJXNg",
+                authDomain: "gen-lang-client-0208380044.firebaseapp.com",
+                databaseURL: "https://gen-lang-client-0208380044-default-rtdb.firebaseio.com",
+                projectId: "gen-lang-client-0208380044",
+                storageBucket: "gen-lang-client-0208380044.firebasestorage.app",
+                messagingSenderId: "17077391191",
+                appId: "1:17077391191:web:f167a311052c56bd3d7812"
+            });
+        }
+        const db = firebase.firestore();
+        db.settings({ experimentalAutoDetectLongPolling: true, ignoreUndefinedProperties: true });
+
+        const TAG_DEFS = {
+            door: { title: '門洞', fields: [{ key: 'w_in', label: '門闊' }, { key: 'h_in', label: '門高' }, { key: 't', label: '牆厚' }, { key: 't_frame', label: '門框厚' }, { key: 'h_top', label: '頂到天花' }, { key: 'w_side', label: '邊到牆' }] },
+            window: { title: '窗', fields: [{ key: 'w_in', label: '內闊' }, { key: 'h_in', label: '內高' }, { key: 'd_in', label: '內深' }, { key: 'h_bottom', label: '面到地' }, { key: 't_stone', label: '窗石厚' }, { key: 'd_stone', label: '窗石凸' }] },
+            beam: { title: '樑', fields: [{ key: 'w', label: '樑闊' }, { key: 'd', label: '樑深' }, { key: 'h_bottom', label: '底到地' }, { key: 'w_side', label: '樑邊到牆' }] },
+            column: { title: '柱', fields: [{ key: 'w', label: '柱闊' }, { key: 'd', label: '柱深' }, { key: 'h_top', label: '柱高' }, { key: 'd_out', label: '柱凸出' }] },
+            protrusion: { title: '凸', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
+            pipe: { title: '包喉', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
+            elec_box: { title: '電箱', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }, { key: 'h_bottom', label: '底到地' }] },
+            ac: { title: '冷氣', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }, { key: 'h_bottom', label: '底到地' }] },
+            fridge: { title: '雪柜', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
+            skirting: { title: '地腳線', fields: [{ key: 'h', label: '高' }, { key: 't', label: '厚' }] },
+            reserve: { title: '留位', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
+            avoid: { title: '避', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] }
+        };
+
+        const buildWallSegments = (w) => {
+            if (!w) return [];
+            const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = Math.hypot(dx, dy); if (L < 4) return [];
+            const ux = dx / L, uy = dy / L, nx = -uy, ny = ux, hw = 9;
+            const p1A = { x: w.x1 + nx * hw, y: w.y1 + ny * hw }, p2A = { x: w.x2 + nx * hw, y: w.y2 + ny * hw };
+            const p1B = { x: w.x1 - nx * hw, y: w.y1 - ny * hw }, p2B = { x: w.x2 - nx * hw, y: w.y2 - ny * hw };
+            const segs = [
+                { x1: p1A.x, y1: p1A.y, x2: p2A.x, y2: p2A.y, isHatch: false }, { x1: p1B.x, y1: p1B.y, x2: p2B.x, y2: p2B.y, isHatch: false },
+                { x1: p1A.x, y1: p1A.y, x2: p1B.x, y2: p1B.y, isHatch: false }, { x1: p2A.x, y1: p2A.y, x2: p2B.x, y2: p2B.y, isHatch: false }
+            ];
+            if (w.style === 'hatched') {
+                for (let c = -hw + 14; c < L + hw; c += 14) {
+                    const t0 = Math.max(-hw, -c), t1 = Math.min(hw, L - c);
+                    if (t1 - t0 > 0.5) segs.push({ x1: w.x1 + (c + t0) * ux + t0 * nx, y1: w.y1 + (c + t0) * uy + t0 * ny, x2: w.x1 + (c + t1) * ux + t1 * nx, y2: w.y1 + (c + t1) * uy + t1 * ny, isHatch: true });
+                }
             }
-            db = firebase.firestore();
-            db.settings({ experimentalAutoDetectLongPolling: true, ignoreUndefinedProperties: true });
-        }
-    } catch (_) {}
+            return segs;
+        };
 
-    const withTimeout = (p, ms = 15000, msg = '雲端連線逾時，請檢查網路') => {
-        let t;
-        return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); })]).finally(() => clearTimeout(t));
-    };
-    const withRetry = async (fn, retries = 3, delay = 800) => {
-        for (let i = 0; i <= retries; i++) {
-            try { return await fn(); } catch (e) { if (i === retries) throw e; await new Promise(r => setTimeout(r, delay * (i + 1))); }
-        }
-    };
+        createApp({
+            setup() {
+                const inputCode = ref(''), isLoading = ref(false), loadingText = ref('正在載入圖紙...');
+                const toastMsg = ref(''), showToast = (m) => { toastMsg.value = m; setTimeout(() => { if (toastMsg.value === m) toastMsg.value = ''; }, 3000); };
 
-    const CHUNK_SIZE = 350000;
-    const getTodayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-    const sanitizeFilename = (s) => String(s || '').trim().replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
+                const project = reactive({ code: '', name: '', date: '' });
+                const pages = ref([]), activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
+                const activePage = computed(() => pages.value[activePageIndex.value] || null);
+                const activeCanvas = computed(() => activePin.value || activePage.value);
+                const canvasW = computed(() => activeCanvas.value?.w || 1200);
+                const canvasH = computed(() => activeCanvas.value?.h || 900);
+                const masterPages = computed(() => pages.value.map((pg, idx) => ({ pg, idx })).filter(x => x.pg.space === '總圖'));
+                const showQuickNav = ref(false);
 
-    const measureStrWidth = (str, charPx) => {
-        let total = 0;
-        for (const ch of String(str || '')) total += /[^\x00-\xff]/.test(ch) ? charPx : charPx * 0.56;
-        return total;
-    };
-
-    const drawRoundRect = (ctx, x, y, w, h, r) => {
-        ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.arcTo(x + w, y, x + w, y + h, r);
-        ctx.arcTo(x + w, y + h, x, y + h, r);
-        ctx.arcTo(x, y + h, x, y, r);
-        ctx.arcTo(x, y, x + w, y, r);
-        ctx.closePath();
-    };
-
-    const renderSketchDataUrl = (w = 1200, h = 1500, hasGrid = true) => {
-        const c = document.createElement('canvas'); c.width = w; c.height = h;
-        const ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
-        if (hasGrid) {
-            ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1.5;
-            for (let x = 50; x < w; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
-            for (let y = 50; y < h; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
-        }
-        return c.toDataURL('image/jpeg', 0.85);
-    };
-
-    const buildWallSegments = (w) => {
-        if (!w) return [];
-        const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = Math.hypot(dx, dy); if (L < 4) return [];
-        const ux = dx / L, uy = dy / L, nx = -uy, ny = ux, hw = 9;
-        const p1A = { x: w.x1 + nx * hw, y: w.y1 + ny * hw }, p2A = { x: w.x2 + nx * hw, y: w.y2 + ny * hw };
-        const p1B = { x: w.x1 - nx * hw, y: w.y1 - ny * hw }, p2B = { x: w.x2 - nx * hw, y: w.y2 - ny * hw };
-        const segs = [
-            { x1: p1A.x, y1: p1A.y, x2: p2A.x, y2: p2A.y, isHatch: false }, { x1: p1B.x, y1: p1B.y, x2: p2B.x, y2: p2B.y, isHatch: false },
-            { x1: p1A.x, y1: p1A.y, x2: p1B.x, y2: p1B.y, isHatch: false }, { x1: p2A.x, y1: p2A.y, x2: p2B.x, y2: p2B.y, isHatch: false }
-        ];
-        if (w.style === 'hatched') {
-            for (let c = -hw + 14; c < L + hw; c += 14) {
-                const t0 = Math.max(-hw, -c), t1 = Math.min(hw, L - c);
-                if (t1 - t0 > 0.5) segs.push({ x1: w.x1 + (c + t0) * ux + t0 * nx, y1: w.y1 + (c + t0) * uy + t0 * ny, x2: w.x1 + (c + t1) * ux + t1 * nx, y2: w.y1 + (c + t1) * uy + t1 * ny, isHatch: true });
-            }
-        }
-        return segs;
-    };
-
-    createApp({
-        setup() {
-            const authorName = ref(''), hasUnsavedCloudChanges = ref(false), dirtyPageIds = new Set();
-            let unsubPages = null, isPushing = false, isAutoQueueing = false;
-
-            // 預設「細字體」(0.6) 及 預設字體顏色 (#ffffff)
-            const currentView = ref('dir'), showWatermark = ref(true), globalFontScale = ref(0.6);
-            const defaultTextColor = ref('#ffffff');
-            const stampFilter = ref('all');
-            const filteredStampGroups = computed(() => stampFilter.value === 'all' ? STAMP_GROUPS : STAMP_GROUPS.filter(g => g.id === stampFilter.value));
-
-            const projectList = ref([]);
-            const project = reactive({ code: '', name: '', date: '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '' });
-            const pages = ref([]), photoPool = ref([]), activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
-            const activePage = computed(() => pages.value[activePageIndex.value] || null);
-            const activeCanvas = computed(() => activePin.value || activePage.value);
-            const canvasW = computed(() => activeCanvas.value?.w || 1200);
-            const canvasH = computed(() => activeCanvas.value?.h || 900);
-
-            // 總圖清單與快速跳頁目錄
-            const masterPages = computed(() => pages.value.map((pg, idx) => ({ pg, idx })).filter(x => x.pg.space === '總圖'));
-            const showQuickPageNav = ref(false);
-            const jumpToPage = (idx) => { showQuickPageNav.value = false; switchPage(idx); };
-            const jumpToPageById = (targetId) => {
-                if (!targetId) return;
-                const idx = pages.value.findIndex(p => String(p.id) === String(targetId));
-                if (idx !== -1) {
-                    switchPage(idx);
-                    showToast(`↪️ 已跳轉至 P${idx + 1}${pages.value[idx].space ? ' [' + pages.value[idx].space + ']' : ''}`);
-                } else {
-                    showToast('⚠️ 連結的目標頁面已不存在');
-                }
-            };
-            const goToMasterPlan = () => {
-                if (!masterPages.value.length) return;
-                if (masterPages.value.length === 1) jumpToPage(masterPages.value[0].idx);
-                else showQuickPageNav.value = !showQuickPageNav.value;
-            };
-
-            // 中上方懸浮工具膠囊位置與收合狀態
-            const capsuleOffset = reactive({ x: 0, y: 0 });
-            const capsuleCollapsed = ref(false);
-            const startCapsuleDrag = (e) => {
-                const sx = e.clientX, sy = e.clientY, ox = capsuleOffset.x, oy = capsuleOffset.y;
-                const onMove = (ev) => {
-                    const maxX = Math.max(60, window.innerWidth / 2 - 50);
-                    capsuleOffset.x = Math.max(-maxX, Math.min(maxX, ox + (ev.clientX - sx)));
-                    capsuleOffset.y = Math.max(-6, Math.min(window.innerHeight - 130, oy + (ev.clientY - sy)));
-                };
-                const onUp = () => {
-                    window.removeEventListener('pointermove', onMove);
-                    window.removeEventListener('pointerup', onUp);
-                    window.removeEventListener('pointercancel', onUp);
-                };
-                window.addEventListener('pointermove', onMove);
-                window.addEventListener('pointerup', onUp);
-                window.addEventListener('pointercancel', onUp);
-            };
-
-            const zoomScale = ref(1), vbX = ref(0), vbY = ref(0);
-            const invZoom = computed(() => 1 / Math.pow(zoomScale.value, 0.65));
-            const svgViewBox = computed(() => {
-                const pw = canvasW.value, ph = canvasH.value;
-                const vw = Math.round((pw / zoomScale.value) * 10) / 10, vh = Math.round((ph / zoomScale.value) * 10) / 10;
-                const vx = Math.max(0, Math.min(pw - vw, vbX.value)), vy = Math.max(0, Math.min(ph - vh, vbY.value));
-                return `${vx} ${vy} ${vw} ${vh}`;
-            });
-
-            const resetZoom = () => { zoomScale.value = 1; vbX.value = 0; vbY.value = 0; };
-            const toggleFontScale = () => {
-                globalFontScale.value = globalFontScale.value === 0.6 ? 0.8 : (globalFontScale.value === 0.8 ? 1.0 : 0.6);
-                (activeCanvas.value?.markers || []).forEach(m => updateMarkerSize(m));
-                saveAll();
-                showToast(`🔠 字體：${globalFontScale.value === 1.0 ? '大' : (globalFontScale.value === 0.8 ? '中' : '細')}`);
-            };
-
-            const applyZoomAtClientPoint = (nextScale, clientX, clientY, anchorSvg) => {
-                const svg = svgCanvas.value, pw = canvasW.value, ph = canvasH.value;
-                const clampedScale = Math.max(1, Math.min(5, Math.round(nextScale * 100) / 100));
-                if (clampedScale <= 1) { resetZoom(); return; }
-                const vw = pw / clampedScale, vh = ph / clampedScale;
-                if (svg && anchorSvg) {
-                    const r = svg.getBoundingClientRect(), baseFit = Math.min(r.width / pw, r.height / ph);
-                    const effScale = baseFit * clampedScale, offX = r.left + (r.width - pw * baseFit) / 2, offY = r.top + (r.height - ph * baseFit) / 2;
-                    zoomScale.value = clampedScale;
-                    vbX.value = Math.max(0, Math.min(pw - vw, anchorSvg.x - (clientX - offX) / effScale));
-                    vbY.value = Math.max(0, Math.min(ph - vh, anchorSvg.y - (clientY - offY) / effScale));
-                } else {
-                    const cx = vbX.value + (pw / zoomScale.value) / 2, cy = vbY.value + (ph / zoomScale.value) / 2;
-                    zoomScale.value = clampedScale;
-                    vbX.value = Math.max(0, Math.min(pw - vw, cx - vw / 2));
-                    vbY.value = Math.max(0, Math.min(ph - vh, cy - vh / 2));
-                }
-            };
-            const stepZoom = (delta) => applyZoomAtClientPoint(zoomScale.value + delta, null, null, null);
-            const onStageWheel = (e) => { if (svgCanvas.value && activeCanvas.value?.photo) applyZoomAtClientPoint(zoomScale.value * (e.deltaY < 0 ? 1.2 : 0.82), e.clientX, e.clientY, getCoords(e)); };
-
-            const fullScreenIndex = ref(-1);
-            const fullScreenList = computed(() => {
-                const list = [];
-                pages.value.forEach((pg, pIdx) => {
-                    const d = pg.date || project.date || getTodayStr(), a = pg.author || project.lastModifiedBy || '';
-                    if (pg.photo) list.push({ item: pg, label: `P${pIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`, date: d, author: a });
-                    (pg.pins || []).forEach((pin, pinIdx) => { if (pin.photo) list.push({ item: pin, label: `P${pIdx + 1} 📍釘#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}`, date: pin.date || d, author: pin.author || a }); });
+                // 縮放與平移
+                const zoomScale = ref(1), vbX = ref(0), vbY = ref(0), svgCanvas = ref(null);
+                const invZoom = computed(() => 1 / Math.pow(zoomScale.value, 0.65));
+                const svgViewBox = computed(() => {
+                    const pw = canvasW.value, ph = canvasH.value;
+                    const vw = Math.round((pw / zoomScale.value) * 10) / 10, vh = Math.round((ph / zoomScale.value) * 10) / 10;
+                    const vx = Math.max(0, Math.min(pw - vw, vbX.value)), vy = Math.max(0, Math.min(ph - vh, vbY.value));
+                    return `${vx} ${vy} ${vw} ${vh}`;
                 });
-                return list;
-            });
-            const currentFullScreen = computed(() => (fullScreenIndex.value >= 0 && fullScreenIndex.value < fullScreenList.value.length) ? fullScreenList.value[fullScreenIndex.value] : null);
-            const fullScreenItem = computed(() => currentFullScreen.value?.item || null);
-            const fullScreenTitle = computed(() => currentFullScreen.value ? `${currentFullScreen.value.label} (${fullScreenIndex.value + 1}/${fullScreenList.value.length})` : '');
-            const fullScreenDate = computed(() => currentFullScreen.value?.date || getTodayStr());
-            const fullScreenAuthor = computed(() => currentFullScreen.value?.author || '');
-
-            const openFullScreenPreview = (targetItem) => { const idx = fullScreenList.value.findIndex(x => String(x.item.id) === String(targetItem.id)); if (idx !== -1) fullScreenIndex.value = idx; };
-            const prevFullScreen = () => { if (fullScreenIndex.value > 0) fullScreenIndex.value--; };
-            const nextFullScreen = () => { if (fullScreenIndex.value < fullScreenList.value.length - 1) fullScreenIndex.value++; };
-
-            const editFromFullScreen = () => {
-                const target = fullScreenItem.value; if (!target) return;
-                const tid = String(target.id);
-                fullScreenIndex.value = -1; resetZoom(); showQuickPageNav.value = false;
-                for (let i = 0; i < pages.value.length; i++) {
-                    const pg = pages.value[i];
-                    if (String(pg.id) === tid) {
-                        activePageIndex.value = i; activePin.value = null; drawMode.value = 'line'; currentView.value = 'proj'; return;
-                    }
-                    const pIdx = (pg.pins || []).findIndex(p => String(p.id) === tid);
-                    if (pIdx !== -1) {
-                        activePageIndex.value = i; openPinSubPage(pg.pins[pIdx], pIdx); drawMode.value = 'line'; currentView.value = 'proj'; return;
-                    }
-                }
-            };
-
-            const draggingPageIdx = ref(null), dragOverPageIdx = ref(null);
-            const startPageDrag = (idx) => {
-                if (pages.value.length <= 1) return;
-                draggingPageIdx.value = idx; dragOverPageIdx.value = idx;
-                const onMove = (ev) => { const card = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-page-idx]'); if (card) { const t = Number(card.getAttribute('data-page-idx')); if (!Number.isNaN(t)) dragOverPageIdx.value = t; } };
-                const onUp = async () => {
-                    window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp);
-                    const from = draggingPageIdx.value, to = dragOverPageIdx.value; draggingPageIdx.value = null; dragOverPageIdx.value = null;
-                    if (from !== null && to !== null && from !== to) {
-                        const [moved] = pages.value.splice(from, 1); pages.value.splice(to, 0, moved); activePageIndex.value = to;
-                        project.pageOrderUpdatedAt = Date.now(); hasUnsavedCloudChanges.value = true;
-                        if (!navigator.onLine) cloudSyncState.value = 'offline';
-                        await saveAll(); showToast(`✅ 已調整為 P${to + 1}`);
-                    }
-                };
-                window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
-            };
-
-            // 極簡 CAD 圖籤膠囊資料計算 (走粗黑邊與 Emoji，縮細 70%)
-            const buildWatermarkBox = (item, itemDate, itemAuthor) => {
-                const pName = project.name?.trim() || '';
-                const spName = item?.space?.trim() || '';
-                const title = [pName, spName].filter(Boolean).join(' · ');
-                const dStr = itemDate || item?.date || project.date || '';
-                const aStr = itemAuthor || item?.author || project.lastModifiedBy || '';
-                const sub = [dStr, aStr].filter(Boolean).join(' · ');
-                if (!title && !sub) return null;
-                const w1 = title ? measureStrWidth(title, 15) : 0;
-                const w2 = sub ? measureStrWidth(sub, 12) : 0;
-                const w = Math.max(96, Math.ceil(Math.max(w1, w2) + 22));
-                const h = title && sub ? 44 : 26;
-                return { x: 14, y: 14, w, h, title, sub };
-            };
-            const fullScreenWatermarkBox = computed(() => buildWatermarkBox(fullScreenItem.value, fullScreenDate.value, fullScreenAuthor.value));
-
-            const showJoinModal = ref(false), inputJoinCode = ref(''), showAddPageModal = ref(false), showSpaceModal = ref(false), showMergeModal = ref(false), showPdfModal = ref(false);
-            const spaceList = ref([...DEFAULT_SPACES]);
-            const showManageModal = ref(false), manageProj = ref({}), showCloudBrowser = ref(false), cloudProjectList = ref([]), showBackupListModal = ref(false), backupList = ref([]);
-            const showPhotoPoolModal = ref(false), photoPoolList = ref([]), photoPoolTarget = ref('newPage');
-
-            const drawColor = ref('#ef4444'), wallStyle = ref('hollow'), toastMsg = ref('');
-            const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
-
-            const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v9.8' }[cloudSyncState.value] || '☁️v9.8'));
-            const cloudStatusClass = computed(() =>
-                cloudSyncState.value === 'syncing' ? 'bg-amber-100 text-amber-900 border-amber-300' :
-                cloudSyncState.value === 'offline' ? 'bg-zinc-100 text-zinc-500 border-zinc-300' :
-                cloudSyncState.value === 'queued' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-emerald-50 text-emerald-700 border-emerald-300'
-            );
-
-            const customStamps = ref([]);
-            const loadCustomStamps = async () => { customStamps.value = (await localforage.getItem('custom_stamps')) || []; };
-            const promptCustomStamp = async () => {
-                const txt = prompt('輸入自訂印章字眼：')?.trim();
-                if (txt) {
-                    if (!customStamps.value.includes(txt)) { customStamps.value.push(txt); await localforage.setItem('custom_stamps', customStamps.value); }
-                    applyStamp(txt);
-                }
-            };
-
-            const showCloudDetail = () => {
-                if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
-                else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                else showToast('v9.8 細字預設・白紅黃三色・極簡圖籤');
-            };
-
-            const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
-            const getBaseImageKey = (pg) => pg?.photoId ? String(pg.photoId) : (pg?.photo && !pg.isSketch ? photoFingerprint(pg.photo) : '');
-
-            const updateQueue = async (code, add) => {
-                code = String(code || '').trim(); if (!code) return;
-                const q = (await localforage.getItem('pending_upload_queue')) || [];
-                const next = add ? (q.includes(code) ? q : [...q, code]) : q.filter(c => c !== code);
-                await localforage.setItem('pending_upload_queue', next);
-            };
-            const markProjectChanged = () => { hasUnsavedCloudChanges.value = true; if (!navigator.onLine) cloudSyncState.value = 'offline'; };
-            const touchDirty = (targetPage = activePage.value) => {
-                const now = Date.now(), today = getTodayStr();
-                if (activePin.value) activePin.value.updatedAt = now;
-                if (targetPage) { targetPage.updatedAt = now; targetPage.date = today; if (authorName.value) targetPage.author = authorName.value; dirtyPageIds.add(targetPage.id); }
-                project.date = today; hasUnsavedCloudChanges.value = true;
-                if (!navigator.onLine) cloudSyncState.value = 'offline';
-            };
-
-            const showBranchPrompt = ref(false), branchOwner = ref(''), branchInputValue = ref(''), pendingBranchAction = ref(null), branchTargetPage = ref(null);
-            const triggerBranchPrompt = (pg, owner, actionCb) => {
-                isDrawing.value = false; currentLine.value = null; currentWall.value = null; currentPath.value = '';
-                if (draggedMarker.value) { draggedMarker.value.x = markerOrigin.value.x; draggedMarker.value.y = markerOrigin.value.y; draggedMarker.value = null; }
-                branchOwner.value = owner; branchInputValue.value = ''; branchTargetPage.value = pg; pendingBranchAction.value = actionCb; showBranchPrompt.value = true;
-                nextTick(() => document.querySelector('input[placeholder="Y"]')?.focus());
-            };
-            const doBranchCopy = (pg, me) => {
-                const c = JSON.parse(JSON.stringify(pg)), sharedPhotoId = pg.photoId || ('page_' + pg.id); pg.photoId = sharedPhotoId;
-                const oldPinId = activePin.value ? String(activePin.value.id) : null;
-                const newPg = makeEmptyPage({
-                    space: c.space || '', date: getTodayStr(), author: me, photo: pg.photo, photoId: sharedPhotoId, w: c.w || 1200, h: c.h || 900,
-                    isSketch: !!c.isSketch, hasGrid: !!c.hasGrid, markers: c.markers || [], lines: c.lines || [], walls: c.walls || [], paths: c.paths || [], pins: c.pins || [], deletedPinIds: c.deletedPinIds || []
-                });
-                pages.value.push(newPg); activePageIndex.value = pages.value.length - 1;
-                if (oldPinId) activePin.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null;
-                dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
-                showToast(`📋 已複製為 P${pages.value.length} (保留 [${branchOwner.value}] 原圖)`);
-            };
-            const confirmBranch = () => { if (branchInputValue.value.trim().toUpperCase() === 'Y') doBranchCopy(branchTargetPage.value, String(authorName.value || '').trim()); const cb = pendingBranchAction.value; showBranchPrompt.value = false; pendingBranchAction.value = null; branchTargetPage.value = null; if (cb) cb(); };
-            const cancelBranch = () => { const cb = pendingBranchAction.value; showBranchPrompt.value = false; pendingBranchAction.value = null; branchTargetPage.value = null; if (cb) cb(); };
-            const checkBranchNeed = (actionCb) => {
-                const pg = activePage.value, me = String(authorName.value || '').trim();
-                if (!pg || !pg.photo || !me) return actionCb();
-                const owner = String(pg.author || '').trim();
-                if (!owner || owner === me) return actionCb();
-                triggerBranchPrompt(pg, owner, actionCb);
-            };
-
-            const drawMode = ref('browse'), showTopSheet = ref(false), showTopTextBar = ref(false), activeMarker = ref(null);
-            const isProcessing = ref(false), processingText = ref(''), focusedInput = ref('val'), topTextInputRef = ref(null), svgCanvas = ref(null);
-
-            // 📝 編 (空間 / 編號索引專用彈窗狀態)
-            const showIndexModal = ref(false), indexDraftPos = ref({ x: 0, y: 0 }), indexCustomCode = ref(''), editingIndexMarker = ref(null);
-            const openIndexModalAt = (x, y, existing = null) => {
-                indexDraftPos.value = { x, y };
-                editingIndexMarker.value = existing;
-                indexCustomCode.value = existing?.data?.customCode || '';
-                showIndexModal.value = true;
-            };
-            const placeSpaceTag = (sp) => {
-                checkBranchNeed(() => {
-                    const c = activeCanvas.value; if (!c) return;
-                    c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
-                    if (editingIndexMarker.value) {
-                        const target = c.markers.find(m => m.id === editingIndexMarker.value.id);
-                        if (target) {
-                            target.type = 'space_tag';
-                            target.textColor = defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null;
-                            target.data = { ...makeBlankMarkerData(), val: sp };
-                            updateMarkerSize(target);
-                        }
+                const resetZoom = () => { zoomScale.value = 1; vbX.value = 0; vbY.value = 0; };
+                const applyZoomAt = (nextScale, clientX, clientY, anchorSvg) => {
+                    const svg = svgCanvas.value, pw = canvasW.value, ph = canvasH.value;
+                    const clamped = Math.max(1, Math.min(5, Math.round(nextScale * 100) / 100));
+                    if (clamped <= 1) { resetZoom(); return; }
+                    const vw = pw / clamped, vh = ph / clamped;
+                    if (svg && anchorSvg) {
+                        const r = svg.getBoundingClientRect(), baseFit = Math.min(r.width / pw, r.height / ph);
+                        const eff = baseFit * clamped, offX = r.left + (r.width - pw * baseFit) / 2, offY = r.top + (r.height - ph * baseFit) / 2;
+                        zoomScale.value = clamped;
+                        vbX.value = Math.max(0, Math.min(pw - vw, anchorSvg.x - (clientX - offX) / eff));
+                        vbY.value = Math.max(0, Math.min(ph - vh, anchorSvg.y - (clientY - offY) / eff));
                     } else {
-                        const markerId = Date.now();
-                        const newMarker = { id: markerId, lineId: null, x: indexDraftPos.value.x, y: indexDraftPos.value.y, w: 140, h: 56, type: 'space_tag', textColor: defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null, data: { ...makeBlankMarkerData(), val: sp } };
-                        updateMarkerSize(newMarker);
-                        c.markers.push(newMarker);
-                        c.historyStack.push({ type: 'marker', markerId });
+                        const cx = vbX.value + (pw / zoomScale.value) / 2, cy = vbY.value + (ph / zoomScale.value) / 2;
+                        zoomScale.value = clamped;
+                        vbX.value = Math.max(0, Math.min(pw - vw, cx - vw / 2));
+                        vbY.value = Math.max(0, Math.min(ph - vh, cy - vh / 2));
                     }
-                    touchDirty(); saveAll(); showIndexModal.value = false; editingIndexMarker.value = null;
-                });
-            };
-            const addCustomSpaceTag = () => {
-                const s = prompt('輸入空間或標籤名稱：')?.trim();
-                if (s) {
-                    if (!spaceList.value.includes(s)) spaceList.value.push(s);
-                    placeSpaceTag(s);
-                }
-            };
-            const placePageLink = (targetPg, targetIdx) => {
-                checkBranchNeed(() => {
-                    const c = activeCanvas.value; if (!c) return;
-                    c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
-                    const code = String(indexCustomCode.value || '').trim();
-                    const label = code ? `${code} ➔ P${targetIdx + 1}` : `P${targetIdx + 1}${targetPg.space ? ' ' + targetPg.space : ''}`;
-                    if (editingIndexMarker.value) {
-                        const target = c.markers.find(m => m.id === editingIndexMarker.value.id);
-                        if (target) {
-                            target.type = 'page_link';
-                            target.data = { ...makeBlankMarkerData(), val: label, customCode: code, targetPageId: targetPg.id };
-                            updateMarkerSize(target);
-                        }
-                    } else {
-                        const markerId = Date.now();
-                        const newMarker = { id: markerId, lineId: null, x: indexDraftPos.value.x, y: indexDraftPos.value.y, w: 160, h: 56, type: 'page_link', data: { ...makeBlankMarkerData(), val: label, customCode: code, targetPageId: targetPg.id } };
-                        updateMarkerSize(newMarker);
-                        c.markers.push(newMarker);
-                        c.historyStack.push({ type: 'marker', markerId });
-                    }
-                    touchDirty(); saveAll(); showIndexModal.value = false; editingIndexMarker.value = null;
-                    showToast(`🔗 已連結至 P${targetIdx + 1}`);
-                });
-            };
-            const deleteEditingIndexMarker = () => {
-                if (!editingIndexMarker.value) return;
-                activeMarker.value = editingIndexMarker.value;
-                showIndexModal.value = false;
-                editingIndexMarker.value = null;
-                deleteMarkerTop();
-            };
-
-            // 切換白 / 紅 / 黃三色字體 (同時記住為預設色)
-            const setMarkerTextColor = (colorHex) => {
-                defaultTextColor.value = colorHex;
-                if (activeMarker.value) {
-                    ensureMarkerBranched(() => {
-                        activeMarker.value.textColor = colorHex;
-                        touchDirty();
-                        saveAll();
-                    });
-                }
-            };
-
-            const getArrowMarkerId = (c) => 'arrow-end-' + String(c || '#ef4444').replace('#', 'hex_');
-            const getFsArrowMarkerId = (c) => 'fs-arrow-' + String(c || '#ef4444').replace('#', 'hex_');
-
-            const getLineStroke = (l, alpha = 0.75) => {
-                if (!l.type || l.type === 'measure') return `rgba(255, 0, 68, ${alpha})`;
-                const legacy = { red: '#ef4444', gray: '#9ca3af', white: '#ffffff' };
-                return legacy[l.color] || l.color || '#ef4444';
-            };
-            const getWallSegments = (w) => buildWallSegments(w);
-
-            const enterEditMode = (idx = 0) => { resetZoom(); showQuickPageNav.value = false; activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; };
-            const switchToPreview = async () => { await saveAll(); resetZoom(); showQuickPageNav.value = false; activePin.value = null; currentView.value = 'preview'; };
-
-            const mergeableGroups = computed(() => {
-                const map = new Map();
-                pages.value.forEach((pg, idx) => { const key = getBaseImageKey(pg); if (key) { if (!map.has(key)) map.set(key, []); map.get(key).push({ pg, idx }); } });
-                return Array.from(map.entries()).filter(([, items]) => items.length >= 2).map(([key, items]) => ({ key, photo: items[0].pg.photo, items }));
-            });
-            const mergePageGroup = async (grp) => {
-                const maps = { lines: new Map(), walls: new Map(), paths: new Map(), markers: new Map(), pins: new Map() };
-                const delPins = new Set(project.deletedPinIds || []);
-                let space = '', w = 1200, h = 900, isSketch = false, hasGrid = false;
-                grp.items.forEach(({ pg }) => {
-                    if (!space && pg.space) space = pg.space; w = pg.w || w; h = pg.h || h; isSketch ||= !!pg.isSketch; hasGrid ||= !!pg.hasGrid;
-                    (pg.deletedPinIds || []).forEach(id => delPins.add(String(id)));
-                    Object.keys(maps).forEach(k => (pg[k] || []).forEach(x => { if (!(k === 'pins' && delPins.has(String(x.id)))) maps[k].set(String(x.id), JSON.parse(JSON.stringify(x))); }));
-                });
-                const mergedPg = makeEmptyPage({
-                    space, date: getTodayStr(), author: (authorName.value || '團隊') + ' (合併)', photo: grp.photo, photoId: grp.key, w, h, isSketch, hasGrid,
-                    lines: [...maps.lines.values()], walls: [...maps.walls.values()], paths: [...maps.paths.values()], markers: [...maps.markers.values()], pins: [...maps.pins.values()], deletedPinIds: [...delPins]
-                });
-                pages.value.push(mergedPg); dirtyPageIds.add(mergedPg.id); hasUnsavedCloudChanges.value = true; showMergeModal.value = false; await saveAll(); showToast(`✅ 已智能合併為 P${pages.value.length}`);
-            };
-
-            const isDrawing = ref(false), startPos = ref({ x: 0, y: 0 }), currentLine = ref(null), currentWall = ref(null), currentPath = ref('');
-            let tempPoints = [];
-            const draggedMarker = ref(null), dragOrigin = ref({ x: 0, y: 0 }), markerOrigin = ref({ x: 0, y: 0 });
-            const hasUndoItems = computed(() => activeCanvas.value?.historyStack?.length > 0);
-            const hasRedoItems = computed(() => activeCanvas.value?.redoStack?.length > 0);
-
-            let isPinching = false, pinchStartDist = 0, pinchStartScale = 1, pinchAnchorSvg = null;
-            let isPanningBrowse = false, panStartClient = { x: 0, y: 0 }, panStartVb = { x: 0, y: 0 };
-            let touchStartTime = 0, touchMoved = false, pendingTapMarker = null;
-            let isSpaceDown = false;
-
-            const getClientPoint = (e) => e.touches?.[0] || e.changedTouches?.[0] || e;
-            const clientToSvgPoint = (clientX, clientY) => {
-                const svg = svgCanvas.value; if (!svg || !activeCanvas.value) return { x: 0, y: 0 };
-                const pw = canvasW.value, ph = canvasH.value;
-                try {
-                    const ctm = svg.getScreenCTM();
-                    if (ctm) { const p = svg.createSVGPoint(); p.x = clientX; p.y = clientY; const loc = p.matrixTransform(ctm.inverse()); return { x: Math.round(Math.max(0, Math.min(pw, loc.x))), y: Math.round(Math.max(0, Math.min(ph, loc.y))) }; }
-                } catch (_) {}
-                const vw = pw / zoomScale.value, vh = ph / zoomScale.value, vx = Math.max(0, Math.min(pw - vw, vbX.value)), vy = Math.max(0, Math.min(ph - vh, vbY.value));
-                const r = svg.getBoundingClientRect(), s = Math.min(r.width / vw, r.height / vh);
-                return { x: Math.round(Math.max(0, Math.min(pw, vx + (clientX - r.left - (r.width - vw * s) / 2) / s))), y: Math.round(Math.max(0, Math.min(ph, vy + (clientY - r.top - (r.height - vh * s) / 2) / s))) };
-            };
-            const getCoords = (e) => { const pt = getClientPoint(e); return clientToSvgPoint(pt.clientX, pt.clientY); };
-
-            const snapWallEnd = (x1, y1, x2, y2) => {
-                if (Math.hypot(x2 - x1, y2 - y1) < 10) return { x: x2, y: y2 };
-                const deg = Math.abs(Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI);
-                if (deg <= 4 || deg >= 176) return { x: x2, y: y1 }; if (Math.abs(deg - 90) <= 4) return { x: x1, y: y2 };
-                return { x: x2, y: y2 };
-            };
-
-            const getAdaptiveCanvasSize = () => {
-                const stage = document.getElementById('draw-stage'); let w = 1200, h = 1500;
-                if (stage) {
-                    const rect = stage.getBoundingClientRect();
-                    if (rect.width > 0 && rect.height > 0) { const ratio = rect.width / rect.height; if (ratio > 1) { h = 1500; w = Math.round(h * ratio); } else { w = 1500; h = Math.round(w / ratio); } }
-                }
-                return { w, h };
-            };
-
-            const makeEmptyPage = (ov = {}) => {
-                const pg = {
-                    id: 'pg_' + Date.now() + '_' + Math.floor(Math.random() * 99999), space: '', date: ov.date || getTodayStr(), author: authorName.value || '',
-                    photo: null, photoId: '', w: 1200, h: 900, isSketch: false, hasGrid: false, markers: [], lines: [], walls: [], paths: [], pins: [], deletedPinIds: [], historyStack: [], redoStack: [], updatedAt: Date.now(), ...ov
                 };
-                if (pg.isSketch && !pg.photo) { const size = getAdaptiveCanvasSize(); pg.w = ov.w || size.w; pg.h = ov.h || size.h; pg.photo = renderSketchDataUrl(pg.w, pg.h, !!pg.hasGrid); }
-                return pg;
-            };
+                const stepZoom = (d) => applyZoomAt(zoomScale.value + d, null, null, null);
+                const onStageWheel = (e) => { if (svgCanvas.value && activeCanvas.value?.photo) applyZoomAt(zoomScale.value * (e.deltaY < 0 ? 1.2 : 0.82), e.clientX, e.clientY, getCoords(e)); };
 
-            const initSketchOnCurrent = () => { if (!activeCanvas.value) return; resetZoom(); const size = getAdaptiveCanvasSize(); Object.assign(activeCanvas.value, { photo: renderSketchDataUrl(size.w, size.h, true), w: size.w, h: size.h, isSketch: true, hasGrid: true }); touchDirty(); drawMode.value = 'browse'; saveAll(); };
-            const addNewSketchPage = (hasGrid) => { showAddPageModal.value = false; resetZoom(); const size = getAdaptiveCanvasSize(); const newPg = makeEmptyPage({ photo: renderSketchDataUrl(size.w, size.h, hasGrid), w: size.w, h: size.h, isSketch: true, hasGrid }); pages.value.push(newPg); activePageIndex.value = pages.value.length - 1; dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; drawMode.value = 'browse'; saveAll(); };
-            const duplicateCurrentPage = (keepAnnotations = false) => {
-                showAddPageModal.value = false; const src = activePage.value; if (!src?.photo) return;
-                resetZoom(); const sharedPhotoId = src.photoId || ('page_' + src.id); src.photoId = sharedPhotoId; const c = JSON.parse(JSON.stringify(src));
-                const newPg = makeEmptyPage({
-                    space: src.space || '', photo: src.photo, photoId: sharedPhotoId, w: src.w || 1200, h: src.h || 900, isSketch: !!src.isSketch, hasGrid: !!src.hasGrid,
-                    markers: keepAnnotations ? (c.markers || []) : [], lines: keepAnnotations ? (c.lines || []) : [], walls: keepAnnotations ? (c.walls || []) : [], paths: keepAnnotations ? (c.paths || []) : [], pins: []
-                });
-                pages.value.push(newPg); activePageIndex.value = pages.value.length - 1; dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; drawMode.value = 'browse'; saveAll();
-                showToast(keepAnnotations ? `📑 已複製整頁為 P${pages.value.length}` : `📄 已複製純淨底圖為 P${pages.value.length}`);
-            };
-            const toggleSketchGrid = () => { if (!activeCanvas.value) return; checkBranchNeed(() => { activeCanvas.value.hasGrid = !activeCanvas.value.hasGrid; activeCanvas.value.photo = renderSketchDataUrl(activeCanvas.value.w || 1200, activeCanvas.value.h || 1500, activeCanvas.value.hasGrid); touchDirty(); saveAll(); }); };
+                const clientToSvgPoint = (clientX, clientY) => {
+                    const svg = svgCanvas.value; if (!svg || !activeCanvas.value) return { x: 0, y: 0 };
+                    const pw = canvasW.value, ph = canvasH.value;
+                    try {
+                        const ctm = svg.getScreenCTM();
+                        if (ctm) { const p = svg.createSVGPoint(); p.x = clientX; p.y = clientY; const loc = p.matrixTransform(ctm.inverse()); return { x: Math.round(Math.max(0, Math.min(pw, loc.x))), y: Math.round(Math.max(0, Math.min(ph, loc.y))) }; }
+                    } catch (_) {}
+                    const vw = pw / zoomScale.value, vh = ph / zoomScale.value, vx = Math.max(0, Math.min(pw - vw, vbX.value)), vy = Math.max(0, Math.min(ph - vh, vbY.value));
+                    const r = svg.getBoundingClientRect(), s = Math.min(r.width / vw, r.height / vh);
+                    return { x: Math.round(Math.max(0, Math.min(pw, vx + (clientX - r.left - (r.width - vw * s) / 2) / s))), y: Math.round(Math.max(0, Math.min(ph, vy + (clientY - r.top - (r.height - vh * s) / 2) / s))) };
+                };
+                const getCoords = (e) => { const pt = e.touches?.[0] || e.changedTouches?.[0] || e; return clientToSvgPoint(pt.clientX, pt.clientY); };
 
-            const switchPage = (idx) => { resetZoom(); showQuickPageNav.value = false; activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; };
-            const prevPage = () => { if (activePageIndex.value > 0) switchPage(activePageIndex.value - 1); };
-            const nextPage = () => { if (activePageIndex.value < pages.value.length - 1) switchPage(activePageIndex.value + 1); };
+                // 批註狀態 (僅存於本機，提交時送入獨立 feedback 集合)
+                const mode = ref('browse'), fbColor = ref('#ef4444');
+                const fbPaths = ref([]), fbMarkers = ref([]), fbHistory = ref([]);
+                const currentFbPath = ref(''), editingFbMarker = ref(null), fbTextInputRef = ref(null);
+                const isSubmitting = ref(false), showSubmitSuccess = ref(false);
+                const hasDraft = computed(() => fbPaths.value.length > 0 || fbMarkers.value.length > 0);
+                const draftCount = computed(() => fbPaths.value.length + fbMarkers.value.length);
 
-            const deleteCurrentPage = () => {
-                if (pages.value.length <= 1) return;
-                if (prompt(`⚠️ 確認刪除 P${activePageIndex.value + 1}？\n請輸入 "d" 確認：`)?.trim().toLowerCase() !== 'd') return;
-                resetZoom(); showQuickPageNav.value = false; const delId = activePage.value.id; project.deletedPageIds ||= [];
-                if (!project.deletedPageIds.includes(delId)) project.deletedPageIds.push(delId);
-                dirtyPageIds.delete(delId); pages.value.splice(activePageIndex.value, 1); activePageIndex.value = Math.max(0, activePageIndex.value - 1);
-                project.pageOrderUpdatedAt = Date.now(); hasUnsavedCloudChanges.value = true; saveAll();
-                if (db && project.code) { const ref = db.collection('site_projects').doc(String(project.code)); ref.collection('pages').doc(delId).delete().catch(() => {}); ref.set({ deletedPageIds: firebase.firestore.FieldValue.arrayUnion(delId), updatedAt: Date.now() }, { merge: true }).catch(() => {}); }
-                showToast('🗑️ 已刪除頁面');
-            };
+                const clearDraft = () => { fbPaths.value = []; fbMarkers.value = []; fbHistory.value = []; currentFbPath.value = ''; editingFbMarker.value = null; };
+                const undoDraft = () => {
+                    if (!fbHistory.value.length) return;
+                    const last = fbHistory.value.pop();
+                    if (last.type === 'path') fbPaths.value = fbPaths.value.filter(x => x.id !== last.id);
+                    else if (last.type === 'marker') fbMarkers.value = fbMarkers.value.filter(x => x.id !== last.id);
+                };
 
-            const openPinSubPage = (pin, idx) => {
-                resetZoom(); showQuickPageNav.value = false;
-                Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], walls: pin.walls || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || activePage.value?.space || '' });
-                if (pin.isSketch && !pin.photo) { const size = getAdaptiveCanvasSize(); pin.photo = renderSketchDataUrl(size.w, size.h, !!pin.hasGrid); pin.w = size.w; pin.h = size.h; }
-                activePin.value = pin; activePinIndex.value = idx; drawMode.value = 'browse';
-            };
-            const exitPinSubPage = () => { resetZoom(); activePin.value = null; drawMode.value = 'browse'; };
-            const onPinTap = (pin, index) => { if (drawMode.value === 'eraser') { showToast('📍 落釘受保護，請點入內按「🗑️刪釘」移除'); return; } openPinSubPage(pin, index); };
-            const deleteActivePin = async () => {
-                if (!activePin.value || !activePage.value) return;
-                checkBranchNeed(async () => {
-                    const pinId = String(activePin.value.id), pg = activePage.value, idx = (pg.pins || []).findIndex(p => String(p.id) === pinId);
-                    if (idx !== -1) {
-                        const removedPin = JSON.parse(JSON.stringify(pg.pins[idx])); pg.pins.splice(idx, 1); pg.deletedPinIds ||= [];
-                        if (!pg.deletedPinIds.includes(pinId)) pg.deletedPinIds.push(pinId); project.deletedPinIds ||= []; if (!project.deletedPinIds.includes(pinId)) project.deletedPinIds.push(pinId);
-                        pg.historyStack ||= []; pg.redoStack = []; pg.historyStack.push({ type: 'delete_pin', pin: removedPin, index: idx });
-                    }
-                    touchDirty(pg); exitPinSubPage(); await saveAll(); showToast('🗑️ 已刪釘（按 ↶ 可復原）');
-                });
-            };
+                const switchPage = (idx) => {
+                    if (hasDraft.value && !confirm('切換頁面會清空本頁未提交的標記，確定切換嗎？')) return;
+                    clearDraft(); resetZoom(); showQuickNav.value = false; activePin.value = null; activePageIndex.value = idx; mode.value = 'browse';
+                };
+                const prevPage = () => { if (activePageIndex.value > 0) switchPage(activePageIndex.value - 1); };
+                const nextPage = () => { if (activePageIndex.value < pages.value.length - 1) switchPage(activePageIndex.value + 1); };
+                const openPinSubPage = (pin, idx) => {
+                    if (hasDraft.value && !confirm('進入細節釘會清空目前未提交的標記，確定繼續嗎？')) return;
+                    clearDraft(); resetZoom(); showQuickNav.value = false; activePin.value = pin; activePinIndex.value = idx; mode.value = 'browse';
+                };
+                const exitPinSubPage = () => {
+                    if (hasDraft.value && !confirm('返回主頁會清空目前未提交的標記，確定返回嗎？')) return;
+                    clearDraft(); resetZoom(); activePin.value = null; mode.value = 'browse';
+                };
+                const onMasterMarkerClick = (m) => {
+                    if (mode.value !== 'browse' || m.type !== 'page_link' || !m.data?.targetPageId) return;
+                    const idx = pages.value.findIndex(p => String(p.id) === String(m.data.targetPageId));
+                    if (idx !== -1) { switchPage(idx); showToast(`↪️ 已跳轉至 P${idx + 1}`); }
+                };
 
-            const resolveMediaDoc = async (doc) => {
-                const d = doc.data(); if (!d) return null; if (d.photo) return d.photo;
-                if (d.chunked && d.totalChunks > 0) {
-                    const snap = await withRetry(() => withTimeout(doc.ref.collection('chunks').get(), 15000));
-                    const list = snap.docs.map(c => c.data()).sort((a, b) => (a.index || 0) - (b.index || 0));
-                    if (list.length === d.totalChunks) return list.map(c => c.data || '').join('');
-                }
-                return null;
-            };
-            const loadMediaMapFromRef = async (projRef) => {
-                const snap = await withRetry(() => withTimeout(projRef.collection('media').get(), 20000)); const map = new Map();
-                await Promise.all(snap.docs.map(async (m) => { const fullPhoto = await resolveMediaDoc(m); if (fullPhoto) map.set(String(m.id), { photo: fullPhoto, data: m.data() }); }));
-                return map;
-            };
+                // 觸控與滑鼠手勢
+                let isDrawing = false, tempPts = [], isPinching = false, pinchDist = 0, pinchScale = 1, pinchAnchor = null;
+                let isPanning = false, panStart = { x: 0, y: 0 }, panVb = { x: 0, y: 0 };
+                let draggedFm = null, dragStart = { x: 0, y: 0 }, fmOrigin = { x: 0, y: 0 }, tapStartClient = null;
 
-            const openPhotoPool = async (target = 'newPage') => {
-                showAddPageModal.value = false; photoPoolTarget.value = target; isProcessing.value = true; processingText.value = '正在讀取工程底圖庫...';
-                try {
-                    const seen = new Set(), list = [];
-                    const addUnique = (item) => { if (!item?.photo || item.isSketch) return; const fp = photoFingerprint(item.photo); if (seen.has(fp)) return; seen.add(fp); list.push({ id: item.id || ('pool_' + list.length), photo: item.photo, w: item.w || 1200, h: item.h || 900, author: item.author || '', updatedAt: item.updatedAt || 0 }); };
-                    if (db && navigator.onLine && project.code) {
-                        try { const mediaMap = await loadMediaMapFromRef(db.collection('site_projects').doc(String(project.code))); mediaMap.forEach((v, id) => addUnique({ id, photo: v.photo, w: v.data.w, h: v.data.h, author: v.data.author, updatedAt: v.data.updatedAt })); } catch (_) {}
-                    }
-                    (photoPool.value || []).forEach(addUnique);
-                    pages.value.forEach(pg => { addUnique({ id: pg.photoId || ('page_' + pg.id), photo: pg.photo, w: pg.w, h: pg.h, author: pg.author, isSketch: pg.isSketch }); (pg.pins || []).forEach(pin => addUnique({ id: pin.photoId || String(pin.id), photo: pin.photo, w: pin.w, h: pin.h, isSketch: pin.isSketch })); });
-                    photoPoolList.value = list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); showPhotoPoolModal.value = true;
-                } finally { isProcessing.value = false; }
-            };
-            const selectFromPhotoPool = (item) => {
-                showPhotoPoolModal.value = false; resetZoom();
-                if (photoPoolTarget.value === 'newPage') {
-                    const newPg = makeEmptyPage({ photo: item.photo, photoId: item.id, w: item.w || 1200, h: item.h || 900 });
-                    pages.value.push(newPg); activePageIndex.value = pages.value.length - 1; dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; showToast(`✅ 已建立 P${pages.value.length}`); drawMode.value = 'browse'; saveAll();
-                } else if (activeCanvas.value) {
-                    checkBranchNeed(() => { Object.assign(activeCanvas.value, { photo: item.photo, photoId: item.id, w: item.w || 1200, h: item.h || 900, isSketch: false }); touchDirty(); drawMode.value = 'browse'; saveAll(); });
-                }
-            };
-            const deleteFromPhotoPool = async (item) => {
-                if (!confirm('確定要從底圖庫移除這張照片嗎？')) return;
-                const fp = photoFingerprint(item.photo); photoPoolList.value = photoPoolList.value.filter(x => photoFingerprint(x.photo) !== fp); photoPool.value = photoPool.value.filter(x => photoFingerprint(x.photo) !== fp); await saveAll();
-                if (db && project.code && item.id) { const mRef = db.collection('site_projects').doc(String(project.code)).collection('media').doc(String(item.id)); mRef.collection('chunks').get().then(s => s.forEach(c => c.ref.delete())).catch(() => {}); mRef.delete().catch(() => {}); }
-            };
-
-            const setPageSpace = (sp) => { checkBranchNeed(() => { if (activeCanvas.value) activeCanvas.value.space = sp; touchDirty(); showSpaceModal.value = false; saveAll(); }); };
-            const addCustomSpace = () => { const s = prompt('輸入空間名稱（例如：閣樓）')?.trim(); if (s) { if (!spaceList.value.includes(s)) spaceList.value.push(s); setPageSpace(s); } };
-
-            const onEraseTap = (targetType, item, e) => {
-                if (drawMode.value !== 'eraser') return;
-                if (e.touches?.length > 1 || isPinching || showBranchPrompt.value) return;
-                e.preventDefault(); e.stopPropagation(); const targetId = item.id;
-                checkBranchNeed(() => {
-                    const c = activeCanvas.value; if (!c) return; c.historyStack ||= []; c.redoStack = [];
-                    if (targetType === 'wall') { const idx = (c.walls || []).findIndex(x => x.id === targetId); if (idx === -1) return; const removed = c.walls.splice(idx, 1)[0]; c.historyStack.push({ type: 'erase', targetType: 'wall', item: removed }); }
-                    else if (targetType === 'path') { const idx = (c.paths || []).findIndex(x => x.id === targetId); if (idx === -1) return; const removed = c.paths.splice(idx, 1)[0]; c.historyStack.push({ type: 'erase', targetType: 'path', item: removed }); }
-                    else if (targetType === 'line') {
-                        const idx = (c.lines || []).findIndex(x => x.id === targetId); if (idx === -1) return; const removedLine = c.lines.splice(idx, 1)[0]; let linkedMarker = null;
-                        const mIdx = (c.markers || []).findIndex(m => m.lineId === targetId); if (mIdx !== -1) linkedMarker = c.markers.splice(mIdx, 1)[0];
-                        c.historyStack.push({ type: 'erase', targetType: 'line', item: removedLine, linkedMarker });
-                    } else if (targetType === 'marker') {
-                        const idx = (c.markers || []).findIndex(x => x.id === targetId); if (idx === -1) return; const removedMarker = c.markers.splice(idx, 1)[0]; let linkedLine = null;
-                        if (removedMarker.lineId) { const lIdx = (c.lines || []).findIndex(l => l.id === removedMarker.lineId); if (lIdx !== -1) linkedLine = c.lines.splice(lIdx, 1)[0]; }
-                        c.historyStack.push({ type: 'erase', targetType: 'marker', item: removedMarker, linkedLine });
-                    }
-                    touchDirty(); saveAll();
-                });
-            };
-
-            const makeBlankMarkerData = () => ({ val: '', name: '', customCode: '', targetPageId: '', w_in: '', h_in: '', d_in: '', w: '', d: '', h: '', t: '', h_bottom: '', t_stone: '', d_stone: '', t_frame: '', h_top: '', w_side: '', d_out: '' });
-
-            const createPointMarker = (x, y, forceType) => {
-                checkBranchNeed(() => {
-                    const c = activeCanvas.value; if (!c) return;
-                    c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
-                    const markerId = Date.now();
-                    const newMarker = {
-                        id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType,
-                        textColor: forceType === 'stamp' ? null : defaultTextColor.value,
-                        data: makeBlankMarkerData()
-                    };
-                    updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
-                    touchDirty(); activeMarker.value = newMarker;
-                    if (forceType === 'stamp') { focusedInput.value = 'stamp'; showTopSheet.value = true; }
-                    else { showTopTextBar.value = true; nextTick(() => topTextInputRef.value?.focus()); }
-                    saveAll();
-                });
-            };
-
-            const onMarkerPointerStart = (marker, e) => {
-                if (e.touches?.length > 1 || isPinching || showBranchPrompt.value) return;
-                if (showQuickPageNav.value) showQuickPageNav.value = false;
-                if (drawMode.value === 'eraser') { onEraseTap('marker', marker, e); return; }
-                const pt = getClientPoint(e);
-                if (drawMode.value === 'move') {
-                    e.preventDefault(); e.stopPropagation();
-                    checkBranchNeed(() => {
-                        const target = (activeCanvas.value.markers || []).find(m => m.id === marker.id) || marker;
-                        if (showBranchPrompt.value) return;
-                        draggedMarker.value = target;
-                        activeMarker.value = target;
+                const onFbMarkerStart = (fm, e) => {
+                    if (e.touches?.length > 1 || isPinching) return;
+                    const pt = e.touches?.[0] || e;
+                    if (mode.value === 'move') {
+                        e.preventDefault(); e.stopPropagation();
+                        draggedFm = fm;
                         const p = getCoords(e);
-                        dragOrigin.value = { x: p.x, y: p.y };
-                        markerOrigin.value = { x: target.x, y: target.y };
-                    });
-                    return;
-                }
-                if (drawMode.value === 'index' && ['space_tag', 'page_link'].includes(marker.type)) {
-                    e.preventDefault(); e.stopPropagation();
-                    openIndexModalAt(marker.x, marker.y, marker);
-                    return;
-                }
-                if (drawMode.value === 'browse') {
-                    pendingTapMarker = { marker, clientX: pt.clientX, clientY: pt.clientY };
-                }
-            };
-
-            const openMarkerEditor = (m) => {
-                if (m.type === 'page_link' && m.data?.targetPageId) {
-                    jumpToPageById(m.data.targetPageId);
-                    return;
-                }
-                if (m.type === 'space_tag') {
-                    openIndexModalAt(m.x, m.y, m);
-                    return;
-                }
-                activeMarker.value = m;
-                if (['text', 'image'].includes(m.type)) {
-                    showTopTextBar.value = true;
-                    if (m.type !== 'image') nextTick(() => topTextInputRef.value?.focus());
-                } else {
-                    showTopSheet.value = true;
-                    focusedInput.value = TAG_DEFS[m.type]?.fields[0]?.key || 'val';
-                }
-            };
-
-            const beginPinch = (t1, t2) => {
-                isPinching = true; isDrawing.value = false; isPanningBrowse = false; pendingTapMarker = null; currentLine.value = null; currentWall.value = null; currentPath.value = '';
-                if (draggedMarker.value) { draggedMarker.value.x = markerOrigin.value.x; draggedMarker.value.y = markerOrigin.value.y; draggedMarker.value = null; }
-                pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1; pinchStartScale = zoomScale.value;
-                pinchAnchorSvg = clientToSvgPoint((t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2);
-            };
-
-            const onStageTouchStart = (e) => {
-                if (showQuickPageNav.value) showQuickPageNav.value = false;
-                if (showTopSheet.value || showTopTextBar.value || showIndexModal.value || showBranchPrompt.value) return;
-                if (e.touches.length >= 2) { e.preventDefault(); beginPinch(e.touches[0], e.touches[1]); return; }
-                if (isPinching) return;
-                touchStartTime = Date.now(); touchMoved = false;
-                if (e.touches.length === 1 && !draggedMarker.value) {
-                    if (drawMode.value === 'browse') {
-                        isPanningBrowse = true; panStartClient = { x: e.touches[0].clientX, y: e.touches[0].clientY }; panStartVb = { x: vbX.value, y: vbY.value };
-                    } else if (!['eraser', 'move'].includes(drawMode.value)) {
-                        beginStroke(e);
+                        dragStart = { x: p.x, y: p.y };
+                        fmOrigin = { x: fm.x, y: fm.y };
+                    } else if (mode.value === 'browse') {
+                        tapStartClient = { fm, x: pt.clientX, y: pt.clientY };
                     }
-                }
-            };
+                };
 
-            const onStageTouchMove = (e) => {
-                if (showBranchPrompt.value) return;
-                if (e.touches.length >= 2) {
-                    e.preventDefault(); if (!isPinching) { beginPinch(e.touches[0], e.touches[1]); return; }
-                    const t1 = e.touches[0], t2 = e.touches[1], curDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1;
-                    applyZoomAtClientPoint(pinchStartScale * (curDist / pinchStartDist), (t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2, pinchAnchorSvg);
-                    return;
-                }
-                if (isPinching) return;
-                if (e.touches.length === 1) {
-                    if (pendingTapMarker && Math.hypot(e.touches[0].clientX - pendingTapMarker.clientX, e.touches[0].clientY - pendingTapMarker.clientY) > 6) {
-                        pendingTapMarker = null;
-                    }
-                    touchMoved = true;
-                    if (isPanningBrowse) { e.preventDefault(); panByClientDelta(e.touches[0].clientX - panStartClient.x, e.touches[0].clientY - panStartClient.y); }
-                    else { moveStroke(e); }
-                }
-            };
-
-            const onStageTouchEnd = (e) => {
-                if (e.touches.length === 0) {
-                    if (isPinching) { isPinching = false; pinchAnchorSvg = null; return; }
-                    if (isPanningBrowse) {
-                        isPanningBrowse = false;
-                        if (pendingTapMarker) { const m = pendingTapMarker.marker; pendingTapMarker = null; openMarkerEditor(m); }
+                const onStageTouchStart = (e) => {
+                    if (showQuickNav.value) showQuickNav.value = false;
+                    if (editingFbMarker.value) return;
+                    if (e.touches.length >= 2) {
+                        e.preventDefault(); isPinching = true; isDrawing = false; isPanning = false; currentFbPath.value = '';
+                        const t1 = e.touches[0], t2 = e.touches[1];
+                        pinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1;
+                        pinchScale = zoomScale.value;
+                        pinchAnchor = clientToSvgPoint((t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2);
                         return;
                     }
-                }
-                if (isPinching || showBranchPrompt.value) return;
-                if (drawMode.value === 'line' && !touchMoved && (Date.now() - touchStartTime < 260) && e.touches.length === 0) {
-                    isDrawing.value = false; currentLine.value = null;
-                    const endPos = getCoords(e); createPointMarker(endPos.x, endPos.y, 'stamp'); return;
-                }
-                if (e.touches.length === 0) endStroke(e);
-            };
-
-            const panByClientDelta = (dxClient, dyClient) => {
-                const svg = svgCanvas.value; if (!svg) return;
-                const pw = canvasW.value, ph = canvasH.value, vw = pw / zoomScale.value, vh = ph / zoomScale.value;
-                const r = svg.getBoundingClientRect(), fitScale = Math.min(r.width / vw, r.height / vh) || 1;
-                vbX.value = Math.max(0, Math.min(pw - vw, panStartVb.x - dxClient / fitScale));
-                vbY.value = Math.max(0, Math.min(ph - vh, panStartVb.y - dyClient / fitScale));
-            };
-
-            const onStageMouseDown = (e) => {
-                if (showQuickPageNav.value) showQuickPageNav.value = false;
-                if (showTopSheet.value || showTopTextBar.value || showIndexModal.value || showBranchPrompt.value) return;
-                if (e.button === 1 || isSpaceDown || (drawMode.value === 'browse' && !draggedMarker.value)) {
-                    e.preventDefault(); isPanningBrowse = true; panStartClient = { x: e.clientX, y: e.clientY }; panStartVb = { x: vbX.value, y: vbY.value }; return;
-                }
-                if (!draggedMarker.value && !['browse', 'eraser', 'move'].includes(drawMode.value)) beginStroke(e);
-            };
-            const onStageMouseMove = (e) => {
-                if (showBranchPrompt.value) return;
-                if (pendingTapMarker && Math.hypot(e.clientX - pendingTapMarker.clientX, e.clientY - pendingTapMarker.clientY) > 6) pendingTapMarker = null;
-                if (isPanningBrowse) { panByClientDelta(e.clientX - panStartClient.x, e.clientY - panStartClient.y); return; }
-                moveStroke(e);
-            };
-            const onStageMouseUp = (e) => {
-                if (isPanningBrowse) {
-                    isPanningBrowse = false;
-                    if (pendingTapMarker) { const m = pendingTapMarker.marker; pendingTapMarker = null; openMarkerEditor(m); }
-                    return;
-                }
-                if (!showBranchPrompt.value) endStroke(e);
-            };
-
-            const beginStroke = (e) => {
-                isDrawing.value = true; startPos.value = getCoords(e);
-                if (['line', 'arrow-single', 'straight'].includes(drawMode.value)) currentLine.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y };
-                else if (drawMode.value === 'wall') currentWall.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y, style: wallStyle.value, color: drawColor.value };
-                else if (drawMode.value === 'freehand') { tempPoints = [[startPos.value.x, startPos.value.y]]; currentPath.value = `M ${startPos.value.x} ${startPos.value.y}`; }
-            };
-
-            const moveStroke = (e) => {
-                if (draggedMarker.value) {
-                    e.preventDefault(); const p = getCoords(e), dx = p.x - dragOrigin.value.x, dy = p.y - dragOrigin.value.y;
-                    draggedMarker.value.x = Math.round(Math.max(0, Math.min(canvasW.value, markerOrigin.value.x + dx)));
-                    draggedMarker.value.y = Math.round(Math.max(0, Math.min(canvasH.value, markerOrigin.value.y + dy)));
-                } else if (isDrawing.value) {
-                    e.preventDefault(); const p = getCoords(e);
-                    if (drawMode.value === 'line' || drawMode.value === 'arrow-single') { currentLine.value.x2 = p.x; currentLine.value.y2 = p.y; }
-                    else if (drawMode.value === 'straight' && currentLine.value) { const snapped = snapWallEnd(currentLine.value.x1, currentLine.value.y1, p.x, p.y); currentLine.value.x2 = snapped.x; currentLine.value.y2 = snapped.y; }
-                    else if (drawMode.value === 'wall' && currentWall.value) { const snapped = snapWallEnd(currentWall.value.x1, currentWall.value.y1, p.x, p.y); currentWall.value.x2 = snapped.x; currentWall.value.y2 = snapped.y; }
-                    else if (drawMode.value === 'freehand') { tempPoints.push([p.x, p.y]); currentPath.value = `M ${tempPoints.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`; }
-                }
-            };
-
-            const endStroke = (e) => {
-                if (draggedMarker.value) {
-                    const moved = Math.hypot(draggedMarker.value.x - markerOrigin.value.x, draggedMarker.value.y - markerOrigin.value.y) > 2;
-                    draggedMarker.value = null;
-                    if (moved) { touchDirty(); saveAll(); }
-                    return;
-                }
-                if (!isDrawing.value) return;
-                isDrawing.value = false; const endPos = getCoords(e);
-
-                if (drawMode.value === 'index') {
-                    currentLine.value = null; currentWall.value = null; currentPath.value = '';
-                    openIndexModalAt(endPos.x, endPos.y, null);
-                    return;
-                }
-
-                if (!activePin.value && drawMode.value === 'pin') {
-                    currentLine.value = null; currentWall.value = null; currentPath.value = '';
-                    checkBranchNeed(() => {
-                        const pw = activePage.value.w || 1200, ph = activePage.value.h || 900; activePage.value.pins ||= []; activePage.value.historyStack ||= []; activePage.value.redoStack = [];
-                        const newPin = { id: 'pin_' + Date.now(), name: `位置 ${activePage.value.pins.length + 1}`, x: parseFloat(((endPos.x / pw) * 100).toFixed(2)), y: parseFloat(((endPos.y / ph) * 100).toFixed(2)), photo: null, photoId: '', w: 1200, h: 900, space: activePage.value.space || '', markers: [], lines: [], walls: [], paths: [], historyStack: [], redoStack: [], updatedAt: Date.now() };
-                        activePage.value.pins.push(newPin); activePage.value.historyStack.push({ type: 'pin', pinId: newPin.id });
-                        touchDirty(); openPinSubPage(newPin, activePage.value.pins.length - 1); saveAll();
-                    });
-                    return;
-                }
-
-                if (drawMode.value === 'wall' && currentWall.value) {
-                    if (Math.hypot(currentWall.value.x2 - currentWall.value.x1, currentWall.value.y2 - currentWall.value.y1) >= 12) {
-                        const wSnap = { ...currentWall.value };
-                        checkBranchNeed(() => { const c = activeCanvas.value; c.walls ||= []; c.historyStack ||= []; c.redoStack = []; const wallId = Date.now(); c.walls.push({ ...wSnap, id: wallId }); c.historyStack.push({ type: 'wall', wallId }); touchDirty(); saveAll(); });
-                    }
-                    currentWall.value = null;
-                } else if (['line', 'arrow-single', 'straight'].includes(drawMode.value) && currentLine.value) {
-                    const lSnap = { ...currentLine.value }; currentLine.value = null;
-                    if (drawMode.value === 'line' && Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 14) {
-                        createPointMarker(lSnap.x2, lSnap.y2, 'stamp'); return;
-                    }
-                    if (Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 10) return;
-                    checkBranchNeed(() => {
-                        const c = activeCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
-                        const lineId = Date.now(), markerId = lineId + 1;
-                        const lineType = drawMode.value === 'line' ? 'measure' : drawMode.value;
-                        c.lines.push({ ...lSnap, id: lineId, type: lineType, color: lineType === 'measure' ? null : drawColor.value });
-                        if (lineType !== 'measure') {
-                            c.historyStack.push({ type: 'line_marker', lineId, markerId: null }); touchDirty(); saveAll(); return;
+                    if (e.touches.length === 1 && !draggedFm) {
+                        if (mode.value === 'browse') {
+                            isPanning = true; panStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; panVb = { x: vbX.value, y: vbY.value };
+                        } else if (mode.value === 'circle') {
+                            isDrawing = true; const p = getCoords(e); tempPts = [[p.x, p.y]]; currentFbPath.value = `M ${p.x} ${p.y}`;
+                        } else if (mode.value === 'text') {
+                            const p = getCoords(e); addFbTextAt(p.x, p.y);
                         }
-                        const newMarker = {
-                            id: markerId, lineId,
-                            x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2),
-                            w: 140, h: 56, type: 'general', textColor: defaultTextColor.value, data: makeBlankMarkerData()
+                    }
+                };
+
+                const onStageTouchMove = (e) => {
+                    if (e.touches.length >= 2 && isPinching) {
+                        e.preventDefault();
+                        const t1 = e.touches[0], t2 = e.touches[1], cur = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1;
+                        applyZoomAt(pinchScale * (cur / pinchDist), (t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2, pinchAnchor);
+                        return;
+                    }
+                    if (isPinching || e.touches.length !== 1) return;
+                    if (tapStartClient && Math.hypot(e.touches[0].clientX - tapStartClient.x, e.touches[0].clientY - tapStartClient.y) > 8) tapStartClient = null;
+                    if (draggedFm) {
+                        e.preventDefault(); const p = getCoords(e);
+                        draggedFm.x = Math.round(Math.max(0, Math.min(canvasW.value, fmOrigin.x + (p.x - dragStart.x))));
+                        draggedFm.y = Math.round(Math.max(0, Math.min(canvasH.value, fmOrigin.y + (p.y - dragStart.y))));
+                    } else if (isPanning) {
+                        e.preventDefault(); panDelta(e.touches[0].clientX - panStart.x, e.touches[0].clientY - panStart.y);
+                    } else if (isDrawing && mode.value === 'circle') {
+                        e.preventDefault(); const p = getCoords(e); tempPts.push([p.x, p.y]);
+                        currentFbPath.value = `M ${tempPts.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`;
+                    }
+                };
+
+                const onStageTouchEnd = (e) => {
+                    if (e.touches.length === 0) {
+                        if (isPinching) { isPinching = false; return; }
+                        if (draggedFm) { draggedFm = null; return; }
+                        if (isPanning) {
+                            isPanning = false;
+                            if (tapStartClient) { const fm = tapStartClient.fm; tapStartClient = null; editingFbMarker.value = fm; }
+                            return;
+                        }
+                        if (isDrawing && mode.value === 'circle') {
+                            isDrawing = false;
+                            if (currentFbPath.value && tempPts.length > 2) {
+                                const id = 'fbp_' + Date.now();
+                                fbPaths.value.push({ id, d: currentFbPath.value, color: fbColor.value });
+                                fbHistory.value.push({ type: 'path', id });
+                            }
+                            currentFbPath.value = '';
+                        }
+                    }
+                };
+
+                const panDelta = (dx, dy) => {
+                    const svg = svgCanvas.value; if (!svg) return;
+                    const pw = canvasW.value, ph = canvasH.value, vw = pw / zoomScale.value, vh = ph / zoomScale.value;
+                    const r = svg.getBoundingClientRect(), fit = Math.min(r.width / vw, r.height / vh) || 1;
+                    vbX.value = Math.max(0, Math.min(pw - vw, panVb.x - dx / fit));
+                    vbY.value = Math.max(0, Math.min(ph - vh, panVb.y - dy / fit));
+                };
+
+                const onStageMouseDown = (e) => {
+                    if (showQuickNav.value) showQuickNav.value = false;
+                    if (editingFbMarker.value || draggedFm) return;
+                    if (mode.value === 'browse') {
+                        isPanning = true; panStart = { x: e.clientX, y: e.clientY }; panVb = { x: vbX.value, y: vbY.value };
+                    } else if (mode.value === 'circle') {
+                        isDrawing = true; const p = getCoords(e); tempPts = [[p.x, p.y]]; currentFbPath.value = `M ${p.x} ${p.y}`;
+                    } else if (mode.value === 'text') {
+                        const p = getCoords(e); addFbTextAt(p.x, p.y);
+                    }
+                };
+                const onStageMouseMove = (e) => {
+                    if (tapStartClient && Math.hypot(e.clientX - tapStartClient.x, e.clientY - tapStartClient.y) > 8) tapStartClient = null;
+                    if (draggedFm) {
+                        const p = getCoords(e);
+                        draggedFm.x = Math.round(Math.max(0, Math.min(canvasW.value, fmOrigin.x + (p.x - dragStart.x))));
+                        draggedFm.y = Math.round(Math.max(0, Math.min(canvasH.value, fmOrigin.y + (p.y - dragStart.y))));
+                    } else if (isPanning) {
+                        panDelta(e.clientX - panStart.x, e.clientY - panStart.y);
+                    } else if (isDrawing && mode.value === 'circle') {
+                        const p = getCoords(e); tempPts.push([p.x, p.y]);
+                        currentFbPath.value = `M ${tempPts.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`;
+                    }
+                };
+                const onStageMouseUp = () => {
+                    if (draggedFm) { draggedFm = null; return; }
+                    if (isPanning) {
+                        isPanning = false;
+                        if (tapStartClient) { const fm = tapStartClient.fm; tapStartClient = null; editingFbMarker.value = fm; }
+                        return;
+                    }
+                    if (isDrawing && mode.value === 'circle') {
+                        isDrawing = false;
+                        if (currentFbPath.value && tempPts.length > 2) {
+                            const id = 'fbp_' + Date.now();
+                            fbPaths.value.push({ id, d: currentFbPath.value, color: fbColor.value });
+                            fbHistory.value.push({ type: 'path', id });
+                        }
+                        currentFbPath.value = '';
+                    }
+                };
+
+                // 留言與附圖處理
+                const updateFbTextSize = (fm) => {
+                    const len = String(fm.text || '').length;
+                    fm.w = Math.max(90, len * 22 + 24);
+                    fm.h = 38;
+                };
+                const addFbTextAt = (x, y) => {
+                    const id = 'fbm_' + Date.now();
+                    const fm = { id, type: 'text', x, y, w: 120, h: 38, text: '', color: fbColor.value };
+                    fbMarkers.value.push(fm);
+                    fbHistory.value.push({ type: 'marker', id });
+                    editingFbMarker.value = fm;
+                    nextTick(() => fbTextInputRef.value?.focus());
+                };
+                const confirmEditFbMarker = () => {
+                    if (editingFbMarker.value?.type === 'text' && !String(editingFbMarker.value.text || '').trim()) {
+                        deleteFbMarker(editingFbMarker.value.id);
+                    }
+                    editingFbMarker.value = null;
+                };
+                const deleteFbMarker = (id) => {
+                    fbMarkers.value = fbMarkers.value.filter(x => x.id !== id);
+                    fbHistory.value = fbHistory.value.filter(x => x.id !== id);
+                    editingFbMarker.value = null;
+                };
+                const resizeFbImage = (factor) => {
+                    const fm = editingFbMarker.value; if (!fm || fm.type !== 'image') return;
+                    fm.w = Math.max(60, Math.min(canvasW.value * 0.9, Math.round(fm.w * factor)));
+                    fm.h = Math.max(60, Math.min(canvasH.value * 0.9, Math.round(fm.h * factor)));
+                };
+
+                const compressAttachImage = (blob) => new Promise((res) => {
+                    const r = new FileReader(); r.readAsDataURL(blob);
+                    r.onload = (e) => {
+                        const img = new Image(); img.src = e.target.result;
+                        img.onload = () => {
+                            const c = document.createElement('canvas'), MAX = 720;
+                            let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+                            if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; } }
+                            c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+                            res({ b64: c.toDataURL('image/jpeg', 0.62), w, h });
                         };
-                        updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
-                        touchDirty(); activeMarker.value = newMarker; focusedInput.value = 'val'; showTopSheet.value = true; saveAll();
-                    });
-                } else if (drawMode.value === 'freehand' && currentPath.value) {
-                    const pSnap = currentPath.value; currentPath.value = '';
-                    checkBranchNeed(() => { const c = activeCanvas.value; c.paths ||= []; c.historyStack ||= []; c.redoStack = []; const pathId = Date.now(); c.paths.push({ id: pathId, d: pSnap, color: drawColor.value }); c.historyStack.push({ type: 'freehand', pathId }); touchDirty(); saveAll(); });
-                }
-            };
-
-            const ensureMarkerBranched = (cb) => { if (activeMarker.value) { checkBranchNeed(() => { activeMarker.value = (activeCanvas.value.markers || []).find(m => m.id === activeMarker.value.id) || activeMarker.value; if (cb) cb(); }); } else if (cb) cb(); };
-            const onMarkerTextInput = () => ensureMarkerBranched(() => { updateMarkerSize(activeMarker.value); touchDirty(); });
-            const resizeImageMarker = (factor) => { if (!activeMarker.value || activeMarker.value.type !== 'image') return; ensureMarkerBranched(() => { const m = activeMarker.value, minSide = 40, maxSide = Math.max(canvasW.value, canvasH.value) * 1.5; const nextW = Math.round(m.w * factor), nextH = Math.round(m.h * factor); if (nextW < minSide || nextH < minSide || nextW > maxSide || nextH > maxSide) return; m.w = nextW; m.h = nextH; touchDirty(); saveAll(); }); };
-
-            const undoLastAction = () => {
-                checkBranchNeed(() => {
-                    const c = activeCanvas.value; if (!c?.historyStack?.length) return; c.redoStack ||= [];
-                    const act = c.historyStack.pop(), u = { type: act.type };
-                    if (act.type === 'line_marker') { const li = c.lines.findIndex(l => l.id === act.lineId); if (li !== -1) u.line = c.lines.splice(li, 1)[0]; if (act.markerId) { const mi = c.markers.findIndex(m => m.id === act.markerId); if (mi !== -1) u.marker = c.markers.splice(mi, 1)[0]; } }
-                    else if (act.type === 'marker') { const mi = c.markers.findIndex(m => m.id === act.markerId); if (mi !== -1) u.marker = c.markers.splice(mi, 1)[0]; }
-                    else if (act.type === 'wall') { const wi = (c.walls || []).findIndex(w => w.id === act.wallId); if (wi !== -1) u.wall = c.walls.splice(wi, 1)[0]; }
-                    else if (act.type === 'freehand') { const pi = c.paths.findIndex(p => p.id === act.pathId); if (pi !== -1) u.path = c.paths.splice(pi, 1)[0]; }
-                    else if (act.type === 'erase') {
-                        u.targetType = act.targetType; u.item = act.item; u.linkedMarker = act.linkedMarker || null; u.linkedLine = act.linkedLine || null;
-                        if (act.targetType === 'wall') { c.walls ||= []; c.walls.push(act.item); } else if (act.targetType === 'path') { c.paths ||= []; c.paths.push(act.item); }
-                        else if (act.targetType === 'line') { c.lines ||= []; c.lines.push(act.item); if (act.linkedMarker) { c.markers ||= []; c.markers.push(act.linkedMarker); } }
-                        else if (act.targetType === 'marker') { c.markers ||= []; c.markers.push(act.item); if (act.linkedLine) { c.lines ||= []; c.lines.push(act.linkedLine); } }
-                    } else if (act.type === 'pin') { const pni = (c.pins || []).findIndex(p => String(p.id) === String(act.pinId)); if (pni !== -1) { u.pin = c.pins.splice(pni, 1)[0]; const pid = String(u.pin.id); c.deletedPinIds ||= []; if (!c.deletedPinIds.includes(pid)) c.deletedPinIds.push(pid); project.deletedPinIds ||= []; if (!project.deletedPinIds.includes(pid)) project.deletedPinIds.push(pid); } }
-                    else if (act.type === 'delete_pin' && act.pin) { c.pins ||= []; const insertIdx = Math.min(act.index ?? c.pins.length, c.pins.length); c.pins.splice(insertIdx, 0, act.pin); const pid = String(act.pin.id); if (c.deletedPinIds) c.deletedPinIds = c.deletedPinIds.filter(x => x !== pid); if (project.deletedPinIds) project.deletedPinIds = project.deletedPinIds.filter(x => x !== pid); u.pin = act.pin; u.index = insertIdx; showToast('↩️ 已復原釘選'); }
-                    c.redoStack.push(u); touchDirty(); saveAll();
+                    };
                 });
-            };
 
-            const redoAction = () => {
-                checkBranchNeed(() => {
-                    const c = activeCanvas.value; if (!c?.redoStack?.length) return; const u = c.redoStack.pop(), act = { type: u.type };
-                    if (u.type === 'erase') {
-                        act.targetType = u.targetType; act.item = u.item; act.linkedMarker = u.linkedMarker || null; act.linkedLine = u.linkedLine || null;
-                        if (u.targetType === 'wall') c.walls = (c.walls || []).filter(x => x.id !== u.item.id); else if (u.targetType === 'path') c.paths = (c.paths || []).filter(x => x.id !== u.item.id);
-                        else if (u.targetType === 'line') { c.lines = (c.lines || []).filter(x => x.id !== u.item.id); if (u.linkedMarker) c.markers = (c.markers || []).filter(x => x.id !== u.linkedMarker.id); }
-                        else if (u.targetType === 'marker') { c.markers = (c.markers || []).filter(x => x.id !== u.item.id); if (u.linkedLine) c.lines = (c.lines || []).filter(x => x.id !== u.linkedLine.id); }
-                    } else {
-                        if (u.line) { c.lines.push(u.line); act.lineId = u.line.id; } if (u.marker) { c.markers.push(u.marker); act.markerId = u.marker.id; }
-                        if (u.wall) { c.walls ||= []; c.walls.push(u.wall); act.wallId = u.wall.id; } if (u.path) { c.paths.push(u.path); act.pathId = u.path.id; }
-                        if (u.type === 'pin' && u.pin) { c.pins ||= []; c.pins.push(u.pin); act.pinId = u.pin.id; const pid = String(u.pin.id); if (c.deletedPinIds) c.deletedPinIds = c.deletedPinIds.filter(x => x !== pid); if (project.deletedPinIds) project.deletedPinIds = project.deletedPinIds.filter(x => x !== pid); }
-                        else if (u.type === 'delete_pin' && u.pin) { const pid = String(u.pin.id); c.pins = (c.pins || []).filter(p => String(p.id) !== pid); c.deletedPinIds ||= []; if (!c.deletedPinIds.includes(pid)) c.deletedPinIds.push(pid); project.deletedPinIds ||= []; if (!project.deletedPinIds.includes(pid)) project.deletedPinIds.push(pid); act.pin = u.pin; act.index = u.index; }
+                const appendAttachedBlob = async (blob) => {
+                    const res = await compressAttachImage(blob);
+                    const vw = canvasW.value / zoomScale.value, vh = canvasH.value / zoomScale.value;
+                    let tw = Math.min(res.w, canvasW.value * 0.35);
+                    let th = Math.round((res.h / res.w) * tw);
+                    const id = 'fbm_' + Date.now();
+                    const fm = { id, type: 'image', x: Math.round(vbX.value + vw / 2), y: Math.round(vbY.value + vh / 2), w: tw, h: th, b64: res.b64 };
+                    fbMarkers.value.push(fm);
+                    fbHistory.value.push({ type: 'marker', id });
+                    mode.value = 'move';
+                    showToast('✅ 已貼上附圖，可直接拖拉調整位置');
+                };
+
+                const handleAttachPhoto = async (e) => {
+                    const file = e.target.files?.[0]; if (!file) return;
+                    await appendAttachedBlob(file);
+                    e.target.value = '';
+                };
+
+                // 提交意見至獨立雲端意見箱 (絕不修改主圖資料)
+                const submitFeedback = async () => {
+                    if (!hasDraft.value) { showToast('請先用「⭕畫圈」、「💬留言」或「📷影/貼圖」標記問題位'); return; }
+                    let sender = localStorage.getItem('measure_viewer_name') || '';
+                    sender = prompt('👤 請輸入您的稱呼 (例：電工明哥、業主陳生)：', sender)?.trim();
+                    if (!sender) return;
+                    localStorage.setItem('measure_viewer_name', sender);
+
+                    const payload = {
+                        pageId: activePage.value.id,
+                        pinId: activePin.value ? String(activePin.value.id) : '',
+                        pageLabel: activePin.value ? `P${activePageIndex.value + 1} 釘#${activePinIndex.value + 1}` : `P${activePageIndex.value + 1}${activePage.value.space ? ' [' + activePage.value.space + ']' : ''}`,
+                        author: sender,
+                        createdAt: Date.now(),
+                        paths: JSON.parse(JSON.stringify(fbPaths.value)),
+                        markers: JSON.parse(JSON.stringify(fbMarkers.value))
+                    };
+                    if (JSON.stringify(payload).length > 900000) {
+                        alert('附圖檔案過大，請減少附圖數量後再提交');
+                        return;
                     }
-                    c.historyStack.push(act); touchDirty(); saveAll();
-                });
-            };
-
-            const deleteMarkerTop = () => ensureMarkerBranched(() => { const c = activeCanvas.value, m = activeMarker.value; if (!m || !c) return; if (m.lineId) c.lines = (c.lines || []).filter(l => l.id !== m.lineId); c.markers = (c.markers || []).filter(x => x.id !== m.id); if (c.historyStack) c.historyStack = c.historyStack.filter(h => h.markerId !== m.id); c.redoStack = []; touchDirty(); showTopSheet.value = false; showTopTextBar.value = false; activeMarker.value = null; saveAll(); });
-            const switchMarkerType = (t, fKey) => ensureMarkerBranched(() => {
-                activeMarker.value.type = t;
-                if (t === 'stamp') activeMarker.value.textColor = null;
-                else if (!activeMarker.value.textColor) activeMarker.value.textColor = defaultTextColor.value;
-                focusedInput.value = fKey;
-                updateMarkerSize(activeMarker.value);
-                touchDirty();
-            });
-            const closeTopTextBar = () => { if (['stamp', 'text'].includes(activeMarker.value?.type) && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
-            const closeTopSheet = () => { if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopSheet.value = false; saveAll(); };
-
-            const handleKeypad = (key) => {
-                if (!activeMarker.value || !focusedInput.value) return;
-                ensureMarkerBranched(() => {
-                    if (focusedInput.value === 'name' || focusedInput.value === 'stamp') focusedInput.value = 'val';
-                    const cur = String(activeMarker.value.data[focusedInput.value] || '');
-                    if (key === 'DEL') { activeMarker.value.data[focusedInput.value] = cur.slice(0, -1); touchDirty(); }
-                    else if (key === 'ENTER') {
-                        const def = TAG_DEFS[activeMarker.value.type];
-                        if (def) { const idx = def.fields.findIndex(x => x.key === focusedInput.value); idx >= 0 && idx < def.fields.length - 1 ? (focusedInput.value = def.fields[idx + 1].key) : closeTopSheet(); }
-                        else closeTopSheet();
-                    } else if (cur.length < 6) { activeMarker.value.data[focusedInput.value] = cur + key; touchDirty(); }
-                    updateMarkerSize(activeMarker.value);
-                });
-            };
-
-            const applyTag = (name) => { if (activeMarker.value) ensureMarkerBranched(() => { activeMarker.value.data.name = name; focusedInput.value = 'val'; updateMarkerSize(activeMarker.value); touchDirty(); }); };
-            const applyStamp = (txt) => {
-                if (activeMarker.value) {
-                    ensureMarkerBranched(() => {
-                        if (activeMarker.value.lineId) {
-                            activeCanvas.value.lines = (activeCanvas.value.lines || []).filter(l => l.id !== activeMarker.value.lineId);
-                            activeMarker.value.lineId = null;
-                        }
-                        activeMarker.value.type = 'stamp';
-                        activeMarker.value.textColor = null;
-                        activeMarker.value.data.val = txt;
-                        updateMarkerSize(activeMarker.value); touchDirty(); closeTopSheet();
-                    });
-                }
-            };
-
-            const updateMarkerSize = (m) => {
-                if (m.type === 'image') return;
-                const lines = getMarkerLines(m), maxLen = Math.max(0, ...lines.map(l => l.length));
-                m.w = Math.max(110, (maxLen * 30 + 34) * globalFontScale.value);
-                m.h = Math.max(50, (lines.length * 36 + 16) * globalFontScale.value);
-            };
-
-            const getStampColor = (m) => {
-                if (m.textColor) return m.textColor;
-                if (m.type === 'space_tag') return '#a855f7';
-                if (m.type === 'page_link') return '#38bdf8';
-                if (m.type !== 'stamp') return '#ffffff';
-                const v = m.data.val;
-                if (STAMP_COLOR_MAP[v]) return STAMP_COLOR_MAP[v];
-                if (customStamps.value.includes(v)) return '#e4e4e7';
-                return '#ffffff';
-            };
-
-            const getTagFields = (t) => TAG_DEFS[t]?.fields || [];
-            const getMarkerLines = (m) => {
-                const def = TAG_DEFS[m.type];
-                if (def) return [def.title, ...def.fields.filter(f => m.data[f.key]).map(f => `${f.label}:${m.data[f.key]}`)];
-                if (['stamp', 'text', 'space_tag', 'page_link'].includes(m.type)) return [m.data.val || ''];
-                return [`${m.data.name ? m.data.name + ': ' : ''}${m.data.val || ''}`];
-            };
-
-            const compressImage = (file) => new Promise((res) => {
-                const reader = new FileReader(); reader.readAsDataURL(file);
-                reader.onload = (e) => { const img = new Image(); img.src = e.target.result; img.onload = () => { const c = document.createElement('canvas'), MAX = 1280; let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height; if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; } } c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h); res({ b64: c.toDataURL('image/jpeg', 0.72), w, h }); }; };
-            });
-
-            const handleImageUpload = async (e, asNewPage = false) => {
-                const rawFiles = Array.from(e.target.files || []); if (!rawFiles.length) return;
-                showAddPageModal.value = false; resetZoom();
-                const files = activePin.value ? [rawFiles[0]] : rawFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-                const isBatch = files.length > 1; if (isBatch) { isProcessing.value = true; processingText.value = `準備匯入 ${files.length} 張圖紙...`; }
-                let firstAddedIdx = -1;
-                try {
-                    for (let i = 0; i < files.length; i++) {
-                        if (isBatch) processingText.value = `正在匯入第 ${i + 1} / ${files.length} 張圖紙...`;
-                        const res = await compressImage(files[i]); const photoId = `img_${Date.now()}_${i}_${Math.floor(Math.random() * 999)}`;
-                        photoPool.value.push({ id: photoId, photo: res.b64, w: res.w, h: res.h, author: authorName.value || '', updatedAt: Date.now() });
-                        if (i === 0 && !asNewPage && activeCanvas.value && !activeCanvas.value.photo) {
-                            checkBranchNeed(() => { Object.assign(activeCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false }); touchDirty(); firstAddedIdx = activePageIndex.value; });
-                            if (showBranchPrompt.value) await new Promise(r => { const timer = setInterval(() => { if (!showBranchPrompt.value) { clearInterval(timer); r(); } }, 200); });
-                        } else {
-                            const newPg = makeEmptyPage({ photo: res.b64, photoId, w: res.w, h: res.h });
-                            pages.value.push(newPg); dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
-                            if (firstAddedIdx === -1) firstAddedIdx = pages.value.length - 1;
-                        }
-                    }
-                    if (firstAddedIdx !== -1 && !activePin.value) activePageIndex.value = firstAddedIdx; drawMode.value = 'browse'; await saveAll(); if (isBatch) showToast(`✅ 已匯入 ${files.length} 張圖紙`);
-                } finally { isProcessing.value = false; e.target.value = ''; }
-            };
-
-            const processPastedBlob = async (blob, forceNewPage) => {
-                showAddPageModal.value = false; isProcessing.value = true; processingText.value = '正在處理貼上圖片...';
-                try {
-                    const res = await compressImage(blob), photoId = 'img_' + Date.now() + '_' + Math.floor(Math.random() * 999);
-                    photoPool.value.push({ id: photoId, photo: res.b64, w: res.w, h: res.h, author: authorName.value || '', updatedAt: Date.now() });
-                    if (forceNewPage || !activeCanvas.value?.photo) {
-                        resetZoom();
-                        if (!forceNewPage && !activeCanvas.value?.photo) checkBranchNeed(() => { Object.assign(activeCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false }); touchDirty(); });
-                        else { const newPg = makeEmptyPage({ photo: res.b64, photoId, w: res.w, h: res.h }); pages.value.push(newPg); activePageIndex.value = pages.value.length - 1; dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; }
-                        showToast('✅ 貼上為底圖');
-                    } else {
-                        checkBranchNeed(() => {
-                            const c = activeCanvas.value; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
-                            let tw = res.w, th = res.h; const maxS = Math.min(canvasW.value, canvasH.value) * 0.7;
-                            if (tw > maxS || th > maxS) { if (tw > th) { th = Math.round(th * maxS / tw); tw = maxS; } else { tw = Math.round(tw * maxS / th); th = maxS; } }
-                            const vw = canvasW.value / zoomScale.value, vh = canvasH.value / zoomScale.value;
-                            const markerId = Date.now(), newMarker = { id: markerId, x: Math.round(vbX.value + vw / 2), y: Math.round(vbY.value + vh / 2), w: tw, h: th, type: 'image', data: { b64: res.b64 } };
-                            c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId }); activeMarker.value = newMarker; showTopTextBar.value = true; touchDirty(); showToast('✅ 貼圖成功');
-                        });
-                    }
-                    drawMode.value = 'browse'; await saveAll();
-                } catch (_) { showToast('貼上失敗，請確定複製的是圖片'); } finally { isProcessing.value = false; }
-            };
-
-            const pasteFromClipboard = async (forceNewPage = false) => { try { const items = await navigator.clipboard.read(); for (const item of items) { if (item.types.some(t => t.startsWith('image/'))) { await processPastedBlob(await item.getType(item.types.find(t => t.startsWith('image/'))), forceNewPage); return; } } showToast('剪貼簿內無圖片'); } catch (_) { showToast('請使用 Ctrl+V (或 Cmd+V) 貼上'); } };
-            const handleGlobalPaste = async (e) => { if (currentView.value !== 'proj' || ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return; const items = e.clipboardData?.items; if (!items) return; for (let i = 0; i < items.length; i++) { if (items[i].type.indexOf('image') !== -1) { e.preventDefault(); await processPastedBlob(items[i].getAsFile(), false); return; } } };
-            const handleGlobalKeydown = (e) => {
-                if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) isSpaceDown = true;
-                if (fullScreenIndex.value === -1) return;
-                if (e.key === 'ArrowLeft') { e.preventDefault(); prevFullScreen(); }
-                else if (e.key === 'ArrowRight') { e.preventDefault(); nextFullScreen(); }
-                else if (e.key === 'Escape') { e.preventDefault(); fullScreenIndex.value = -1; }
-            };
-            const handleGlobalKeyup = (e) => { if (e.code === 'Space') isSpaceDown = false; };
-
-            const saveAll = async () => {
-                const code = String(project.code || '').trim(); if (!code) return;
-                const cleanPages = JSON.parse(JSON.stringify(pages.value || [])).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
-                const hasPending = hasUnsavedCloudChanges.value || dirtyPageIds.size > 0;
-                await localforage.setItem('proj_' + code, { code, name: String(project.name || ''), date: String(project.date || ''), pages: cleanPages, photoPool: JSON.parse(JSON.stringify(photoPool.value || [])), deletedPageIds: JSON.parse(JSON.stringify(project.deletedPageIds || [])), deletedPinIds: JSON.parse(JSON.stringify(project.deletedPinIds || [])), pageOrderUpdatedAt: Number(project.pageOrderUpdatedAt || 0), updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0), lastModifiedBy: String(project.lastModifiedBy || authorName.value || ''), pendingUpload: hasPending });
-                await updateQueue(code, hasPending);
-            };
-
-            const mergePagesSmart = (localList, cloudList, deletedSet, orderList) => {
-                const lMap = new Map(localList.map(p => [p.id, p])), cMap = new Map(cloudList.map(p => [p.id, p])), result = [];
-                const globalDeletedPins = new Set((project.deletedPinIds || []).map(String));
-                new Set([...lMap.keys(), ...cMap.keys()]).forEach(id => {
-                    if (deletedSet.has(id)) return;
-                    const lp = lMap.get(id), cp = cMap.get(id), pageDeletedPins = new Set([...globalDeletedPins, ...((lp?.deletedPinIds || []).map(String)), ...((cp?.deletedPinIds || []).map(String))]);
-                    if (!lp || !cp) { const single = makeEmptyPage(lp || cp); single.pins = (single.pins || []).filter(x => !pageDeletedPins.has(String(x.id))); single.deletedPinIds = [...pageDeletedPins]; result.push(single); return; }
-                    const base = (cp.updatedAt || 0) > (lp.updatedAt || 0) ? { ...cp } : { ...lp }; if (!base.photo) base.photo = lp.photo || cp.photo || null; if (!base.date) base.date = lp.date || cp.date || getTodayStr();
-                    const lPins = new Map((lp.pins || []).map(x => [String(x.id), x])), cPins = new Map((cp.pins || []).map(x => [String(x.id), x])), mergedPins = [];
-                    new Set([...lPins.keys(), ...cPins.keys()]).forEach(pid => { if (pageDeletedPins.has(pid)) return; const lP = lPins.get(pid), cP = cPins.get(pid); if (!lP || !cP) mergedPins.push(lP || cP); else { const w = (cP.updatedAt || 0) > (lP.updatedAt || 0) ? { ...cP } : { ...lP }; if (!w.photo) w.photo = lP.photo || cP.photo || null; mergedPins.push(w); } });
-                    base.pins = mergedPins; base.deletedPinIds = [...pageDeletedPins]; result.push(makeEmptyPage(base));
-                });
-                return result.sort((a, b) => (orderList.indexOf(a.id) === -1 ? 9999 : orderList.indexOf(a.id)) - (orderList.indexOf(b.id) === -1 ? 9999 : orderList.indexOf(b.id)));
-            };
-
-            const pullAndMergeFromCloud = async (code, throwErr = false) => {
-                code = String(code || '').trim(); if (!navigator.onLine) { cloudSyncState.value = 'offline'; if (throwErr) throw new Error('目前無網絡連線'); return; }
-                if (!db) throw new Error('雲端資料庫未初始化');
-                cloudSyncState.value = 'syncing';
-                try {
-                    const projRef = db.collection('site_projects').doc(code);
-                    const [projDoc, pagesSnap, mediaMap] = await Promise.all([withRetry(() => withTimeout(projRef.get())), withRetry(() => withTimeout(projRef.collection('pages').get())), loadMediaMapFromRef(projRef)]);
-                    if (!projDoc.exists) { cloudSyncState.value = hasUnsavedCloudChanges.value ? 'queued' : 'ready'; return; }
-                    const pd = projDoc.data(); if (pd.name) project.name = pd.name; if (pd.date) project.date = pd.date; if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy;
-                    const deletedSet = new Set([...(project.deletedPageIds || []), ...(pd.deletedPageIds || [])]); project.deletedPageIds = [...deletedSet];
-                    const deletedPins = new Set([...(project.deletedPinIds || []).map(String), ...((pd.deletedPinIds || []).map(String))]); project.deletedPinIds = [...deletedPins];
-                    const cloudPages = pagesSnap.docs.map(doc => { const r = doc.data(); return makeEmptyPage({ id: doc.id, ...r, date: r.date || pd.date || getTodayStr(), photo: (r.photoId && mediaMap.get(r.photoId)?.photo) || mediaMap.get('page_' + (r.id || doc.id))?.photo || r.photo || null, pins: (r.pins || []).map(pin => ({ ...pin, photo: (pin.photoId && mediaMap.get(pin.photoId)?.photo) || mediaMap.get(String(pin.id))?.photo || pin.photo || null })) }); });
-                    const localOrderNewer = (project.pageOrderUpdatedAt || 0) > (pd.pageOrderUpdatedAt || 0); if (!localOrderNewer && pd.pageOrderUpdatedAt) project.pageOrderUpdatedAt = pd.pageOrderUpdatedAt;
-                    const orderList = localOrderNewer ? [...pages.value.map(p => p.id), ...(pd.pageIds || [])] : [...(pd.pageIds || []), ...pages.value.map(p => p.id)];
-                    const merged = mergePagesSmart(pages.value, cloudPages, deletedSet, orderList);
-                    if (merged.length) { pages.value = merged; if (activePageIndex.value >= pages.value.length) activePageIndex.value = pages.value.length - 1; if (activePin.value && activePage.value) activePin.value = (activePage.value.pins || []).find(p => String(p.id) === String(activePin.value.id)) || null; }
-                    project.lastSyncAt = Date.now(); if (dirtyPageIds.size === 0 && !hasUnsavedCloudChanges.value) hasUnsavedCloudChanges.value = false;
-                    await saveAll(); cloudSyncState.value = hasUnsavedCloudChanges.value ? 'queued' : 'ready';
-                } catch (e) { cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; if (throwErr) throw e; }
-            };
-
-            const startRealtimeListener = (code) => {
-                if (unsubPages) { unsubPages(); unsubPages = null; }
-                if (!db || !code) return; let first = true;
-                unsubPages = db.collection('site_projects').doc(String(code)).collection('pages').onSnapshot(async (snap) => {
-                    if (first) { first = false; return; }
-                    if (isPushing || currentView.value === 'dir' || snap.metadata.hasPendingWrites || isDrawing.value || isPinching || showTopSheet.value || showTopTextBar.value || showIndexModal.value) return;
-                    await pullAndMergeFromCloud(code, false); showToast('🔄 已同步同事最新圖紙');
-                }, () => {});
-            };
-
-            const uploadMediaWithChunks = async (projRef, code, docKey, photoB64, meta, onStatus) => {
-                if (!photoB64) return; const cacheKey = `synced_media_${code}_${docKey}_${photoB64.length}`; if (await localforage.getItem(cacheKey)) return;
-                const mediaRef = projRef.collection('media').doc(docKey), totalChunks = Math.ceil(photoB64.length / CHUNK_SIZE);
-                try { const ex = await withTimeout(mediaRef.get(), 10000); if (ex.exists && ex.data().chunked && ex.data().totalChunks === totalChunks && ex.data().byteLen === photoB64.length) { await localforage.setItem(cacheKey, true); return; } } catch (_) {}
-                for (let i = 0; i < totalChunks; i++) { onStatus?.(`切片 ${i + 1}/${totalChunks}`); await withRetry(() => withTimeout(mediaRef.collection('chunks').doc(String(i)).set({ index: i, data: photoB64.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE) }), 20000)); }
-                await withRetry(() => withTimeout(mediaRef.set({ chunked: true, totalChunks, byteLen: photoB64.length, w: meta.w || 1200, h: meta.h || 900, author: meta.author || '', updatedAt: meta.updatedAt || Date.now() }, { merge: true }), 15000));
-                await localforage.setItem(cacheKey, true);
-            };
-
-            const pushProjectPayload = async (projObj, isCurrentOpen = true, onProgress = null) => {
-                const code = String(projObj.code || '').trim(); if (!db || !code || !navigator.onLine) return false;
-                const projRef = db.collection('site_projects').doc(code), now = Date.now(), lastSync = projObj.lastSyncAt || 0, rawPages = projObj.pages || [];
-                const targetList = isCurrentOpen ? rawPages.filter(pg => dirtyPageIds.has(pg.id) || (pg.updatedAt || 0) > lastSync) : rawPages;
-                const dirtyPages = JSON.parse(JSON.stringify(targetList)).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
-                const projPatch = { code, name: projObj.name || '', date: projObj.date || getTodayStr(), pageIds: rawPages.map(p => p.id), pageOrderUpdatedAt: projObj.pageOrderUpdatedAt || now, deletedPageIds: projObj.deletedPageIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPageIds) : [], deletedPinIds: projObj.deletedPinIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPinIds) : [], updatedAt: now };
-                if (dirtyPages.length > 0 && authorName.value) projPatch.lastModifiedBy = authorName.value;
-                await withRetry(() => withTimeout(projRef.set(projPatch, { merge: true }), 15000));
-                for (let idx = 0; idx < dirtyPages.length; idx++) {
-                    const pg = dirtyPages[idx], { photo: pagePhoto, pins, ...restPage } = pg;
-                    if (pagePhoto && !pg.isSketch) await uploadMediaWithChunks(projRef, code, pg.photoId || ('page_' + pg.id), pagePhoto, { w: pg.w, h: pg.h, author: pg.author || authorName.value || '', updatedAt: now }, (st) => onProgress?.(`上傳第 ${idx + 1}/${dirtyPages.length} 頁 (${st})...`));
-                    const pinsMeta = [];
-                    for (let pIdx = 0; pIdx < (pins || []).length; pIdx++) {
-                        const { photo: pinPhoto, ...restPin } = pins[pIdx]; pinsMeta.push({ ...restPin, hasPhoto: !!pinPhoto });
-                        if (pinPhoto && !pins[pIdx].isSketch) await uploadMediaWithChunks(projRef, code, pins[pIdx].photoId || String(pins[pIdx].id), pinPhoto, { w: pins[pIdx].w, h: pins[pIdx].h, author: authorName.value || '', updatedAt: now }, (st) => onProgress?.(`上傳 P${idx + 1} 釘#${pIdx + 1} (${st})...`));
-                    }
-                    onProgress?.(`儲存第 ${idx + 1}/${dirtyPages.length} 頁標註...`);
-                    await withRetry(() => withTimeout(projRef.collection('pages').doc(pg.id).set({ ...restPage, updatedAt: now, hasPhoto: !!pagePhoto, pins: pinsMeta }, { merge: true }), 15000));
-                }
-                await updateQueue(code, false); return now;
-            };
-
-            const pushToCloud = async (throwErr = false, onProgress = null) => {
-                const code = String(project.code || '').trim(); if (!db || !code) return;
-                if (!navigator.onLine) { await saveAll(); cloudSyncState.value = 'offline'; if (throwErr) throw new Error('目前無網絡'); return; }
-                isPushing = true; cloudSyncState.value = 'syncing';
-                try {
-                    const now = await pushProjectPayload({ code, name: project.name, date: project.date, pages: pages.value, deletedPageIds: project.deletedPageIds, deletedPinIds: project.deletedPinIds, pageOrderUpdatedAt: project.pageOrderUpdatedAt, lastSyncAt: project.lastSyncAt }, true, onProgress);
-                    dirtyPageIds.clear(); project.lastSyncAt = now; cloudSyncState.value = 'ready'; hasUnsavedCloudChanges.value = false; await saveAll();
-                } catch (e) { await saveAll(); cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; if (throwErr) throw e; } finally { setTimeout(() => { isPushing = false; }, 1000); }
-            };
-
-            const createCloudBackup = async (code) => {
-                if (!db || !navigator.onLine) return; const localData = await localforage.getItem('proj_' + code); if (!localData) return;
-                const bData = JSON.parse(JSON.stringify(localData)); delete bData.photoPool; bData.pages.forEach(p => { delete p.photo; (p.pins || []).forEach(pin => delete pin.photo); });
-                const ref = db.collection('site_projects').doc(code).collection('backups'), ts = Date.now();
-                await withRetry(() => withTimeout(ref.doc(String(ts)).set({ timestamp: ts, author: authorName.value || '未知', data: JSON.stringify(bData) })));
-                const snaps = await ref.orderBy('timestamp', 'desc').get(); let i = 0; snaps.forEach(d => { if (++i > 5) d.ref.delete(); });
-            };
-
-            const processPendingUploadQueue = async (silent = true) => {
-                if (isAutoQueueing || !navigator.onLine || !db || isDrawing.value || isPinching || showTopSheet.value || showTopTextBar.value || showIndexModal.value || showBranchPrompt.value) return;
-                const queue = (await localforage.getItem('pending_upload_queue')) || []; if (!queue.length) return; isAutoQueueing = true;
-                try {
-                    for (const qCode of [...queue]) {
-                        if (!navigator.onLine) break;
-                        if (currentView.value !== 'dir' && String(project.code) === String(qCode)) { await pullAndMergeFromCloud(qCode, false); await pushToCloud(true); await createCloudBackup(qCode); if (!silent) showToast(`✅ #${qCode} 已自動上傳`); }
-                        else { const saved = await localforage.getItem('proj_' + qCode); if (!saved) { await updateQueue(qCode, false); continue; } saved.lastSyncAt = await pushProjectPayload(saved, false, null); saved.pendingUpload = false; await localforage.setItem('proj_' + qCode, saved); await createCloudBackup(qCode); showToast(`✅ 網絡已恢復，#${qCode} 已自動上傳`); }
-                    }
-                    if (currentView.value === 'dir') await loadProjectList();
-                } catch (_) {} finally { isAutoQueueing = false; }
-            };
-
-            const uploadNow = async () => {
-                if (!project.code) return; await saveAll(); if (!navigator.onLine) { cloudSyncState.value = 'offline'; showToast('📴 無網絡：已鎖入本機，有訊號自動上傳'); return; }
-                isProcessing.value = true; processingText.value = '正在智能合併並分片上傳...';
-                try { await pullAndMergeFromCloud(project.code, false); await pushToCloud(true, (st) => { processingText.value = st; }); await createCloudBackup(project.code); showToast('✅ 100% 上傳成功'); } catch (_) { showToast('⚠️ 網絡波動，已加入自動補傳隊列'); } finally { isProcessing.value = false; }
-            };
-            const downloadNow = async () => {
-                if (!project.code) return; if (!navigator.onLine) { showToast('📴 目前無網絡，顯示本機最新資料'); return; }
-                isProcessing.value = true; processingText.value = '正在載入最新進度...';
-                try { await pullAndMergeFromCloud(project.code, true); showToast('✅ 已合併雲端最新資料'); } catch (e) { alert('載入失敗：' + e.message); } finally { isProcessing.value = false; }
-            };
-
-            const createNewProject = async () => {
-                await checkAuthorName(); resetZoom(); const today = getTodayStr(), firstPg = makeEmptyPage({ date: today });
-                Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: today, deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
-                pages.value = [firstPg]; photoPool.value = []; activePageIndex.value = 0; activePin.value = null; dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id); hasUnsavedCloudChanges.value = true;
-                cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; currentView.value = 'proj'; await saveAll(); startRealtimeListener(project.code);
-            };
-            const copyCode = (code) => { navigator.clipboard?.writeText(code); showToast('已複製工程碼：#' + code); showManageModal.value = false; };
-            const joinProjectByCode = async () => {
-                await checkAuthorName(); const code = String(inputJoinCode.value || '').trim(); if (code.length !== 6) return alert('請輸入 6 位數字工程碼'); if (!navigator.onLine) return alert('連通新工程碼需要網絡連線');
-                isProcessing.value = true; processingText.value = '正在連通 #' + code + '...';
-                try { const doc = await withRetry(() => withTimeout(db.collection('site_projects').doc(code).get(), 15000)); if (!doc.exists) return alert('雲端找不到工程碼 #' + code); showJoinModal.value = false; inputJoinCode.value = ''; await loadProject(code, true); showToast('✅ 已連通 #' + code); } catch (e) { alert('連線失敗：' + e.message); } finally { isProcessing.value = false; }
-            };
-            const loadProject = async (code, openAsPreview = true) => {
-                resetZoom(); showQuickPageNav.value = false; code = String(code); project.code = code; project.deletedPageIds = []; project.deletedPinIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; dirtyPageIds.clear();
-                const d = await localforage.getItem('proj_' + code);
-                if (d) { Object.assign(project, { name: d.name || '', date: d.date || '', deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' }); if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg)); if (d.photoPool) photoPool.value = d.photoPool; hasUnsavedCloudChanges.value = !!d.pendingUpload; } else hasUnsavedCloudChanges.value = false;
-                activePageIndex.value = 0; activePin.value = null; currentView.value = openAsPreview ? 'preview' : 'proj';
-                await pullAndMergeFromCloud(code, false); if (!pages.value.length) pages.value = [makeEmptyPage()]; drawMode.value = 'browse'; startRealtimeListener(code);
-            };
-
-            const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
-            const renameProject = async () => {
-                const newName = prompt('請輸入新的地址 / 名稱：', manageProj.value.name);
-                if (newName !== null) { const trimmed = newName.trim(), code = String(manageProj.value.code), d = await localforage.getItem('proj_' + code); if (d) { d.name = trimmed; d.pendingUpload = true; await localforage.setItem('proj_' + code, d); await updateQueue(code, true); } manageProj.value.name = trimmed; if (db && navigator.onLine) db.collection('site_projects').doc(code).set({ name: trimmed, updatedAt: Date.now() }, { merge: true }).catch(() => {}); await loadProjectList(); showToast('✅ 已更新地址'); }
-            };
-            const duplicateProject = async () => { const d = await localforage.getItem('proj_' + manageProj.value.code); if (!d) return; const newCode = Math.floor(100000 + Math.random() * 900000).toString(); d.code = newCode; d.name = (d.name || '工程') + ' (副本)'; d.lastSyncAt = 0; d.pendingUpload = true; await localforage.setItem('proj_' + newCode, d); await updateQueue(newCode, true); showManageModal.value = false; await loadProjectList(); showToast('✅ 已複製為 #' + newCode); };
-            const batchDeleteDocs = async (docs) => { for (let i = 0; i < docs.length; i += 400) { const b = db.batch(); docs.slice(i, i + 400).forEach(d => b.delete(d.ref)); await b.commit(); } };
-            const deleteProject = async (code) => {
-                if (prompt('⚠️ 輸入 "dd" 確認刪除此工程：')?.trim().toLowerCase() !== 'dd') return; isProcessing.value = true; processingText.value = '正在徹底刪除工程...';
-                try { await localforage.removeItem('proj_' + code); await updateQueue(code, false); if (db && navigator.onLine) { const ref = db.collection('site_projects').doc(String(code)); const delCol = async (sub) => { const snap = await ref.collection(sub).get(); if (sub === 'media') { for (const doc of snap.docs) await batchDeleteDocs((await doc.ref.collection('chunks').get()).docs); } await batchDeleteDocs(snap.docs); }; await Promise.all([delCol('pages'), delCol('media'), delCol('backups')]); await ref.delete(); } showManageModal.value = false; await loadProjectList(); showToast('🗑️ 已徹底刪除'); } catch (e) { alert('清理異常：' + e.message); } finally { isProcessing.value = false; }
-            };
-            const cleanCloudGarbage = async () => {
-                if (!db || !navigator.onLine) return alert('請檢查網路連線'); if (!confirm('🧹 掃描並徹底清除已刪除工程的殘留碎片？')) return; isProcessing.value = true; processingText.value = '正在清理雲端殘留垃圾...';
-                try { const activeIds = new Set((await withTimeout(db.collection('site_projects').get(), 15000)).docs.map(d => d.id)); let removed = 0; for (const sub of ['chunks', 'media', 'pages', 'backups']) { const snap = await withTimeout(db.collectionGroup(sub).get(), 20000); const orphans = snap.docs.filter(d => { const p = d.ref.path.split('/'); return p[0] === 'site_projects' && p[1] && !activeIds.has(p[1]); }); await batchDeleteDocs(orphans); removed += orphans.length; } showToast(removed > 0 ? `🧹 已清理 ${removed} 筆殘留垃圾` : '✨ 雲端非常乾淨'); } catch (e) { alert('清理失敗：' + e.message); } finally { isProcessing.value = false; }
-            };
-            const openBackupList = async () => { showManageModal.value = false; isProcessing.value = true; processingText.value = '正在搜尋備份...'; try { const snaps = await withTimeout(db.collection('site_projects').doc(manageProj.value.code).collection('backups').get(), 15000); backupList.value = snaps.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); showBackupListModal.value = true; } catch (e) { alert('讀取失敗：' + e.message); } finally { isProcessing.value = false; } };
-            const restoreBackup = async (bkId) => {
-                isProcessing.value = true; processingText.value = '正在還原紀錄...';
-                try {
-                    const doc = await withTimeout(db.collection('site_projects').doc(manageProj.value.code).collection('backups').doc(bkId).get(), 15000);
-                    const bData = JSON.parse(doc.data().data), newCode = Math.floor(100000 + Math.random() * 900000).toString();
-                    bData.code = newCode; bData.name = (bData.name || '工程') + ' (還原檔)'; bData.lastSyncAt = 0; bData.pendingUpload = true;
-                    const curLocal = await localforage.getItem('proj_' + manageProj.value.code);
-                    if (curLocal) { const pMap = new Map(); curLocal.pages.forEach(p => { if (p.photo) pMap.set(p.id, p.photo); (p.pins || []).forEach(pin => { if (pin.photo) pMap.set(pin.id, pin.photo); }); }); bData.pages.forEach(p => { p.photo = pMap.get(p.id) || null; (p.pins || []).forEach(pin => { pin.photo = pMap.get(pin.id) || null; }); }); }
-                    await localforage.setItem('proj_' + newCode, bData); await updateQueue(newCode, true); showBackupListModal.value = false; await loadProjectList(); showToast('✅ 已還原為 #' + newCode);
-                } catch (e) { alert('還原失敗：' + e.message); } finally { isProcessing.value = false; }
-            };
-
-            const openCloudBrowser = async () => { if (!db || !navigator.onLine) return alert('請檢查網路連線'); isProcessing.value = true; processingText.value = '正在讀取雲端目錄...'; try { const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(30).get(), 10000); cloudProjectList.value = snaps.docs.map(d => ({ code: d.id, ...d.data() })).filter(d => d.name || d.updatedAt); showCloudBrowser.value = true; } catch (e) { alert('讀取目錄失敗：' + e.message); } finally { isProcessing.value = false; } };
-            const downloadFromCloudBrowser = async (code) => { showCloudBrowser.value = false; await loadProject(code, true); showToast('✅ 已載入 #' + code); };
-            const loadProjectList = async () => { const keys = await localforage.keys(), q = (await localforage.getItem('pending_upload_queue')) || [], list = []; for (const k of keys) { if (k.startsWith('proj_')) { const d = await localforage.getItem(k); if (d?.code) { const pgs = d.pages || []; list.push({ code: d.code, name: d.name, date: d.date, pageCount: pgs.length || 1, pinCount: pgs.reduce((s, p) => s + (p.pins?.length || 0), 0), updatedAt: d.updatedAt || 0, lastModifiedBy: d.lastModifiedBy || '', pendingUpload: !!d.pendingUpload || q.includes(String(d.code)) }); } } } projectList.value = list.sort((a, b) => b.updatedAt - a.updatedAt); };
-            const backToProjects = async () => { resetZoom(); showQuickPageNav.value = false; if (unsubPages) { unsubPages(); unsubPages = null; } await saveAll(); if ((hasUnsavedCloudChanges.value || dirtyPageIds.size > 0) && project.code && db) { if (!navigator.onLine) showToast('📴 無網絡模式：已鎖入本機，有訊號自動上傳'); else { isProcessing.value = true; processingText.value = '正在自動上傳並返回目錄...'; try { await pullAndMergeFromCloud(project.code, false); await pushToCloud(true, (st) => { processingText.value = st; }); await createCloudBackup(project.code); showToast('✅ 已自動同步雲端'); } catch (_) { showToast('⚠️ 已排入自動補傳隊列'); } finally { isProcessing.value = false; } } } dirtyPageIds.clear(); hasUnsavedCloudChanges.value = false; await loadProjectList(); currentView.value = 'dir'; };
-            const checkAuthorName = async () => { let name = await localforage.getItem('measure_author_name'); if (!name) { name = prompt('👤 請輸入您的稱呼或設備名稱 (例: 明哥、強哥iPad)：')?.trim(); if (name) await localforage.setItem('measure_author_name', name); } authorName.value = name || ''; };
-            const changeAuthorName = async () => { const name = prompt('👤 更新設備稱呼：', authorName.value)?.trim(); if (name) { authorName.value = name; await localforage.setItem('measure_author_name', name); } };
-
-            const fallbackCopyTextToClipboard = (text) => { const textArea = document.createElement("textarea"); textArea.value = text; textArea.style.position = "fixed"; textArea.style.top = "0"; textArea.style.left = "0"; document.body.appendChild(textArea); textArea.focus(); textArea.select(); try { document.execCommand('copy'); showToast('🔗 已複製 WhatsApp 專屬連結'); } catch (_) { window.prompt("請手動複製以下連結：", text); } document.body.removeChild(textArea); };
-            const copyShareLink = () => {
-                const code = String(project.code || '').trim(); if (!code) return; let baseUrl = window.location.href.split('index.html')[0]; if (!baseUrl.endsWith('/')) baseUrl += '/'; const link = baseUrl + 'view.html?code=' + code; const msg = `📋 工程度尺圖 (#${code})\n📍 地址：${project.name || '未標題'}\n👉 點擊檢視：\n${link}`;
-                if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(msg).then(() => showToast('🔗 已複製 WhatsApp 專屬連結')).catch(() => fallbackCopyTextToClipboard(msg));
-                else fallbackCopyTextToClipboard(msg);
-            };
-
-            onMounted(async () => {
-                const bs = document.getElementById('boot-screen'); if (bs) bs.remove(); document.getElementById('app').style.display = 'flex';
-                await loadCustomStamps(); await checkAuthorName(); await loadProjectList();
-                window.addEventListener('online', () => { cloudSyncState.value = 'ready'; showToast('🌐 網絡已恢復'); processPendingUploadQueue(false); });
-                window.addEventListener('offline', () => { cloudSyncState.value = 'offline'; });
-                window.addEventListener('paste', handleGlobalPaste);
-                window.addEventListener('keydown', handleGlobalKeydown);
-                window.addEventListener('keyup', handleGlobalKeyup);
-                if (navigator.onLine) setTimeout(() => processPendingUploadQueue(false), 1500);
-                setInterval(() => { if (navigator.onLine) processPendingUploadQueue(true); }, 15000);
-            });
-
-            onUnmounted(() => {
-                window.removeEventListener('paste', handleGlobalPaste);
-                window.removeEventListener('keydown', handleGlobalKeydown);
-                window.removeEventListener('keyup', handleGlobalKeyup);
-            });
-
-            const renderAnnotatedCanvas = (canvasObj, includeStamp = true, itemDate = '', itemAuthor = '') => new Promise(async (resolve) => {
-                const img = new Image(); img.src = canvasObj.photo; await new Promise(r => { img.onload = r; img.onerror = r; });
-                const c = document.createElement('canvas'), w = canvasObj.w || 1200, h = canvasObj.h || 900; c.width = w; c.height = h; const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-                const markerImages = {}; for (const m of (canvasObj.markers || [])) { if (m.type === 'image' && m.data.b64) { const im = new Image(); im.src = m.data.b64; await new Promise(r => { im.onload = r; im.onerror = r; }); markerImages[m.id] = im; } }
-                if (includeStamp) {
-                    const wm = buildWatermarkBox(canvasObj, itemDate, itemAuthor);
-                    if (wm) {
-                        ctx.save();
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
-                        drawRoundRect(ctx, wm.x, wm.y, wm.w, wm.h, 6);
-                        ctx.fill();
-                        ctx.lineWidth = 1.5;
-                        ctx.strokeStyle = '#cbd5e1';
-                        ctx.stroke();
-                        ctx.textAlign = 'left';
-                        ctx.textBaseline = 'middle';
-                        if (wm.title) {
-                            ctx.font = 'bold 15px sans-serif';
-                            ctx.fillStyle = '#0f172a';
-                            ctx.fillText(wm.title, wm.x + 11, wm.sub ? wm.y + 15 : wm.y + wm.h / 2);
-                        }
-                        if (wm.sub) {
-                            ctx.font = '600 12px sans-serif';
-                            ctx.fillStyle = '#64748b';
-                            ctx.fillText(wm.sub, wm.x + 11, wm.title ? wm.y + 32 : wm.y + wm.h / 2);
-                        }
-                        ctx.restore();
-                    }
-                }
-                ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-                (canvasObj.walls || []).forEach(wObj => { ctx.strokeStyle = wObj.color || '#111827'; buildWallSegments(wObj).forEach(seg => { ctx.lineWidth = seg.isHatch ? 2.5 : 3.5; ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke(); }); });
-                (canvasObj.lines || []).forEach(l => {
-                    if (l.type === 'arrow-single') {
-                        const hex = getLineStroke(l); ctx.strokeStyle = hex; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
-                        ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(Math.atan2(l.y2 - l.y1, l.x2 - l.x1)); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-9, 4.5); ctx.lineTo(-9, -4.5); ctx.closePath(); ctx.fill(); ctx.restore();
-                    } else if (l.type === 'straight') {
-                        ctx.strokeStyle = getLineStroke(l); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
-                    } else {
-                        ctx.save(); ctx.setLineDash([14, 10]); ctx.strokeStyle = getLineStroke(l, 0.7); ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore();
-                    }
-                });
-                (canvasObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 6; ctx.stroke(new Path2D(p.d)); });
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                (canvasObj.markers || []).forEach(m => { if (m.type === 'image') { if (markerImages[m.id]) ctx.drawImage(markerImages[m.id], m.x - m.w / 2, m.y - m.h / 2, m.w, m.h); } else { const lines = getMarkerLines(m), color = getStampColor(m); ctx.font = `900 ${28 * globalFontScale.value}px sans-serif`; const startY = m.y - ((lines.length - 1) * 34 * globalFontScale.value) / 2; lines.forEach((line, i) => { const y = startY + i * 34 * globalFontScale.value; ctx.lineWidth = 7 * globalFontScale.value; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); }); } });
-                (canvasObj.pins || []).forEach((pin, idx) => { const px = (pin.x / 100) * w, py = (pin.y / 100) * h; ctx.beginPath(); ctx.arc(px, py - 22, 20, 0, 2 * Math.PI); ctx.fillStyle = '#dc2626'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(idx + 1, px, py - 22); });
-                resolve(c);
-            });
-
-            const copyFullScreenImage = async () => { if (!fullScreenItem.value?.photo) return; const c = await renderAnnotatedCanvas(fullScreenItem.value, showWatermark.value, fullScreenDate.value, fullScreenAuthor.value); try { if (navigator.clipboard && window.ClipboardItem) { const blob = await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(), 'image/png')); await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); showToast('✅ 已複製圖片'); return; } } catch (_) {} try { const blob = await new Promise(res => c.toBlob(res, 'image/png')); const file = new File([blob], 'measure.png', { type: 'image/png' }); if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); return; } } catch (_) {} alert('此瀏覽器不支援直接複製圖片，請按旁邊「⬇️下載」'); };
-            const downloadFullScreenImage = async () => { if (!fullScreenItem.value?.photo) return; try { const dStr = sanitizeFilename(fullScreenDate.value || getTodayStr()); const c = await renderAnnotatedCanvas(fullScreenItem.value, showWatermark.value, fullScreenDate.value, fullScreenAuthor.value); const url = URL.createObjectURL(await new Promise(res => c.toBlob(res, 'image/jpeg', 0.92))); const a = document.createElement('a'); a.href = url; a.download = `${sanitizeFilename(project.name || '工程')}_#${project.code}_${sanitizeFilename(currentFullScreen.value?.label || '圖紙')}_${dStr}.jpg`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000); showToast('✅ 已下載圖片'); } catch (_) { alert('下載圖片失敗'); } };
-
-            const exportPdfReport = async (perPage = 1) => {
-                showPdfModal.value = false; isProcessing.value = true; processingText.value = `正在產生 PDF (每頁 ${perPage} 張)...`;
-                setTimeout(async () => {
+                    isSubmitting.value = true;
                     try {
-                        const { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-                        const PAGE_W = 1240, PAGE_H = 1754, validPages = [];
-                        pages.value.forEach((pg, pIdx) => { const pgDate = pg.date || project.date || getTodayStr(), pgAuthor = pg.author || project.lastModifiedBy || '未知'; if (pg.photo) validPages.push({ ...pg, date: pgDate, author: pgAuthor, pdfLabel: `P${pIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}` }); (pg.pins || []).forEach((pin, pinIdx) => { if (pin.photo) validPages.push({ ...pin, date: pgDate, author: pgAuthor, pdfLabel: `P${pIdx + 1} 📍釘選#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}` }); }); });
-                        if (!validPages.length) return alert('沒有可輸出的圖紙！');
-                        const uniqueDates = [...new Set(validPages.map(p => p.date).filter(Boolean))]; const headerDate = uniqueDates.length > 1 ? `${uniqueDates[0]} ~ ${uniqueDates[uniqueDates.length - 1]}` : (uniqueDates[0] || getTodayStr()); const fileDateTag = sanitizeFilename(uniqueDates[uniqueDates.length - 1] || getTodayStr());
-                        if (perPage > 1) {
-                            const cols = perPage === 4 ? 2 : 1, rows = 2; const totalPdf = Math.ceil(validPages.length / perPage), mx = 45, topY = 115, gap = 24; const cellW = Math.floor((PAGE_W - mx * 2 - (cols - 1) * gap) / cols); const cellH = Math.floor((PAGE_H - topY - 45 - (rows - 1) * gap) / rows);
-                            for (let pIdx = 0; pIdx < totalPdf; pIdx++) {
-                                if (pIdx > 0) doc.addPage(); const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H); ctx.fillStyle = '#000'; ctx.font = 'bold 34px sans-serif'; ctx.fillText(`${project.name || '工程度尺'} (#${project.code})`, mx, 60); ctx.font = 'bold 21px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${headerDate}   |   共 ${validPages.length} 張   |   第 ${pIdx + 1} / ${totalPdf} 頁`, mx, 94);
-                                for (let j = 0; j < perPage; j++) {
-                                    const pg = validPages[pIdx * perPage + j]; if (!pg) break; const cx = mx + (j % cols) * (cellW + gap), cy = topY + Math.floor(j / cols) * (cellH + gap); ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 2; ctx.strokeRect(cx, cy, cellW, cellH); ctx.fillStyle = '#f3f4f6'; ctx.fillRect(cx + 1, cy + 1, cellW - 2, 44); ctx.fillStyle = '#111827'; ctx.font = 'bold 20px sans-serif'; ctx.fillText(`${pg.pdfLabel} (${pg.date})`.slice(0, cols === 1 ? 56 : 32), cx + 14, cy + 30);
-                                    const im = await renderAnnotatedCanvas(pg, true, pg.date, pg.author); const maxW = cellW - 20, maxH = cellH - 60; let dw = maxW, dh = (im.height / im.width) * dw; if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; } ctx.drawImage(im, cx + 10 + (maxW - dw) / 2, cy + 52 + (maxH - dh) / 2, dw, dh);
-                                }
-                                doc.addImage(c.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
-                            }
-                        } else {
-                            for (let i = 0; i < validPages.length; i++) {
-                                if (i > 0) doc.addPage(); const pg = validPages[i], c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H); ctx.fillStyle = '#000'; ctx.font = 'bold 38px sans-serif'; ctx.fillText(`${project.name || '工程度尺'} (#${project.code}) — ${pg.pdfLabel}`, 50, 65); ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${pg.date}   |   最後修改: ${pg.author}`, 50, 102);
-                                const im = await renderAnnotatedCanvas(pg, true, pg.date, pg.author); const maxW = PAGE_W - 100, maxH = PAGE_H - 180; let dw = maxW, dh = (im.height / im.width) * dw; if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; } ctx.drawImage(im, 50 + (maxW - dw) / 2, 130, dw, dh); doc.addImage(c.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
-                            }
-                        }
-                        const modeTag = perPage === 4 ? '4合1' : perPage === 2 ? '2合1' : '單頁'; doc.save(`${sanitizeFilename(project.name || '工程')}_#${project.code}_${fileDateTag}_${modeTag}.pdf`);
-                    } catch (_) { alert('生成 PDF 失敗'); } finally { isProcessing.value = false; }
-                }, 50);
-            };
+                        await db.collection('site_projects').doc(String(project.code)).collection('feedback').add(payload);
+                        showSubmitSuccess.value = true;
+                    } catch (err) {
+                        alert('提交失敗，請檢查網絡連線：' + err.message);
+                    } finally {
+                        isSubmitting.value = false;
+                    }
+                };
 
-            return {
-                offlineReady, currentView, TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_GROUPS, stampFilter, filteredStampGroups,
-                defaultTextColor, setMarkerTextColor, getArrowMarkerId, getFsArrowMarkerId,
-                capsuleOffset, capsuleCollapsed, startCapsuleDrag,
-                masterPages, showQuickPageNav, jumpToPage, jumpToPageById, goToMasterPlan,
-                showIndexModal, indexCustomCode, editingIndexMarker, placeSpaceTag, addCustomSpaceTag, placePageLink, deleteEditingIndexMarker,
-                fullScreenIndex, fullScreenList, fullScreenItem, fullScreenTitle, fullScreenWatermarkBox, showWatermark, getLineStroke, getWallSegments,
-                zoomScale, invZoom, svgViewBox, stepZoom, resetZoom, onStageWheel, draggingPageIdx, dragOverPageIdx, startPageDrag,
-                openFullScreenPreview, prevFullScreen, nextFullScreen, editFromFullScreen, copyFullScreenImage, downloadFullScreenImage, enterEditMode, switchToPreview, duplicateCurrentPage,
-                showMergeModal, mergeableGroups, mergePageGroup, showPdfModal, showPhotoPoolModal, photoPoolList, openPhotoPool, selectFromPhotoPool, deleteFromPhotoPool,
-                projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH,
-                showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges, markProjectChanged,
-                showManageModal, manageProj, openManageMenu, renameProject, duplicateProject, showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
-                showBackupListModal, backupList, openBackupList, restoreBackup, drawColor, wallStyle, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg, copyShareLink,
-                customStamps, promptCustomStamp, drawMode, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
-                showBranchPrompt, branchOwner, branchInputValue, confirmBranch, cancelBranch, svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
-                createNewProject, loadProject, deleteProject, backToProjects, copyCode, joinProjectByCode, saveAll, downloadNow, uploadNow, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, onPinTap, deleteActivePin,
-                setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload, pasteFromClipboard,
-                onEraseTap, resizeImageMarker, onMarkerPointerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
-                deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, onMarkerTextInput, handleKeypad, applyTag, applyStamp, getStampColor, getMarkerLines, getTagFields, exportPdfReport,
-                globalFontScale, toggleFontScale
-            };
-        }
-    }).mount('#app');
-}
-// === END OF app.js ===
+                // 唯讀輔助渲染函數
+                const getArrowId = (c) => 'v-arrow-' + String(c || '#ef4444').replace('#', 'hex_');
+                const getLineStroke = (l, a = 0.75) => (!l.type || l.type === 'measure') ? `rgba(255,0,68,${a})` : ({ red: '#ef4444', gray: '#9ca3af', white: '#ffffff' }[l.color] || l.color || '#ef4444');
+                const getWallSegments = (w) => buildWallSegments(w);
+                const getStampColor = (m) => m.textColor || (m.type === 'space_tag' ? '#a855f7' : (m.type === 'page_link' ? '#38bdf8' : '#ffffff'));
+                const getMarkerLines = (m) => {
+                    const def = TAG_DEFS[m.type];
+                    if (def) return [def.title, ...def.fields.filter(f => m.data[f.key]).map(f => `${f.label}:${m.data[f.key]}`)];
+                    if (['stamp', 'text', 'space_tag', 'page_link'].includes(m.type)) return [m.data.val || ''];
+                    return [`${m.data.name ? m.data.name + ': ' : ''}${m.data.val || ''}`];
+                };
+
+                const downloadAnnotatedImage = async () => {
+                    if (!activeCanvas.value?.photo) return;
+                    const cObj = activeCanvas.value, img = new Image(); img.src = cObj.photo;
+                    await new Promise(r => { img.onload = r; img.onerror = r; });
+                    const c = document.createElement('canvas'), w = cObj.w || 1200, h = cObj.h || 900; c.width = w; c.height = h;
+                    const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+                    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                    (cObj.lines || []).forEach(l => {
+                        ctx.save(); if (!l.type || l.type === 'measure') ctx.setLineDash([14, 10]);
+                        ctx.strokeStyle = getLineStroke(l, 0.75); ctx.lineWidth = 4;
+                        ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore();
+                    });
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    (cObj.markers || []).forEach(m => {
+                        if (m.type !== 'image') {
+                            const lines = getMarkerLines(m); ctx.font = '900 17px sans-serif';
+                            lines.forEach((ln, i) => {
+                                const y = m.y - ((lines.length - 1) * 20) / 2 + i * 20;
+                                ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(ln, m.x, y);
+                                ctx.fillStyle = getStampColor(m); ctx.fillText(ln, m.x, y);
+                            });
+                        }
+                    });
+                    fbPaths.value.forEach(fp => { ctx.strokeStyle = fp.color; ctx.lineWidth = 7; ctx.stroke(new Path2D(fp.d)); });
+                    for (const fm of fbMarkers.value) {
+                        if (fm.type === 'image' && fm.b64) {
+                            const im = new Image(); im.src = fm.b64; await new Promise(r => { im.onload = r; im.onerror = r; });
+                            ctx.drawImage(im, fm.x - fm.w / 2, fm.y - fm.h / 2, fm.w, fm.h);
+                        } else if (fm.text) {
+                            ctx.font = '900 22px sans-serif'; ctx.lineWidth = 6; ctx.strokeStyle = '#fff'; ctx.strokeText(fm.text, fm.x, fm.y);
+                            ctx.fillStyle = fm.color; ctx.fillText(fm.text, fm.x, fm.y);
+                        }
+                    }
+                    const url = URL.createObjectURL(await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9)));
+                    const a = document.createElement('a'); a.href = url; a.download = `批註_${project.name || project.code}_P${activePageIndex.value + 1}.jpg`;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000);
+                };
+
+                // 唯讀載入雲端工程資料
+                const resolveMediaDoc = async (doc) => {
+                    const d = doc.data(); if (!d) return null; if (d.photo) return d.photo;
+                    if (d.chunked && d.totalChunks > 0) {
+                        const snap = await doc.ref.collection('chunks').get();
+                        const list = snap.docs.map(c => c.data()).sort((a, b) => (a.index || 0) - (b.index || 0));
+                        if (list.length === d.totalChunks) return list.map(c => c.data || '').join('');
+                    }
+                    return null;
+                };
+
+                const loadProjectData = async (code) => {
+                    code = String(code || '').trim(); if (!code) return;
+                    isLoading.value = true; loadingText.value = `正在載入工程 #${code}...`;
+                    try {
+                        const projRef = db.collection('site_projects').doc(code);
+                        const [projDoc, pagesSnap, mediaSnap] = await Promise.all([projRef.get(), projRef.collection('pages').get(), projRef.collection('media').get()]);
+                        if (!projDoc.exists) { alert('找不到工程碼 #' + code); project.code = ''; return; }
+                        const pd = projDoc.data();
+                        project.code = code; project.name = pd.name || ''; project.date = pd.date || '';
+                        const mediaMap = new Map();
+                        await Promise.all(mediaSnap.docs.map(async (m) => { const p = await resolveMediaDoc(m); if (p) mediaMap.set(String(m.id), p); }));
+                        const orderList = pd.pageIds || [], deletedSet = new Set(pd.deletedPageIds || []);
+                        const loaded = pagesSnap.docs.filter(d => !deletedSet.has(d.id)).map(doc => {
+                            const r = doc.data();
+                            return {
+                                id: doc.id, ...r,
+                                photo: (r.photoId && mediaMap.get(r.photoId)) || mediaMap.get('page_' + (r.id || doc.id)) || r.photo || null,
+                                pins: (r.pins || []).map(pin => ({ ...pin, photo: (pin.photoId && mediaMap.get(pin.photoId)) || mediaMap.get(String(pin.id)) || pin.photo || null }))
+                            };
+                        });
+                        pages.value = loaded.sort((a, b) => (orderList.indexOf(a.id) === -1 ? 9999 : orderList.indexOf(a.id)) - (orderList.indexOf(b.id) === -1 ? 9999 : orderList.indexOf(b.id)));
+                        activePageIndex.value = 0; activePin.value = null;
+                    } catch (e) {
+                        alert('載入失敗：' + e.message);
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                const loadByInputCode = () => { if (inputCode.value.trim().length === 6) loadProjectData(inputCode.value.trim()); else alert('請輸入 6 位數工程碼'); };
+
+                onMounted(() => {
+                    const params = new URLSearchParams(window.location.search);
+                    const c = params.get('code');
+                    if (c) loadProjectData(c);
+                    window.addEventListener('paste', async (e) => {
+                        if (!activeCanvas.value?.photo) return;
+                        const items = e.clipboardData?.items || [];
+                        for (let i = 0; i < items.length; i++) {
+                            if (items[i].type.indexOf('image') !== -1) { e.preventDefault(); await appendAttachedBlob(items[i].getAsFile()); return; }
+                        }
+                    });
+                });
+
+                return {
+                    inputCode, isLoading, loadingText, toastMsg, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH, masterPages, showQuickNav,
+                    zoomScale, invZoom, svgViewBox, svgCanvas, stepZoom, resetZoom, onStageWheel,
+                    mode, fbColor, fbPaths, fbMarkers, fbHistory, currentFbPath, editingFbMarker, fbTextInputRef, isSubmitting, showSubmitSuccess, hasDraft, draftCount,
+                    clearDraft, undoDraft, switchPage, prevPage, nextPage, openPinSubPage, exitPinSubPage, onMasterMarkerClick,
+                    onFbMarkerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp,
+                    updateFbTextSize, confirmEditFbMarker, deleteFbMarker, resizeFbImage, handleAttachPhoto, submitFeedback,
+                    getArrowId, getLineStroke, getWallSegments, getStampColor, getMarkerLines, downloadAnnotatedImage, loadByInputCode
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
