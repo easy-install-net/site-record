@@ -740,12 +740,15 @@ const syncUserOwnedProjects = async () => {
             const showManageModal = ref(false), manageProj = ref({}), showCloudBrowser = ref(false), cloudProjectList = ref([]), showBackupListModal = ref(false), backupList = ref([]);
             const showPhotoPoolModal = ref(false), photoPoolList = ref([]), photoPoolTarget = ref('newPage');
 
+const localHiddenCodes = ref([]);
             const unclaimedCloudProjects = computed(() => {
                 const localCodes = new Set(projectList.value.map(p => String(p.code)));
+                const hiddenSet = new Set(localHiddenCodes.value);
                 const uid = currentUser.value?.uid ? String(currentUser.value.uid) : '';
                 return cloudProjectList.value.filter(cp => {
                     const code = String(cp.code);
                     if (localCodes.has(code)) return false;
+                    if (hiddenSet.has(code)) return true;
                     if (uid && cp.ownerId && String(cp.ownerId) === uid) return false;
                     return true;
                 });
@@ -1786,6 +1789,23 @@ const openProjectMap = async (proj) => {
             const duplicateProject = async () => { const d = await localforage.getItem('proj_' + manageProj.value.code); if (!d) return; const newCode = Math.floor(100000 + Math.random() * 900000).toString(); d.code = newCode; d.name = (d.name || '工程') + ' (副本)'; d.ownerId = currentUser.value?.uid || ''; d.lastSyncAt = 0; d.pendingUpload = true; await localforage.setItem('proj_' + newCode, d); await updateQueue(newCode, true); showManageModal.value = false; await loadProjectList(); showToast('✅ 已複製為新檔'); };
             const batchDeleteDocs = async (docs) => { for (let i = 0; i < docs.length; i += 400) { const b = db.batch(); docs.slice(i, i + 400).forEach(d => b.delete(d.ref)); await b.commit(); } };
             const clearLocalMediaCacheForCode = async (code) => { const prefix = `synced_media_${code}_`; const keys = await localforage.keys(); for (const k of keys) { if (k.startsWith(prefix)) await localforage.removeItem(k); } };
+            const removeProjectLocalOnly = async (code) => {
+                code = String(code || '').trim();
+                if (!code) return;
+                if (!confirm('確定只從「本機目錄」移除此工程嗎？\n（雲端備份會完整保留，不再作無謂同步；日後有需要可到右上角「☁️ 雲端」重新下載）')) return;
+                await localforage.removeItem('proj_' + code);
+                await clearLocalMediaCacheForCode(code);
+                await updateQueue(code, false);
+                const hidden = (await localforage.getItem('local_hidden_projects')) || [];
+                if (!hidden.includes(code)) {
+                    hidden.push(code);
+                    await localforage.setItem('local_hidden_projects', hidden);
+                }
+                showManageModal.value = false;
+                await loadProjectList();
+                showToast('📱 已從本機移除（雲端仍保留，不再背景同步）');
+            };
+            
             const deleteProject = async (code) => {
                 if (prompt('⚠️ 輸入 "dd" 確認刪除此工程：')?.trim().toLowerCase() !== 'dd') return; isProcessing.value = true; processingText.value = '正在徹底刪除工程...';
                 try { await localforage.removeItem('proj_' + code); await clearLocalMediaCacheForCode(code); await updateQueue(code, false); if (db && navigator.onLine) { const ref = db.collection('site_projects').doc(String(code)); const delCol = async (sub) => { const snap = await ref.collection(sub).get(); if (sub === 'media') { for (const doc of snap.docs) await batchDeleteDocs((await doc.ref.collection('chunks').get()).docs); } await batchDeleteDocs(snap.docs); }; await Promise.all([delCol('pages'), delCol('media'), delCol('backups'), delCol('feedback')]); await ref.delete(); } showManageModal.value = false; await loadProjectList(); showToast('🗑️ 已徹底刪除'); } catch (e) { alert('清理異常：' + e.message); } finally { isProcessing.value = false; }
@@ -2088,12 +2108,19 @@ const cleanCloudGarbage = async () => {
                 } catch (e) { alert('轉檔失敗：' + e.message); } finally { isProcessing.value = false; }
             };
 
-            const openCloudBrowser = async () => { if (!db || !navigator.onLine) return alert('請檢查網路連線'); isProcessing.value = true; processingText.value = '正在讀取待認領雲端工程...'; try { const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(40).get(), 10000); cloudProjectList.value = snaps.docs.map(d => ({ code: d.id, ...d.data() })).filter(d => d.name || d.updatedAt); showCloudBrowser.value = true; } catch (e) { alert('讀取目錄失敗：' + e.message); } finally { isProcessing.value = false; } };
+const openCloudBrowser = async () => { if (!db || !navigator.onLine) return alert('請檢查網路連線'); isProcessing.value = true; processingText.value = '正在讀取待認領雲端工程...'; try { localHiddenCodes.value = ((await localforage.getItem('local_hidden_projects')) || []).map(String); const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(40).get(), 10000); cloudProjectList.value = snaps.docs.map(d => ({ code: d.id, ...d.data() })).filter(d => d.name || d.updatedAt); showCloudBrowser.value = true; } catch (e) { alert('讀取目錄失敗：' + e.message); } finally { isProcessing.value = false; } };
             const downloadFromCloudBrowser = async (code) => {
                 code = String(code);
+                const hidden = (await localforage.getItem('local_hidden_projects')) || [];
+                if (hidden.includes(code)) {
+                    await localforage.setItem('local_hidden_projects', hidden.filter(c => c !== code));
+                    localHiddenCodes.value = localHiddenCodes.value.filter(c => c !== code);
+                }
                 if (currentUser.value?.uid && db && navigator.onLine) {
                     db.collection('site_projects').doc(code).set({ ownerId: currentUser.value.uid }, { merge: true }).catch(() => {});
                 }
+
+            
                 await loadProject(code, true);
                 if (currentUser.value?.uid) {
                     project.ownerId = currentUser.value.uid;
@@ -2248,7 +2275,7 @@ const cleanCloudGarbage = async () => {
                 showBackupListModal, backupList, openBackupList, restoreBackup, drawColor, wallStyle, cloudStatusText, cloudStatusClass, showCloudDetail, forceSyncToCloud,toastMsg, copyShareLink,
                 drawMode, drawingPane, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
                 showBranchPrompt, branchOwner, branchInputValue, confirmBranch, cancelBranch, svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
-                createNewProject, loadProject, deleteProject, backToProjects, copyCode, saveAll, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, onPinTap, deleteActivePin,
+                createNewProject, loadProject, removeProjectLocalOnly, deleteProject, backToProjects, copyCode, saveAll, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, onPinTap, deleteActivePin,
                 setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload, pasteFromClipboard,
                 onEraseTap, resizeImageMarker, onMarkerPointerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
                 deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, onMarkerTextInput, handleKeypad, applyTag, applyStamp, getStampColor, getMarkerLines, getTagFields, exportPdfReport,
