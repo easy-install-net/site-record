@@ -108,12 +108,11 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const stampCategories = ref([]);
             const stampItems = ref([]);
             const stampUpdatedAt = ref(0);
-            const stampFilter = ref('hot'); // 預設打開 'hot' (🔥 熱門)
+            const stampFilter = ref('hot');
             const showStampManagerModal = ref(false);
             const managerCatFilter = ref('all');
             const managerSearch = ref('');
 
-            // 新增分類與新增印章表單狀態
             const newCatName = ref(''), newCatIcon = ref('🏷️'), newCatColor = ref('#38bdf8');
             const newStampText = ref(''), newStampCatId = ref(''), newStampColor = ref('#ffffff');
             const showQuickAddStamp = ref(false);
@@ -153,7 +152,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     stampUpdatedAt.value = saved.updatedAt || Date.now();
                 } else {
                     const { cats, items } = buildSeedStampData();
-                    // 兼容遷移舊版自訂印章
                     const legacyCustom = (await localforage.getItem('custom_stamps')) || [];
                     if (legacyCustom.length) {
                         cats.unshift({ id: 'cat_custom', icon: '⭐', name: '自訂', defaultColor: '#ffffff' });
@@ -172,7 +170,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 }
             };
 
-            // 🔥 熱門印章自動計算 (手動加星 ⭐ 置頂 + 使用次數最高前 18 個)
             const hotStamps = computed(() => {
                 const active = stampItems.value.filter(x => x.pinned || (x.count || 0) > 0);
                 if (active.length > 0) {
@@ -180,11 +177,9 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.count || 0) - (a.count || 0))
                         .slice(0, 18);
                 }
-                // 首次使用尚未有任何計數時，預設顯示前 12 個（例如「📐 收口」常用印）
                 return stampItems.value.slice(0, 12);
             });
 
-            // 畫布內工藝印章面板分類清單
             const filteredCanvasStampGroups = computed(() => {
                 return stampCategories.value
                     .filter(c => stampFilter.value === 'all' || stampFilter.value === c.id)
@@ -195,7 +190,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     .filter(g => g.items.length > 0);
             });
 
-            // 首頁「🏷️ 印章管理」篩選與搜尋結果
             const managerFilteredItems = computed(() => {
                 const kw = String(managerSearch.value || '').trim().toLowerCase();
                 return stampItems.value.filter(it => {
@@ -261,7 +255,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         catId,
                         text: txt,
                         color,
-                        count: applyImmediately ? 0 : 0,
+                        count: 0,
                         pinned: false
                     };
                     stampItems.value.unshift(existing);
@@ -380,7 +374,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const getCadTransform = (m) => `translate(${m.x}, ${m.y}) rotate(${m.rot || 0}) scale(${(m.scale || 1) * (m.flipX || 1)}, ${(m.scale || 1) * (m.flipY || 1)})`;
 
             const projectList = ref([]), allProjectOptions = ref([]);
-            const project = reactive({ code: '', name: '', date: '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '' });
+            const project = reactive({ code: '', name: '', nameUpdatedAt: 0, date: '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '' });
             const pages = ref([]), photoPool = ref([]);
 
             // ⊞ 雙頁分屏並排狀態 (Pane A = 主畫布, Pane B = 副畫布)
@@ -638,7 +632,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
             const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v10.1' }[cloudSyncState.value] || '☁️v10.1'));
+            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v10.2' }[cloudSyncState.value] || '☁️v10.2'));
             const cloudStatusClass = computed(() =>
                 cloudSyncState.value === 'syncing' ? 'bg-amber-100 text-amber-900 border-amber-300' :
                 cloudSyncState.value === 'offline' ? 'bg-zinc-100 text-zinc-500 border-zinc-300' :
@@ -648,7 +642,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const showCloudDetail = () => {
                 if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                 else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                else showToast('v10.1 全動態印章管理・熱門自動排行');
+                else showToast('v10.2 地址修改即時同步・全動態印章管理');
             };
 
             const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -660,7 +654,11 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 const next = add ? (q.includes(code) ? q : [...q, code]) : q.filter(c => c !== code);
                 await localforage.setItem('pending_upload_queue', next);
             };
-            const markProjectChanged = () => { hasUnsavedCloudChanges.value = true; if (!navigator.onLine) cloudSyncState.value = 'offline'; };
+            const markProjectChanged = () => {
+                project.nameUpdatedAt = Date.now();
+                hasUnsavedCloudChanges.value = true;
+                if (!navigator.onLine) cloudSyncState.value = 'offline';
+            };
             const touchDirty = (pg = targetPage.value) => {
                 const now = Date.now(), today = getTodayStr();
                 if (targetPin.value) targetPin.value.updatedAt = now;
@@ -1490,8 +1488,19 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 const code = String(project.code || '').trim(); if (!code) return;
                 const cleanPages = JSON.parse(JSON.stringify(pages.value || [])).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
                 const hasPending = hasUnsavedCloudChanges.value || dirtyPageIds.size > 0;
-                await localforage.setItem('proj_' + code, { code, name: String(project.name || ''), date: String(project.date || ''), pages: cleanPages, photoPool: JSON.parse(JSON.stringify(photoPool.value || [])), deletedPageIds: JSON.parse(JSON.stringify(project.deletedPageIds || [])), deletedPinIds: JSON.parse(JSON.stringify(project.deletedPinIds || [])), pageOrderUpdatedAt: Number(project.pageOrderUpdatedAt || 0), updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0), lastModifiedBy: String(project.lastModifiedBy || authorName.value || ''), pendingUpload: hasPending });
+                const nameTs = Number(project.nameUpdatedAt || 0);
+                await localforage.setItem('proj_' + code, { code, name: String(project.name || ''), nameUpdatedAt: nameTs, date: String(project.date || ''), pages: cleanPages, photoPool: JSON.parse(JSON.stringify(photoPool.value || [])), deletedPageIds: JSON.parse(JSON.stringify(project.deletedPageIds || [])), deletedPinIds: JSON.parse(JSON.stringify(project.deletedPinIds || [])), pageOrderUpdatedAt: Number(project.pageOrderUpdatedAt || 0), updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0), lastModifiedBy: String(project.lastModifiedBy || authorName.value || ''), pendingUpload: hasPending });
                 await updateQueue(code, hasPending);
+
+                // 地址/檔案名有修改且在線時，即時背景同步名稱到 Firestore 後臺
+                if (db && navigator.onLine && nameTs > Number(project.lastSyncAt || 0)) {
+                    db.collection('site_projects').doc(code).set({
+                        code,
+                        name: String(project.name || ''),
+                        nameUpdatedAt: nameTs,
+                        updatedAt: Date.now()
+                    }, { merge: true }).catch(() => {});
+                }
             };
 
             const mergePagesSmart = (localList, cloudList, deletedSet, orderList) => {
@@ -1517,7 +1526,15 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     const projRef = db.collection('site_projects').doc(code);
                     const [projDoc, pagesSnap, mediaMap] = await Promise.all([withRetry(() => withTimeout(projRef.get())), withRetry(() => withTimeout(projRef.collection('pages').get())), loadMediaMapFromRef(projRef)]);
                     if (!projDoc.exists) { cloudSyncState.value = hasUnsavedCloudChanges.value ? 'queued' : 'ready'; return; }
-                    const pd = projDoc.data(); if (pd.name) project.name = pd.name; if (pd.date) project.date = pd.date; if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy;
+                    const pd = projDoc.data();
+                    const cloudNameTs = Number(pd.nameUpdatedAt || 0);
+                    const localNameTs = Number(project.nameUpdatedAt || 0);
+                    if (pd.name !== undefined && (cloudNameTs > localNameTs || (!project.name && localNameTs === 0))) {
+                        project.name = pd.name;
+                        if (cloudNameTs) project.nameUpdatedAt = cloudNameTs;
+                    }
+                    if (pd.date) project.date = pd.date;
+                    if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy;
                     const deletedSet = new Set([...(project.deletedPageIds || []), ...(pd.deletedPageIds || [])]); project.deletedPageIds = [...deletedSet];
                     const deletedPins = new Set([...(project.deletedPinIds || []).map(String), ...((pd.deletedPinIds || []).map(String))]); project.deletedPinIds = [...deletedPins];
                     const cloudPages = pagesSnap.docs.map(doc => { const r = doc.data(); return makeEmptyPage({ id: doc.id, ...r, date: r.date || pd.date || getTodayStr(), photo: (r.photoId && mediaMap.get(r.photoId)?.photo) || mediaMap.get('page_' + (r.id || doc.id))?.photo || r.photo || null, pins: (r.pins || []).map(pin => ({ ...pin, photo: (pin.photoId && mediaMap.get(pin.photoId)?.photo) || mediaMap.get(String(pin.id))?.photo || pin.photo || null })) }); });
@@ -1569,7 +1586,17 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 const projRef = db.collection('site_projects').doc(code), now = Date.now(), lastSync = projObj.lastSyncAt || 0, rawPages = projObj.pages || [];
                 const targetList = isCurrentOpen ? rawPages.filter(pg => dirtyPageIds.has(pg.id) || (pg.updatedAt || 0) > lastSync) : rawPages;
                 const dirtyPages = JSON.parse(JSON.stringify(targetList)).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
-                const projPatch = { code, name: projObj.name || '', date: projObj.date || getTodayStr(), pageIds: rawPages.map(p => p.id), pageOrderUpdatedAt: projObj.pageOrderUpdatedAt || now, deletedPageIds: projObj.deletedPageIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPageIds) : [], deletedPinIds: projObj.deletedPinIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPinIds) : [], updatedAt: now };
+                const projPatch = {
+                    code,
+                    name: projObj.name || '',
+                    nameUpdatedAt: Number(projObj.nameUpdatedAt || now),
+                    date: projObj.date || getTodayStr(),
+                    pageIds: rawPages.map(p => p.id),
+                    pageOrderUpdatedAt: projObj.pageOrderUpdatedAt || now,
+                    deletedPageIds: projObj.deletedPageIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPageIds) : [],
+                    deletedPinIds: projObj.deletedPinIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPinIds) : [],
+                    updatedAt: now
+                };
                 if (dirtyPages.length > 0 && authorName.value) projPatch.lastModifiedBy = authorName.value;
                 await withRetry(() => withTimeout(projRef.set(projPatch, { merge: true }), 15000));
                 for (let idx = 0; idx < dirtyPages.length; idx++) {
@@ -1591,7 +1618,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (!navigator.onLine) { await saveAll(); cloudSyncState.value = 'offline'; if (throwErr) throw new Error('目前無網絡'); return; }
                 isPushing = true; cloudSyncState.value = 'syncing';
                 try {
-                    const now = await pushProjectPayload({ code, name: project.name, date: project.date, pages: pages.value, deletedPageIds: project.deletedPageIds, deletedPinIds: project.deletedPinIds, pageOrderUpdatedAt: project.pageOrderUpdatedAt, lastSyncAt: project.lastSyncAt }, true, onProgress);
+                    const now = await pushProjectPayload({ code, name: project.name, nameUpdatedAt: project.nameUpdatedAt, date: project.date, pages: pages.value, deletedPageIds: project.deletedPageIds, deletedPinIds: project.deletedPinIds, pageOrderUpdatedAt: project.pageOrderUpdatedAt, lastSyncAt: project.lastSyncAt }, true, onProgress);
                     dirtyPageIds.clear(); project.lastSyncAt = now; cloudSyncState.value = 'ready'; hasUnsavedCloudChanges.value = false; await saveAll();
                 } catch (e) { await saveAll(); cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; if (throwErr) throw e; } finally { setTimeout(() => { isPushing = false; }, 1000); }
             };
@@ -1629,8 +1656,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const createNewProject = async () => {
-                await checkAuthorName(); resetZoom(); const today = getTodayStr(), firstPg = makeEmptyPage({ date: today });
-                Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: today, deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
+                await checkAuthorName(); resetZoom(); const today = getTodayStr(), now = Date.now(), firstPg = makeEmptyPage({ date: today });
+                Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', nameUpdatedAt: now, date: today, deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: now, lastSyncAt: 0, lastModifiedBy: authorName.value });
                 pages.value = [firstPg]; photoPool.value = []; feedbackList.value = []; activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; splitMode.value = false; activePane.value = 'A'; dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id); hasUnsavedCloudChanges.value = true;
                 cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; currentView.value = 'proj'; await saveAll(); startRealtimeListener(project.code);
             };
@@ -1641,9 +1668,9 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 try { const doc = await withRetry(() => withTimeout(db.collection('site_projects').doc(code).get(), 15000)); if (!doc.exists) return alert('雲端找不到工程碼 #' + code); showJoinModal.value = false; inputJoinCode.value = ''; await loadProject(code, true); showToast('✅ 已連通 #' + code); } catch (e) { alert('連線失敗：' + e.message); } finally { isProcessing.value = false; }
             };
             const loadProject = async (code, openAsPreview = true) => {
-                resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; code = String(code); project.code = code; project.deletedPageIds = []; project.deletedPinIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; feedbackList.value = []; dirtyPageIds.clear();
+                resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; code = String(code); project.code = code; project.name = ''; project.nameUpdatedAt = 0; project.deletedPageIds = []; project.deletedPinIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; feedbackList.value = []; dirtyPageIds.clear();
                 const d = await localforage.getItem('proj_' + code);
-                if (d) { Object.assign(project, { name: d.name || '', date: d.date || '', deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' }); if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg)); if (d.photoPool) photoPool.value = d.photoPool; hasUnsavedCloudChanges.value = !!d.pendingUpload; } else hasUnsavedCloudChanges.value = false;
+                if (d) { Object.assign(project, { name: d.name || '', nameUpdatedAt: d.nameUpdatedAt || 0, date: d.date || '', deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' }); if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg)); if (d.photoPool) photoPool.value = d.photoPool; hasUnsavedCloudChanges.value = !!d.pendingUpload; } else hasUnsavedCloudChanges.value = false;
                 activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; currentView.value = openAsPreview ? 'preview' : 'proj';
                 await pullAndMergeFromCloud(code, false); if (!pages.value.length) pages.value = [makeEmptyPage()]; drawMode.value = 'browse'; startRealtimeListener(code);
             };
@@ -1651,9 +1678,21 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
             const renameProject = async () => {
                 const newName = prompt('請輸入新的地址 / 名稱：', manageProj.value.name);
-                if (newName !== null) { const trimmed = newName.trim(), code = String(manageProj.value.code), d = await localforage.getItem('proj_' + code); if (d) { d.name = trimmed; d.pendingUpload = true; await localforage.setItem('proj_' + code, d); await updateQueue(code, true); } manageProj.value.name = trimmed; if (db && navigator.onLine) db.collection('site_projects').doc(code).set({ name: trimmed, updatedAt: Date.now() }, { merge: true }).catch(() => {}); await loadProjectList(); showToast('✅ 已更新地址'); }
+                if (newName !== null) {
+                    const trimmed = newName.trim(), code = String(manageProj.value.code), now = Date.now();
+                    const d = await localforage.getItem('proj_' + code);
+                    if (d) { d.name = trimmed; d.nameUpdatedAt = now; d.pendingUpload = true; await localforage.setItem('proj_' + code, d); await updateQueue(code, true); }
+                    manageProj.value.name = trimmed;
+                    if (db && navigator.onLine) {
+                        try {
+                            await withTimeout(db.collection('site_projects').doc(code).set({ name: trimmed, nameUpdatedAt: now, updatedAt: now }, { merge: true }), 10000);
+                        } catch (_) {}
+                    }
+                    await loadProjectList();
+                    showToast('✅ 已更新地址');
+                }
             };
-            const duplicateProject = async () => { const d = await localforage.getItem('proj_' + manageProj.value.code); if (!d) return; const newCode = Math.floor(100000 + Math.random() * 900000).toString(); d.code = newCode; d.name = (d.name || '工程') + ' (副本)'; d.lastSyncAt = 0; d.pendingUpload = true; await localforage.setItem('proj_' + newCode, d); await updateQueue(newCode, true); showManageModal.value = false; await loadProjectList(); showToast('✅ 已複製為 #' + newCode); };
+            const duplicateProject = async () => { const d = await localforage.getItem('proj_' + manageProj.value.code); if (!d) return; const newCode = Math.floor(100000 + Math.random() * 900000).toString(); d.code = newCode; d.name = (d.name || '工程') + ' (副本)'; d.nameUpdatedAt = Date.now(); d.lastSyncAt = 0; d.pendingUpload = true; await localforage.setItem('proj_' + newCode, d); await updateQueue(newCode, true); showManageModal.value = false; await loadProjectList(); showToast('✅ 已複製為 #' + newCode); };
             const batchDeleteDocs = async (docs) => { for (let i = 0; i < docs.length; i += 400) { const b = db.batch(); docs.slice(i, i + 400).forEach(d => b.delete(d.ref)); await b.commit(); } };
             const clearLocalMediaCacheForCode = async (code) => {
                 const prefix = `synced_media_${code}_`;
@@ -1747,14 +1786,13 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 try {
                     const doc = await withTimeout(db.collection('site_projects').doc(manageProj.value.code).collection('backups').doc(bkId).get(), 15000);
                     const bData = JSON.parse(doc.data().data), newCode = Math.floor(100000 + Math.random() * 900000).toString();
-                    bData.code = newCode; bData.name = (bData.name || '工程') + ' (還原檔)'; bData.lastSyncAt = 0; bData.pendingUpload = true;
+                    bData.code = newCode; bData.name = (bData.name || '工程') + ' (還原檔)'; bData.nameUpdatedAt = Date.now(); bData.lastSyncAt = 0; bData.pendingUpload = true;
                     const curLocal = await localforage.getItem('proj_' + manageProj.value.code);
                     if (curLocal) { const pMap = new Map(); curLocal.pages.forEach(p => { if (p.photo) pMap.set(p.id, p.photo); (p.pins || []).forEach(pin => { if (pin.photo) pMap.set(pin.id, pin.photo); }); }); bData.pages.forEach(p => { p.photo = pMap.get(p.id) || null; (p.pins || []).forEach(pin => { pin.photo = pMap.get(pin.id) || null; }); }); }
                     await localforage.setItem('proj_' + newCode, bData); await updateQueue(newCode, true); showBackupListModal.value = false; await loadProjectList(); showToast('✅ 已還原為 #' + newCode);
                 } catch (e) { alert('還原失敗：' + e.message); } finally { isProcessing.value = false; }
             };
 
-            // 🔗 讀取完整工程資料 (本機 + 雲端底圖合併)，供合拼與轉檔使用
             const fetchCompleteProjectData = async (code) => {
                 code = String(code || '').trim();
                 const localObj = await localforage.getItem('proj_' + code);
@@ -1784,7 +1822,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                             if (!result) {
                                 const delSet = new Set(pd.deletedPageIds || []);
                                 result = {
-                                    code, name: pd.name || '', date: pd.date || getTodayStr(),
+                                    code, name: pd.name || '', nameUpdatedAt: pd.nameUpdatedAt || 0, date: pd.date || getTodayStr(),
                                     pages: cloudPages.filter(p => !delSet.has(p.id)).sort((a, b) => ((pd.pageIds || []).indexOf(a.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(a.id)) - ((pd.pageIds || []).indexOf(b.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(b.id))),
                                     photoPool: [], deletedPageIds: pd.deletedPageIds || [], deletedPinIds: pd.deletedPinIds || [],
                                     pageOrderUpdatedAt: pd.pageOrderUpdatedAt || 0, lastSyncAt: Date.now(), lastModifiedBy: pd.lastModifiedBy || ''
@@ -1854,7 +1892,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 allProjectOptions.value = Array.from(map.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
             };
 
-            // 🔗 兩個總號合拼
             const openMergeProjectsModal = async () => {
                 isProcessing.value = true; processingText.value = '正在讀取工程清單...';
                 try {
@@ -1900,11 +1937,12 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     do { newCode = Math.floor(100000 + Math.random() * 900000).toString(); } while (existingCodes.has(newCode));
 
                     const finalName = mergeProjNewName.value.trim() || `${dataA.name || '#' + cA} + ${dataB.name || '#' + cB}`;
+                    const now = Date.now();
                     const newProjObj = {
-                        code: newCode, name: finalName, date: getTodayStr(),
+                        code: newCode, name: finalName, nameUpdatedAt: now, date: getTodayStr(),
                         pages: mergedPages, photoPool: mergedPool,
-                        deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(),
-                        updatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true
+                        deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: now,
+                        updatedAt: now, lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true
                     };
 
                     await localforage.setItem('proj_' + newCode, newProjObj);
@@ -1926,7 +1964,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 }
             };
 
-            // ↗️ 工程內選圖轉檔 (複製或移動至另一工程)
             const toggleSelectMode = () => { selectMode.value = !selectMode.value; selectedPageIds.value = []; };
             const togglePageSelection = (pgId) => {
                 const idStr = String(pgId);
@@ -1963,16 +2000,17 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 try {
                     const clonedPages = clonePagesWithFreshIds(pickedRaw);
                     let targetCode = String(transferTargetCode.value);
+                    const now = Date.now();
 
                     if (targetCode === '__NEW__') {
                         const existingCodes = new Set(allProjectOptions.value.map(x => String(x.code)));
                         do { targetCode = Math.floor(100000 + Math.random() * 900000).toString(); } while (existingCodes.has(targetCode));
                         const targetName = transferNewProjName.value.trim() || `${project.name || '工程'} (分拆)`;
                         const newProjObj = {
-                            code: targetCode, name: targetName, date: getTodayStr(),
+                            code: targetCode, name: targetName, nameUpdatedAt: now, date: getTodayStr(),
                             pages: clonedPages, photoPool: [],
-                            deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(),
-                            updatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true
+                            deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: now,
+                            updatedAt: now, lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true
                         };
                         await localforage.setItem('proj_' + targetCode, newProjObj);
                         await updateQueue(targetCode, true);
@@ -1986,7 +2024,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         const targetProj = await fetchCompleteProjectData(targetCode);
                         if (!targetProj) throw new Error(`找不到目標工程 #${targetCode}`);
                         targetProj.pages = [...(targetProj.pages || []), ...clonedPages];
-                        targetProj.updatedAt = Date.now();
+                        targetProj.updatedAt = now;
                         targetProj.pendingUpload = true;
                         await localforage.setItem('proj_' + targetCode, targetProj);
                         await updateQueue(targetCode, true);
