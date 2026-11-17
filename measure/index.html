@@ -748,12 +748,7 @@
                     <button v-for="c in stampCategories" :key="c.id" @click="managerCatFilter = c.id" :class="managerCatFilter === c.id ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded text-xs font-bold">{{ c.icon }}{{ c.name }}</button>
                 </div>
 
-                <!-- 分類篩選 -->
-                <div class="flex gap-1 overflow-x-auto no-scrollbar pb-2 mb-2 border-b border-zinc-100 shrink-0">
-                    <button @click="managerCatFilter = 'all'" :class="managerCatFilter === 'all' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2.5 py-1 rounded text-xs font-bold shrink-0">全部</button>
-                    <button @click="managerCatFilter = 'pinned'" :class="managerCatFilter === 'pinned' ? 'bg-amber-500 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2.5 py-1 rounded text-xs font-bold shrink-0">⭐置頂</button>
-                    <button v-for="c in stampCategories" :key="c.id" @click="managerCatFilter = c.id" :class="managerCatFilter === c.id ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2.5 py-1 rounded text-xs font-bold shrink-0">{{ c.icon }}{{ c.name }}</button>
-                </div>
+
 
                 <!-- 印章列表 -->
                 <div class="overflow-y-auto flex-1 touch-scrollable space-y-1.5 pr-0.5">
@@ -824,14 +819,15 @@
                     </div>
                 </div>
 
-                <!-- 分類篩選 -->
-                <div class="flex flex-wrap gap-1 pb-0.5">
-                        <button @click="stampFilter = 'pinned'" :class="stampFilter === 'pinned' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-zinc-700 border-zinc-300'" class="px-1.5 py-0.5 rounded text-xs font-bold border">⭐置頂</button>
-                        <button @click="stampFilter = 'all'" :class="stampFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'" class="px-1.5 py-0.5 rounded text-xs font-bold border">全部</button>
-                        <button v-for="g in STAMP_GROUPS" :key="g.id" @click="stampFilter = g.id"
-                                :class="stampFilter === g.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'"
-                                class="px-1.5 py-0.5 rounded text-xs font-bold border">{{ g.icon }}{{ g.name }}</button>
-                    </div>
+            
+<!-- 分類篩選 -->
+                <div class="flex flex-wrap gap-1 pb-2 mb-2 border-b border-zinc-100 shrink-0">
+                    <button @click="cadMgrFilter = 'all'" :class="cadMgrFilter === 'all' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded text-xs font-bold">全部 ({{ allCadManageList.length }})</button>
+                    <button v-for="c in CAD_CATEGORIES" :key="c.id" @click="cadMgrFilter = c.id" :class="cadMgrFilter === c.id ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded text-xs font-bold">{{ c.name }}</button>
+                </div>
+
+
+                
 
                 <!-- 圖塊列表 (每項帶 40×40 實時縮圖框) -->
                 <div class="overflow-y-auto flex-1 touch-scrollable space-y-1.5 pr-0.5">
