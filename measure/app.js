@@ -1678,7 +1678,42 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     if (currentView.value === 'dir') await loadProjectList();
                 } catch (_) {} finally { isAutoQueueing = false; }
             };
-
+const forceSyncToCloud = async () => {
+                if (!navigator.onLine) return showToast('📴 目前無網絡連線，無法同步');
+                if (!db) return showToast('雲端資料庫未就緒');
+                if (isProcessing.value || isPushing) return showToast('⏳ 系統正在同步中，請稍候');
+                isProcessing.value = true;
+                processingText.value = '正在強制同步相片與圖紙至雲端...';
+                try {
+                    if (currentView.value === 'proj' && project.code) {
+                        await clearLocalMediaCacheForCode(project.code);
+                        pages.value.forEach(p => dirtyPageIds.add(p.id));
+                        markProjectChanged();
+                        await saveAll();
+                        await pushToCloud(true, (st) => { processingText.value = st; });
+                        await pullAndMergeFromCloud(project.code, false);
+                    } else {
+                        await processPendingUploadQueue(false);
+                        for (const item of projectList.value) {
+                            const saved = await localforage.getItem('proj_' + item.code);
+                            if (saved && (!saved.lastModifiedBy || saved.lastModifiedBy === authorName.value)) {
+                                await clearLocalMediaCacheForCode(item.code);
+                                saved.lastSyncAt = await pushProjectPayload(saved, false, (st) => { processingText.value = `${item.name || item.code}: ${st}`; });
+                                saved.pendingUpload = false;
+                                await localforage.setItem('proj_' + item.code, saved);
+                            }
+                        }
+                        await syncUserOwnedProjects();
+                    }
+                    await syncUserLibrariesCloud(true);
+                    await loadProjectList();
+                    showToast('✅ 同步完成！所有相片及修改已更新');
+                } catch (e) {
+                    alert('同步失敗：' + e.message);
+                } finally {
+                    isProcessing.value = false;
+                }
+            };
             const createNewProject = async () => {
                 await checkAuthorName(); resetZoom(); const today = getTodayStr(), firstPg = makeEmptyPage({ date: today });
                 Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: today, ownerId: currentUser.value?.uid || '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
@@ -2161,7 +2196,7 @@ const cleanCloudGarbage = async () => {
                 projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH,
                 showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges, markProjectChanged,
                 showManageModal, manageProj, openManageMenu, renameProject, duplicateProject, showCloudBrowser, cloudProjectList, unclaimedCloudProjects, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
-                showBackupListModal, backupList, openBackupList, restoreBackup, drawColor, wallStyle, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg, copyShareLink,
+                showBackupListModal, backupList, openBackupList, restoreBackup, drawColor, wallStyle, cloudStatusText, cloudStatusClass, showCloudDetail, forceSyncToCloud,toastMsg, copyShareLink,
                 drawMode, drawingPane, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
                 showBranchPrompt, branchOwner, branchInputValue, confirmBranch, cancelBranch, svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
                 createNewProject, loadProject, deleteProject, backToProjects, copyCode, saveAll, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, onPinTap, deleteActivePin,
