@@ -1784,12 +1784,14 @@ const cleanCloudGarbage = async () => {
                                 const bLen = mData.byteLen || 150000;
                                 totalBytes += bLen;
                                 orphanMediaDocs.push(mDoc);
-                                const dt = mData.updatedAt ? new Date(mData.updatedAt).toLocaleDateString() : '舊相片';
-                                previewItems.push({
-                                    title: `🖼️ 無用舊底圖 (${pName})`,
-                                    desc: `建立於 ${dt} · 現存頁面均未引用`,
-                                    sizeLabel: `${Math.max(1, Math.round(bLen / 1024))} KB`
-                                });
+                          const dt = mData.updatedAt ? new Date(mData.updatedAt).toLocaleDateString() : '舊相片';
+                    const thumbUrl = Object.values(mData).find(v => typeof v === 'string' && (v.startsWith('data:image') || v.startsWith('http'))) || '';
+                    previewItems.push({
+                        title: `🖼️ 無用舊底圖 (${pName})`,
+                        desc: `建立於 ${dt} · 現存頁面均未引用`,
+                        sizeLabel: `${Math.max(1, Math.round(bLen / 1024))} KB`,
+                        thumbUrl
+                    });
                             }
                         });
                     }
