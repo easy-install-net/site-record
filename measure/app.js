@@ -1,8 +1,11 @@
-if (!window.Vue) {
-    if (window.__showBootError) window.__showBootError('Vue 引擎載入失敗，請檢查網絡連線');
-    else alert('Vue 引擎載入失敗，請檢查網絡連線');
+if (!window.Vue || !window.MEASURE_DATA) {
+    const msg = !window.Vue ? 'Vue 引擎載入失敗，請檢查網絡連線' : '資料檔 data.js 載入失敗，請重新整理';
+    if (window.__showBootError) window.__showBootError(msg);
+    else alert(msg);
 } else {
     const { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick } = Vue;
+    const { TAG_DEFS, TEMPLATE_ROWS, DIM_QUICK_ROWS, KEYPAD_KEYS, DEFAULT_SPACES, STAMP_GROUPS, STAMP_COLOR_MAP } = window.MEASURE_DATA;
+
     localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
     const offlineReady = ref(false);
@@ -44,39 +47,21 @@ if (!window.Vue) {
     const getTodayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     const sanitizeFilename = (s) => String(s || '').trim().replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
 
-    // 11 個獨立結構/設備模板定義 (連同「尺寸」共 12 格)
-    const TAG_DEFS = {
-        door: { title: '門洞', fields: [{ key: 'w_in', label: '門闊' }, { key: 'h_in', label: '門高' }, { key: 't', label: '牆厚' }, { key: 't_frame', label: '門框厚' }, { key: 'h_top', label: '頂到天花' }, { key: 'w_side', label: '邊到牆' }] },
-        window: { title: '窗', fields: [{ key: 'w_in', label: '內闊' }, { key: 'h_in', label: '內高' }, { key: 'd_in', label: '內深' }, { key: 'h_bottom', label: '面到地' }, { key: 't_stone', label: '窗石厚' }, { key: 'd_stone', label: '窗石凸' }] },
-        beam: { title: '樑', fields: [{ key: 'w', label: '樑闊' }, { key: 'd', label: '樑深' }, { key: 'h_bottom', label: '底到地' }, { key: 'w_side', label: '樑邊到牆' }] },
-        column: { title: '柱', fields: [{ key: 'w', label: '柱闊' }, { key: 'd', label: '柱深' }, { key: 'h_top', label: '柱高' }, { key: 'd_out', label: '柱凸出' }] },
-        protrusion: { title: '凸', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
-        pipe: { title: '包喉', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
-        elec_box: { title: '電箱', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }, { key: 'h_bottom', label: '底到地' }] },
-        ac: { title: '冷氣', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }, { key: 'h_bottom', label: '底到地' }] },
-        skirting: { title: '地腳線', fields: [{ key: 'h', label: '高' }, { key: 't', label: '厚' }] },
-        reserve: { title: '留位', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
-        avoid: { title: '避', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] }
+    const measureStrWidth = (str, charPx) => {
+        let total = 0;
+        for (const ch of String(str || '')) total += /[^\x00-\xff]/.test(ch) ? charPx : charPx * 0.56;
+        return total;
     };
 
-    const TEMPLATE_ROWS = [
-        [
-            { id: 'general', l: '尺寸', f: 'val' },
-            { id: 'door', l: '門洞', f: 'w_in' },
-            { id: 'window', l: '窗', f: 'w_in' },
-            { id: 'beam', l: '樑', f: 'w' },
-            { id: 'column', l: '柱', f: 'w' },
-            { id: 'protrusion', l: '凸', f: 'w' }
-        ],
-        [
-            { id: 'pipe', l: '包喉', f: 'w' },
-            { id: 'elec_box', l: '電箱', f: 'w' },
-            { id: 'ac', l: '冷氣', f: 'w' },
-            { id: 'skirting', l: '地腳線', f: 'h' },
-            { id: 'reserve', l: '留位', f: 'w' },
-            { id: 'avoid', l: '避', f: 'w' }
-        ]
-    ];
+    const drawRoundRect = (ctx, x, y, w, h, r) => {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+    };
 
     const renderSketchDataUrl = (w = 1200, h = 1500, hasGrid = true) => {
         const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -113,7 +98,12 @@ if (!window.Vue) {
             const authorName = ref(''), hasUnsavedCloudChanges = ref(false), dirtyPageIds = new Set();
             let unsubPages = null, isPushing = false, isAutoQueueing = false;
 
-            const currentView = ref('dir'), showWatermark = ref(true), globalFontScale = ref(1.0);
+            // 預設「細字體」(0.6) 及 預設字體顏色 (#ffffff)
+            const currentView = ref('dir'), showWatermark = ref(true), globalFontScale = ref(0.6);
+            const defaultTextColor = ref('#ffffff');
+            const stampFilter = ref('all');
+            const filteredStampGroups = computed(() => stampFilter.value === 'all' ? STAMP_GROUPS : STAMP_GROUPS.filter(g => g.id === stampFilter.value));
+
             const projectList = ref([]);
             const project = reactive({ code: '', name: '', date: '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '' });
             const pages = ref([]), photoPool = ref([]), activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
@@ -125,10 +115,7 @@ if (!window.Vue) {
             // 總圖清單與快速跳頁目錄
             const masterPages = computed(() => pages.value.map((pg, idx) => ({ pg, idx })).filter(x => x.pg.space === '總圖'));
             const showQuickPageNav = ref(false);
-            const jumpToPage = (idx) => {
-                showQuickPageNav.value = false;
-                switchPage(idx);
-            };
+            const jumpToPage = (idx) => { showQuickPageNav.value = false; switchPage(idx); };
             const jumpToPageById = (targetId) => {
                 if (!targetId) return;
                 const idx = pages.value.findIndex(p => String(p.id) === String(targetId));
@@ -141,11 +128,8 @@ if (!window.Vue) {
             };
             const goToMasterPlan = () => {
                 if (!masterPages.value.length) return;
-                if (masterPages.value.length === 1) {
-                    jumpToPage(masterPages.value[0].idx);
-                } else {
-                    showQuickPageNav.value = !showQuickPageNav.value;
-                }
+                if (masterPages.value.length === 1) jumpToPage(masterPages.value[0].idx);
+                else showQuickPageNav.value = !showQuickPageNav.value;
             };
 
             // 中上方懸浮工具膠囊位置與收合狀態
@@ -179,7 +163,7 @@ if (!window.Vue) {
 
             const resetZoom = () => { zoomScale.value = 1; vbX.value = 0; vbY.value = 0; };
             const toggleFontScale = () => {
-                globalFontScale.value = globalFontScale.value === 1.0 ? 0.8 : (globalFontScale.value === 0.8 ? 0.6 : 1.0);
+                globalFontScale.value = globalFontScale.value === 0.6 ? 0.8 : (globalFontScale.value === 0.8 ? 1.0 : 0.6);
                 (activeCanvas.value?.markers || []).forEach(m => updateMarkerSize(m));
                 saveAll();
                 showToast(`🔠 字體：${globalFontScale.value === 1.0 ? '大' : (globalFontScale.value === 0.8 ? '中' : '細')}`);
@@ -226,7 +210,6 @@ if (!window.Vue) {
             const prevFullScreen = () => { if (fullScreenIndex.value > 0) fullScreenIndex.value--; };
             const nextFullScreen = () => { if (fullScreenIndex.value < fullScreenList.value.length - 1) fullScreenIndex.value++; };
 
-            // 全螢幕檢視一鍵跳轉編輯 (僅限 index.html 內部預覽)
             const editFromFullScreen = () => {
                 const target = fullScreenItem.value; if (!target) return;
                 const tid = String(target.id);
@@ -261,26 +244,33 @@ if (!window.Vue) {
                 window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
             };
 
-            const buildWatermarkLines = (item, itemDate, itemAuthor) => {
-                const lines = [], dStr = itemDate || item?.date || project.date, aStr = itemAuthor || item?.author || project.lastModifiedBy;
-                if (dStr || aStr) lines.push({ text: `${dStr ? '📅 ' + dStr : ''}${aStr ? (dStr ? '  ' : '') + '✍️' + aStr : ''}`, color: '#ffffff' });
-                if (project.name?.trim()) lines.push({ text: `📍 ${project.name.trim()}`, color: '#facc15' });
-                if (item?.space?.trim()) lines.push({ text: `🏠 ${item.space.trim()}`, color: '#ffffff' });
-                return lines;
+            // 極簡 CAD 圖籤膠囊資料計算 (走粗黑邊與 Emoji，縮細 70%)
+            const buildWatermarkBox = (item, itemDate, itemAuthor) => {
+                const pName = project.name?.trim() || '';
+                const spName = item?.space?.trim() || '';
+                const title = [pName, spName].filter(Boolean).join(' · ');
+                const dStr = itemDate || item?.date || project.date || '';
+                const aStr = itemAuthor || item?.author || project.lastModifiedBy || '';
+                const sub = [dStr, aStr].filter(Boolean).join(' · ');
+                if (!title && !sub) return null;
+                const w1 = title ? measureStrWidth(title, 15) : 0;
+                const w2 = sub ? measureStrWidth(sub, 12) : 0;
+                const w = Math.max(96, Math.ceil(Math.max(w1, w2) + 22));
+                const h = title && sub ? 44 : 26;
+                return { x: 14, y: 14, w, h, title, sub };
             };
-            const fullScreenWatermarkLines = computed(() => buildWatermarkLines(fullScreenItem.value, fullScreenDate.value, fullScreenAuthor.value));
+            const fullScreenWatermarkBox = computed(() => buildWatermarkBox(fullScreenItem.value, fullScreenDate.value, fullScreenAuthor.value));
 
             const showJoinModal = ref(false), inputJoinCode = ref(''), showAddPageModal = ref(false), showSpaceModal = ref(false), showMergeModal = ref(false), showPdfModal = ref(false);
-            const spaceList = ref(['總圖', '主人房', '睡房一', '睡房二', '客廳', '飯廳', '廚房', '客廁', '套廁', '儲物室', '玄關', '露台']);
+            const spaceList = ref([...DEFAULT_SPACES]);
             const showManageModal = ref(false), manageProj = ref({}), showCloudBrowser = ref(false), cloudProjectList = ref([]), showBackupListModal = ref(false), backupList = ref([]);
             const showPhotoPoolModal = ref(false), photoPoolList = ref([]), photoPoolTarget = ref('newPage');
 
-            // 統一繪畫顏色 (適用於 繪圖 / 空心牆 / 斜線牆 / 直線 / 單箭)
             const drawColor = ref('#ef4444'), wallStyle = ref('hollow'), toastMsg = ref('');
             const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
             const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v9.7' }[cloudSyncState.value] || '☁️v9.7'));
+            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v9.8' }[cloudSyncState.value] || '☁️v9.8'));
             const cloudStatusClass = computed(() =>
                 cloudSyncState.value === 'syncing' ? 'bg-amber-100 text-amber-900 border-amber-300' :
                 cloudSyncState.value === 'offline' ? 'bg-zinc-100 text-zinc-500 border-zinc-300' :
@@ -300,7 +290,7 @@ if (!window.Vue) {
             const showCloudDetail = () => {
                 if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                 else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                else showToast('v9.7 分層導航・虛線度尺・獨立索引');
+                else showToast('v9.8 細字預設・白紅黃三色・極簡圖籤');
             };
 
             const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -350,7 +340,6 @@ if (!window.Vue) {
                 triggerBranchPrompt(pg, owner, actionCb);
             };
 
-            // drawMode: 'browse' | 'move' | 'index' | 'line' | 'freehand' | 'wall' | 'straight' | 'arrow-single' | 'pin' | 'eraser'
             const drawMode = ref('browse'), showTopSheet = ref(false), showTopTextBar = ref(false), activeMarker = ref(null);
             const isProcessing = ref(false), processingText = ref(''), focusedInput = ref('val'), topTextInputRef = ref(null), svgCanvas = ref(null);
 
@@ -370,12 +359,13 @@ if (!window.Vue) {
                         const target = c.markers.find(m => m.id === editingIndexMarker.value.id);
                         if (target) {
                             target.type = 'space_tag';
+                            target.textColor = defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null;
                             target.data = { ...makeBlankMarkerData(), val: sp };
                             updateMarkerSize(target);
                         }
                     } else {
                         const markerId = Date.now();
-                        const newMarker = { id: markerId, lineId: null, x: indexDraftPos.value.x, y: indexDraftPos.value.y, w: 140, h: 56, type: 'space_tag', data: { ...makeBlankMarkerData(), val: sp } };
+                        const newMarker = { id: markerId, lineId: null, x: indexDraftPos.value.x, y: indexDraftPos.value.y, w: 140, h: 56, type: 'space_tag', textColor: defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null, data: { ...makeBlankMarkerData(), val: sp } };
                         updateMarkerSize(newMarker);
                         c.markers.push(newMarker);
                         c.historyStack.push({ type: 'marker', markerId });
@@ -421,6 +411,21 @@ if (!window.Vue) {
                 editingIndexMarker.value = null;
                 deleteMarkerTop();
             };
+
+            // 切換白 / 紅 / 黃三色字體 (同時記住為預設色)
+            const setMarkerTextColor = (colorHex) => {
+                defaultTextColor.value = colorHex;
+                if (activeMarker.value) {
+                    ensureMarkerBranched(() => {
+                        activeMarker.value.textColor = colorHex;
+                        touchDirty();
+                        saveAll();
+                    });
+                }
+            };
+
+            const getArrowMarkerId = (c) => 'arrow-end-' + String(c || '#ef4444').replace('#', 'hex_');
+            const getFsArrowMarkerId = (c) => 'fs-arrow-' + String(c || '#ef4444').replace('#', 'hex_');
 
             const getLineStroke = (l, alpha = 0.75) => {
                 if (!l.type || l.type === 'measure') return `rgba(255, 0, 68, ${alpha})`;
@@ -627,7 +632,11 @@ if (!window.Vue) {
                     const c = activeCanvas.value; if (!c) return;
                     c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                     const markerId = Date.now();
-                    const newMarker = { id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType, data: makeBlankMarkerData() };
+                    const newMarker = {
+                        id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType,
+                        textColor: forceType === 'stamp' ? null : defaultTextColor.value,
+                        data: makeBlankMarkerData()
+                    };
                     updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
                     touchDirty(); activeMarker.value = newMarker;
                     if (forceType === 'stamp') { focusedInput.value = 'stamp'; showTopSheet.value = true; }
@@ -803,14 +812,12 @@ if (!window.Vue) {
                 if (!isDrawing.value) return;
                 isDrawing.value = false; const endPos = getCoords(e);
 
-                // 📝 編：點擊放空間 / 編號索引
                 if (drawMode.value === 'index') {
                     currentLine.value = null; currentWall.value = null; currentPath.value = '';
                     openIndexModalAt(endPos.x, endPos.y, null);
                     return;
                 }
 
-                // 📍 釘：落釘影細節相
                 if (!activePin.value && drawMode.value === 'pin') {
                     currentLine.value = null; currentWall.value = null; currentPath.value = '';
                     checkBranchNeed(() => {
@@ -842,7 +849,11 @@ if (!window.Vue) {
                         if (lineType !== 'measure') {
                             c.historyStack.push({ type: 'line_marker', lineId, markerId: null }); touchDirty(); saveAll(); return;
                         }
-                        const newMarker = { id: markerId, lineId, x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2), w: 140, h: 56, type: 'general', data: makeBlankMarkerData() };
+                        const newMarker = {
+                            id: markerId, lineId,
+                            x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2),
+                            w: 140, h: 56, type: 'general', textColor: defaultTextColor.value, data: makeBlankMarkerData()
+                        };
                         updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
                         touchDirty(); activeMarker.value = newMarker; focusedInput.value = 'val'; showTopSheet.value = true; saveAll();
                     });
@@ -894,7 +905,14 @@ if (!window.Vue) {
             };
 
             const deleteMarkerTop = () => ensureMarkerBranched(() => { const c = activeCanvas.value, m = activeMarker.value; if (!m || !c) return; if (m.lineId) c.lines = (c.lines || []).filter(l => l.id !== m.lineId); c.markers = (c.markers || []).filter(x => x.id !== m.id); if (c.historyStack) c.historyStack = c.historyStack.filter(h => h.markerId !== m.id); c.redoStack = []; touchDirty(); showTopSheet.value = false; showTopTextBar.value = false; activeMarker.value = null; saveAll(); });
-            const switchMarkerType = (t, fKey) => ensureMarkerBranched(() => { activeMarker.value.type = t; focusedInput.value = fKey; updateMarkerSize(activeMarker.value); touchDirty(); });
+            const switchMarkerType = (t, fKey) => ensureMarkerBranched(() => {
+                activeMarker.value.type = t;
+                if (t === 'stamp') activeMarker.value.textColor = null;
+                else if (!activeMarker.value.textColor) activeMarker.value.textColor = defaultTextColor.value;
+                focusedInput.value = fKey;
+                updateMarkerSize(activeMarker.value);
+                touchDirty();
+            });
             const closeTopTextBar = () => { if (['stamp', 'text'].includes(activeMarker.value?.type) && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
             const closeTopSheet = () => { if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopSheet.value = false; saveAll(); };
 
@@ -922,6 +940,7 @@ if (!window.Vue) {
                             activeMarker.value.lineId = null;
                         }
                         activeMarker.value.type = 'stamp';
+                        activeMarker.value.textColor = null;
                         activeMarker.value.data.val = txt;
                         updateMarkerSize(activeMarker.value); touchDirty(); closeTopSheet();
                     });
@@ -936,16 +955,14 @@ if (!window.Vue) {
             };
 
             const getStampColor = (m) => {
+                if (m.textColor) return m.textColor;
                 if (m.type === 'space_tag') return '#a855f7';
                 if (m.type === 'page_link') return '#38bdf8';
                 if (m.type !== 'stamp') return '#ffffff';
                 const v = m.data.val;
-                if (['需清拆', '牆身斜', '牆體不平', '空鼓', '滲水', '局部凸出'].includes(v)) return '#ef4444';
-                if (['開關', '單蘇', '孖蘇', '燈曲', '數據', '燈線'].includes(v)) return '#eab308';
-                if (['留通道', '開門方向', '可保留', '實地台'].includes(v)) return '#3b82f6';
-                if (['要收口', '見光', '開背板', '生口位', '避窗簾盒', '留散熱', '要分件'].includes(v)) return '#d97706';
-                if (customStamps.value.includes(v)) return '#a1a1aa';
-                return spaceList.value.includes(v) ? '#a855f7' : '#ffffff';
+                if (STAMP_COLOR_MAP[v]) return STAMP_COLOR_MAP[v];
+                if (customStamps.value.includes(v)) return '#e4e4e7';
+                return '#ffffff';
             };
 
             const getTagFields = (t) => TAG_DEFS[t]?.fields || [];
@@ -1231,7 +1248,31 @@ if (!window.Vue) {
                 const img = new Image(); img.src = canvasObj.photo; await new Promise(r => { img.onload = r; img.onerror = r; });
                 const c = document.createElement('canvas'), w = canvasObj.w || 1200, h = canvasObj.h || 900; c.width = w; c.height = h; const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
                 const markerImages = {}; for (const m of (canvasObj.markers || [])) { if (m.type === 'image' && m.data.b64) { const im = new Image(); im.src = m.data.b64; await new Promise(r => { im.onload = r; im.onerror = r; }); markerImages[m.id] = im; } }
-                if (includeStamp) { const wmLines = buildWatermarkLines(canvasObj, itemDate, itemAuthor); if (wmLines.length) { ctx.font = '900 23px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; wmLines.forEach((item, idx) => { const y = 26 + idx * 32; ctx.lineWidth = 6; ctx.strokeStyle = '#ffffff'; ctx.strokeText(item.text, 22, y); ctx.fillStyle = item.color === '#ffffff' ? '#111827' : (item.color === '#facc15' ? '#d97706' : item.color); ctx.fillText(item.text, 22, y); }); } }
+                if (includeStamp) {
+                    const wm = buildWatermarkBox(canvasObj, itemDate, itemAuthor);
+                    if (wm) {
+                        ctx.save();
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+                        drawRoundRect(ctx, wm.x, wm.y, wm.w, wm.h, 6);
+                        ctx.fill();
+                        ctx.lineWidth = 1.5;
+                        ctx.strokeStyle = '#cbd5e1';
+                        ctx.stroke();
+                        ctx.textAlign = 'left';
+                        ctx.textBaseline = 'middle';
+                        if (wm.title) {
+                            ctx.font = 'bold 15px sans-serif';
+                            ctx.fillStyle = '#0f172a';
+                            ctx.fillText(wm.title, wm.x + 11, wm.sub ? wm.y + 15 : wm.y + wm.h / 2);
+                        }
+                        if (wm.sub) {
+                            ctx.font = '600 12px sans-serif';
+                            ctx.fillStyle = '#64748b';
+                            ctx.fillText(wm.sub, wm.x + 11, wm.title ? wm.y + 32 : wm.y + wm.h / 2);
+                        }
+                        ctx.restore();
+                    }
+                }
                 ctx.lineCap = 'round'; ctx.lineJoin = 'round';
                 (canvasObj.walls || []).forEach(wObj => { ctx.strokeStyle = wObj.color || '#111827'; buildWallSegments(wObj).forEach(seg => { ctx.lineWidth = seg.isHatch ? 2.5 : 3.5; ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke(); }); });
                 (canvasObj.lines || []).forEach(l => {
@@ -1285,10 +1326,12 @@ if (!window.Vue) {
             };
 
             return {
-                offlineReady, currentView, TEMPLATE_ROWS, TAG_DEFS, capsuleOffset, capsuleCollapsed, startCapsuleDrag,
+                offlineReady, currentView, TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_GROUPS, stampFilter, filteredStampGroups,
+                defaultTextColor, setMarkerTextColor, getArrowMarkerId, getFsArrowMarkerId,
+                capsuleOffset, capsuleCollapsed, startCapsuleDrag,
                 masterPages, showQuickPageNav, jumpToPage, jumpToPageById, goToMasterPlan,
                 showIndexModal, indexCustomCode, editingIndexMarker, placeSpaceTag, addCustomSpaceTag, placePageLink, deleteEditingIndexMarker,
-                fullScreenIndex, fullScreenList, fullScreenItem, fullScreenTitle, fullScreenWatermarkLines, showWatermark, getLineStroke, getWallSegments,
+                fullScreenIndex, fullScreenList, fullScreenItem, fullScreenTitle, fullScreenWatermarkBox, showWatermark, getLineStroke, getWallSegments,
                 zoomScale, invZoom, svgViewBox, stepZoom, resetZoom, onStageWheel, draggingPageIdx, dragOverPageIdx, startPageDrag,
                 openFullScreenPreview, prevFullScreen, nextFullScreen, editFromFullScreen, copyFullScreenImage, downloadFullScreenImage, enterEditMode, switchToPreview, duplicateCurrentPage,
                 showMergeModal, mergeableGroups, mergePageGroup, showPdfModal, showPhotoPoolModal, photoPoolList, openPhotoPool, selectFromPhotoPool, deleteFromPhotoPool,
