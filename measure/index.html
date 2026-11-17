@@ -24,7 +24,7 @@
             padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
             font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
         }
-        input, select, textarea { font-size: 16px !important; -webkit-user-select: text; user-select: text; color: #111827; }
+       input, select, textarea { font-size: 13px !important; -webkit-user-select: text; user-select: text; color: #111827; }
         .canvas-touch-lock { touch-action: none !important; }
         .touch-scrollable { touch-action: pan-y !important; -webkit-overflow-scrolling: touch; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -263,23 +263,23 @@
                     <button v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff']" :key="c" @click="drawColor = c" :style="{backgroundColor: c}" :class="drawColor === c ? 'ring-2 ring-zinc-900 scale-110' : ''" class="w-4 h-4 rounded-full border border-zinc-400 shrink-0"></button>
                 </div>
 
-                <!-- 🏛️ AutoCAD 矢量/圖片圖塊快速選擇列 (帶迷你縮圖預覽) -->
+              
+<!-- 🏛️ AutoCAD 矢量/圖片圖塊快速選擇列 (窄框自動換行防溢出) -->
                 <div v-if="!capsuleCollapsed && drawMode === 'cad'"
-                     class="bg-white/95 backdrop-blur-md border border-indigo-300 rounded-2xl p-1.5 shadow-xl flex flex-col gap-1 max-w-[95vw]">
-                    <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                     class="bg-white/95 backdrop-blur-md border border-indigo-300 rounded-xl p-1.5 shadow-xl flex flex-col gap-1 w-[94vw] max-w-md">
+                    <div class="flex flex-wrap items-center gap-1">
                         <button v-for="cat in CAD_CATEGORIES" :key="cat.id" @click="cadCategory = cat.id; selectedCadType = filteredCadList[0]?.id || selectedCadType"
                                 :class="cadCategory === cat.id ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-700'"
-                                class="px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0">{{ cat.name }}</button>
-                        <button @click="openCadManager" class="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0">⚙️圖庫</button>
-                        <span class="text-[10px] text-indigo-700 font-bold pl-1 shrink-0">連續點畫面放置</span>
+                                class="px-1.5 py-0.5 rounded text-xs font-bold">{{ cat.name }}</button>
+                        <button @click="openCadManager" class="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded text-xs font-bold">⚙️圖庫</button>
                     </div>
-                    <div class="flex items-center gap-1 overflow-x-auto no-scrollbar pt-0.5">
+                    <div class="flex flex-wrap items-center gap-1 pt-0.5 max-h-28 overflow-y-auto">
                         <button v-for="item in filteredCadList" :key="item.id" @click="selectedCadType = item.id"
                                 :class="selectedCadType === item.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-800 border-zinc-300'"
-                                class="px-2 py-1 rounded-lg border text-xs font-bold whitespace-nowrap shrink-0 shadow-sm flex items-center gap-1.5">
-                            <span class="w-5 h-5 rounded bg-white border border-zinc-200 flex items-center justify-center overflow-hidden shrink-0">
+                                class="px-1.5 py-0.5 rounded border text-xs font-bold shadow-sm flex items-center gap-1">
+                            <span class="w-4 h-4 rounded bg-white border border-zinc-200 flex items-center justify-center overflow-hidden shrink-0">
                                 <img v-if="item.imgB64" :src="item.imgB64" class="w-full h-full object-contain">
-                                <svg v-else :view-box.camel="getCadPreviewViewBox(item)" class="w-4 h-4">
+                                <svg v-else :view-box.camel="getCadPreviewViewBox(item)" class="w-3.5 h-3.5">
                                     <template v-for="(s, sIdx) in (item.shapes || [])" :key="sIdx">
                                         <rect v-if="s.t === 'rect'" :x="s.x" :y="s.y" :width="s.w" :height="s.h" stroke="#111827" stroke-width="4" fill="none" />
                                         <line v-else-if="s.t === 'line'" :x1="s.x1" :y1="s.y1" :x2="s.x2" :y2="s.y2" stroke="#111827" stroke-width="4" />
@@ -293,7 +293,47 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- ✥ 移模式精準排位操控列 (左右/上下大細、反轉、1°微調、方向貼牆) -->
+                <div v-if="!capsuleCollapsed && drawMode === 'move' && activeMarker"
+                     class="bg-white/95 backdrop-blur-md border border-blue-400 rounded-xl p-1.5 shadow-xl flex flex-col gap-1 w-[94vw] max-w-md">
+                    <div class="flex flex-wrap items-center gap-1">
+                        <template v-if="['cad','image'].includes(activeMarker.type)">
+                            <button @click="flipMarker('x')" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-1.5 py-0.5 rounded text-xs font-bold">↔️反轉</button>
+                            <button @click="flipMarker('y')" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-1.5 py-0.5 rounded text-xs font-bold">↕️反轉</button>
+                            <button @click="rotateMarker(-90)" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-1.5 py-0.5 rounded text-xs font-bold">↺90°</button>
+                            <button @click="rotateMarker(90)" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-1.5 py-0.5 rounded text-xs font-bold">↻90°</button>
+                            <button @click="rotateMarker(-1)" class="bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 rounded text-xs font-bold">-1°</button>
+                            <button @click="rotateMarker(1)" class="bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 rounded text-xs font-bold">+1°</button>
+                        </template>
+                        <div class="flex items-center gap-0.5 ml-auto">
+                            <button @click="nudgeMarker(-2, 0)" class="bg-zinc-100 border border-zinc-300 px-1.5 py-0.5 rounded text-xs font-black">⬅️</button>
+                            <button @click="nudgeMarker(0, -2)" class="bg-zinc-100 border border-zinc-300 px-1.5 py-0.5 rounded text-xs font-black">⬆️</button>
+                            <button @click="nudgeMarker(0, 2)" class="bg-zinc-100 border border-zinc-300 px-1.5 py-0.5 rounded text-xs font-black">⬇️</button>
+                            <button @click="nudgeMarker(2, 0)" class="bg-zinc-100 border border-zinc-300 px-1.5 py-0.5 rounded text-xs font-black">➡️</button>
+                            <button @click="activeMarker = null" class="bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded text-xs font-bold ml-0.5">✕</button>
+                        </div>
+                    </div>
+                    <div v-if="['cad','image'].includes(activeMarker.type)" class="grid grid-cols-2 gap-1.5 pt-0.5 border-t border-zinc-100">
+                        <div class="flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded px-1.5 py-0.5">
+                            <span class="text-xs font-bold text-zinc-700 shrink-0">↔️闊</span>
+                            <input type="range" min="0.3" max="3.0" step="0.05" :value="activeMarker.scaleX || 1" @input="e => setMarkerScaleX(e.target.value)" class="flex-1 min-w-0 accent-blue-600">
+                            <span class="text-xs font-bold text-zinc-700 w-8 text-right shrink-0">{{ Math.round((activeMarker.scaleX || 1) * 100) }}%</span>
+                        </div>
+                        <div class="flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded px-1.5 py-0.5">
+                            <span class="text-xs font-bold text-zinc-700 shrink-0">↕️高</span>
+                            <input type="range" min="0.3" max="3.0" step="0.05" :value="activeMarker.scaleY || 1" @input="e => setMarkerScaleY(e.target.value)" class="flex-1 min-w-0 accent-blue-600">
+                            <span class="text-xs font-bold text-zinc-700 w-8 text-right shrink-0">{{ Math.round((activeMarker.scaleY || 1) * 100) }}%</span>
+                        </div>
+                    </div>
+                </div>
             </div>
+
+
+
+
+
+                
 
             <!-- 雙屏 / 單屏並排主容器 -->
             <div class="flex-1 min-h-0 w-full flex flex-col md:flex-row gap-1.5 p-1 overflow-hidden">
@@ -680,23 +720,32 @@
                     </div>
                 </div>
 
-                <!-- 新增印章與分類 -->
-                <div class="bg-amber-50/70 border border-amber-200 rounded-lg p-2.5 mb-2.5 flex flex-col gap-2 shrink-0">
-                    <div class="flex gap-1.5 items-center">
-                        <select v-model="newStampCatId" @change="onSelectNewStampCat" class="bg-white border border-zinc-300 rounded px-2 py-1.5 text-xs font-bold shrink-0">
+      <!-- 新增印章與分類 (兩行全寬輸入 + 窄框防溢出) -->
+                <div class="bg-amber-50/70 border border-amber-200 rounded-lg p-2 mb-2 flex flex-col gap-1.5 shrink-0">
+                    <div class="flex gap-1.5 items-center justify-between">
+                        <select v-model="newStampCatId" @change="onSelectNewStampCat" class="bg-white border border-zinc-300 rounded px-2 py-1 text-xs font-bold flex-1 min-w-0">
                             <option v-for="c in stampCategories" :key="c.id" :value="c.id">{{ c.icon }} {{ c.name }}</option>
                         </select>
-                        <input type="text" v-model="newStampText" @keyup.enter="addStampItem(false)" placeholder="輸入新印章字眼..." class="flex-1 min-w-0 bg-white border border-zinc-300 rounded px-2.5 py-1.5 text-xs font-bold">
                         <div class="flex items-center gap-1 bg-white border border-zinc-300 rounded px-1.5 py-1 shrink-0">
                             <button v-for="c in ['#ffffff','#ef4444','#eab308']" :key="c" @click="newStampColor = c" :style="{backgroundColor: c}" :class="newStampColor === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-65'" class="w-4 h-4 rounded-full border border-zinc-400"></button>
                         </div>
-                        <button @click="addStampItem(false)" class="bg-zinc-900 text-white px-3 py-1.5 rounded text-xs font-bold shrink-0">加入</button>
+                    </div>
+                    <div class="flex gap-1.5 items-center">
+                        <input type="text" v-model="newStampText" @keyup.enter="addStampItem(false)" placeholder="輸入新印章字眼..." class="flex-1 min-w-0 bg-white border border-zinc-300 rounded px-2 py-1 text-xs font-bold">
+                        <button @click="addStampItem(false)" class="bg-zinc-900 text-white px-2.5 py-1 rounded text-xs font-bold shrink-0">加入</button>
                     </div>
                     <div class="flex gap-1.5 items-center pt-1 border-t border-amber-200/70">
-                        <span class="text-[11px] font-bold text-amber-900 shrink-0">+新分類:</span>
+                        <span class="text-xs font-bold text-amber-900 shrink-0">+新分類:</span>
                         <input type="text" v-model="newCatName" @keyup.enter="addStampCategory" placeholder="如: 泥水 / 雜項" class="flex-1 min-w-0 bg-white border border-zinc-300 rounded px-2 py-1 text-xs font-bold">
-                        <button @click="addStampCategory" class="bg-amber-700 text-white px-2.5 py-1 rounded text-[11px] font-bold shrink-0">建分類</button>
+                        <button @click="addStampCategory" class="bg-amber-700 text-white px-2 py-1 rounded text-xs font-bold shrink-0">建分類</button>
                     </div>
+                </div>
+
+                <!-- 分類篩選 (自動換行防溢出) -->
+                <div class="flex flex-wrap gap-1 pb-2 mb-2 border-b border-zinc-100 shrink-0">
+                    <button @click="managerCatFilter = 'all'" :class="managerCatFilter === 'all' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded text-xs font-bold">全部</button>
+                    <button @click="managerCatFilter = 'pinned'" :class="managerCatFilter === 'pinned' ? 'bg-amber-500 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded text-xs font-bold">⭐置頂</button>
+                    <button v-for="c in stampCategories" :key="c.id" @click="managerCatFilter = c.id" :class="managerCatFilter === c.id ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded text-xs font-bold">{{ c.icon }}{{ c.name }}</button>
                 </div>
 
                 <!-- 分類篩選 -->
@@ -776,10 +825,13 @@
                 </div>
 
                 <!-- 分類篩選 -->
-                <div class="flex gap-1 overflow-x-auto no-scrollbar pb-2 mb-2 border-b border-zinc-100 shrink-0">
-                    <button @click="cadMgrFilter = 'all'" :class="cadMgrFilter === 'all' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2.5 py-1 rounded text-xs font-bold shrink-0">全部 ({{ allCadManageList.length }})</button>
-                    <button v-for="c in CAD_CATEGORIES" :key="c.id" @click="cadMgrFilter = c.id" :class="cadMgrFilter === c.id ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2.5 py-1 rounded text-xs font-bold shrink-0">{{ c.name }}</button>
-                </div>
+                <div class="flex flex-wrap gap-1 pb-0.5">
+                        <button @click="stampFilter = 'pinned'" :class="stampFilter === 'pinned' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-zinc-700 border-zinc-300'" class="px-1.5 py-0.5 rounded text-xs font-bold border">⭐置頂</button>
+                        <button @click="stampFilter = 'all'" :class="stampFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'" class="px-1.5 py-0.5 rounded text-xs font-bold border">全部</button>
+                        <button v-for="g in STAMP_GROUPS" :key="g.id" @click="stampFilter = g.id"
+                                :class="stampFilter === g.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'"
+                                class="px-1.5 py-0.5 rounded text-xs font-bold border">{{ g.icon }}{{ g.name }}</button>
+                    </div>
 
                 <!-- 圖塊列表 (每項帶 40×40 實時縮圖框) -->
                 <div class="overflow-y-auto flex-1 touch-scrollable space-y-1.5 pr-0.5">
