@@ -1,11 +1,13 @@
-if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
-    const msg = !window.Vue ? 'Vue 引擎載入失敗，請檢查網絡連線' : (!window.MEASURE_DATA ? '資料檔 data.js 載入失敗' : '圖塊檔 cad.js 載入失敗');
+if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD || !window.MEASURE_EXPORT) {
+    const missing = !window.Vue ? 'Vue 引擎' : (!window.MEASURE_DATA ? 'data.js' : (!window.MEASURE_CAD ? 'cad.js' : 'export.js'));
+    const msg = `檔案 ${missing} 載入失敗，請檢查網絡或檔案是否齊全`;
     if (window.__showBootError) window.__showBootError(msg);
     else alert(msg);
 } else {
     const { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick } = Vue;
     const { TAG_DEFS, TEMPLATE_ROWS, DIM_QUICK_ROWS, KEYPAD_KEYS, DEFAULT_SPACES, STAMP_PALETTE, DEFAULT_STAMP_SEED } = window.MEASURE_DATA;
-    const { CAD_CATEGORIES, CAD_DEFS, CAD_LIST, drawOnCanvas: drawCadOnCanvas } = window.MEASURE_CAD;
+    const { CAD_CATEGORIES, CAD_DEFS, CAD_LIST } = window.MEASURE_CAD;
+    const { buildWallSegments, getLineStroke, buildWatermarkBox, copyAnnotatedImage, downloadAnnotatedImage, generatePdfReport } = window.MEASURE_EXPORT;
 
     localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
 
@@ -15,7 +17,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
         navigator.serviceWorker.ready.then(() => { offlineReady.value = true; }).catch(() => {});
     }
 
-    let db = null;
+    let db = null, auth = null;
     try {
         if (window.firebase) {
             if (!firebase.apps.length) {
@@ -31,6 +33,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             }
             db = firebase.firestore();
             db.settings({ experimentalAutoDetectLongPolling: true, ignoreUndefinedProperties: true });
+            if (typeof firebase.auth === 'function') auth = firebase.auth();
         }
     } catch (_) {}
 
@@ -48,22 +51,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
     const getTodayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     const sanitizeFilename = (s) => String(s || '').trim().replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
 
-    const measureStrWidth = (str, charPx) => {
-        let total = 0;
-        for (const ch of String(str || '')) total += /[^\x00-\xff]/.test(ch) ? charPx : charPx * 0.56;
-        return total;
-    };
-
-    const drawRoundRect = (ctx, x, y, w, h, r) => {
-        ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.arcTo(x + w, y, x + w, y + h, r);
-        ctx.arcTo(x + w, y + h, x, y + h, r);
-        ctx.arcTo(x, y + h, x, y, r);
-        ctx.arcTo(x, y, x + w, y, r);
-        ctx.closePath();
-    };
-
     const renderSketchDataUrl = (w = 1200, h = 1500, hasGrid = true) => {
         const c = document.createElement('canvas'); c.width = w; c.height = h;
         const ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
@@ -75,47 +62,77 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
         return c.toDataURL('image/jpeg', 0.85);
     };
 
-    const buildWallSegments = (w) => {
-        if (!w) return [];
-        const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = Math.hypot(dx, dy); if (L < 4) return [];
-        const ux = dx / L, uy = dy / L, nx = -uy, ny = ux, hw = 9;
-        const p1A = { x: w.x1 + nx * hw, y: w.y1 + ny * hw }, p2A = { x: w.x2 + nx * hw, y: w.y2 + ny * hw };
-        const p1B = { x: w.x1 - nx * hw, y: w.y1 - ny * hw }, p2B = { x: w.x2 - nx * hw, y: w.y2 - ny * hw };
-        const segs = [
-            { x1: p1A.x, y1: p1A.y, x2: p2A.x, y2: p2A.y, isHatch: false }, { x1: p1B.x, y1: p1B.y, x2: p2B.x, y2: p2B.y, isHatch: false },
-            { x1: p1A.x, y1: p1A.y, x2: p1B.x, y2: p1B.y, isHatch: false }, { x1: p2A.x, y1: p2A.y, x2: p2B.x, y2: p2B.y, isHatch: false }
-        ];
-        if (w.style === 'hatched') {
-            for (let c = -hw + 14; c < L + hw; c += 14) {
-                const t0 = Math.max(-hw, -c), t1 = Math.min(hw, L - c);
-                if (t1 - t0 > 0.5) segs.push({ x1: w.x1 + (c + t0) * ux + t0 * nx, y1: w.y1 + (c + t0) * uy + t0 * ny, x2: w.x1 + (c + t1) * ux + t1 * nx, y2: w.y1 + (c + t1) * uy + t1 * ny, isHatch: true });
-            }
-        }
-        return segs;
-    };
-
     createApp({
         setup() {
+            // =========================================================================
+            // 🔐 Google 一鍵登入 ＋ 地盤斷網離線保護引擎
+            // =========================================================================
+            const authReady = ref(false);
+            const currentUser = ref(null);
+            const isGuestMode = ref(false);
+            const isLoggingIn = ref(false);
             const authorName = ref(''), hasUnsavedCloudChanges = ref(false), dirtyPageIds = new Set();
             let unsubPages = null, unsubFeedback = null, isPushing = false, isAutoQueueing = false;
+
+            const loginWithGoogle = async () => {
+                if (!auth) return alert('登入模組載入中，請稍候或重新整理網頁');
+                if (!navigator.onLine) return alert('目前無網絡連線，請先點「免登入離線進入」，有訊號後再綁定 Google 帳號');
+                isLoggingIn.value = true;
+                try {
+                    const provider = new firebase.auth.GoogleAuthProvider();
+                    provider.setCustomParameters({ prompt: 'select_account' });
+                    await auth.signInWithPopup(provider);
+                } catch (e) {
+                    if (e?.code === 'auth/popup-blocked' || e?.code === 'auth/cancelled-popup-request') {
+                        try {
+                            const provider = new firebase.auth.GoogleAuthProvider();
+                            await auth.signInWithRedirect(provider);
+                            return;
+                        } catch (re) { alert('登入失敗：' + re.message); }
+                    } else if (e?.code !== 'auth/popup-closed-by-user') {
+                        alert('Google 登入失敗：' + (e?.message || '請確認 Firebase 後台已授權此網域'));
+                    }
+                } finally {
+                    isLoggingIn.value = false;
+                }
+            };
+
+            const enterAsGuest = async () => {
+                isGuestMode.value = true;
+                currentUser.value = null;
+                authReady.value = true;
+                await localforage.setItem('auth_session_v1', { guest: true });
+                await checkAuthorName();
+            };
+
+            const logoutUser = async () => {
+                if (!navigator.onLine && !confirm('⚠️ 目前無網絡連線，登出後需等有訊號才能重新登入 Google，確定要登出嗎？')) return;
+                if (auth && navigator.onLine) await auth.signOut().catch(() => {});
+                currentUser.value = null;
+                isGuestMode.value = false;
+                await localforage.removeItem('auth_session_v1');
+                showToast('👋 已登出帳號');
+            };
 
             const currentView = ref('dir'), showWatermark = ref(true), globalFontScale = ref(0.6);
             const defaultTextColor = ref('#ffffff');
 
             // =========================================================================
-            // 🏷️ 全動態印章管理引擎 (出廠種子自動匯入 + 熱門排行 + 釘選 + 增減改色 + 雲端同步)
+            // 🏷️ 全動態印章管理引擎 (簡化介面 ＋ 熱門排行 ＋ 釘選 ＋ 自動雲端同步)
             // =========================================================================
             const stampCategories = ref([]);
             const stampItems = ref([]);
             const stampUpdatedAt = ref(0);
             const stampFilter = ref('hot');
             const showStampManagerModal = ref(false);
+            const showNewCatForm = ref(false);
             const managerCatFilter = ref('all');
             const managerSearch = ref('');
 
-            const newCatName = ref(''), newCatIcon = ref('🏷️'), newCatColor = ref('#38bdf8');
+            const newCatName = ref(''), newCatIcon = ref('📐'), newCatColor = ref('#38bdf8');
             const newStampText = ref(''), newStampCatId = ref(''), newStampColor = ref('#ffffff');
             const showQuickAddStamp = ref(false);
+            let stampAutoSyncTimer = null;
 
             const saveStampStore = async () => {
                 stampUpdatedAt.value = Date.now();
@@ -124,6 +141,10 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     items: JSON.parse(JSON.stringify(stampItems.value || [])),
                     updatedAt: stampUpdatedAt.value
                 });
+                if (currentUser.value?.uid && db && navigator.onLine) {
+                    clearTimeout(stampAutoSyncTimer);
+                    stampAutoSyncTimer = setTimeout(() => { syncStampLibraryCloud(true); }, 1500);
+                }
             };
 
             const buildSeedStampData = () => {
@@ -131,14 +152,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 (DEFAULT_STAMP_SEED || []).forEach((g, gIdx) => {
                     cats.push({ id: g.id, icon: g.icon || '🏷️', name: g.name, defaultColor: g.defaultColor || '#ffffff' });
                     (g.items || []).forEach((txt, iIdx) => {
-                        items.push({
-                            id: `st_${g.id}_${iIdx}_${gIdx}`,
-                            catId: g.id,
-                            text: txt,
-                            color: g.defaultColor || '#ffffff',
-                            count: 0,
-                            pinned: false
-                        });
+                        items.push({ id: `st_${g.id}_${iIdx}_${gIdx}`, catId: g.id, text: txt, color: g.defaultColor || '#ffffff', count: 0, pinned: false });
                     });
                 });
                 return { cats, items };
@@ -165,17 +179,13 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     stampItems.value = items;
                     await saveStampStore();
                 }
-                if (!newStampCatId.value && stampCategories.value.length) {
-                    newStampCatId.value = stampCategories.value[0].id;
-                }
+                if (!newStampCatId.value && stampCategories.value.length) newStampCatId.value = stampCategories.value[0].id;
             };
 
             const hotStamps = computed(() => {
                 const active = stampItems.value.filter(x => x.pinned || (x.count || 0) > 0);
                 if (active.length > 0) {
-                    return [...active]
-                        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.count || 0) - (a.count || 0))
-                        .slice(0, 18);
+                    return [...active].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.count || 0) - (a.count || 0)).slice(0, 18);
                 }
                 return stampItems.value.slice(0, 12);
             });
@@ -183,10 +193,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const filteredCanvasStampGroups = computed(() => {
                 return stampCategories.value
                     .filter(c => stampFilter.value === 'all' || stampFilter.value === c.id)
-                    .map(c => ({
-                        ...c,
-                        items: stampItems.value.filter(it => it.catId === c.id)
-                    }))
+                    .map(c => ({ ...c, items: stampItems.value.filter(it => it.catId === c.id) }))
                     .filter(g => g.items.length > 0);
             });
 
@@ -205,6 +212,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const openStampManager = () => {
                 managerCatFilter.value = 'all';
                 managerSearch.value = '';
+                showNewCatForm.value = false;
                 if (!newStampCatId.value && stampCategories.value.length) {
                     newStampCatId.value = stampCategories.value[0].id;
                     newStampColor.value = stampCategories.value[0].defaultColor || '#ffffff';
@@ -226,6 +234,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 newCatName.value = '';
                 newStampCatId.value = id;
                 newStampColor.value = newCatColor.value || '#ffffff';
+                showNewCatForm.value = false;
                 await saveStampStore();
                 showToast(`✅ 已新增分類「${name}」`);
             };
@@ -250,14 +259,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 const color = newStampColor.value || '#ffffff';
                 let existing = stampItems.value.find(it => it.text === txt && it.catId === catId);
                 if (!existing) {
-                    existing = {
-                        id: 'st_' + Date.now() + '_' + Math.floor(Math.random() * 999),
-                        catId,
-                        text: txt,
-                        color,
-                        count: 0,
-                        pinned: false
-                    };
+                    existing = { id: 'st_' + Date.now() + '_' + Math.floor(Math.random() * 999), catId, text: txt, color, count: 0, pinned: false };
                     stampItems.value.unshift(existing);
                 } else {
                     existing.color = color;
@@ -265,11 +267,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 newStampText.value = '';
                 showQuickAddStamp.value = false;
                 await saveStampStore();
-                if (applyImmediately && activeMarker.value) {
-                    applyStamp(existing);
-                } else {
-                    showToast(`✅ 已加入印章「${txt}」`);
-                }
+                if (applyImmediately && activeMarker.value) applyStamp(existing);
+                else showToast(`✅ 已加入印章「${txt}」`);
             };
 
             const toggleStampPin = async (item) => {
@@ -278,9 +277,14 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 showToast(item.pinned ? `⭐ 已將「${item.text}」置頂到熱門` : `已取消「${item.text}」置頂`);
             };
 
-            const setStampItemColor = async (item, hex) => {
-                item.color = hex;
+            const setStampItemColor = async (item, hex) => { item.color = hex; await saveStampStore(); };
+
+            const cycleStampItemColor = async (item) => {
+                const idx = STAMP_PALETTE.findIndex(p => p.hex === (item.color || '#ffffff'));
+                const next = STAMP_PALETTE[(idx + 1) % STAMP_PALETTE.length];
+                item.color = next.hex;
                 await saveStampStore();
+                showToast(`🎨 顏色：${next.name}`);
             };
 
             const editStampItemText = async (item) => {
@@ -307,21 +311,16 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const restoreDefaultStamps = async () => {
                 if (!confirm('補回所有出廠預設分類與印章？（你自建的印章與計數會完整保留）')) return;
                 const { cats, items } = buildSeedStampData();
-                cats.forEach(c => {
-                    if (!stampCategories.value.some(x => x.id === c.id)) stampCategories.value.push(c);
-                });
-                items.forEach(it => {
-                    if (!stampItems.value.some(x => x.text === it.text && x.catId === it.catId)) stampItems.value.push(it);
-                });
+                cats.forEach(c => { if (!stampCategories.value.some(x => x.id === c.id)) stampCategories.value.push(c); });
+                items.forEach(it => { if (!stampItems.value.some(x => x.text === it.text && x.catId === it.catId)) stampItems.value.push(it); });
                 await saveStampStore();
                 showToast('✅ 已補回全部出廠預設印章');
             };
 
-            const syncStampLibraryCloud = async () => {
-                if (!db || !navigator.onLine) return alert('請檢查網絡連線後再同步印章庫');
-                await checkAuthorName();
-                const libKey = sanitizeFilename(authorName.value || 'shared_team') || 'shared_team';
-                isProcessing.value = true; processingText.value = `正在同步 [${authorName.value || '團隊'}] 的印章庫...`;
+            const syncStampLibraryCloud = async (silent = false) => {
+                if (!db || !navigator.onLine) { if (!silent) alert('請檢查網絡連線後再同步印章庫'); return; }
+                const libKey = currentUser.value?.uid ? ('uid_' + currentUser.value.uid) : (sanitizeFilename(authorName.value || 'shared_team') || 'shared_team');
+                if (!silent) { isProcessing.value = true; processingText.value = '正在同步雲端印章庫...'; }
                 try {
                     const docRef = db.collection('stamp_libraries').doc(libKey);
                     const snap = await withTimeout(docRef.get(), 15000);
@@ -339,34 +338,35 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                             const k = `${it.catId}__${it.text}`;
                             const ex = itemMap.get(k);
                             if (ex) {
-                                itemMap.set(k, {
-                                    ...it,
-                                    count: Math.max(it.count || 0, ex.count || 0),
-                                    pinned: !!(it.pinned || ex.pinned)
-                                });
+                                itemMap.set(k, { ...it, count: Math.max(it.count || 0, ex.count || 0), pinned: !!(it.pinned || ex.pinned) });
                             } else {
                                 itemMap.set(k, { ...it });
                             }
                         });
                         stampItems.value = Array.from(itemMap.values());
                     }
-                    await saveStampStore();
+                    await localforage.setItem('dynamic_stamp_store_v1', {
+                        categories: JSON.parse(JSON.stringify(stampCategories.value || [])),
+                        items: JSON.parse(JSON.stringify(stampItems.value || [])),
+                        updatedAt: Date.now()
+                    });
                     await withTimeout(docRef.set({
-                        owner: authorName.value || '團隊',
+                        owner: currentUser.value?.name || authorName.value || '團隊',
+                        uid: currentUser.value?.uid || '',
                         categories: JSON.parse(JSON.stringify(stampCategories.value)),
                         items: JSON.parse(JSON.stringify(stampItems.value)),
                         updatedAt: Date.now()
                     }, { merge: true }), 15000);
-                    showToast(`☁️ 已雙向同步 ${stampItems.value.length} 個印章`);
+                    if (!silent) showToast(`☁️ 已雙向同步 ${stampItems.value.length} 個印章`);
                 } catch (e) {
-                    alert('印章庫同步失敗：' + e.message);
+                    if (!silent) alert('印章庫同步失敗：' + e.message);
                 } finally {
-                    isProcessing.value = false;
+                    if (!silent) isProcessing.value = false;
                 }
             };
 
             // =========================================================================
-            // AutoCAD 圖塊狀態
+            // AutoCAD 圖塊 & 工程畫布狀態
             // =========================================================================
             const cadCategory = ref('arch'), selectedCadType = ref('door_single');
             const filteredCadList = computed(() => CAD_LIST.filter(x => x.cat === cadCategory.value));
@@ -377,7 +377,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const project = reactive({ code: '', name: '', nameUpdatedAt: 0, date: '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '' });
             const pages = ref([]), photoPool = ref([]);
 
-            // ⊞ 雙頁分屏並排狀態 (Pane A = 主畫布, Pane B = 副畫布)
             const splitMode = ref(false), activePane = ref('A');
             const activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
             const pageIndexB = ref(0), pinB = ref(null), pinIndexB = ref(0);
@@ -402,31 +401,22 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const toggleSplitMode = () => {
                 splitMode.value = !splitMode.value;
                 if (splitMode.value) {
-                    if (pages.value.length > 1 && pageIndexB.value === activePageIndex.value) {
-                        pageIndexB.value = activePageIndex.value === 0 ? 1 : 0;
-                    }
-                    pinB.value = null;
-                    resetZoomB();
-                    activePane.value = 'A';
-                    showToast('⊞ 已開啟雙頁並排編輯（點選任一邊即可繪畫）');
+                    if (pages.value.length > 1 && pageIndexB.value === activePageIndex.value) pageIndexB.value = activePageIndex.value === 0 ? 1 : 0;
+                    pinB.value = null; resetZoomB(); activePane.value = 'A';
+                    showToast('⊞ 已開啟雙頁並排編輯');
                 } else {
                     activePane.value = 'A';
                 }
             };
 
-            // 💬 外部師傅/業主雲端意見箱
             const feedbackList = ref([]), showFeedbackOverlay = ref(true), showFeedbackModal = ref(false);
             const currentCanvasFeedbacks = computed(() => {
-                const pgId = String(activePage.value?.id || '');
-                const pinId = activePin.value ? String(activePin.value.id) : '';
-                if (!pgId) return [];
-                return feedbackList.value.filter(f => String(f.pageId || '') === pgId && String(f.pinId || '') === pinId);
+                const pgId = String(activePage.value?.id || ''), pinId = activePin.value ? String(activePin.value.id) : '';
+                return pgId ? feedbackList.value.filter(f => String(f.pageId || '') === pgId && String(f.pinId || '') === pinId) : [];
             });
             const canvasBFeedbacks = computed(() => {
-                const pgId = String(pageB.value?.id || '');
-                const pinId = pinB.value ? String(pinB.value.id) : '';
-                if (!pgId) return [];
-                return feedbackList.value.filter(f => String(f.pageId || '') === pgId && String(f.pinId || '') === pinId);
+                const pgId = String(pageB.value?.id || ''), pinId = pinB.value ? String(pinB.value.id) : '';
+                return pgId ? feedbackList.value.filter(f => String(f.pageId || '') === pgId && String(f.pinId || '') === pinId) : [];
             });
             const pageFeedbackCount = (pgId) => feedbackList.value.filter(f => String(f.pageId || '') === String(pgId)).length;
             const jumpToFeedback = (fb) => {
@@ -442,8 +432,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 showFeedbackOverlay.value = true; drawMode.value = 'browse'; currentView.value = 'proj';
             };
             const resolveFeedback = async (fbId) => {
-                if (!db || !project.code || !fbId) return;
-                if (!navigator.onLine) { showToast('📴 請在有網絡連線時清除意見'); return; }
+                if (!db || !project.code || !fbId || !navigator.onLine) { showToast('📴 請在有網絡連線時清除意見'); return; }
                 try {
                     await db.collection('site_projects').doc(String(project.code)).collection('feedback').doc(String(fbId)).delete();
                     feedbackList.value = feedbackList.value.filter(x => x.id !== fbId);
@@ -451,7 +440,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 } catch (_) { showToast('⚠️ 清除失敗，請稍後再試'); }
             };
 
-            // 總圖清單與快速跳頁目錄
             const masterPages = computed(() => pages.value.map((pg, idx) => ({ pg, idx })).filter(x => x.pg.space === '總圖'));
             const showQuickPageNav = ref(false), showQuickPageNavB = ref(false);
             const jumpToPage = (idx) => { showQuickPageNav.value = false; switchPage(idx, 'A'); };
@@ -459,25 +447,16 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const jumpToPageById = (targetId, pane = activePane.value) => {
                 if (!targetId) return;
                 const idx = pages.value.findIndex(p => String(p.id) === String(targetId));
-                if (idx !== -1) {
-                    switchPage(idx, pane);
-                    showToast(`↪️ 已跳轉至 P${idx + 1}${pages.value[idx].space ? ' [' + pages.value[idx].space + ']' : ''}`);
-                } else showToast('⚠️ 連結的目標頁面已不存在');
+                if (idx !== -1) { switchPage(idx, pane); showToast(`↪️ 已跳轉至 P${idx + 1}${pages.value[idx].space ? ' [' + pages.value[idx].space + ']' : ''}`); }
+                else showToast('⚠️ 連結的目標頁面已不存在');
             };
             const goToMasterPlan = (pane = 'A') => {
                 if (!masterPages.value.length) return;
-                if (masterPages.value.length === 1) {
-                    if (pane === 'B') jumpToPageB(masterPages.value[0].idx);
-                    else jumpToPage(masterPages.value[0].idx);
-                } else {
-                    if (pane === 'B') showQuickPageNavB.value = !showQuickPageNavB.value;
-                    else showQuickPageNav.value = !showQuickPageNav.value;
-                }
+                if (masterPages.value.length === 1) { pane === 'B' ? jumpToPageB(masterPages.value[0].idx) : jumpToPage(masterPages.value[0].idx); }
+                else { if (pane === 'B') showQuickPageNavB.value = !showQuickPageNavB.value; else showQuickPageNav.value = !showQuickPageNav.value; }
             };
 
-            // 中上方懸浮工具膠囊位置與收合狀態
-            const capsuleOffset = reactive({ x: 0, y: 0 });
-            const capsuleCollapsed = ref(false);
+            const capsuleOffset = reactive({ x: 0, y: 0 }), capsuleCollapsed = ref(false);
             const startCapsuleDrag = (e) => {
                 const sx = e.clientX, sy = e.clientY, ox = capsuleOffset.x, oy = capsuleOffset.y;
                 const onMove = (ev) => {
@@ -489,23 +468,18 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
             };
 
-            // 獨立縮放與視口 (Pane A & Pane B)
             const zoomScale = ref(1), vbX = ref(0), vbY = ref(0);
             const invZoom = computed(() => 1 / Math.pow(zoomScale.value, 0.65));
             const svgViewBox = computed(() => {
-                const pw = canvasW.value, ph = canvasH.value;
-                const vw = Math.round((pw / zoomScale.value) * 10) / 10, vh = Math.round((ph / zoomScale.value) * 10) / 10;
-                const vx = Math.max(0, Math.min(pw - vw, vbX.value)), vy = Math.max(0, Math.min(ph - vh, vbY.value));
-                return `${vx} ${vy} ${vw} ${vh}`;
+                const pw = canvasW.value, ph = canvasH.value, vw = Math.round((pw / zoomScale.value) * 10) / 10, vh = Math.round((ph / zoomScale.value) * 10) / 10;
+                return `${Math.max(0, Math.min(pw - vw, vbX.value))} ${Math.max(0, Math.min(ph - vh, vbY.value))} ${vw} ${vh}`;
             });
 
             const zoomScaleB = ref(1), vbXB = ref(0), vbYB = ref(0);
             const invZoomB = computed(() => 1 / Math.pow(zoomScaleB.value, 0.65));
             const svgViewBoxB = computed(() => {
-                const pw = canvasWB.value, ph = canvasHB.value;
-                const vw = Math.round((pw / zoomScaleB.value) * 10) / 10, vh = Math.round((ph / zoomScaleB.value) * 10) / 10;
-                const vx = Math.max(0, Math.min(pw - vw, vbXB.value)), vy = Math.max(0, Math.min(ph - vh, vbYB.value));
-                return `${vx} ${vy} ${vw} ${vh}`;
+                const pw = canvasWB.value, ph = canvasHB.value, vw = Math.round((pw / zoomScaleB.value) * 10) / 10, vh = Math.round((ph / zoomScaleB.value) * 10) / 10;
+                return `${Math.max(0, Math.min(pw - vw, vbXB.value))} ${Math.max(0, Math.min(ph - vh, vbYB.value))} ${vw} ${vh}`;
             });
 
             const resetZoom = () => { zoomScale.value = 1; vbX.value = 0; vbY.value = 0; };
@@ -519,13 +493,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const applyZoomAtClientPoint = (nextScale, clientX, clientY, anchorSvg, pane = 'A') => {
-                const isB = pane === 'B';
-                const svg = isB ? svgCanvasB.value : svgCanvas.value;
-                const pw = isB ? canvasWB.value : canvasW.value;
-                const ph = isB ? canvasHB.value : canvasH.value;
-                const zRef = isB ? zoomScaleB : zoomScale;
-                const xRef = isB ? vbXB : vbX;
-                const yRef = isB ? vbYB : vbY;
+                const isB = pane === 'B', svg = isB ? svgCanvasB.value : svgCanvas.value, pw = isB ? canvasWB.value : canvasW.value, ph = isB ? canvasHB.value : canvasH.value;
+                const zRef = isB ? zoomScaleB : zoomScale, xRef = isB ? vbXB : vbX, yRef = isB ? vbYB : vbY;
                 const clampedScale = Math.max(1, Math.min(5, Math.round(nextScale * 100) / 100));
                 if (clampedScale <= 1) { isB ? resetZoomB() : resetZoom(); return; }
                 const vw = pw / clampedScale, vh = ph / clampedScale;
@@ -544,8 +513,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
             const stepZoom = (delta, pane = 'A') => applyZoomAtClientPoint((pane === 'B' ? zoomScaleB.value : zoomScale.value) + delta, null, null, null, pane);
             const onStageWheel = (e, pane = 'A') => {
-                const svg = pane === 'B' ? svgCanvasB.value : svgCanvas.value;
-                const cObj = pane === 'B' ? canvasB.value : activeCanvas.value;
+                const svg = pane === 'B' ? svgCanvasB.value : svgCanvas.value, cObj = pane === 'B' ? canvasB.value : activeCanvas.value;
                 if (svg && cObj?.photo) applyZoomAtClientPoint((pane === 'B' ? zoomScaleB.value : zoomScale.value) * (e.deltaY < 0 ? 1.2 : 0.82), e.clientX, e.clientY, getCoords(e, pane), pane);
             };
 
@@ -599,30 +567,16 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
             };
 
-            // 單行正中上方・高通透 CAD 圖籤膠囊
-            const buildWatermarkBox = (item, itemDate, itemAuthor, canvasWidth = 1200) => {
-                const pName = project.name?.trim() || '';
-                const spName = item?.space?.trim() || '';
-                const leftPart = [pName, spName].filter(Boolean).join(' · ');
-                const dStr = itemDate || item?.date || project.date || '';
-                const aStr = itemAuthor || item?.author || project.lastModifiedBy || '';
-                const rightPart = [dStr, aStr].filter(Boolean).join(' · ');
-                const text = [leftPart, rightPart].filter(Boolean).join('  ｜  ');
-                if (!text) return null;
-                const w = Math.min(canvasWidth - 20, Math.max(120, Math.ceil(measureStrWidth(text, 13) + 24)));
-                const h = 26;
-                const x = Math.max(10, Math.round((canvasWidth - w) / 2));
-                const y = 8;
-                return { x, y, w, h, text };
-            };
-            const fullScreenWatermarkBox = computed(() => buildWatermarkBox(fullScreenItem.value, fullScreenDate.value, fullScreenAuthor.value, fullScreenItem.value?.w || 1200));
+            const fullScreenWatermarkBox = computed(() => buildWatermarkBox(fullScreenItem.value, {
+                projectName: project.name, projectDate: project.date, projectAuthor: project.lastModifiedBy,
+                itemDate: fullScreenDate.value, itemAuthor: fullScreenAuthor.value, canvasWidth: fullScreenItem.value?.w || 1200
+            }));
 
             const showJoinModal = ref(false), inputJoinCode = ref(''), showAddPageModal = ref(false), showSpaceModal = ref(false), showMergeModal = ref(false), showPdfModal = ref(false);
             const spaceList = ref([...DEFAULT_SPACES]);
             const showManageModal = ref(false), manageProj = ref({}), showCloudBrowser = ref(false), cloudProjectList = ref([]), showBackupListModal = ref(false), backupList = ref([]);
             const showPhotoPoolModal = ref(false), photoPoolList = ref([]), photoPoolTarget = ref('newPage');
 
-            // 🔗 兩個總號合拼 & ↗️ 選圖轉檔 狀態
             const showMergeProjectsModal = ref(false), mergeProjCodeA = ref(''), mergeProjCodeB = ref(''), mergeProjNewName = ref('');
             const selectMode = ref(false), selectedPageIds = ref([]);
             const showTransferModal = ref(false), transferTargetCode = ref(''), transferMode = ref('copy'), transferNewProjName = ref('');
@@ -632,7 +586,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
             const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v10.2' }[cloudSyncState.value] || '☁️v10.2'));
+            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v1.0' }[cloudSyncState.value] || '☁️v1.0'));
             const cloudStatusClass = computed(() =>
                 cloudSyncState.value === 'syncing' ? 'bg-amber-100 text-amber-900 border-amber-300' :
                 cloudSyncState.value === 'offline' ? 'bg-zinc-100 text-zinc-500 border-zinc-300' :
@@ -642,7 +596,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const showCloudDetail = () => {
                 if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                 else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                else showToast('v10.2 地址修改即時同步・全動態印章管理');
+                else showToast(`度尺寶 Pro v1.0 · ${currentUser.value ? 'Google 帳號已連線' : '訪客離線模式'}`);
             };
 
             const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -683,13 +637,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     isSketch: !!c.isSketch, hasGrid: !!c.hasGrid, markers: c.markers || [], lines: c.lines || [], walls: c.walls || [], paths: c.paths || [], pins: c.pins || [], deletedPinIds: c.deletedPinIds || []
                 });
                 pages.value.push(newPg);
-                if (isB) {
-                    pageIndexB.value = pages.value.length - 1;
-                    if (oldPinId) pinB.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null;
-                } else {
-                    activePageIndex.value = pages.value.length - 1;
-                    if (oldPinId) activePin.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null;
-                }
+                if (isB) { pageIndexB.value = pages.value.length - 1; if (oldPinId) pinB.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null; }
+                else { activePageIndex.value = pages.value.length - 1; if (oldPinId) activePin.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null; }
                 dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
                 showToast(`📋 已複製為 P${pages.value.length} (保留 [${branchOwner.value}] 原圖)`);
             };
@@ -706,11 +655,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const drawMode = ref('browse'), showTopSheet = ref(false), showTopTextBar = ref(false), activeMarker = ref(null);
             const isProcessing = ref(false), processingText = ref(''), focusedInput = ref('val'), topTextInputRef = ref(null), svgCanvas = ref(null), svgCanvasB = ref(null);
 
-            // 📝 編 (空間 / 編號索引專用彈窗狀態)
             const showIndexModal = ref(false), indexDraftPos = ref({ x: 0, y: 0 }), indexCustomCode = ref(''), editingIndexMarker = ref(null);
-            const openIndexModalAt = (x, y, existing = null) => {
-                indexDraftPos.value = { x, y }; editingIndexMarker.value = existing; indexCustomCode.value = existing?.data?.customCode || ''; showIndexModal.value = true;
-            };
+            const openIndexModalAt = (x, y, existing = null) => { indexDraftPos.value = { x, y }; editingIndexMarker.value = existing; indexCustomCode.value = existing?.data?.customCode || ''; showIndexModal.value = true; };
             const placeSpaceTag = (sp) => {
                 checkBranchNeed(() => {
                     const c = targetCanvas.value; if (!c) return;
@@ -726,10 +672,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     touchDirty(); saveAll(); showIndexModal.value = false; editingIndexMarker.value = null;
                 });
             };
-            const addCustomSpaceTag = () => {
-                const s = prompt('輸入空間或標籤名稱：')?.trim();
-                if (s) { if (!spaceList.value.includes(s)) spaceList.value.push(s); placeSpaceTag(s); }
-            };
+            const addCustomSpaceTag = () => { const s = prompt('輸入空間或標籤名稱：')?.trim(); if (s) { if (!spaceList.value.includes(s)) spaceList.value.push(s); placeSpaceTag(s); } };
             const placePageLink = (targetPg, targetIdx) => {
                 checkBranchNeed(() => {
                     const c = targetCanvas.value; if (!c) return;
@@ -748,27 +691,15 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     showToast(`🔗 已連結至 P${targetIdx + 1}`);
                 });
             };
-            const deleteEditingIndexMarker = () => {
-                if (!editingIndexMarker.value) return;
-                activeMarker.value = editingIndexMarker.value; showIndexModal.value = false; editingIndexMarker.value = null; deleteMarkerTop();
-            };
+            const deleteEditingIndexMarker = () => { if (!editingIndexMarker.value) return; activeMarker.value = editingIndexMarker.value; showIndexModal.value = false; editingIndexMarker.value = null; deleteMarkerTop(); };
 
             const setMarkerTextColor = (colorHex) => {
                 defaultTextColor.value = colorHex;
-                if (activeMarker.value) {
-                    ensureMarkerBranched(() => { activeMarker.value.textColor = colorHex; touchDirty(); saveAll(); });
-                }
+                if (activeMarker.value) ensureMarkerBranched(() => { activeMarker.value.textColor = colorHex; touchDirty(); saveAll(); });
             };
 
             const getArrowMarkerId = (c, suffix = '') => 'arrow-end-' + suffix + String(c || '#ef4444').replace('#', 'hex_');
             const getFsArrowMarkerId = (c) => 'fs-arrow-' + String(c || '#ef4444').replace('#', 'hex_');
-
-            const getLineStroke = (l, alpha = 0.75) => {
-                if (!l.type || l.type === 'measure') return `rgba(255, 0, 68, ${alpha})`;
-                const legacy = { red: '#ef4444', gray: '#9ca3af', white: '#ffffff' };
-                return legacy[l.color] || l.color || '#ef4444';
-            };
-            const getWallSegments = (w) => buildWallSegments(w);
 
             const enterEditMode = (idx = 0) => { resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; };
             const switchToPreview = async () => { await saveAll(); resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; activePin.value = null; currentView.value = 'preview'; };
@@ -802,23 +733,18 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
 
             let isPinching = false, pinchPane = 'A', pinchStartDist = 0, pinchStartScale = 1, pinchAnchorSvg = null;
             let isPanningBrowse = false, panPane = 'A', panStartClient = { x: 0, y: 0 }, panStartVb = { x: 0, y: 0 };
-            let touchStartTime = 0, touchMoved = false, pendingTapMarker = null;
-            let isSpaceDown = false;
+            let touchStartTime = 0, touchMoved = false, pendingTapMarker = null, isSpaceDown = false;
 
             const getClientPoint = (e) => e.touches?.[0] || e.changedTouches?.[0] || e;
             const clientToSvgPoint = (clientX, clientY, pane = 'A') => {
-                const isB = pane === 'B';
-                const svg = isB ? svgCanvasB.value : svgCanvas.value;
-                const cObj = isB ? canvasB.value : activeCanvas.value;
+                const isB = pane === 'B', svg = isB ? svgCanvasB.value : svgCanvas.value, cObj = isB ? canvasB.value : activeCanvas.value;
                 if (!svg || !cObj) return { x: 0, y: 0 };
                 const pw = cObj.w || 1200, ph = cObj.h || 900;
                 try {
                     const ctm = svg.getScreenCTM();
                     if (ctm) { const p = svg.createSVGPoint(); p.x = clientX; p.y = clientY; const loc = p.matrixTransform(ctm.inverse()); return { x: Math.round(Math.max(0, Math.min(pw, loc.x))), y: Math.round(Math.max(0, Math.min(ph, loc.y))) }; }
                 } catch (_) {}
-                const zVal = isB ? zoomScaleB.value : zoomScale.value;
-                const xVal = isB ? vbXB.value : vbX.value;
-                const yVal = isB ? vbYB.value : vbY.value;
+                const zVal = isB ? zoomScaleB.value : zoomScale.value, xVal = isB ? vbXB.value : vbX.value, yVal = isB ? vbYB.value : vbY.value;
                 const vw = pw / zVal, vh = ph / zVal, vx = Math.max(0, Math.min(pw - vw, xVal)), vy = Math.max(0, Math.min(ph - vh, yVal));
                 const r = svg.getBoundingClientRect(), s = Math.min(r.width / vw, r.height / vh);
                 return { x: Math.round(Math.max(0, Math.min(pw, vx + (clientX - r.left - (r.width - vw * s) / 2) / s))), y: Math.round(Math.max(0, Math.min(ph, vy + (clientY - r.top - (r.height - vh * s) / 2) / s))) };
@@ -890,30 +816,18 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const openPinSubPage = (pin, idx, pane = 'A') => {
-                const isB = pane === 'B';
-                isB ? resetZoomB() : resetZoom();
+                const isB = pane === 'B'; isB ? resetZoomB() : resetZoom();
                 showQuickPageNav.value = false; showQuickPageNavB.value = false;
                 const parentPg = isB ? pageB.value : activePage.value;
                 Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], walls: pin.walls || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || parentPg?.space || '' });
                 if (pin.isSketch && !pin.photo) { const size = getAdaptiveCanvasSize(); pin.photo = renderSketchDataUrl(size.w, size.h, !!pin.hasGrid); pin.w = size.w; pin.h = size.h; }
-                if (isB) { pinB.value = pin; pinIndexB.value = idx; }
-                else { activePin.value = pin; activePinIndex.value = idx; }
+                if (isB) { pinB.value = pin; pinIndexB.value = idx; } else { activePin.value = pin; activePinIndex.value = idx; }
                 drawMode.value = 'browse';
             };
-            const exitPinSubPage = (pane = 'A') => {
-                if (pane === 'B') { resetZoomB(); pinB.value = null; }
-                else { resetZoom(); activePin.value = null; }
-                drawMode.value = 'browse';
-            };
-            const onPinTap = (pin, index, pane = 'A') => {
-                focusPane(pane);
-                if (drawMode.value === 'eraser') { showToast('📍 落釘受保護，請點入內按「🗑️刪釘」移除'); return; }
-                openPinSubPage(pin, index, pane);
-            };
+            const exitPinSubPage = (pane = 'A') => { if (pane === 'B') { resetZoomB(); pinB.value = null; } else { resetZoom(); activePin.value = null; } drawMode.value = 'browse'; };
+            const onPinTap = (pin, index, pane = 'A') => { focusPane(pane); if (drawMode.value === 'eraser') { showToast('📍 落釘受保護，請點入內按「🗑️刪釘」移除'); return; } openPinSubPage(pin, index, pane); };
             const deleteActivePin = async (pane = activePane.value) => {
-                const isB = pane === 'B';
-                const pObj = isB ? pinB.value : activePin.value;
-                const pg = isB ? pageB.value : activePage.value;
+                const isB = pane === 'B', pObj = isB ? pinB.value : activePin.value, pg = isB ? pageB.value : activePage.value;
                 if (!pObj || !pg) return;
                 activePane.value = pane;
                 checkBranchNeed(async () => {
@@ -1002,43 +916,24 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     const c = targetCanvas.value; if (!c) return;
                     c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                     const markerId = Date.now();
-                    const newMarker = {
-                        id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType,
-                        textColor: forceType === 'stamp' ? null : defaultTextColor.value,
-                        data: makeBlankMarkerData()
-                    };
+                    const newMarker = { id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType, textColor: forceType === 'stamp' ? null : defaultTextColor.value, data: makeBlankMarkerData() };
                     updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
                     touchDirty(); activeMarker.value = newMarker;
-                    if (forceType === 'stamp') {
-                        stampFilter.value = 'hot';
-                        showQuickAddStamp.value = false;
-                        focusedInput.value = 'stamp';
-                        showTopSheet.value = true;
-                    } else {
-                        showTopTextBar.value = true;
-                        nextTick(() => topTextInputRef.value?.focus());
-                    }
+                    if (forceType === 'stamp') { stampFilter.value = 'hot'; showQuickAddStamp.value = false; focusedInput.value = 'stamp'; showTopSheet.value = true; }
+                    else { showTopTextBar.value = true; nextTick(() => topTextInputRef.value?.focus()); }
                     saveAll();
                 });
             };
 
             const placeCadBlockAt = (x, y) => {
-                const def = CAD_DEFS[selectedCadType.value];
-                if (!def) return;
+                const def = CAD_DEFS[selectedCadType.value]; if (!def) return;
                 checkBranchNeed(() => {
                     const c = targetCanvas.value; if (!c) return;
                     c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                     const markerId = Date.now();
-                    const newMarker = {
-                        id: markerId, lineId: null, x, y, w: def.w, h: def.h,
-                        type: 'cad', color: drawColor.value, rot: 0, scale: 1, flipX: 1, flipY: 1,
-                        data: { ...makeBlankMarkerData(), cadType: selectedCadType.value }
-                    };
-                    c.markers.push(newMarker);
-                    c.historyStack.push({ type: 'marker', markerId });
-                    activeMarker.value = newMarker;
-                    showTopTextBar.value = true;
-                    touchDirty(); saveAll();
+                    const newMarker = { id: markerId, lineId: null, x, y, w: def.w, h: def.h, type: 'cad', color: drawColor.value, rot: 0, scale: 1, flipX: 1, flipY: 1, data: { ...makeBlankMarkerData(), cadType: selectedCadType.value } };
+                    c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
+                    activeMarker.value = newMarker; showTopTextBar.value = true; touchDirty(); saveAll();
                 });
             };
 
@@ -1060,14 +955,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     });
                     return;
                 }
-                if (drawMode.value === 'index' && ['space_tag', 'page_link'].includes(marker.type)) {
-                    e.preventDefault(); e.stopPropagation();
-                    openIndexModalAt(marker.x, marker.y, marker);
-                    return;
-                }
-                if (drawMode.value === 'browse') {
-                    pendingTapMarker = { marker, pane, clientX: pt.clientX, clientY: pt.clientY };
-                }
+                if (drawMode.value === 'index' && ['space_tag', 'page_link'].includes(marker.type)) { e.preventDefault(); e.stopPropagation(); openIndexModalAt(marker.x, marker.y, marker); return; }
+                if (drawMode.value === 'browse') pendingTapMarker = { marker, pane, clientX: pt.clientX, clientY: pt.clientY };
             };
 
             const openMarkerEditor = (m, pane = activePane.value) => {
@@ -1075,14 +964,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (m.type === 'page_link' && m.data?.targetPageId) { jumpToPageById(m.data.targetPageId, pane); return; }
                 if (m.type === 'space_tag') { openIndexModalAt(m.x, m.y, m); return; }
                 activeMarker.value = m;
-                if (['text', 'image', 'cad'].includes(m.type)) {
-                    showTopTextBar.value = true;
-                    if (m.type === 'text') nextTick(() => topTextInputRef.value?.focus());
-                } else {
-                    if (m.type === 'stamp') { stampFilter.value = 'hot'; showQuickAddStamp.value = false; }
-                    showTopSheet.value = true;
-                    focusedInput.value = TAG_DEFS[m.type]?.fields[0]?.key || 'val';
-                }
+                if (['text', 'image', 'cad'].includes(m.type)) { showTopTextBar.value = true; if (m.type === 'text') nextTick(() => topTextInputRef.value?.focus()); }
+                else { if (m.type === 'stamp') { stampFilter.value = 'hot'; showQuickAddStamp.value = false; } showTopSheet.value = true; focusedInput.value = TAG_DEFS[m.type]?.fields[0]?.key || 'val'; }
             };
 
             const beginPinch = (t1, t2, pane = 'A') => {
@@ -1106,9 +989,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         isPanningBrowse = true; panPane = pane;
                         panStartClient = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                         panStartVb = pane === 'B' ? { x: vbXB.value, y: vbYB.value } : { x: vbX.value, y: vbY.value };
-                    } else if (!['eraser', 'move'].includes(drawMode.value)) {
-                        beginStroke(e, pane);
-                    }
+                    } else if (!['eraser', 'move'].includes(drawMode.value)) beginStroke(e, pane);
                 }
             };
 
@@ -1147,16 +1028,11 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const panByClientDelta = (dxClient, dyClient, pane = 'A') => {
-                const isB = pane === 'B';
-                const svg = isB ? svgCanvasB.value : svgCanvas.value; if (!svg) return;
-                const pw = isB ? canvasWB.value : canvasW.value, ph = isB ? canvasHB.value : canvasH.value;
-                const zVal = isB ? zoomScaleB.value : zoomScale.value;
-                const vw = pw / zVal, vh = ph / zVal;
-                const r = svg.getBoundingClientRect(), fitScale = Math.min(r.width / vw, r.height / vh) || 1;
-                const nextX = Math.max(0, Math.min(pw - vw, panStartVb.x - dxClient / fitScale));
-                const nextY = Math.max(0, Math.min(ph - vh, panStartVb.y - dyClient / fitScale));
-                if (isB) { vbXB.value = nextX; vbYB.value = nextY; }
-                else { vbX.value = nextX; vbY.value = nextY; }
+                const isB = pane === 'B', svg = isB ? svgCanvasB.value : svgCanvas.value; if (!svg) return;
+                const pw = isB ? canvasWB.value : canvasW.value, ph = isB ? canvasHB.value : canvasH.value, zVal = isB ? zoomScaleB.value : zoomScale.value;
+                const vw = pw / zVal, vh = ph / zVal, r = svg.getBoundingClientRect(), fitScale = Math.min(r.width / vw, r.height / vh) || 1;
+                const nextX = Math.max(0, Math.min(pw - vw, panStartVb.x - dxClient / fitScale)), nextY = Math.max(0, Math.min(ph - vh, panStartVb.y - dyClient / fitScale));
+                if (isB) { vbXB.value = nextX; vbYB.value = nextY; } else { vbX.value = nextX; vbY.value = nextY; }
             };
 
             const onStageMouseDown = (e, pane = 'A') => {
@@ -1208,7 +1084,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 }
             };
 
-            const endStroke = (e, pane = drawingPane.value) => {
+            const endStroke = (e) => {
                 if (draggedMarker.value) {
                     const moved = Math.hypot(draggedMarker.value.x - markerOrigin.value.x, draggedMarker.value.y - markerOrigin.value.y) > 2;
                     draggedMarker.value = null;
@@ -1245,15 +1121,10 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     if (Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 10) return;
                     checkBranchNeed(() => {
                         const c = targetCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
-                        const lineId = Date.now(), markerId = lineId + 1;
-                        const lineType = drawMode.value === 'line' ? 'measure' : drawMode.value;
+                        const lineId = Date.now(), markerId = lineId + 1, lineType = drawMode.value === 'line' ? 'measure' : drawMode.value;
                         c.lines.push({ ...lSnap, id: lineId, type: lineType, color: lineType === 'measure' ? null : drawColor.value });
                         if (lineType !== 'measure') { c.historyStack.push({ type: 'line_marker', lineId, markerId: null }); touchDirty(); saveAll(); return; }
-                        const newMarker = {
-                            id: markerId, lineId,
-                            x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2),
-                            w: 140, h: 56, type: 'general', textColor: defaultTextColor.value, data: makeBlankMarkerData()
-                        };
+                        const newMarker = { id: markerId, lineId, x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2), w: 140, h: 56, type: 'general', textColor: defaultTextColor.value, data: makeBlankMarkerData() };
                         updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
                         touchDirty(); activeMarker.value = newMarker; focusedInput.value = 'val'; showTopSheet.value = true; saveAll();
                     });
@@ -1270,17 +1141,13 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (!activeMarker.value) return;
                 const s = Math.max(0.3, Math.min(3.5, Math.round(Number(val) * 100) / 100));
                 ensureMarkerBranched(() => {
-                    const m = activeMarker.value;
-                    m.scale = s;
-                    if (m.type === 'image') {
-                        if (!m.baseW) { m.baseW = m.w; m.baseH = m.h; }
-                        m.w = Math.round(m.baseW * s); m.h = Math.round(m.baseH * s);
-                    }
+                    const m = activeMarker.value; m.scale = s;
+                    if (m.type === 'image') { if (!m.baseW) { m.baseW = m.w; m.baseH = m.h; } m.w = Math.round(m.baseW * s); m.h = Math.round(m.baseH * s); }
                     touchDirty(); saveAll();
                 });
             };
-            const resizeImageMarker = (factor) => { if (!activeMarker.value) return; setMarkerScale((activeMarker.value.scale || 1) * factor); };
-            const rotateMarker = (deg) => { if (!activeMarker.value) return; ensureMarkerBranched(() => { activeMarker.value.rot = ((activeMarker.value.rot || 0) + deg + 360) % 360; touchDirty(); saveAll(); }); };
+            const resizeImageMarker = (factor) => { if (activeMarker.value) setMarkerScale((activeMarker.value.scale || 1) * factor); };
+            const rotateMarker = (deg) => { if (activeMarker.value) ensureMarkerBranched(() => { activeMarker.value.rot = ((activeMarker.value.rot || 0) + deg + 360) % 360; touchDirty(); saveAll(); }); };
             const flipMarker = (axis) => {
                 if (!activeMarker.value) return;
                 ensureMarkerBranched(() => {
@@ -1289,7 +1156,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     touchDirty(); saveAll();
                 });
             };
-            const setCadMarkerColor = (hex) => { drawColor.value = hex; if (!activeMarker.value || activeMarker.value.type !== 'cad') return; ensureMarkerBranched(() => { activeMarker.value.color = hex; touchDirty(); saveAll(); }); };
+            const setCadMarkerColor = (hex) => { drawColor.value = hex; if (activeMarker.value?.type === 'cad') ensureMarkerBranched(() => { activeMarker.value.color = hex; touchDirty(); saveAll(); }); };
 
             const undoLastAction = () => {
                 checkBranchNeed(() => {
@@ -1331,12 +1198,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const deleteMarkerTop = () => ensureMarkerBranched(() => { const c = targetCanvas.value, m = activeMarker.value; if (!m || !c) return; if (m.lineId) c.lines = (c.lines || []).filter(l => l.id !== m.lineId); c.markers = (c.markers || []).filter(x => x.id !== m.id); if (c.historyStack) c.historyStack = c.historyStack.filter(h => h.markerId !== m.id); c.redoStack = []; touchDirty(); showTopSheet.value = false; showTopTextBar.value = false; activeMarker.value = null; saveAll(); });
             const switchMarkerType = (t, fKey) => ensureMarkerBranched(() => {
                 activeMarker.value.type = t;
-                if (t === 'stamp') {
-                    stampFilter.value = 'hot';
-                    showQuickAddStamp.value = false;
-                } else if (!activeMarker.value.textColor) {
-                    activeMarker.value.textColor = defaultTextColor.value;
-                }
+                if (t === 'stamp') { stampFilter.value = 'hot'; showQuickAddStamp.value = false; }
+                else if (!activeMarker.value.textColor) activeMarker.value.textColor = defaultTextColor.value;
                 focusedInput.value = fKey; updateMarkerSize(activeMarker.value); touchDirty();
             });
             const closeTopTextBar = () => { if (['stamp', 'text'].includes(activeMarker.value?.type) && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
@@ -1364,23 +1227,11 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 const isObj = typeof stampOrText === 'object' && stampOrText !== null;
                 const txt = isObj ? stampOrText.text : String(stampOrText || '');
                 const col = isObj ? (stampOrText.color || '#ffffff') : (stampItems.value.find(x => x.text === txt)?.color || '#ffffff');
-
-                if (isObj) {
-                    stampOrText.count = (stampOrText.count || 0) + 1;
-                    saveStampStore();
-                } else {
-                    const matched = stampItems.value.find(x => x.text === txt);
-                    if (matched) { matched.count = (matched.count || 0) + 1; saveStampStore(); }
-                }
-
+                if (isObj) { stampOrText.count = (stampOrText.count || 0) + 1; saveStampStore(); }
+                else { const matched = stampItems.value.find(x => x.text === txt); if (matched) { matched.count = (matched.count || 0) + 1; saveStampStore(); } }
                 ensureMarkerBranched(() => {
-                    if (activeMarker.value.lineId) {
-                        targetCanvas.value.lines = (targetCanvas.value.lines || []).filter(l => l.id !== activeMarker.value.lineId);
-                        activeMarker.value.lineId = null;
-                    }
-                    activeMarker.value.type = 'stamp';
-                    activeMarker.value.textColor = col;
-                    activeMarker.value.data.val = txt;
+                    if (activeMarker.value.lineId) { targetCanvas.value.lines = (targetCanvas.value.lines || []).filter(l => l.id !== activeMarker.value.lineId); activeMarker.value.lineId = null; }
+                    activeMarker.value.type = 'stamp'; activeMarker.value.textColor = col; activeMarker.value.data.val = txt;
                     updateMarkerSize(activeMarker.value); touchDirty(); closeTopSheet();
                 });
             };
@@ -1396,10 +1247,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (m.textColor) return m.textColor;
                 if (m.type === 'space_tag') return '#a855f7';
                 if (m.type === 'page_link') return '#38bdf8';
-                if (m.type === 'stamp') {
-                    const found = stampItems.value.find(x => x.text === m.data?.val);
-                    if (found?.color) return found.color;
-                }
+                if (m.type === 'stamp') { const found = stampItems.value.find(x => x.text === m.data?.val); if (found?.color) return found.color; }
                 return '#ffffff';
             };
 
@@ -1436,10 +1284,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                             if (firstAddedIdx === -1) firstAddedIdx = pages.value.length - 1;
                         }
                     }
-                    if (firstAddedIdx !== -1 && !targetPin.value) {
-                        if (splitMode.value && activePane.value === 'B') pageIndexB.value = firstAddedIdx;
-                        else activePageIndex.value = firstAddedIdx;
-                    }
+                    if (firstAddedIdx !== -1 && !targetPin.value) { if (splitMode.value && activePane.value === 'B') pageIndexB.value = firstAddedIdx; else activePageIndex.value = firstAddedIdx; }
                     drawMode.value = 'browse'; await saveAll(); if (isBatch) showToast(`✅ 已匯入 ${files.length} 張圖紙`);
                 } finally { isProcessing.value = false; e.target.value = ''; }
             };
@@ -1459,14 +1304,10 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                             const c = targetCanvas.value; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                             let tw = res.w, th = res.h; const maxS = Math.min(targetCanvasW.value, targetCanvasH.value) * 0.7;
                             if (tw > maxS || th > maxS) { if (tw > th) { th = Math.round(th * maxS / tw); tw = maxS; } else { tw = Math.round(tw * maxS / th); th = maxS; } }
-                            const isB = splitMode.value && activePane.value === 'B';
-                            const zVal = isB ? zoomScaleB.value : zoomScale.value;
-                            const vx = isB ? vbXB.value : vbX.value;
-                            const vy = isB ? vbYB.value : vbY.value;
-                            const vw = targetCanvasW.value / zVal, vh = targetCanvasH.value / zVal;
-                            const markerId = Date.now();
+                            const isB = splitMode.value && activePane.value === 'B', zVal = isB ? zoomScaleB.value : zoomScale.value, vx = isB ? vbXB.value : vbX.value, vy = isB ? vbYB.value : vbY.value;
+                            const vw = targetCanvasW.value / zVal, vh = targetCanvasH.value / zVal, markerId = Date.now();
                             const newMarker = { id: markerId, x: Math.round(vx + vw / 2), y: Math.round(vy + vh / 2), w: tw, h: th, baseW: tw, baseH: th, scale: 1, rot: 0, type: 'image', data: { b64: res.b64 } };
-                            c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId }); activeMarker.value = newMarker; showTopTextBar.value = true; touchDirty(); showToast('✅ 貼圖成功（可用滑桿調大細）');
+                            c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId }); activeMarker.value = newMarker; showTopTextBar.value = true; touchDirty(); showToast('✅ 貼圖成功');
                         });
                     }
                     drawMode.value = 'browse'; await saveAll();
@@ -1478,9 +1319,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const handleGlobalKeydown = (e) => {
                 if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) isSpaceDown = true;
                 if (fullScreenIndex.value === -1) return;
-                if (e.key === 'ArrowLeft') { e.preventDefault(); prevFullScreen(); }
-                else if (e.key === 'ArrowRight') { e.preventDefault(); nextFullScreen(); }
-                else if (e.key === 'Escape') { e.preventDefault(); fullScreenIndex.value = -1; }
+                if (e.key === 'ArrowLeft') { e.preventDefault(); prevFullScreen(); } else if (e.key === 'ArrowRight') { e.preventDefault(); nextFullScreen(); } else if (e.key === 'Escape') { e.preventDefault(); fullScreenIndex.value = -1; }
             };
             const handleGlobalKeyup = (e) => { if (e.code === 'Space') isSpaceDown = false; };
 
@@ -1492,14 +1331,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 await localforage.setItem('proj_' + code, { code, name: String(project.name || ''), nameUpdatedAt: nameTs, date: String(project.date || ''), pages: cleanPages, photoPool: JSON.parse(JSON.stringify(photoPool.value || [])), deletedPageIds: JSON.parse(JSON.stringify(project.deletedPageIds || [])), deletedPinIds: JSON.parse(JSON.stringify(project.deletedPinIds || [])), pageOrderUpdatedAt: Number(project.pageOrderUpdatedAt || 0), updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0), lastModifiedBy: String(project.lastModifiedBy || authorName.value || ''), pendingUpload: hasPending });
                 await updateQueue(code, hasPending);
 
-                // 地址/檔案名有修改且在線時，即時背景同步名稱到 Firestore 後臺
                 if (db && navigator.onLine && nameTs > Number(project.lastSyncAt || 0)) {
-                    db.collection('site_projects').doc(code).set({
-                        code,
-                        name: String(project.name || ''),
-                        nameUpdatedAt: nameTs,
-                        updatedAt: Date.now()
-                    }, { merge: true }).catch(() => {});
+                    db.collection('site_projects').doc(code).set({ code, name: String(project.name || ''), nameUpdatedAt: nameTs, updatedAt: Date.now() }, { merge: true }).catch(() => {});
                 }
             };
 
@@ -1526,13 +1359,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     const projRef = db.collection('site_projects').doc(code);
                     const [projDoc, pagesSnap, mediaMap] = await Promise.all([withRetry(() => withTimeout(projRef.get())), withRetry(() => withTimeout(projRef.collection('pages').get())), loadMediaMapFromRef(projRef)]);
                     if (!projDoc.exists) { cloudSyncState.value = hasUnsavedCloudChanges.value ? 'queued' : 'ready'; return; }
-                    const pd = projDoc.data();
-                    const cloudNameTs = Number(pd.nameUpdatedAt || 0);
-                    const localNameTs = Number(project.nameUpdatedAt || 0);
-                    if (pd.name !== undefined && (cloudNameTs > localNameTs || (!project.name && localNameTs === 0))) {
-                        project.name = pd.name;
-                        if (cloudNameTs) project.nameUpdatedAt = cloudNameTs;
-                    }
+                    const pd = projDoc.data(), cloudNameTs = Number(pd.nameUpdatedAt || 0), localNameTs = Number(project.nameUpdatedAt || 0);
+                    if (pd.name !== undefined && (cloudNameTs > localNameTs || (!project.name && localNameTs === 0))) { project.name = pd.name; if (cloudNameTs) project.nameUpdatedAt = cloudNameTs; }
                     if (pd.date) project.date = pd.date;
                     if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy;
                     const deletedSet = new Set([...(project.deletedPageIds || []), ...(pd.deletedPageIds || [])]); project.deletedPageIds = [...deletedSet];
@@ -1563,7 +1391,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     if (isPushing || currentView.value === 'dir' || snap.metadata.hasPendingWrites || isDrawing.value || isPinching || showTopSheet.value || showTopTextBar.value || showIndexModal.value) return;
                     await pullAndMergeFromCloud(code, false); showToast('🔄 已同步同事最新圖紙');
                 }, () => {});
-
                 let fbFirst = true;
                 unsubFeedback = db.collection('site_projects').doc(String(code)).collection('feedback').orderBy('createdAt', 'desc').onSnapshot((snap) => {
                     feedbackList.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1587,12 +1414,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 const targetList = isCurrentOpen ? rawPages.filter(pg => dirtyPageIds.has(pg.id) || (pg.updatedAt || 0) > lastSync) : rawPages;
                 const dirtyPages = JSON.parse(JSON.stringify(targetList)).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
                 const projPatch = {
-                    code,
-                    name: projObj.name || '',
-                    nameUpdatedAt: Number(projObj.nameUpdatedAt || now),
-                    date: projObj.date || getTodayStr(),
-                    pageIds: rawPages.map(p => p.id),
-                    pageOrderUpdatedAt: projObj.pageOrderUpdatedAt || now,
+                    code, name: projObj.name || '', nameUpdatedAt: Number(projObj.nameUpdatedAt || now), date: projObj.date || getTodayStr(),
+                    pageIds: rawPages.map(p => p.id), pageOrderUpdatedAt: projObj.pageOrderUpdatedAt || now,
                     deletedPageIds: projObj.deletedPageIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPageIds) : [],
                     deletedPinIds: projObj.deletedPinIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPinIds) : [],
                     updatedAt: now
@@ -1684,9 +1507,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     if (d) { d.name = trimmed; d.nameUpdatedAt = now; d.pendingUpload = true; await localforage.setItem('proj_' + code, d); await updateQueue(code, true); }
                     manageProj.value.name = trimmed;
                     if (db && navigator.onLine) {
-                        try {
-                            await withTimeout(db.collection('site_projects').doc(code).set({ name: trimmed, nameUpdatedAt: now, updatedAt: now }, { merge: true }), 10000);
-                        } catch (_) {}
+                        try { await withTimeout(db.collection('site_projects').doc(code).set({ name: trimmed, nameUpdatedAt: now, updatedAt: now }, { merge: true }), 10000); } catch (_) {}
                     }
                     await loadProjectList();
                     showToast('✅ 已更新地址');
@@ -1695,8 +1516,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const duplicateProject = async () => { const d = await localforage.getItem('proj_' + manageProj.value.code); if (!d) return; const newCode = Math.floor(100000 + Math.random() * 900000).toString(); d.code = newCode; d.name = (d.name || '工程') + ' (副本)'; d.nameUpdatedAt = Date.now(); d.lastSyncAt = 0; d.pendingUpload = true; await localforage.setItem('proj_' + newCode, d); await updateQueue(newCode, true); showManageModal.value = false; await loadProjectList(); showToast('✅ 已複製為 #' + newCode); };
             const batchDeleteDocs = async (docs) => { for (let i = 0; i < docs.length; i += 400) { const b = db.batch(); docs.slice(i, i + 400).forEach(d => b.delete(d.ref)); await b.commit(); } };
             const clearLocalMediaCacheForCode = async (code) => {
-                const prefix = `synced_media_${code}_`;
-                const keys = await localforage.keys();
+                const prefix = `synced_media_${code}_`, keys = await localforage.keys();
                 for (const k of keys) { if (k.startsWith(prefix)) await localforage.removeItem(k); }
             };
             const deleteProject = async (code) => {
@@ -1712,72 +1532,38 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     const projSnap = await withTimeout(db.collection('site_projects').get(), 15000);
                     const activeIds = new Set(projSnap.docs.map(d => d.id));
                     let removedDocs = 0, removedOrphanMedia = 0;
-
                     for (const sub of ['pages', 'media', 'backups', 'feedback']) {
                         processingText.value = `正在清理殘留 ${sub}...`;
                         const snap = await withTimeout(db.collectionGroup(sub).get(), 20000);
-                        const orphans = snap.docs.filter(d => {
-                            const p = d.ref.path.split('/');
-                            return p[0] === 'site_projects' && p[1] && !activeIds.has(p[1]);
-                        });
-                        if (sub === 'media') {
-                            for (const mDoc of orphans) {
-                                const cSnap = await withTimeout(mDoc.ref.collection('chunks').get(), 15000);
-                                if (cSnap.docs.length) { await batchDeleteDocs(cSnap.docs); removedDocs += cSnap.docs.length; }
-                            }
-                        }
-                        if (orphans.length) {
-                            await batchDeleteDocs(orphans);
-                            removedDocs += orphans.length;
-                        }
+                        const orphans = snap.docs.filter(d => { const p = d.ref.path.split('/'); return p[0] === 'site_projects' && p[1] && !activeIds.has(p[1]); });
+                        if (sub === 'media') { for (const mDoc of orphans) { const cSnap = await withTimeout(mDoc.ref.collection('chunks').get(), 15000); if (cSnap.docs.length) { await batchDeleteDocs(cSnap.docs); removedDocs += cSnap.docs.length; } } }
+                        if (orphans.length) { await batchDeleteDocs(orphans); removedDocs += orphans.length; }
                     }
-
                     const safeCutoff = Date.now() - 5 * 60 * 1000;
                     for (let i = 0; i < projSnap.docs.length; i++) {
-                        const pDoc = projSnap.docs[i];
-                        processingText.value = `正在核對工程 #${pDoc.id} (${i + 1}/${projSnap.docs.length})...`;
-                        const [pSnap, mSnap] = await Promise.all([
-                            withTimeout(pDoc.ref.collection('pages').get(), 15000),
-                            withTimeout(pDoc.ref.collection('media').get(), 15000)
-                        ]);
+                        const pDoc = projSnap.docs[i]; processingText.value = `正在核對工程 #${pDoc.id} (${i + 1}/${projSnap.docs.length})...`;
+                        const [pSnap, mSnap] = await Promise.all([withTimeout(pDoc.ref.collection('pages').get(), 15000), withTimeout(pDoc.ref.collection('media').get(), 15000)]);
                         const usedIds = new Set();
                         pSnap.docs.forEach(pgDoc => {
                             const pg = pgDoc.data() || {};
                             if (pg.photoId) usedIds.add(String(pg.photoId));
                             usedIds.add('page_' + (pg.id || pgDoc.id));
-                            (pg.pins || []).forEach(pin => {
-                                if (pin.photoId) usedIds.add(String(pin.photoId));
-                                if (pin.id) usedIds.add(String(pin.id));
-                            });
+                            (pg.pins || []).forEach(pin => { if (pin.photoId) usedIds.add(String(pin.photoId)); if (pin.id) usedIds.add(String(pin.id)); });
                         });
                         for (const mDoc of mSnap.docs) {
                             const mData = mDoc.data() || {};
                             if (!usedIds.has(String(mDoc.id)) && (!mData.updatedAt || mData.updatedAt < safeCutoff)) {
                                 const cSnap = await withTimeout(mDoc.ref.collection('chunks').get(), 15000);
                                 if (cSnap.docs.length) await batchDeleteDocs(cSnap.docs);
-                                await mDoc.ref.delete();
-                                removedOrphanMedia++;
+                                await mDoc.ref.delete(); removedOrphanMedia++;
                             }
                         }
                     }
-
                     const lKeys = await localforage.keys();
-                    for (const k of lKeys) {
-                        if (k.startsWith('synced_media_')) {
-                            const cPart = k.split('_')[2];
-                            if (cPart && !activeIds.has(cPart) && !(await localforage.getItem('proj_' + cPart))) {
-                                await localforage.removeItem(k);
-                            }
-                        }
-                    }
-
+                    for (const k of lKeys) { if (k.startsWith('synced_media_')) { const cPart = k.split('_')[2]; if (cPart && !activeIds.has(cPart) && !(await localforage.getItem('proj_' + cPart))) await localforage.removeItem(k); } }
                     const total = removedDocs + removedOrphanMedia;
                     showToast(total > 0 ? `🧹 已徹底清理 ${removedDocs} 筆殘留及 ${removedOrphanMedia} 張孤兒相` : '✨ 雲端與本機非常乾淨');
-                } catch (e) {
-                    alert('清理失敗：' + e.message);
-                } finally {
-                    isProcessing.value = false;
-                }
+                } catch (e) { alert('清理失敗：' + e.message); } finally { isProcessing.value = false; }
             };
 
             const openBackupList = async () => { showManageModal.value = false; isProcessing.value = true; processingText.value = '正在搜尋備份...'; try { const snaps = await withTimeout(db.collection('site_projects').doc(manageProj.value.code).collection('backups').get(), 15000); backupList.value = snaps.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); showBackupListModal.value = true; } catch (e) { alert('讀取失敗：' + e.message); } finally { isProcessing.value = false; } };
@@ -1797,36 +1583,19 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 code = String(code || '').trim();
                 const localObj = await localforage.getItem('proj_' + code);
                 let result = localObj ? JSON.parse(JSON.stringify(localObj)) : null;
-
                 if (db && navigator.onLine) {
                     try {
                         const projRef = db.collection('site_projects').doc(code);
-                        const [projDoc, pagesSnap, mediaMap] = await Promise.all([
-                            withRetry(() => withTimeout(projRef.get(), 15000)),
-                            withRetry(() => withTimeout(projRef.collection('pages').get(), 15000)),
-                            loadMediaMapFromRef(projRef)
-                        ]);
+                        const [projDoc, pagesSnap, mediaMap] = await Promise.all([withRetry(() => withTimeout(projRef.get(), 15000)), withRetry(() => withTimeout(projRef.collection('pages').get(), 15000)), loadMediaMapFromRef(projRef)]);
                         if (projDoc.exists) {
                             const pd = projDoc.data();
                             const cloudPages = pagesSnap.docs.map(doc => {
                                 const r = doc.data();
-                                return makeEmptyPage({
-                                    id: doc.id, ...r, date: r.date || pd.date || getTodayStr(),
-                                    photo: (r.photoId && mediaMap.get(r.photoId)?.photo) || mediaMap.get('page_' + (r.id || doc.id))?.photo || r.photo || null,
-                                    pins: (r.pins || []).map(pin => ({
-                                        ...pin,
-                                        photo: (pin.photoId && mediaMap.get(pin.photoId)?.photo) || mediaMap.get(String(pin.id))?.photo || pin.photo || null
-                                    }))
-                                });
+                                return makeEmptyPage({ id: doc.id, ...r, date: r.date || pd.date || getTodayStr(), photo: (r.photoId && mediaMap.get(r.photoId)?.photo) || mediaMap.get('page_' + (r.id || doc.id))?.photo || r.photo || null, pins: (r.pins || []).map(pin => ({ ...pin, photo: (pin.photoId && mediaMap.get(pin.photoId)?.photo) || mediaMap.get(String(pin.id))?.photo || pin.photo || null })) });
                             });
                             if (!result) {
                                 const delSet = new Set(pd.deletedPageIds || []);
-                                result = {
-                                    code, name: pd.name || '', nameUpdatedAt: pd.nameUpdatedAt || 0, date: pd.date || getTodayStr(),
-                                    pages: cloudPages.filter(p => !delSet.has(p.id)).sort((a, b) => ((pd.pageIds || []).indexOf(a.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(a.id)) - ((pd.pageIds || []).indexOf(b.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(b.id))),
-                                    photoPool: [], deletedPageIds: pd.deletedPageIds || [], deletedPinIds: pd.deletedPinIds || [],
-                                    pageOrderUpdatedAt: pd.pageOrderUpdatedAt || 0, lastSyncAt: Date.now(), lastModifiedBy: pd.lastModifiedBy || ''
-                                };
+                                result = { code, name: pd.name || '', nameUpdatedAt: pd.nameUpdatedAt || 0, date: pd.date || getTodayStr(), pages: cloudPages.filter(p => !delSet.has(p.id)).sort((a, b) => ((pd.pageIds || []).indexOf(a.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(a.id)) - ((pd.pageIds || []).indexOf(b.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(b.id))), photoPool: [], deletedPageIds: pd.deletedPageIds || [], deletedPinIds: pd.deletedPinIds || [], pageOrderUpdatedAt: pd.pageOrderUpdatedAt || 0, lastSyncAt: Date.now(), lastModifiedBy: pd.lastModifiedBy || '' };
                             } else {
                                 const delSet = new Set([...(result.deletedPageIds || []), ...(pd.deletedPageIds || [])]);
                                 const orderList = [...(pd.pageIds || []), ...(result.pages || []).map(p => p.id)];
@@ -1840,28 +1609,12 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const clonePagesWithFreshIds = (rawPages) => {
-                const cloned = JSON.parse(JSON.stringify(rawPages || []));
-                const idMap = new Map();
-                const now = Date.now();
-                cloned.forEach((pg, idx) => {
-                    const oldId = String(pg.id);
-                    const newId = `pg_${now}_${idx}_${Math.floor(Math.random() * 99999)}`;
-                    idMap.set(oldId, newId);
-                });
+                const cloned = JSON.parse(JSON.stringify(rawPages || [])), idMap = new Map(), now = Date.now();
+                cloned.forEach((pg, idx) => idMap.set(String(pg.id), `pg_${now}_${idx}_${Math.floor(Math.random() * 99999)}`));
                 return cloned.map((pg, idx) => {
-                    const newId = idMap.get(String(pg.id));
-                    delete pg.historyStack;
-                    delete pg.redoStack;
-                    (pg.markers || []).forEach(m => {
-                        if (m.type === 'page_link' && m.data?.targetPageId && idMap.has(String(m.data.targetPageId))) {
-                            m.data.targetPageId = idMap.get(String(m.data.targetPageId));
-                        }
-                    });
-                    (pg.pins || []).forEach((pin, pIdx) => {
-                        pin.id = `pin_${now}_${idx}_${pIdx}_${Math.floor(Math.random() * 99999)}`;
-                        delete pin.historyStack;
-                        delete pin.redoStack;
-                    });
+                    const newId = idMap.get(String(pg.id)); delete pg.historyStack; delete pg.redoStack;
+                    (pg.markers || []).forEach(m => { if (m.type === 'page_link' && m.data?.targetPageId && idMap.has(String(m.data.targetPageId))) m.data.targetPageId = idMap.get(String(m.data.targetPageId)); });
+                    (pg.pins || []).forEach((pin, pIdx) => { pin.id = `pin_${now}_${idx}_${pIdx}_${Math.floor(Math.random() * 99999)}`; delete pin.historyStack; delete pin.redoStack; });
                     return makeEmptyPage({ ...pg, id: newId, updatedAt: now });
                 });
             };
@@ -1874,17 +1627,10 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     try {
                         const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(50).get(), 10000);
                         snaps.docs.forEach(d => {
-                            const data = d.data() || {};
-                            const c = String(d.id);
+                            const data = d.data() || {}, c = String(d.id);
                             if (data.name || data.updatedAt) {
                                 const ex = map.get(c);
-                                map.set(c, {
-                                    code: c,
-                                    name: data.name || ex?.name || '',
-                                    date: data.date || ex?.date || '',
-                                    pageCount: (data.pageIds?.length) || ex?.pageCount || 1,
-                                    updatedAt: Math.max(data.updatedAt || 0, ex?.updatedAt || 0)
-                                });
+                                map.set(c, { code: c, name: data.name || ex?.name || '', date: data.date || ex?.date || '', pageCount: (data.pageIds?.length) || ex?.pageCount || 1, updatedAt: Math.max(data.updatedAt || 0, ex?.updatedAt || 0) });
                             }
                         });
                     } catch (_) {}
@@ -1906,177 +1652,98 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const updateMergeDefaultName = () => {
                 const a = allProjectOptions.value.find(x => String(x.code) === String(mergeProjCodeA.value));
                 const b = allProjectOptions.value.find(x => String(x.code) === String(mergeProjCodeB.value));
-                const nA = a?.name?.trim() || `#${mergeProjCodeA.value}`;
-                const nB = b?.name?.trim() || `#${mergeProjCodeB.value}`;
-                mergeProjNewName.value = (mergeProjCodeA.value && mergeProjCodeB.value) ? `${nA} + ${nB}` : '';
+                mergeProjNewName.value = (mergeProjCodeA.value && mergeProjCodeB.value) ? `${a?.name?.trim() || '#' + mergeProjCodeA.value} + ${b?.name?.trim() || '#' + mergeProjCodeB.value}` : '';
             };
             const executeMergeProjects = async () => {
-                const cA = String(mergeProjCodeA.value || '').trim();
-                const cB = String(mergeProjCodeB.value || '').trim();
+                const cA = String(mergeProjCodeA.value || '').trim(), cB = String(mergeProjCodeB.value || '').trim();
                 if (!cA || !cB) return alert('請選擇兩個要合拼的工程');
                 if (cA === cB) return alert('請選擇兩個不同的工程總號');
-
-                showMergeProjectsModal.value = false;
-                isProcessing.value = true; processingText.value = `正在讀取 #${cA} 與 #${cB} 圖紙...`;
+                showMergeProjectsModal.value = false; isProcessing.value = true; processingText.value = `正在讀取 #${cA} 與 #${cB} 圖紙...`;
                 try {
                     const [dataA, dataB] = await Promise.all([fetchCompleteProjectData(cA), fetchCompleteProjectData(cB)]);
                     if (!dataA || !dataB) throw new Error('無法讀取其中一份工程資料，請檢查網絡連線');
-
                     const mergedPages = [...clonePagesWithFreshIds(dataA.pages), ...clonePagesWithFreshIds(dataB.pages)];
                     if (!mergedPages.length) mergedPages.push(makeEmptyPage());
-
                     const seenFp = new Set(), mergedPool = [];
-                    [...(dataA.photoPool || []), ...(dataB.photoPool || [])].forEach(item => {
-                        if (!item?.photo) return;
-                        const fp = photoFingerprint(item.photo);
-                        if (!seenFp.has(fp)) { seenFp.add(fp); mergedPool.push(item); }
-                    });
-
+                    [...(dataA.photoPool || []), ...(dataB.photoPool || [])].forEach(item => { if (item?.photo) { const fp = photoFingerprint(item.photo); if (!seenFp.has(fp)) { seenFp.add(fp); mergedPool.push(item); } } });
                     const existingCodes = new Set(allProjectOptions.value.map(x => String(x.code)));
                     let newCode = '';
                     do { newCode = Math.floor(100000 + Math.random() * 900000).toString(); } while (existingCodes.has(newCode));
-
-                    const finalName = mergeProjNewName.value.trim() || `${dataA.name || '#' + cA} + ${dataB.name || '#' + cB}`;
-                    const now = Date.now();
-                    const newProjObj = {
-                        code: newCode, name: finalName, nameUpdatedAt: now, date: getTodayStr(),
-                        pages: mergedPages, photoPool: mergedPool,
-                        deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: now,
-                        updatedAt: now, lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true
-                    };
-
-                    await localforage.setItem('proj_' + newCode, newProjObj);
-                    await updateQueue(newCode, true);
-
+                    const finalName = mergeProjNewName.value.trim() || `${dataA.name || '#' + cA} + ${dataB.name || '#' + cB}`, now = Date.now();
+                    const newProjObj = { code: newCode, name: finalName, nameUpdatedAt: now, date: getTodayStr(), pages: mergedPages, photoPool: mergedPool, deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: now, updatedAt: now, lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true };
+                    await localforage.setItem('proj_' + newCode, newProjObj); await updateQueue(newCode, true);
                     if (db && navigator.onLine) {
-                        try {
-                            const syncTs = await pushProjectPayload(newProjObj, false, (st) => { processingText.value = st; });
-                            if (syncTs) { newProjObj.lastSyncAt = syncTs; newProjObj.pendingUpload = false; await localforage.setItem('proj_' + newCode, newProjObj); }
-                        } catch (_) {}
+                        try { const syncTs = await pushProjectPayload(newProjObj, false, (st) => { processingText.value = st; }); if (syncTs) { newProjObj.lastSyncAt = syncTs; newProjObj.pendingUpload = false; await localforage.setItem('proj_' + newCode, newProjObj); } } catch (_) {}
                     }
-
                     await loadProjectList();
-                    showToast(`✅ 已合拼為新總號 #${newCode}（共 ${mergedPages.length} 頁，保留原檔）`);
-                } catch (e) {
-                    alert('合拼失敗：' + e.message);
-                } finally {
-                    isProcessing.value = false;
-                }
+                    showToast(`✅ 已合拼為新總號 #${newCode}（共 ${mergedPages.length} 頁）`);
+                } catch (e) { alert('合拼失敗：' + e.message); } finally { isProcessing.value = false; }
             };
 
             const toggleSelectMode = () => { selectMode.value = !selectMode.value; selectedPageIds.value = []; };
-            const togglePageSelection = (pgId) => {
-                const idStr = String(pgId);
-                const idx = selectedPageIds.value.indexOf(idStr);
-                if (idx === -1) selectedPageIds.value.push(idStr);
-                else selectedPageIds.value.splice(idx, 1);
-            };
-            const selectAllPages = () => {
-                if (selectedPageIds.value.length === pages.value.length) selectedPageIds.value = [];
-                else selectedPageIds.value = pages.value.map(p => String(p.id));
-            };
+            const togglePageSelection = (pgId) => { const idStr = String(pgId), idx = selectedPageIds.value.indexOf(idStr); if (idx === -1) selectedPageIds.value.push(idStr); else selectedPageIds.value.splice(idx, 1); };
+            const selectAllPages = () => { selectedPageIds.value = selectedPageIds.value.length === pages.value.length ? [] : pages.value.map(p => String(p.id)); };
             const openTransferModal = async (singlePageId = null) => {
                 if (singlePageId) selectedPageIds.value = [String(singlePageId)];
                 if (!selectedPageIds.value.length) { showToast('請先點選要轉檔的圖紙'); return; }
                 isProcessing.value = true; processingText.value = '正在讀取工程選列...';
-                try {
-                    await refreshAllProjectOptions();
-                    transferTargetCode.value = otherProjectOptions.value[0]?.code || '__NEW__';
-                    transferMode.value = 'copy';
-                    transferNewProjName.value = '';
-                    showTransferModal.value = true;
-                } finally { isProcessing.value = false; }
+                try { await refreshAllProjectOptions(); transferTargetCode.value = otherProjectOptions.value[0]?.code || '__NEW__'; transferMode.value = 'copy'; transferNewProjName.value = ''; showTransferModal.value = true; }
+                finally { isProcessing.value = false; }
             };
             const executeTransferPages = async () => {
                 if (!selectedPageIds.value.length || !transferTargetCode.value) return;
-                const selectedSet = new Set(selectedPageIds.value.map(String));
-                const pickedRaw = pages.value.filter(p => selectedSet.has(String(p.id)));
+                const selectedSet = new Set(selectedPageIds.value.map(String)), pickedRaw = pages.value.filter(p => selectedSet.has(String(p.id)));
                 if (!pickedRaw.length) return;
-
                 if (transferMode.value === 'move' && !confirm(`確定要將選中的 ${pickedRaw.length} 頁「移動」過去嗎？\n（移動後將從目前工程 #${project.code} 移除）`)) return;
-
-                showTransferModal.value = false;
-                isProcessing.value = true; processingText.value = `正在轉移 ${pickedRaw.length} 頁圖紙...`;
+                showTransferModal.value = false; isProcessing.value = true; processingText.value = `正在轉移 ${pickedRaw.length} 頁圖紙...`;
                 try {
-                    const clonedPages = clonePagesWithFreshIds(pickedRaw);
+                    const clonedPages = clonePagesWithFreshIds(pickedRaw), now = Date.now();
                     let targetCode = String(transferTargetCode.value);
-                    const now = Date.now();
-
                     if (targetCode === '__NEW__') {
                         const existingCodes = new Set(allProjectOptions.value.map(x => String(x.code)));
                         do { targetCode = Math.floor(100000 + Math.random() * 900000).toString(); } while (existingCodes.has(targetCode));
                         const targetName = transferNewProjName.value.trim() || `${project.name || '工程'} (分拆)`;
-                        const newProjObj = {
-                            code: targetCode, name: targetName, nameUpdatedAt: now, date: getTodayStr(),
-                            pages: clonedPages, photoPool: [],
-                            deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: now,
-                            updatedAt: now, lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true
-                        };
-                        await localforage.setItem('proj_' + targetCode, newProjObj);
-                        await updateQueue(targetCode, true);
-                        if (db && navigator.onLine) {
-                            try {
-                                const syncTs = await pushProjectPayload(newProjObj, false, (st) => { processingText.value = st; });
-                                if (syncTs) { newProjObj.lastSyncAt = syncTs; newProjObj.pendingUpload = false; await localforage.setItem('proj_' + targetCode, newProjObj); }
-                            } catch (_) {}
-                        }
+                        const newProjObj = { code: targetCode, name: targetName, nameUpdatedAt: now, date: getTodayStr(), pages: clonedPages, photoPool: [], deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: now, updatedAt: now, lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true };
+                        await localforage.setItem('proj_' + targetCode, newProjObj); await updateQueue(targetCode, true);
+                        if (db && navigator.onLine) { try { const syncTs = await pushProjectPayload(newProjObj, false, (st) => { processingText.value = st; }); if (syncTs) { newProjObj.lastSyncAt = syncTs; newProjObj.pendingUpload = false; await localforage.setItem('proj_' + targetCode, newProjObj); } } catch (_) {} }
                     } else {
                         const targetProj = await fetchCompleteProjectData(targetCode);
                         if (!targetProj) throw new Error(`找不到目標工程 #${targetCode}`);
-                        targetProj.pages = [...(targetProj.pages || []), ...clonedPages];
-                        targetProj.updatedAt = now;
-                        targetProj.pendingUpload = true;
-                        await localforage.setItem('proj_' + targetCode, targetProj);
-                        await updateQueue(targetCode, true);
-                        if (db && navigator.onLine) {
-                            try {
-                                const syncTs = await pushProjectPayload(targetProj, false, (st) => { processingText.value = st; });
-                                if (syncTs) { targetProj.lastSyncAt = syncTs; targetProj.pendingUpload = false; await localforage.setItem('proj_' + targetCode, targetProj); }
-                            } catch (_) {}
-                        }
+                        targetProj.pages = [...(targetProj.pages || []), ...clonedPages]; targetProj.updatedAt = now; targetProj.pendingUpload = true;
+                        await localforage.setItem('proj_' + targetCode, targetProj); await updateQueue(targetCode, true);
+                        if (db && navigator.onLine) { try { const syncTs = await pushProjectPayload(targetProj, false, (st) => { processingText.value = st; }); if (syncTs) { targetProj.lastSyncAt = syncTs; targetProj.pendingUpload = false; await localforage.setItem('proj_' + targetCode, targetProj); } } catch (_) {} }
                     }
-
                     if (transferMode.value === 'move') {
                         project.deletedPageIds ||= [];
-                        pickedRaw.forEach(pg => {
-                            if (!project.deletedPageIds.includes(pg.id)) project.deletedPageIds.push(pg.id);
-                            dirtyPageIds.delete(pg.id);
-                        });
+                        pickedRaw.forEach(pg => { if (!project.deletedPageIds.includes(pg.id)) project.deletedPageIds.push(pg.id); dirtyPageIds.delete(pg.id); });
                         pages.value = pages.value.filter(p => !selectedSet.has(String(p.id)));
                         if (!pages.value.length) pages.value = [makeEmptyPage()];
                         activePageIndex.value = Math.min(activePageIndex.value, pages.value.length - 1);
                         pageIndexB.value = Math.min(pageIndexB.value, pages.value.length - 1);
-                        project.pageOrderUpdatedAt = Date.now();
-                        hasUnsavedCloudChanges.value = true;
-                        await saveAll();
-
+                        project.pageOrderUpdatedAt = Date.now(); hasUnsavedCloudChanges.value = true; await saveAll();
                         if (db && navigator.onLine && project.code) {
                             const curRef = db.collection('site_projects').doc(String(project.code));
                             pickedRaw.forEach(pg => curRef.collection('pages').doc(pg.id).delete().catch(() => {}));
-                            curRef.set({
-                                pageIds: pages.value.map(p => p.id),
-                                deletedPageIds: firebase.firestore.FieldValue.arrayUnion(...pickedRaw.map(p => p.id)),
-                                updatedAt: Date.now()
-                            }, { merge: true }).catch(() => {});
+                            curRef.set({ pageIds: pages.value.map(p => p.id), deletedPageIds: firebase.firestore.FieldValue.arrayUnion(...pickedRaw.map(p => p.id)), updatedAt: Date.now() }, { merge: true }).catch(() => {});
                         }
                     }
-
-                    selectMode.value = false;
-                    selectedPageIds.value = [];
+                    selectMode.value = false; selectedPageIds.value = [];
                     showToast(`✅ 已${transferMode.value === 'move' ? '移動' : '複製'} ${clonedPages.length} 頁至 #${targetCode}`);
-                } catch (e) {
-                    alert('轉檔失敗：' + e.message);
-                } finally {
-                    isProcessing.value = false;
-                }
+                } catch (e) { alert('轉檔失敗：' + e.message); } finally { isProcessing.value = false; }
             };
 
             const openCloudBrowser = async () => { if (!db || !navigator.onLine) return alert('請檢查網路連線'); isProcessing.value = true; processingText.value = '正在讀取雲端目錄...'; try { const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(30).get(), 10000); cloudProjectList.value = snaps.docs.map(d => ({ code: d.id, ...d.data() })).filter(d => d.name || d.updatedAt); showCloudBrowser.value = true; } catch (e) { alert('讀取目錄失敗：' + e.message); } finally { isProcessing.value = false; } };
             const downloadFromCloudBrowser = async (code) => { showCloudBrowser.value = false; await loadProject(code, true); showToast('✅ 已載入 #' + code); };
             const loadProjectList = async () => { const keys = await localforage.keys(), q = (await localforage.getItem('pending_upload_queue')) || [], list = []; for (const k of keys) { if (k.startsWith('proj_')) { const d = await localforage.getItem(k); if (d?.code) { const pgs = d.pages || []; list.push({ code: d.code, name: d.name, date: d.date, pageCount: pgs.length || 1, pinCount: pgs.reduce((s, p) => s + (p.pins?.length || 0), 0), updatedAt: d.updatedAt || 0, lastModifiedBy: d.lastModifiedBy || '', pendingUpload: !!d.pendingUpload || q.includes(String(d.code)) }); } } } projectList.value = list.sort((a, b) => b.updatedAt - a.updatedAt); };
             const backToProjects = async () => { resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; if (unsubPages) { unsubPages(); unsubPages = null; } if (unsubFeedback) { unsubFeedback(); unsubFeedback = null; } await saveAll(); if ((hasUnsavedCloudChanges.value || dirtyPageIds.size > 0) && project.code && db) { if (!navigator.onLine) showToast('📴 無網絡模式：已鎖入本機，有訊號自動上傳'); else { isProcessing.value = true; processingText.value = '正在自動上傳並返回目錄...'; try { await pullAndMergeFromCloud(project.code, false); await pushToCloud(true, (st) => { processingText.value = st; }); await createCloudBackup(project.code); showToast('✅ 已自動同步雲端'); } catch (_) { showToast('⚠️ 已排入自動補傳隊列'); } finally { isProcessing.value = false; } } } dirtyPageIds.clear(); hasUnsavedCloudChanges.value = false; feedbackList.value = []; await loadProjectList(); currentView.value = 'dir'; };
-            const checkAuthorName = async () => { let name = await localforage.getItem('measure_author_name'); if (!name) { name = prompt('👤 請輸入您的稱呼或設備名稱 (例: 明哥、強哥iPad)：')?.trim(); if (name) await localforage.setItem('measure_author_name', name); } authorName.value = name || ''; };
-            const changeAuthorName = async () => { const name = prompt('👤 更新設備稱呼：', authorName.value)?.trim(); if (name) { authorName.value = name; await localforage.setItem('measure_author_name', name); } };
+
+            const checkAuthorName = async () => {
+                if (currentUser.value?.name) { authorName.value = currentUser.value.name; await localforage.setItem('measure_author_name', authorName.value); return; }
+                let name = await localforage.getItem('measure_author_name');
+                if (!name) { name = prompt('👤 請輸入您的稱呼或設備名稱 (例: 明哥、強哥iPad)：')?.trim(); if (name) await localforage.setItem('measure_author_name', name); }
+                authorName.value = name || '';
+            };
+            const changeAuthorName = async () => { const name = prompt('👤 更新顯示稱呼：', authorName.value)?.trim(); if (name) { authorName.value = name; await localforage.setItem('measure_author_name', name); } };
 
             const fallbackCopyTextToClipboard = (text) => { const textArea = document.createElement("textarea"); textArea.value = text; textArea.style.position = "fixed"; textArea.style.top = "0"; textArea.style.left = "0"; document.body.appendChild(textArea); textArea.focus(); textArea.select(); try { document.execCommand('copy'); showToast('🔗 已複製 WhatsApp 專屬連結'); } catch (_) { window.prompt("請手動複製以下連結：", text); } document.body.removeChild(textArea); };
             const copyShareLink = () => {
@@ -2087,8 +1754,52 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
 
             onMounted(async () => {
                 const bs = document.getElementById('boot-screen'); if (bs) bs.remove(); document.getElementById('app').style.display = 'flex';
-                await loadStampStore(); await checkAuthorName(); await loadProjectList();
-                window.addEventListener('online', () => { cloudSyncState.value = 'ready'; showToast('🌐 網絡已恢復'); processPendingUploadQueue(false); });
+
+                // 1. 優先讀取本機永久登入憑證（斷網地庫秒入畫布）
+                const cachedSession = await localforage.getItem('auth_session_v1');
+                if (cachedSession?.user) {
+                    currentUser.value = cachedSession.user;
+                    authorName.value = cachedSession.user.name || (await localforage.getItem('measure_author_name')) || '';
+                    authReady.value = true;
+                } else if (cachedSession?.guest) {
+                    isGuestMode.value = true;
+                    authorName.value = (await localforage.getItem('measure_author_name')) || '';
+                    authReady.value = true;
+                }
+
+                await loadStampStore();
+                await loadProjectList();
+
+                // 2. 監聽 Google 登入狀態
+                if (auth) {
+                    auth.getRedirectResult().catch(() => {});
+                    auth.onAuthStateChanged(async (fbUser) => {
+                        if (fbUser) {
+                            const u = {
+                                uid: fbUser.uid,
+                                name: fbUser.displayName || fbUser.email?.split('@')[0] || '工程師',
+                                email: fbUser.email || '',
+                                photo: fbUser.photoURL || ''
+                            };
+                            currentUser.value = u;
+                            isGuestMode.value = false;
+                            authReady.value = true;
+                            await localforage.setItem('auth_session_v1', { user: u });
+                            const savedName = await localforage.getItem('measure_author_name');
+                            authorName.value = savedName || u.name;
+                            if (!savedName) await localforage.setItem('measure_author_name', authorName.value);
+                            if (navigator.onLine) syncStampLibraryCloud(true);
+                        } else if (!cachedSession?.user && !cachedSession?.guest) {
+                            authReady.value = true;
+                        }
+                    });
+                } else if (!authReady.value) {
+                    isGuestMode.value = true;
+                    authReady.value = true;
+                    await checkAuthorName();
+                }
+
+                window.addEventListener('online', () => { cloudSyncState.value = 'ready'; showToast('🌐 網絡已恢復'); processPendingUploadQueue(false); if (currentUser.value?.uid) syncStampLibraryCloud(true); });
                 window.addEventListener('offline', () => { cloudSyncState.value = 'offline'; });
                 window.addEventListener('paste', handleGlobalPaste);
                 window.addEventListener('keydown', handleGlobalKeydown);
@@ -2103,96 +1814,33 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 window.removeEventListener('keyup', handleGlobalKeyup);
             });
 
-            const renderAnnotatedCanvas = (canvasObj, includeStamp = true, itemDate = '', itemAuthor = '') => new Promise(async (resolve) => {
-                const img = new Image(); img.src = canvasObj.photo; await new Promise(r => { img.onload = r; img.onerror = r; });
-                const c = document.createElement('canvas'), w = canvasObj.w || 1200, h = canvasObj.h || 900; c.width = w; c.height = h; const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-                const markerImages = {}; for (const m of (canvasObj.markers || [])) { if (m.type === 'image' && m.data.b64) { const im = new Image(); im.src = m.data.b64; await new Promise(r => { im.onload = r; im.onerror = r; }); markerImages[m.id] = im; } }
-                if (includeStamp) {
-                    const wm = buildWatermarkBox(canvasObj, itemDate, itemAuthor, w);
-                    if (wm) {
-                        ctx.save();
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.56)';
-                        drawRoundRect(ctx, wm.x, wm.y, wm.w, wm.h, 6);
-                        ctx.fill();
-                        ctx.lineWidth = 1.2;
-                        ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
-                        ctx.stroke();
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.font = 'bold 13px sans-serif';
-                        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-                        ctx.fillText(wm.text, wm.x + wm.w / 2, wm.y + wm.h / 2);
-                        ctx.restore();
-                    }
-                }
-                ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-                (canvasObj.walls || []).forEach(wObj => { ctx.strokeStyle = wObj.color || '#111827'; buildWallSegments(wObj).forEach(seg => { ctx.lineWidth = seg.isHatch ? 2.5 : 3.5; ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke(); }); });
-                (canvasObj.lines || []).forEach(l => {
-                    if (l.type === 'arrow-single') {
-                        const hex = getLineStroke(l); ctx.strokeStyle = hex; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
-                        ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(Math.atan2(l.y2 - l.y1, l.x2 - l.x1)); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-9, 4.5); ctx.lineTo(-9, -4.5); ctx.closePath(); ctx.fill(); ctx.restore();
-                    } else if (l.type === 'straight') {
-                        ctx.strokeStyle = getLineStroke(l); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
-                    } else {
-                        ctx.save(); ctx.setLineDash([14, 10]); ctx.strokeStyle = getLineStroke(l, 0.7); ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore();
-                    }
-                });
-                (canvasObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 6; ctx.stroke(new Path2D(p.d)); });
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                (canvasObj.markers || []).forEach(m => {
-                    if (m.type === 'cad') {
-                        drawCadOnCanvas(ctx, m);
-                    } else if (m.type === 'image') {
-                        if (markerImages[m.id]) {
-                            ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(((m.rot || 0) * Math.PI) / 180);
-                            ctx.drawImage(markerImages[m.id], -m.w / 2, -m.h / 2, m.w, m.h); ctx.restore();
-                        }
-                    } else {
-                        const lines = getMarkerLines(m), color = getStampColor(m); ctx.font = `900 ${28 * globalFontScale.value}px sans-serif`; const startY = m.y - ((lines.length - 1) * 34 * globalFontScale.value) / 2; lines.forEach((line, i) => { const y = startY + i * 34 * globalFontScale.value; ctx.lineWidth = 7 * globalFontScale.value; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); });
-                    }
-                });
-                (canvasObj.pins || []).forEach((pin, idx) => { const px = (pin.x / 100) * w, py = (pin.y / 100) * h; ctx.beginPath(); ctx.arc(px, py - 22, 20, 0, 2 * Math.PI); ctx.fillStyle = '#dc2626'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(idx + 1, px, py - 22); });
-                resolve(c);
+            // 圖片複製、下載及 PDF 輸出（委派予 export.js）
+            const copyFullScreenImage = () => copyAnnotatedImage(fullScreenItem.value, {
+                includeStamp: showWatermark.value, projectName: project.name, projectDate: project.date, projectAuthor: project.lastModifiedBy,
+                itemDate: fullScreenDate.value, itemAuthor: fullScreenAuthor.value, fontScale: globalFontScale.value, getMarkerLines, getStampColor, onToast: showToast
             });
 
-            const copyFullScreenImage = async () => { if (!fullScreenItem.value?.photo) return; const c = await renderAnnotatedCanvas(fullScreenItem.value, showWatermark.value, fullScreenDate.value, fullScreenAuthor.value); try { if (navigator.clipboard && window.ClipboardItem) { const blob = await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(), 'image/png')); await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); showToast('✅ 已複製圖片'); return; } } catch (_) {} try { const blob = await new Promise(res => c.toBlob(res, 'image/png')); const file = new File([blob], 'measure.png', { type: 'image/png' }); if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); return; } } catch (_) {} alert('此瀏覽器不支援直接複製圖片，請按旁邊「⬇️下載」'); };
-            const downloadFullScreenImage = async () => { if (!fullScreenItem.value?.photo) return; try { const dStr = sanitizeFilename(fullScreenDate.value || getTodayStr()); const c = await renderAnnotatedCanvas(fullScreenItem.value, showWatermark.value, fullScreenDate.value, fullScreenAuthor.value); const url = URL.createObjectURL(await new Promise(res => c.toBlob(res, 'image/jpeg', 0.92))); const a = document.createElement('a'); a.href = url; a.download = `${sanitizeFilename(project.name || '工程')}_#${project.code}_${sanitizeFilename(currentFullScreen.value?.label || '圖紙')}_${dStr}.jpg`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000); showToast('✅ 已下載圖片'); } catch (_) { alert('下載圖片失敗'); } };
+            const downloadFullScreenImage = () => downloadAnnotatedImage(fullScreenItem.value, {
+                includeStamp: showWatermark.value, projectName: project.name, projectCode: project.code, projectDate: project.date, projectAuthor: project.lastModifiedBy,
+                itemDate: fullScreenDate.value, itemAuthor: fullScreenAuthor.value, label: currentFullScreen.value?.label || '圖紙',
+                fontScale: globalFontScale.value, getMarkerLines, getStampColor, onToast: showToast
+            });
 
             const exportPdfReport = async (perPage = 1) => {
                 showPdfModal.value = false; isProcessing.value = true; processingText.value = `正在產生 PDF (每頁 ${perPage} 張)...`;
                 setTimeout(async () => {
                     try {
-                        const { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-                        const PAGE_W = 1240, PAGE_H = 1754, validPages = [];
-                        pages.value.forEach((pg, pIdx) => { const pgDate = pg.date || project.date || getTodayStr(), pgAuthor = pg.author || project.lastModifiedBy || '未知'; if (pg.photo) validPages.push({ ...pg, date: pgDate, author: pgAuthor, pdfLabel: `P${pIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}` }); (pg.pins || []).forEach((pin, pinIdx) => { if (pin.photo) validPages.push({ ...pin, date: pgDate, author: pgAuthor, pdfLabel: `P${pIdx + 1} 📍釘選#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}` }); }); });
-                        if (!validPages.length) return alert('沒有可輸出的圖紙！');
-                        const uniqueDates = [...new Set(validPages.map(p => p.date).filter(Boolean))]; const headerDate = uniqueDates.length > 1 ? `${uniqueDates[0]} ~ ${uniqueDates[uniqueDates.length - 1]}` : (uniqueDates[0] || getTodayStr()); const fileDateTag = sanitizeFilename(uniqueDates[uniqueDates.length - 1] || getTodayStr());
-                        if (perPage > 1) {
-                            const cols = perPage === 4 ? 2 : 1, rows = 2; const totalPdf = Math.ceil(validPages.length / perPage), mx = 45, topY = 115, gap = 24; const cellW = Math.floor((PAGE_W - mx * 2 - (cols - 1) * gap) / cols); const cellH = Math.floor((PAGE_H - topY - 45 - (rows - 1) * gap) / rows);
-                            for (let pIdx = 0; pIdx < totalPdf; pIdx++) {
-                                if (pIdx > 0) doc.addPage(); const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H); ctx.fillStyle = '#000'; ctx.font = 'bold 34px sans-serif'; ctx.fillText(`${project.name || '工程度尺'} (#${project.code})`, mx, 60); ctx.font = 'bold 21px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${headerDate}   |   共 ${validPages.length} 張   |   第 ${pIdx + 1} / ${totalPdf} 頁`, mx, 94);
-                                for (let j = 0; j < perPage; j++) {
-                                    const pg = validPages[pIdx * perPage + j]; if (!pg) break; const cx = mx + (j % cols) * (cellW + gap), cy = topY + Math.floor(j / cols) * (cellH + gap); ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 2; ctx.strokeRect(cx, cy, cellW, cellH); ctx.fillStyle = '#f3f4f6'; ctx.fillRect(cx + 1, cy + 1, cellW - 2, 44); ctx.fillStyle = '#111827'; ctx.font = 'bold 20px sans-serif'; ctx.fillText(`${pg.pdfLabel} (${pg.date})`.slice(0, cols === 1 ? 56 : 32), cx + 14, cy + 30);
-                                    const im = await renderAnnotatedCanvas(pg, true, pg.date, pg.author); const maxW = cellW - 20, maxH = cellH - 60; let dw = maxW, dh = (im.height / im.width) * dw; if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; } ctx.drawImage(im, cx + 10 + (maxW - dw) / 2, cy + 52 + (maxH - dh) / 2, dw, dh);
-                                }
-                                doc.addImage(c.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
-                            }
-                        } else {
-                            for (let i = 0; i < validPages.length; i++) {
-                                if (i > 0) doc.addPage(); const pg = validPages[i], c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H); ctx.fillStyle = '#000'; ctx.font = 'bold 38px sans-serif'; ctx.fillText(`${project.name || '工程度尺'} (#${project.code}) — ${pg.pdfLabel}`, 50, 65); ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${pg.date}   |   最後修改: ${pg.author}`, 50, 102);
-                                const im = await renderAnnotatedCanvas(pg, true, pg.date, pg.author); const maxW = PAGE_W - 100, maxH = PAGE_H - 180; let dw = maxW, dh = (im.height / im.width) * dw; if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; } ctx.drawImage(im, 50 + (maxW - dw) / 2, 130, dw, dh); doc.addImage(c.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
-                            }
-                        }
-                        const modeTag = perPage === 4 ? '4合1' : perPage === 2 ? '2合1' : '單頁'; doc.save(`${sanitizeFilename(project.name || '工程')}_#${project.code}_${fileDateTag}_${modeTag}.pdf`);
+                        await generatePdfReport(pages.value, { code: project.code, name: project.name, date: project.date, lastModifiedBy: project.lastModifiedBy }, { perPage, fontScale: globalFontScale.value, getMarkerLines, getStampColor });
                     } catch (_) { alert('生成 PDF 失敗'); } finally { isProcessing.value = false; }
                 }, 50);
             };
 
             return {
+                authReady, currentUser, isGuestMode, isLoggingIn, loginWithGoogle, enterAsGuest, logoutUser,
                 offlineReady, currentView, TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_PALETTE,
-                stampCategories, stampItems, stampFilter, hotStamps, filteredCanvasStampGroups, showStampManagerModal, managerCatFilter, managerSearch, managerFilteredItems,
+                stampCategories, stampItems, stampFilter, hotStamps, filteredCanvasStampGroups, showStampManagerModal, showNewCatForm, managerCatFilter, managerSearch, managerFilteredItems,
                 newCatName, newCatIcon, newCatColor, newStampText, newStampCatId, newStampColor, showQuickAddStamp,
-                getCategoryById, openStampManager, onSelectNewStampCat, addStampCategory, deleteStampCategory, addStampItem, toggleStampPin, setStampItemColor, editStampItemText, deleteStampItem, resetStampCounts, restoreDefaultStamps, syncStampLibraryCloud,
+                getCategoryById, openStampManager, onSelectNewStampCat, addStampCategory, deleteStampCategory, addStampItem, toggleStampPin, setStampItemColor, cycleStampItemColor, editStampItemText, deleteStampItem, resetStampCounts, restoreDefaultStamps, syncStampLibraryCloud,
                 CAD_CATEGORIES, cadCategory, selectedCadType, filteredCadList, getCadDef, getCadTransform, setMarkerScale, rotateMarker, flipMarker, setCadMarkerColor,
                 defaultTextColor, setMarkerTextColor, getArrowMarkerId, getFsArrowMarkerId,
                 allProjectOptions, otherProjectOptions, showMergeProjectsModal, mergeProjCodeA, mergeProjCodeB, mergeProjNewName, openMergeProjectsModal, updateMergeDefaultName, executeMergeProjects,
