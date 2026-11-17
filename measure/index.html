@@ -64,6 +64,7 @@
                     <input v-model="project.name" @input="markProjectChanged" @blur="saveAll" @keyup.enter="$event.target.blur()" placeholder="輸入工程地址..." class="bg-transparent focus:bg-zinc-50 border border-transparent focus:border-blue-500 text-zinc-900 text-sm font-bold min-w-[60px] flex-1 px-1.5 py-0.5 rounded focus:outline-none truncate">
                 </template>
                 <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer border">{{ cloudStatusText }}</span>
+                <button v-if="currentUser" @click="forceSyncToCloud" class="bg-blue-600 text-white px-2 py-0.5 rounded text-[11px] font-bold shrink-0 shadow-sm ml-1">🔄 同步</button>
             </div>
             <div class="flex gap-1 items-center shrink-0">
                 <template v-if="currentView === 'dir'">
