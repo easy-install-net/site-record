@@ -1096,7 +1096,7 @@
                         <button @click="promptCustomStamp" class="flex-1 bg-blue-50 border border-blue-200 text-blue-700 py-1.5 rounded-md text-xs font-bold shadow-sm">➕ 快速新增印章</button>
                         <button @click="closeTopSheet(); openStampManager()" class="bg-amber-50 border border-amber-300 text-amber-800 px-2.5 py-1.5 rounded-md text-xs font-bold shadow-sm">⚙️ 管理</button>
                     </div>
-                    <div class="flex gap-1 overflow-x-auto no-scrollbar pb-0.5">
+                    <div class="flex flex-wrap gap-1">
                         <button @click="stampFilter = 'pinned'" :class="stampFilter === 'pinned' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2 py-1 rounded-md text-[11px] font-bold border shrink-0">⭐置頂</button>
                         <button @click="stampFilter = 'all'" :class="stampFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2 py-1 rounded-md text-[11px] font-bold border shrink-0">全部</button>
                         <button v-for="g in STAMP_GROUPS" :key="g.id" @click="stampFilter = g.id"
