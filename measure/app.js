@@ -1730,8 +1730,8 @@ const forceSyncToCloud = async () => {
             };
 const openProjectMap = async (proj) => {
                 if (!proj) return;
-                const launch = (url) => {
-                    showToast('🗺️ 正在開啟 Google Maps...');
+                const launch = (url, label) => {
+                    showToast(`🗺️ 正在開啟地圖：${label || ''}`);
                     const a = document.createElement('a');
                     a.href = url;
                     a.target = '_blank';
@@ -1740,12 +1740,22 @@ const openProjectMap = async (proj) => {
                     a.click();
                     document.body.removeChild(a);
                 };
-                if (proj.mapUrl) { launch(proj.mapUrl); return; }
+                if (proj.mapUrl) { launch(proj.mapUrl, proj.name); return; }
                 const rawName = String(proj.name || '').trim();
-                if (/^https?:\/\//i.test(rawName)) { launch(rawName); return; }
-                const cleanAddr = rawName.replace(/^\d{6,8}[\s\-_]*/, '').trim();
+                if (/^https?:\/\//i.test(rawName)) { launch(rawName, '自訂連結'); return; }
+
+                // 自動清理：1.去日期字頭 -> 2.去圖紙備註 -> 3.去樓層/單位/室號 -> 4.鎖定香港
+                let cleanAddr = rawName
+                    .replace(/^\d{6,8}[\s\-_]*/, '')
+                    .replace(/[\s\-_]*(傢俬圖|平面圖|施工圖|度尺|報價|現場|工程|設計|修改|副本|\(.*?\)|（.*?）)+$/g, '')
+                    .replace(/(\d+|[一二三四五六七八九十百]+)[樓層Ff].*$/g, '')
+                    .replace(/[A-Za-z0-9]+室$/g, '')
+                    .replace(/[\s\-_]*\d+[\-\/]\d+[A-Za-z]?$/g, '')
+                    .trim();
+
                 if (cleanAddr) {
-                    launch(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanAddr)}`);
+                    const finalQuery = /香港|Hong\s*Kong/i.test(cleanAddr) ? cleanAddr : `香港 ${cleanAddr}`;
+                    launch(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(finalQuery)}`, cleanAddr);
                     return;
                 }
                 const input = prompt('此工程尚未輸入地址，請輸入地址或貼上 Google Maps 連結：')?.trim();
@@ -1754,13 +1764,16 @@ const openProjectMap = async (proj) => {
                 if (/^https?:\/\//i.test(input)) {
                     proj.mapUrl = input;
                     if (d) { d.mapUrl = input; await localforage.setItem('proj_' + code, d); }
-                    launch(input);
+                    launch(input, '自訂連結');
                 } else {
                     proj.name = input;
                     if (d) { d.name = input; d.pendingUpload = true; await localforage.setItem('proj_' + code, d); await updateQueue(code, true); }
-                    launch(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(input)}`);
+                    const finalQuery = /香港|Hong\s*Kong/i.test(input) ? input : `香港 ${input}`;
+                    launch(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(finalQuery)}`, input);
                 }
             };
+
+            
             const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
             const renameProject = async () => {
                 const newName = prompt('請輸入新的地址 / 名稱：', manageProj.value.name);
