@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v9.7</title>
+    <title>度尺寶 Pro v9.8</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -40,11 +40,6 @@
             stroke: #000; stroke-width: 5px; stroke-linejoin: round; stroke-linecap: round;
             pointer-events: none;
         }
-        .wm-text {
-            font-weight: 900; font-size: 23px; paint-order: stroke fill; letter-spacing: 1px;
-            stroke: #000; stroke-width: 6px; stroke-linejoin: round; stroke-linecap: round;
-            pointer-events: none;
-        }
     </style>
     <script>
         window.__showBootError = function(msg) {
@@ -53,19 +48,22 @@
             if (btn) btn.style.display = 'inline-block';
         };
         window.addEventListener('error', function(e) {
-            if (document.getElementById('boot-screen')) window.__showBootError('載入異常：' + (e.message || '請檢查 app.js'));
+            if (!document.getElementById('boot-screen')) return;
+            var msg = e && e.message ? String(e.message) : '';
+            if (msg === 'Script error.' && !e.filename) return;
+            window.__showBootError('載入異常：' + (msg || '請檢查網絡連線'));
         });
     </script>
 </head>
 <body class="antialiased">
     <div id="boot-screen" style="position:fixed;inset:0;z-index:200;background:#ffffff;color:#111827;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
-        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v9.7...</div>
+        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v9.8...</div>
         <button id="boot-retry" onclick="location.reload()" style="display:none;margin-top:16px;background:#111827;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;">🔄 重新載入</button>
     </div>
 
     <div id="app" class="fixed inset-0 w-full h-full flex flex-col overflow-hidden bg-zinc-50" style="display:none;">
 
-        <!-- 頂部導航欄 (支援左右並排窄屏自動縮排，確保按鈕 100% 不被切走) -->
+        <!-- 頂部導航欄 -->
         <header class="shrink-0 min-h-[42px] h-auto py-1 w-full bg-white border-b border-zinc-200 px-1.5 flex flex-wrap justify-between items-center gap-1 z-30">
             <div class="flex items-center gap-1 min-w-0 flex-1">
                 <span v-if="currentView === 'dir'" class="text-sm font-bold text-zinc-900 truncate pl-1">工程目錄</span>
@@ -333,7 +331,7 @@
                          @wheel.prevent="onStageWheel" @touchstart="onStageTouchStart" @touchmove="onStageTouchMove" @touchend="onStageTouchEnd" @touchcancel="onStageTouchEnd"
                          @mousedown="onStageMouseDown" @mousemove="onStageMouseMove" @mouseup="onStageMouseUp">
                         <defs>
-                            <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="'arrow-end-' + c" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                            <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowMarkerId(c)" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
                                 <path d="M 0 0.6 L 6 3 L 0 5.4 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
                             </marker>
                         </defs>
@@ -355,13 +353,13 @@
                                   :stroke-width="((!l.type || l.type === 'measure') ? 5 : 4) * invZoom"
                                   :stroke-dasharray="(!l.type || l.type === 'measure') ? `${14 * invZoom} ${10 * invZoom}` : null"
                                   stroke-linecap="round"
-                                  :marker-end="l.type === 'arrow-single' ? `url(#arrow-end-${l.color || '#ef4444'})` : null" />
+                                  :marker-end="l.type === 'arrow-single' ? `url(#${getArrowMarkerId(l.color)})` : null" />
                         </g>
                         <line v-if="currentLine" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
                               :stroke="drawMode === 'line' ? '#ff0044' : drawColor"
                               :stroke-width="4 * invZoom"
                               :stroke-dasharray="drawMode === 'line' ? `${12 * invZoom} ${8 * invZoom}` : null"
-                              :marker-end="drawMode === 'arrow-single' ? `url(#arrow-end-${drawColor})` : null" />
+                              :marker-end="drawMode === 'arrow-single' ? `url(#${getArrowMarkerId(drawColor)})` : null" />
 
                         <g v-for="p in (activeCanvas.paths || [])" :key="p.id" :class="drawMode === 'eraser' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onEraseTap('path', p, e)" @mousedown="e => onEraseTap('path', p, e)">
                             <path v-if="drawMode === 'eraser'" :d="p.d" stroke="transparent" :stroke-width="34 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" />
@@ -414,7 +412,6 @@
                 </div>
 
                 <div class="overflow-y-auto flex-1 touch-scrollable space-y-3 pr-0.5">
-                    <!-- 區域 1：純空間標籤 (紫色) -->
                     <div>
                         <div class="text-[11px] font-black text-purple-700 mb-1.5">🏠 放置空間標籤 (純文字標記)</div>
                         <div class="flex flex-wrap gap-1.5">
@@ -425,7 +422,6 @@
 
                     <div class="border-t border-zinc-200"></div>
 
-                    <!-- 區域 2：跳頁編號傳送門 (藍色膠囊，一篤跳去對應詳圖) -->
                     <div>
                         <div class="text-[11px] font-black text-sky-700 mb-1.5">🔗 建立跳頁索引 (在睇圖模式輕點即飛去該頁)</div>
                         <input type="text" v-model="indexCustomCode" placeholder="選填圖號/名稱 (例: 24-27/27 或 衣櫃，留空自動顯示頁碼)" class="w-full bg-zinc-50 border border-zinc-300 focus:border-sky-500 rounded-md p-2 text-xs font-bold mb-2 focus:outline-none">
@@ -447,40 +443,39 @@
             </div>
         </div>
 
-        <!-- 一體化面板 (兩行 12 格模板 + 純工藝常用印章) -->
+        <!-- 一體化面板 (白/紅/黃三色字 + 快捷尺寸標籤 + 13格模板 + 3x4寬版鍵盤 + 87工藝印章) -->
         <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/20 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
-        <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-zinc-900 border-b border-x border-zinc-300 rounded-b-xl z-50 flex flex-col shadow-xl overflow-hidden max-h-[90dvh]" @touchstart.stop @mousedown.stop>
+        <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-zinc-900 border-b border-x border-zinc-300 rounded-b-xl z-50 flex flex-col shadow-xl overflow-hidden max-h-[92dvh]" @touchstart.stop @mousedown.stop>
 
             <div class="px-2 pt-2 bg-zinc-100 flex justify-between items-end border-b border-zinc-200 gap-1">
                 <div class="flex gap-1">
-                    <button @click="switchMarkerType('general', 'val')" :class="activeMarker.type !== 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'" class="px-3 py-2 text-[13px] relative z-10 border translate-y-[1px]">📏 度尺/標籤</button>
-                    <button @click="switchMarkerType('stamp', 'val')" :class="activeMarker.type === 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'" class="px-3 py-2 text-[13px] relative z-10 border translate-y-[1px]">🏷️ 工藝印章</button>
+                    <button @click="switchMarkerType('general', 'val')" :class="activeMarker.type !== 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'" class="px-2.5 py-2 text-[13px] relative z-10 border translate-y-[1px]">📏 度尺/標籤</button>
+                    <button @click="switchMarkerType('stamp', 'val')" :class="activeMarker.type === 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'" class="px-2.5 py-2 text-[13px] relative z-10 border translate-y-[1px]">🏷️ 工藝印章</button>
                 </div>
-                <div class="flex gap-1 pb-1.5 shrink-0">
-                    <button @click="deleteMarkerTop" class="bg-white text-red-600 border border-zinc-300 font-bold px-2.5 py-1 rounded text-xs shadow-sm">刪除</button>
+                <div class="flex items-center gap-1.5 pb-1.5 shrink-0">
+                    <!-- ⚪白 ・ 🔴紅 ・ 🟡黃 三色字體切換 -->
+                    <div class="flex items-center gap-1 bg-white border border-zinc-300 rounded-full px-1.5 py-1 shadow-sm">
+                        <button v-for="c in ['#ffffff','#ef4444','#eab308']" :key="c" @click="setMarkerTextColor(c)"
+                                :style="{ backgroundColor: c }"
+                                :class="(activeMarker.textColor || defaultTextColor) === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-70'"
+                                class="w-4 h-4 rounded-full border border-zinc-400 shrink-0 transition-transform"></button>
+                    </div>
+                    <button @click="deleteMarkerTop" class="bg-white text-red-600 border border-zinc-300 font-bold px-2 py-1 rounded text-xs shadow-sm">刪除</button>
                     <button @click="closeTopSheet" class="bg-zinc-900 text-white font-bold px-2.5 py-1 rounded text-xs shadow-sm">完成</button>
                 </div>
             </div>
 
-            <!-- TAB 1: 度尺與 12 格結構模板 -->
+            <!-- TAB 1: 度尺與 13 格結構/設備模板 -->
             <div v-if="activeMarker.type !== 'stamp'" class="flex flex-col flex-1 min-h-0">
+                <!-- 1. 輸入框 -->
                 <div class="p-2 bg-white border-b border-zinc-200 shrink-0 flex items-center justify-center gap-1.5">
                     <input type="text" v-model="activeMarker.data.name" @input="onMarkerTextInput" @focus="focusedInput = 'name'" class="w-[5.5em] border border-zinc-300 p-1.5 text-[15px] font-bold bg-zinc-50 rounded-md text-center focus:outline-none focus:border-blue-500" placeholder="標籤">
                     <span class="font-black text-lg text-zinc-400">:</span>
                     <input type="text" readonly :value="activeMarker.data[focusedInput === 'name' ? 'val' : focusedInput]" @click="focusedInput = (focusedInput === 'name' ? 'val' : focusedInput)" class="flex-1 min-w-0 border-2 border-blue-500 bg-blue-50 p-1.5 px-3 text-[15px] font-bold rounded-md cursor-pointer text-zinc-900" placeholder="點擊下方數字...">
                 </div>
 
-                <!-- 兩行 12 格模板 (每行 6 個) -->
-                <div class="p-1.5 border-b border-zinc-200 bg-zinc-50 shrink-0 flex flex-col gap-1">
-                    <div v-for="(row, rIdx) in TEMPLATE_ROWS" :key="rIdx" class="grid grid-cols-6 gap-1">
-                        <button v-for="t in row" :key="t.id" @click="switchMarkerType(t.id, t.f)"
-                                :class="activeMarker.type === t.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-800 border-zinc-300'"
-                                class="py-1.5 px-0.5 text-[12px] font-bold rounded border shadow-sm text-center truncate">{{ t.l }}</button>
-                    </div>
-                </div>
-
-                <!-- 動態輸入區：多格填表 vs 單一尺寸快捷標籤 -->
-                <div class="p-2.5 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[155px]">
+                <!-- 2. 緊貼輸入框：快捷尺寸標籤 (闊/高/深、全闊/全高/全深、預位) 或 結構多格欄位 -->
+                <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[168px]">
                     <div v-if="TAG_DEFS[activeMarker.type]" :class="getTagFields(activeMarker.type).length === 2 ? 'grid-cols-2' : 'grid-cols-3'" class="grid gap-1.5">
                         <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
                             <label class="text-[11px] font-bold text-zinc-600 bg-zinc-100 border border-zinc-200 border-b-0 px-1 py-0.5 text-center rounded-t-md">{{ field.label }}</label>
@@ -488,42 +483,52 @@
                         </div>
                     </div>
                     <div v-else class="flex flex-col gap-1.5">
-                        <div v-for="row in [{t:'基礎',items:['高','闊','深','厚','總闊','總高','總深']},{t:'水電',items:['制中-地','制底-地','制中-牆','制邊-牆']},{t:'預位',items:['假天花','喉底-地','喉邊-牆']}]" :key="row.t" class="flex gap-1.5 overflow-x-auto no-scrollbar items-center">
-                            <span class="text-[10px] font-black text-zinc-500 bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded shrink-0">{{ row.t }}</span>
-                            <button v-for="w in row.items" :key="w" @click="applyTag(w)" class="micro-btn py-1">{{ w }}</button>
+                        <div v-for="(row, rIdx) in DIM_QUICK_ROWS" :key="rIdx" class="flex gap-1.5 items-center flex-wrap">
+                            <span v-if="row.label" class="text-[11px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-1 rounded shrink-0">{{ row.label }}</span>
+                            <button v-for="w in row.items" :key="w" @click="applyTag(w)" class="micro-btn flex-1 min-w-[4.2em] text-center py-1.5">{{ w }}</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- 數字鍵盤 -->
-                <div class="bg-zinc-100 p-2 border-t border-zinc-200 grid grid-cols-4 gap-1.5 shrink-0 pb-3">
-                    <button v-for="k in ['1','2','3','DEL','4','5','6','0','7','8','9','ENTER']" :key="k" @click.stop="handleKeypad(k)" :class="k === 'DEL' ? 'bg-white border-red-300 text-red-600 text-xl' : k === 'ENTER' ? 'bg-zinc-900 border-zinc-900 text-white text-[15px]' : 'bg-white border-zinc-300 text-zinc-900 text-xl'" class="border rounded-lg shadow-sm font-bold py-2.5 active:scale-95 transition-transform">{{ k === 'DEL' ? '⌫' : k === 'ENTER' ? '確定' : k }}</button>
+                <!-- 3. 緊貼鍵盤上方：13 個結構/設備模板 (兩行：6格 + 7格含雪柜) -->
+                <div class="p-1.5 border-t border-zinc-200 bg-zinc-50 shrink-0 flex flex-col gap-1">
+                    <div v-for="(row, rIdx) in TEMPLATE_ROWS" :key="rIdx" :class="row.length === 7 ? 'grid-cols-7' : 'grid-cols-6'" class="grid gap-1">
+                        <button v-for="t in row" :key="t.id" @click="switchMarkerType(t.id, t.f)"
+                                :class="activeMarker.type === t.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-800 border-zinc-300'"
+                                class="py-1.5 px-0.5 text-[11px] sm:text-[12px] font-bold rounded border shadow-sm text-center truncate">{{ t.l }}</button>
+                    </div>
+                </div>
+
+                <!-- 4. 最底部：3 欄 × 4 行寬版數字鍵盤 -->
+                <div class="bg-zinc-100 p-2 border-t border-zinc-200 grid grid-cols-3 gap-1.5 shrink-0 pb-3">
+                    <button v-for="k in KEYPAD_KEYS" :key="k" @click.stop="handleKeypad(k)"
+                            :class="k === 'DEL' ? 'bg-white border-red-300 text-red-600 text-xl' : k === 'ENTER' ? 'bg-zinc-900 border-zinc-900 text-white text-[15px]' : 'bg-white border-zinc-300 text-zinc-900 text-xl'"
+                            class="border rounded-lg shadow-sm font-bold py-2.5 active:scale-95 transition-transform">{{ k === 'DEL' ? '⌫' : k === 'ENTER' ? '確定' : k }}</button>
                 </div>
             </div>
 
-            <!-- TAB 2: 純工藝常用印章 (空間已獨立抽離至「📝 編」) -->
-            <div v-else class="p-3 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[400px]">
-                <div class="flex flex-col gap-2.5">
-                    <button @click="promptCustomStamp" class="w-full bg-blue-50 border border-blue-200 text-blue-700 py-2 rounded-md text-[13px] font-bold shadow-sm">➕ 新增自訂印章</button>
-                    <div v-if="customStamps.length" class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-black text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">自訂</span>
+            <!-- TAB 2: 8 大工種 87 個工藝印章 ＋ 頂部工種篩選列 -->
+            <div v-else class="flex flex-col flex-1 min-h-0 bg-white">
+                <div class="p-2 border-b border-zinc-200 bg-zinc-50 shrink-0 flex flex-col gap-1.5">
+                    <button @click="promptCustomStamp" class="w-full bg-blue-50 border border-blue-200 text-blue-700 py-1.5 rounded-md text-[12px] font-bold shadow-sm">➕ 新增自訂印章</button>
+                    <div class="flex gap-1 overflow-x-auto no-scrollbar pb-0.5">
+                        <button @click="stampFilter = 'all'" :class="stampFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2 py-1 rounded-md text-[11px] font-bold border shrink-0">全部</button>
+                        <button v-for="g in STAMP_GROUPS" :key="g.id" @click="stampFilter = g.id"
+                                :class="stampFilter === g.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'"
+                                class="px-2 py-1 rounded-md text-[11px] font-bold border shrink-0">{{ g.icon }}{{ g.name }}</button>
+                    </div>
+                </div>
+
+                <div class="p-2.5 overflow-y-auto flex-1 touch-scrollable max-h-[380px] flex flex-col gap-2.5">
+                    <div v-if="customStamps.length && stampFilter === 'all'" class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[10px] font-black text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">自訂</span>
                         <button v-for="s in customStamps" :key="s" @click="applyStamp(s)" class="micro-btn">{{ s }}</button>
                     </div>
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">泥水</span>
-                        <button v-for="s in ['需清拆','牆身斜','牆體不平','空鼓','滲水','局部凸出']" :key="s" @click="applyStamp(s)" class="micro-btn border-red-200 text-red-700">{{ s }}</button>
-                    </div>
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">水電</span>
-                        <button v-for="s in ['開關','單蘇','孖蘇','燈曲','數據','燈線']" :key="s" @click="applyStamp(s)" class="micro-btn border-amber-300 text-amber-900">{{ s }}</button>
-                    </div>
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">結構</span>
-                        <button v-for="s in ['留通道','開門方向','可保留','實地台']" :key="s" @click="applyStamp(s)" class="micro-btn border-blue-200 text-blue-700">{{ s }}</button>
-                    </div>
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200">木工</span>
-                        <button v-for="s in ['要收口','見光','開背板','生口位','避窗簾盒','留散熱','要分件']" :key="s" @click="applyStamp(s)" class="micro-btn border-orange-300 text-orange-800">{{ s }}</button>
+                    <div v-for="g in filteredStampGroups" :key="g.id" class="flex flex-col gap-1.5">
+                        <div v-for="(row, rIdx) in g.rows" :key="rIdx" class="flex items-center gap-1.5 flex-wrap">
+                            <span v-if="rIdx === 0" :class="g.badgeClass" class="text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0">{{ g.icon }}{{ g.name }}</span>
+                            <button v-for="s in row" :key="s" @click="applyStamp(s)" :class="g.btnClass" class="micro-btn">{{ s }}</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -543,12 +548,18 @@
             <template v-else>
                 <span class="text-[11px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded shrink-0">備註</span>
                 <input ref="topTextInputRef" type="text" v-model="activeMarker.data.val" @input="onMarkerTextInput" @keyup.enter="closeTopTextBar" class="flex-1 min-w-0 bg-white border border-zinc-300 p-1.5 px-2 text-[15px] font-bold rounded-md focus:outline-none focus:border-blue-500" placeholder="補加備註...">
+                <div class="flex items-center gap-1 shrink-0">
+                    <button v-for="c in ['#ffffff','#ef4444','#eab308']" :key="c" @click="setMarkerTextColor(c)"
+                            :style="{ backgroundColor: c }"
+                            :class="(activeMarker.textColor || defaultTextColor) === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-70'"
+                            class="w-4 h-4 rounded-full border border-zinc-400 shrink-0 transition-transform"></button>
+                </div>
                 <button @click="deleteMarkerTop" class="bg-white text-red-600 border border-zinc-300 px-2.5 py-1.5 rounded-md text-xs font-bold shrink-0">刪除</button>
                 <button @click="closeTopTextBar" class="bg-zinc-900 text-white px-3 py-1.5 rounded-md text-xs font-bold shrink-0">確定</button>
             </template>
         </div>
 
-        <!-- 唯讀全螢幕大圖檢視器 (含「✏️修改」直達編輯掣) -->
+        <!-- 唯讀全螢幕大圖檢視器 (含極簡 CAD 圖籤水印 + 「✏️修改」直達編輯掣) -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-zinc-100 flex flex-col overflow-hidden">
             <div class="min-h-[42px] h-auto py-1 bg-white border-b border-zinc-300 px-2 flex flex-wrap justify-between items-center gap-1 shrink-0 z-10">
                 <div class="flex items-center gap-1 min-w-0 flex-1">
@@ -558,7 +569,7 @@
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
                     <button @click="editFromFullScreen" class="bg-blue-600 text-white px-2.5 py-1 rounded-md text-xs font-bold shadow-sm active:bg-blue-700">✏️修改</button>
-                    <button @click="showWatermark = !showWatermark" :class="showWatermark ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-white text-zinc-500 border-zinc-300'" class="px-2 py-1 rounded-md text-[11px] font-bold border">🏷️水印</button>
+                    <button @click="showWatermark = !showWatermark" :class="showWatermark ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-white text-zinc-500 border-zinc-300'" class="px-2 py-1 rounded-md text-[11px] font-bold border">🏷️圖籤</button>
                     <button @click="copyFullScreenImage" class="bg-white border border-zinc-300 text-zinc-900 px-2 py-1 rounded-md text-xs font-bold">📋複製</button>
                     <button @click="downloadFullScreenImage" class="bg-white border border-zinc-300 text-zinc-900 px-2 py-1 rounded-md text-xs font-bold">⬇️下載</button>
                     <button @click="fullScreenIndex = -1" class="bg-zinc-900 text-white px-2.5 py-1 rounded-md text-xs font-bold">✕</button>
@@ -570,20 +581,25 @@
                 <div class="absolute inset-1 overflow-hidden bg-white shadow-sm border border-zinc-300 rounded-lg">
                     <svg :view-box.camel="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;">
                         <defs>
-                            <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="'fs-arrow-' + c" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                            <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getFsArrowMarkerId(c)" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
                                 <path d="M 0 0.6 L 6 3 L 0 5.4 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
                             </marker>
                         </defs>
                         <rect x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" fill="#ffffff" />
                         <image :href="fullScreenItem.photo" x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" preserveAspectRatio="none" />
-                        <g v-if="showWatermark && fullScreenWatermarkLines.length" transform="translate(22, 26)">
-                            <text v-for="(item, wIdx) in fullScreenWatermarkLines" :key="wIdx" x="0" :y="wIdx * 32" dominant-baseline="central" :fill="item.color === '#ffffff' ? '#111827' : (item.color === '#facc15' ? '#d97706' : item.color)" class="wm-text" stroke="#ffffff" stroke-width="6">{{ item.text }}</text>
+
+                        <!-- 極簡 CAD 圖籤膠囊 -->
+                        <g v-if="showWatermark && fullScreenWatermarkBox" :transform="`translate(${fullScreenWatermarkBox.x}, ${fullScreenWatermarkBox.y})`">
+                            <rect x="0" y="0" :width="fullScreenWatermarkBox.w" :height="fullScreenWatermarkBox.h" rx="6" fill="rgba(255,255,255,0.88)" stroke="#cbd5e1" stroke-width="1.5" />
+                            <text v-if="fullScreenWatermarkBox.title" x="11" :y="fullScreenWatermarkBox.sub ? 15 : fullScreenWatermarkBox.h / 2" dominant-baseline="central" fill="#0f172a" font-size="15" font-weight="700">{{ fullScreenWatermarkBox.title }}</text>
+                            <text v-if="fullScreenWatermarkBox.sub" x="11" :y="fullScreenWatermarkBox.title ? 32 : fullScreenWatermarkBox.h / 2" dominant-baseline="central" fill="#64748b" font-size="12" font-weight="600">{{ fullScreenWatermarkBox.sub }}</text>
                         </g>
+
                         <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
                             <template v-if="m.type === 'image'"><image :href="m.data.b64" :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" preserveAspectRatio="none" /></template>
                         </g>
                         <g v-for="w in (fullScreenItem.walls || [])" :key="w.id"><line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" /></g>
-                        <line v-for="l in (fullScreenItem.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.75)" :stroke-width="(!l.type || l.type === 'measure') ? 6 : 4" :stroke-dasharray="(!l.type || l.type === 'measure') ? '14 10' : null" stroke-linecap="round" :marker-end="l.type === 'arrow-single' ? `url(#fs-arrow-${l.color || '#ef4444'})` : null" />
+                        <line v-for="l in (fullScreenItem.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.75)" :stroke-width="(!l.type || l.type === 'measure') ? 6 : 4" :stroke-dasharray="(!l.type || l.type === 'measure') ? '14 10' : null" stroke-linecap="round" :marker-end="l.type === 'arrow-single' ? `url(#${getFsArrowMarkerId(l.color)})` : null" />
                         <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
                         <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
                             <template v-if="m.type !== 'image'">
@@ -602,7 +618,7 @@
             </div>
         </div>
 
-        <!-- 模態窗群組：PDF / 合併 / 加頁 / 分歧複製 / 底圖庫 / 管理 / 雲端 / 備份 / 空間 / 工程碼 -->
+        <!-- 模態窗群組 -->
         <div v-if="showPdfModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showPdfModal = false">
             <div class="bg-white border border-zinc-200 w-full max-w-xs rounded-xl p-4 flex flex-col gap-2.5 shadow-xl">
                 <div class="text-[15px] font-black text-center text-zinc-900 mb-1 border-b border-zinc-200 pb-2">📄 選擇輸出 PDF 排版</div>
@@ -716,6 +732,7 @@
         </div>
     </div>
 
-    <script src="./app.js"></script>
+    <script src="./data.js?v=9.8"></script>
+    <script src="./app.js?v=9.8"></script>
 </body>
 </html>
