@@ -1,69 +1,48 @@
-const CACHE_NAME = 'site-measure-pro-v9.4';
-const PRECACHE_URLS = [
+const CACHE_NAME = 'site-measure-pro-v1.0';
+const CORE_ASSETS = [
     './',
     './index.html',
+    './data.js?v=1.0',
+    './cad.js?v=1.0',
+    './export.js?v=1.0',
+    './app.js?v=1.0',
     './view.html',
-    'https://cdn.tailwindcss.com',
-    'https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-    'https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js',
-    'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js'
+    './view.js',
+    './manifest.json'
 ];
 
 self.addEventListener('install', (e) => {
     self.skipWaiting();
     e.waitUntil(
-        caches.open(CACHE_NAME).then((cache) =>
-            Promise.allSettled(
-                PRECACHE_URLS.map(async (url) => {
-                    try {
-                        const res = await fetch(url.startsWith('http') ? new Request(url, { mode: 'no-cors' }) : url);
-                        if (res) await cache.put(url, res);
-                    } catch (_) {}
-                })
-            )
-        )
+        caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)).catch(() => {})
     );
 });
 
 self.addEventListener('activate', (e) => {
     e.waitUntil(
-        caches.keys()
-            .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
-            .then(() => self.clients.claim())
+        caches.keys().then((keys) =>
+            Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+        ).then(() => self.clients.claim())
     );
 });
 
 self.addEventListener('fetch', (e) => {
     const req = e.request;
-    if (req.method !== 'GET' || req.url.includes('googleapis.com')) return;
+    if (req.method !== 'GET' || !req.url.startsWith('http')) return;
 
-    if (req.mode === 'navigate' || req.url.endsWith('/index.html') || req.url.endsWith('/view.html') || req.url.endsWith('/measure/')) {
-        e.respondWith((async () => {
-            const cache = await caches.open(CACHE_NAME);
-            try {
-                const ctrl = new AbortController();
-                const timer = setTimeout(() => ctrl.abort(), 3000);
-                const fresh = await fetch(req, { signal: ctrl.signal });
-                clearTimeout(timer);
-                if (fresh?.ok) {
-                    cache.put(req, fresh.clone());
-                    return fresh;
-                }
-            } catch (_) {}
-            return (await cache.match(req, { ignoreSearch: true })) || (await cache.match('./index.html')) || fetch(req);
-        })());
-        return;
-    }
+    const url = new URL(req.url);
+    if (url.origin !== self.location.origin) return;
 
     e.respondWith(
-        caches.match(req, { ignoreSearch: true }).then((cached) => cached || fetch(req).then((res) => {
-            if (res && (res.status === 200 || res.type === 'opaque')) {
-                const copy = res.clone();
-                caches.open(CACHE_NAME).then((c) => c.put(req, copy));
-            }
-            return res;
-        }).catch(() => cached))
+        fetch(req)
+            .then((res) => {
+                if (res && res.status === 200) {
+                    const copy = res.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(req, copy)).catch(() => {});
+                }
+                return res;
+            })
+            .catch(() => caches.match(req).then((cached) => cached || caches.match('./index.html')))
     );
 });
+// === END OF sw.js ===
