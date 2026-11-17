@@ -29,11 +29,6 @@
             stroke: #000; stroke-width: 5px; stroke-linejoin: round; stroke-linecap: round;
             pointer-events: none;
         }
-        .fb-text {
-            font-weight: 900; paint-order: stroke fill; letter-spacing: 0.5px;
-            stroke: #ffffff; stroke-width: 6px; stroke-linejoin: round; stroke-linecap: round;
-            pointer-events: none;
-        }
     </style>
 </head>
 <body class="antialiased">
@@ -140,30 +135,39 @@
                     </div>
                 </div>
 
-                <!-- 底部懸浮極簡批註工具列 -->
-                <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 max-w-[96vw]" @touchstart.stop @mousedown.stop>
+                <!-- 正上方可浮動拖拉工具膠囊 -->
+                <div :style="{ transform: `translate(calc(-50% + ${capsuleOffset.x}px), ${capsuleOffset.y}px)` }"
+                     class="fixed top-[88px] sm:top-[52px] left-1/2 z-30 flex flex-col items-center gap-1.5 max-w-[98vw]" @touchstart.stop @mousedown.stop>
+
+                    <!-- 主工具膠囊 -->
+                    <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-xl flex items-center gap-0.5 sm:gap-1 overflow-x-auto no-scrollbar max-w-full">
+                        <span @pointerdown.stop.prevent="startCapsuleDrag" style="touch-action:none" title="按住拖拉移動工具列" class="cursor-grab active:cursor-grabbing px-1.5 py-1 text-zinc-400 font-black text-sm select-none shrink-0">⠿</span>
+                        <template v-if="capsuleCollapsed">
+                            <button @click="capsuleCollapsed = false" class="bg-zinc-900 text-white px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">🛠️ 展開標註工具</button>
+                        </template>
+                        <template v-else>
+                            <button @click="mode = 'browse'" :class="mode === 'browse' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">👆 睇</button>
+                            <button @click="mode = 'circle'" :class="mode === 'circle' ? 'bg-red-600 text-white' : 'text-red-600 hover:bg-red-50'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">⭕ 畫圈</button>
+                            <button @click="mode = 'text'" :class="mode === 'text' ? 'bg-blue-600 text-white' : 'text-blue-700 hover:bg-blue-50'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">💬 留言</button>
+                            <label class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0 text-emerald-700 hover:bg-emerald-50 cursor-pointer flex items-center gap-0.5">
+                                📷 影/貼圖
+                                <input type="file" accept="image/*" class="hidden" @change="handleAttachPhoto">
+                            </label>
+                            <button @click="mode = 'move'" :class="mode === 'move' ? 'bg-amber-600 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✥ 移</button>
+                            <div class="w-px h-4 bg-zinc-300 mx-0.5 shrink-0"></div>
+                            <button @click="undoDraft" :disabled="!fbHistory.length" :class="fbHistory.length ? 'text-zinc-900 hover:bg-zinc-100' : 'text-zinc-300'" class="px-2 py-1 rounded-full text-sm font-black shrink-0">↶</button>
+                            <button v-if="hasDraft" @click="clearDraft" class="px-2 py-1 rounded-full text-xs font-bold text-red-600 hover:bg-red-50 shrink-0">🗑️清空</button>
+                            <button @click="capsuleCollapsed = true" title="縮細工具列" class="px-1.5 py-1 text-zinc-400 hover:text-zinc-700 text-xs font-bold shrink-0">▴</button>
+                        </template>
+                    </div>
+
                     <!-- 顏色子列 (畫圈或留言時顯示) -->
-                    <div v-if="mode === 'circle' || mode === 'text'" class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full px-3 py-1 shadow-lg flex items-center gap-2">
+                    <div v-if="!capsuleCollapsed && (mode === 'circle' || mode === 'text')" class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full px-3 py-1 shadow-lg flex items-center gap-2">
                         <span class="text-[11px] font-bold text-zinc-600">標記顏色：</span>
                         <button v-for="c in ['#ef4444','#eab308','#2563eb']" :key="c" @click="fbColor = c"
                                 :style="{ backgroundColor: c }"
                                 :class="fbColor === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-70'"
                                 class="w-4 h-4 rounded-full border border-zinc-400 transition-transform"></button>
-                    </div>
-
-                    <!-- 主工具膠囊 -->
-                    <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-xl flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full">
-                        <button @click="mode = 'browse'" :class="mode === 'browse' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">👆 睇</button>
-                        <button @click="mode = 'circle'" :class="mode === 'circle' ? 'bg-red-600 text-white' : 'text-red-600 hover:bg-red-50'" class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">⭕ 畫圈</button>
-                        <button @click="mode = 'text'" :class="mode === 'text' ? 'bg-blue-600 text-white' : 'text-blue-700 hover:bg-blue-50'" class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">💬 留言</button>
-                        <label class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 text-emerald-700 hover:bg-emerald-50 cursor-pointer flex items-center gap-0.5">
-                            📷 影/貼圖
-                            <input type="file" accept="image/*" class="hidden" @change="handleAttachPhoto">
-                        </label>
-                        <button @click="mode = 'move'" :class="mode === 'move' ? 'bg-amber-600 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✥ 移</button>
-                        <div class="w-px h-4 bg-zinc-300 mx-0.5 shrink-0"></div>
-                        <button @click="undoDraft" :disabled="!fbHistory.length" :class="fbHistory.length ? 'text-zinc-900' : 'text-zinc-300'" class="px-2 py-1 rounded-full text-sm font-black shrink-0">↶</button>
-                        <button v-if="hasDraft" @click="clearDraft" class="px-2 py-1 rounded-full text-xs font-bold text-red-600 shrink-0">🗑️清空</button>
                     </div>
                 </div>
 
@@ -336,6 +340,26 @@
                 const canvasH = computed(() => activeCanvas.value?.h || 900);
                 const masterPages = computed(() => pages.value.map((pg, idx) => ({ pg, idx })).filter(x => x.pg.space === '總圖'));
                 const showQuickNav = ref(false);
+
+                // 正上方可浮動拖拉工具膠囊狀態
+                const capsuleOffset = reactive({ x: 0, y: 0 });
+                const capsuleCollapsed = ref(false);
+                const startCapsuleDrag = (e) => {
+                    const sx = e.clientX, sy = e.clientY, ox = capsuleOffset.x, oy = capsuleOffset.y;
+                    const onMove = (ev) => {
+                        const maxX = Math.max(60, window.innerWidth / 2 - 50);
+                        capsuleOffset.x = Math.max(-maxX, Math.min(maxX, ox + (ev.clientX - sx)));
+                        capsuleOffset.y = Math.max(-6, Math.min(window.innerHeight - 130, oy + (ev.clientY - sy)));
+                    };
+                    const onUp = () => {
+                        window.removeEventListener('pointermove', onMove);
+                        window.removeEventListener('pointerup', onUp);
+                        window.removeEventListener('pointercancel', onUp);
+                    };
+                    window.addEventListener('pointermove', onMove);
+                    window.addEventListener('pointerup', onUp);
+                    window.addEventListener('pointercancel', onUp);
+                };
 
                 // 縮放與平移
                 const zoomScale = ref(1), vbX = ref(0), vbY = ref(0), svgCanvas = ref(null);
@@ -753,6 +777,7 @@
 
                 return {
                     inputCode, isLoading, loadingText, toastMsg, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH, masterPages, showQuickNav,
+                    capsuleOffset, capsuleCollapsed, startCapsuleDrag,
                     zoomScale, invZoom, svgViewBox, svgCanvas, stepZoom, resetZoom, onStageWheel,
                     mode, fbColor, fbPaths, fbMarkers, fbHistory, currentFbPath, editingFbMarker, fbTextInputRef, isSubmitting, showSubmitSuccess, hasDraft, draftCount,
                     clearDraft, undoDraft, switchPage, prevPage, nextPage, openPinSubPage, exitPinSubPage, onMasterMarkerClick,
