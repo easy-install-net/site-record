@@ -4,230 +4,764 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#ffffff">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="檢視度尺">
-    <title>工程單檢視器</title>
+    <title>度尺寶 Pro — 圖紙檢視與意見回饋</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <style>
         * { box-sizing: border-box; }
         html, body {
             position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh;
-            margin: 0; padding: 0; overflow: hidden; background: #ffffff; color: #111827;
+            margin: 0; padding: 0; overflow: hidden; background: #f4f4f5; color: #111827;
             -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
             overscroll-behavior: none; touch-action: manipulation;
+            padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
             font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", "Helvetica Neue", sans-serif;
         }
-        input { font-size: 16px !important; -webkit-user-select: text; user-select: text; color: #111827; }
+        input, textarea { font-size: 16px !important; -webkit-user-select: text; user-select: text; color: #111827; }
+        .canvas-touch-lock { touch-action: none !important; }
         .touch-scrollable { touch-action: pan-y !important; -webkit-overflow-scrolling: touch; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .stamp-text {
-            font-weight: 900; font-size: 28px; paint-order: stroke fill; letter-spacing: 1px;
+            font-weight: 900; paint-order: stroke fill; letter-spacing: 1px;
             stroke: #000; stroke-width: 5px; stroke-linejoin: round; stroke-linecap: round;
             pointer-events: none;
         }
-        .wm-text {
-            font-weight: 900; font-size: 23px; paint-order: stroke fill; letter-spacing: 1px;
+        .fb-text {
+            font-weight: 900; paint-order: stroke fill; letter-spacing: 0.5px;
             stroke: #ffffff; stroke-width: 6px; stroke-linejoin: round; stroke-linecap: round;
             pointer-events: none;
         }
     </style>
 </head>
 <body class="antialiased">
-    <div id="boot-screen" style="position:fixed;inset:0;z-index:200;background:#ffffff;color:#111827;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
-        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在載入工程單檢視器...</div>
-    </div>
-    
-    <div id="app" class="fixed inset-0 w-full h-full flex flex-col overflow-hidden bg-zinc-50" style="display:none;">
-        
-        <!-- 頂部導航列 -->
-        <header v-if="project.code" class="shrink-0 h-11 w-full bg-white border-b border-zinc-200 px-2 flex justify-between items-center gap-1.5 z-30 shadow-sm">
+    <div id="app" class="fixed inset-0 w-full h-full flex flex-col overflow-hidden bg-zinc-100">
+
+        <!-- 頂部導航欄 -->
+        <header class="shrink-0 min-h-[44px] py-1 w-full bg-white border-b border-zinc-200 px-2 flex justify-between items-center gap-1.5 z-30">
             <div class="flex items-center gap-1.5 min-w-0 flex-1">
-                <button @click="logout" class="bg-white border border-zinc-300 text-red-600 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 active:bg-red-50">🚪退出</button>
-                <span class="bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-mono font-black px-1.5 py-0.5 rounded-md shrink-0">#{{ project.code }}</span>
-                <span class="text-[14px] font-black text-zinc-900 truncate min-w-0">{{ project.name || '未標題工程' }}</span>
+                <span class="bg-amber-100 text-amber-900 border border-amber-300 text-xs font-mono font-black px-1.5 py-0.5 rounded shrink-0">#{{ project.code || '------' }}</span>
+                <span class="font-black text-sm text-zinc-900 truncate">{{ project.name || '工程圖紙檢視' }}</span>
             </div>
             <div class="flex items-center gap-1.5 shrink-0">
-                <button @click="reloadCurrentProject" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold active:bg-zinc-100">🔄更新</button>
-                <button @click="copyShareLink" class="bg-indigo-50 border border-indigo-300 text-indigo-700 px-2.5 py-1 rounded-md text-xs font-bold active:bg-indigo-100">🔗連結</button>
-                <button v-if="pages.length" @click="showPdfModal = true" class="bg-zinc-900 text-white px-2.5 py-1 rounded-md text-xs font-bold active:bg-zinc-700">📄PDF</button>
+                <button v-if="activeCanvas?.photo" @click="downloadAnnotatedImage" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">⬇️存圖</button>
+                <button v-if="activeCanvas?.photo" @click="submitFeedback" :disabled="isSubmitting"
+                        :class="hasDraft ? 'bg-blue-600 text-white border-blue-600 animate-pulse' : 'bg-zinc-900 text-white border-zinc-900'"
+                        class="px-3 py-1 rounded-md text-xs font-bold border shadow-sm">
+                    📤 提交意見{{ draftCount ? `(${draftCount})` : '' }}
+                </button>
             </div>
         </header>
 
-        <div v-if="toastMsg" class="fixed top-12 left-1/2 -translate-x-1/2 z-[80] bg-zinc-900 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl border border-zinc-700 whitespace-nowrap">{{ toastMsg }}</div>
+        <div v-if="toastMsg" class="fixed top-14 left-1/2 -translate-x-1/2 z-[80] bg-zinc-900 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl border border-zinc-700 whitespace-nowrap">{{ toastMsg }}</div>
 
-        <!-- 鎖定畫面：輸入密碼 -->
-        <main v-if="!project.code" class="flex-1 flex flex-col items-center justify-center p-4 bg-zinc-50">
-            <div class="w-full max-w-sm p-6 bg-white border border-zinc-200 rounded-2xl shadow-xl flex flex-col items-center">
-                <div class="w-14 h-14 bg-zinc-100 text-zinc-800 rounded-full flex items-center justify-center text-3xl mb-4 shadow-sm border border-zinc-200">🔒</div>
-                <h2 class="text-lg font-black text-zinc-900 mb-1">查閱工程單</h2>
-                <p class="text-[13px] font-bold text-zinc-500 mb-6">請輸入 6 位數字專屬工程碼</p>
-                <input type="text" inputmode="numeric" maxlength="6" v-model="inputCode" @keyup.enter="submitCode" placeholder="例如: 849201" class="w-full bg-zinc-50 border-2 border-zinc-300 rounded-xl p-3.5 text-center text-3xl font-mono font-black tracking-widest text-zinc-900 mb-5 focus:outline-none focus:border-blue-500 transition-colors">
-                <button @click="submitCode" class="w-full bg-zinc-900 text-white font-bold py-3.5 rounded-xl text-sm shadow-md active:scale-95 transition-transform">立即查閱</button>
-            </div>
-        </main>
-
-        <!-- 圖紙總覽 (Lazy Load 介面) -->
-        <main v-else class="flex-1 min-h-0 w-full flex flex-col bg-zinc-100 overflow-hidden">
-            <div class="bg-white border-b border-zinc-200 px-3 py-2 flex items-center justify-between shrink-0">
-                <span class="text-xs font-black text-zinc-900">🖼️ 圖紙總覽 (共 {{ pages.length }} 頁)</span>
-                <span v-if="project.lastModifiedBy" class="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">✍️ 最後修改: {{ project.lastModifiedBy }}</span>
-            </div>
-
-            <div class="flex-1 overflow-y-auto p-2 touch-scrollable">
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    <div v-for="(pg, idx) in pages" :key="pg.id" class="bg-white border border-zinc-300 rounded-lg overflow-hidden shadow-sm flex flex-col justify-between">
-                        <!-- 圖紙 Header -->
-                        <div class="bg-zinc-50 px-2 py-1.5 border-b border-zinc-200 flex flex-col gap-0.5">
-                            <div class="flex items-center gap-1.5 min-w-0">
-                                <span class="bg-white text-zinc-900 border border-zinc-300 text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0">P{{ idx + 1 }}</span>
-                                <span class="text-zinc-900 font-bold text-xs truncate">{{ pg.space || '未標空間' }}</span>
-                            </div>
-                            <div class="text-[10px] text-zinc-500 font-bold truncate">
-                                📅{{ pg.date || project.date }} ✍️{{ pg.author || '未知' }}
-                            </div>
-                        </div>
-
-                        <!-- 圖紙縮圖 -->
-                        <div @click="openFullScreenPreview(pg)" class="h-40 relative bg-zinc-100 cursor-pointer hover:bg-zinc-200 active:bg-zinc-300 overflow-hidden flex items-center justify-center transition-colors">
-                            <div v-if="pg.photo" class="absolute inset-1 overflow-hidden flex items-center justify-center">
-                                <svg :view-box.camel="`0 0 ${pg.w || 1200} ${pg.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="pointer-events-none">
-                                    <image :href="pg.photo" x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" preserveAspectRatio="none" />
-                                    
-                                    <g v-for="m in (pg.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
-                                        <template v-if="m.type === 'image'">
-                                            <image :href="m.data.b64" :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" preserveAspectRatio="none" />
-                                        </template>
-                                    </g>
-
-                                    <g v-for="w in (pg.walls || [])" :key="w.id">
-                                        <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" />
-                                    </g>
-                                    <line v-for="l in (pg.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 4 : 6" stroke-linecap="round" />
-                                    <path v-for="p in (pg.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
-                                    
-                                    <g v-for="m in (pg.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
-                                        <template v-if="m.type !== 'image'">
-                                            <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
-                                                <tspan v-for="(line, lIdx) in getMarkerLines(m)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
-                                            </text>
-                                        </template>
-                                    </g>
-                                    <g v-for="(pin, pIdx) in (pg.pins || [])" :key="pin.id" :transform="`translate(${(pin.x / 100) * (pg.w || 1200)}, ${(pin.y / 100) * (pg.h || 900)})`">
-                                        <circle cx="0" cy="-22" r="20" fill="#dc2626" stroke="#ffffff" stroke-width="4" />
-                                        <text x="0" y="-21" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="22" font-weight="900">{{ pIdx + 1 }}</text>
-                                    </g>
-                                </svg>
-                            </div>
-                            <div v-else class="flex flex-col items-center justify-center text-zinc-400 gap-2">
-                                <div class="w-6 h-6 border-2 border-zinc-300 border-t-zinc-500 rounded-full animate-spin"></div>
-                                <span class="text-[11px] font-bold">載入底圖中...</span>
-                            </div>
-                        </div>
-
-                        <!-- 圖紙 Footer (釘選) -->
-                        <div class="bg-zinc-50 px-2 py-1.5 border-t border-zinc-200 flex items-center justify-between gap-1 flex-wrap">
-                            <div v-if="pg.pins?.length" class="flex items-center gap-1 flex-wrap">
-                                <button v-for="(pin, pIdx) in pg.pins" :key="pin.id" @click.stop="openFullScreenPreview(pin)" class="bg-red-50 border border-red-300 text-red-700 hover:bg-red-100 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm transition-colors">
-                                    📍釘#{{ pIdx + 1 }}
-                                </button>
-                            </div>
-                            <span v-else class="text-[11px] text-zinc-400 font-bold">無落釘</span>
-                            <span @click="openFullScreenPreview(pg)" class="text-[11px] text-zinc-500 font-bold cursor-pointer hover:text-zinc-800">🔍全圖</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-
-        <!-- 📄 PDF 排版選擇 Modal -->
-        <div v-if="showPdfModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showPdfModal = false">
-            <div class="bg-white border border-zinc-200 w-full max-w-xs rounded-xl p-4 flex flex-col gap-2.5 shadow-xl">
-                <div class="text-[15px] font-black text-center text-zinc-900 mb-1 border-b border-zinc-200 pb-2">📄 選擇匯出 PDF 格式</div>
-                <button @click="exportPdfReport(1)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[13px] font-bold shadow-sm active:bg-zinc-50">🖼️ 每頁 1 張 (大圖版)</button>
-                <button @click="exportPdfReport(2)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[13px] font-bold shadow-sm active:bg-zinc-50">▯▯ 每頁 2 張 (上下雙圖)</button>
-                <button @click="exportPdfReport(4)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[13px] font-bold shadow-sm active:bg-zinc-50">田 每頁 4 張 (緊湊總覽)</button>
-                <button @click="showPdfModal = false" class="w-full text-zinc-500 py-2 text-xs font-bold mt-1">取消</button>
+        <!-- 無工程碼輸入畫面 -->
+        <div v-if="!project.code && !isLoading" class="flex-1 flex items-center justify-center p-4">
+            <div class="bg-white border border-zinc-300 w-full max-w-xs rounded-xl p-5 shadow-lg text-center">
+                <div class="text-base font-black text-zinc-900 mb-1">📋 檢視工程度尺圖</div>
+                <p class="text-xs text-zinc-500 font-bold mb-4">請輸入 6 位數工程碼開啟圖紙</p>
+                <input type="text" inputmode="numeric" maxlength="6" v-model="inputCode" @keyup.enter="loadByInputCode" placeholder="849201" class="w-full bg-zinc-50 border-2 border-zinc-300 rounded-lg p-2.5 text-center text-2xl font-mono font-bold tracking-widest mb-3 focus:outline-none focus:border-blue-500">
+                <button @click="loadByInputCode" class="w-full bg-zinc-900 text-white font-bold py-2.5 rounded-lg text-sm">開啟圖紙</button>
             </div>
         </div>
 
-        <!-- 🔍 唯讀全螢幕大圖檢視器 -->
-        <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-zinc-100 flex flex-col overflow-hidden">
-            <div class="h-11 bg-white border-b border-zinc-300 px-2 flex justify-between items-center gap-1 shrink-0 z-10 shadow-sm">
-                <div class="flex items-center gap-1 min-w-0 flex-1">
-                    <button @click="prevFullScreen" :disabled="fullScreenIndex <= 0" :class="fullScreenIndex <= 0 ? 'opacity-30' : 'active:bg-zinc-100'" class="bg-white border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 shadow-sm">◀</button>
-                    <span class="text-[13px] font-black text-zinc-900 truncate min-w-0 px-1">{{ fullScreenTitle }}</span>
-                    <button @click="nextFullScreen" :disabled="fullScreenIndex >= fullScreenList.length - 1" :class="fullScreenIndex >= fullScreenList.length - 1 ? 'opacity-30' : 'active:bg-zinc-100'" class="bg-white border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 shadow-sm">▶</button>
-                </div>
-                <div class="flex items-center gap-1.5 shrink-0">
-                    <button @click="copyFullScreenImage" class="bg-white border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-[11px] font-bold shadow-sm">📋複製</button>
-                    <button @click="downloadFullScreenImage" class="bg-white border border-zinc-300 text-zinc-900 px-2.5 py-1 rounded-md text-[11px] font-bold shadow-sm">⬇️下載</button>
-                    <button @click="fullScreenIndex = -1" class="bg-zinc-900 text-white px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">✕</button>
-                </div>
+        <!-- 載入中畫面 -->
+        <div v-else-if="isLoading" class="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <div class="w-10 h-10 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin mb-3"></div>
+            <div class="text-sm font-bold text-zinc-700">{{ loadingText }}</div>
+        </div>
+
+        <!-- 主畫布視圖 -->
+        <main v-else class="flex-1 min-h-0 w-full relative overflow-hidden flex flex-col">
+            <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center text-zinc-400 text-sm font-bold gap-2">
+                <span>此頁面暫無底圖</span>
+                <button v-if="activePin" @click="exitPinSubPage" class="bg-white border border-zinc-300 text-zinc-800 px-3 py-1.5 rounded-md text-xs font-bold">‹ 返回主頁</button>
             </div>
-            
-            <div class="flex-1 min-h-0 w-full relative bg-zinc-200 overflow-hidden">
-                <!-- 左右快速切換箭頭 -->
-                <button v-if="fullScreenIndex > 0" @click.stop="prevFullScreen" class="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-10 h-12 rounded-xl bg-white/90 hover:bg-white active:scale-95 border border-zinc-300 text-zinc-900 text-lg font-black flex items-center justify-center shadow-lg transition-transform">◀</button>
-                <button v-if="fullScreenIndex < fullScreenList.length - 1" @click.stop="nextFullScreen" class="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-10 h-12 rounded-xl bg-white/90 hover:bg-white active:scale-95 border border-zinc-300 text-zinc-900 text-lg font-black flex items-center justify-center shadow-lg transition-transform">▶</button>
 
-                <div class="absolute inset-1 overflow-hidden bg-white shadow-sm border border-zinc-300 rounded-lg flex items-center justify-center">
-                    <svg v-if="fullScreenItem.photo" :view-box.camel="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;">
+            <div v-else class="flex-1 min-h-0 w-full relative overflow-hidden">
+                <!-- 左上浮動：頁碼切換 + 總圖快捷 -->
+                <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
+                    <div v-if="!activePin" class="bg-white/95 border border-zinc-300 rounded-md flex items-center px-1 py-1 shadow-sm">
+                        <button @click="prevPage" :class="{ 'opacity-30': activePageIndex === 0 }" class="px-2 py-0.5 text-zinc-700 font-black text-xs">◀</button>
+                        <button @click="showQuickNav = !showQuickNav" class="px-2 py-0.5 text-zinc-900 font-black text-xs flex items-center gap-1">
+                            <span>P{{ activePageIndex + 1 }}/{{ pages.length }}</span>
+                            <span class="text-[10px] text-blue-600">▾</span>
+                        </button>
+                        <button @click="nextPage" :class="{ 'opacity-30': activePageIndex === pages.length - 1 }" class="px-2 py-0.5 text-zinc-700 font-black text-xs">▶</button>
+                    </div>
+                    <div v-else class="bg-red-50 border border-red-300 rounded-md flex items-center px-2.5 py-1 shadow-sm">
+                        <button @click="exitPinSubPage" class="text-red-700 text-xs font-black">‹ 返回 P{{ activePageIndex + 1 }}</button>
+                        <span class="mx-1.5 text-red-300">|</span>
+                        <span class="text-red-900 font-black text-xs">📍 細節釘 #{{ activePinIndex + 1 }}</span>
+                    </div>
+
+                    <!-- 快速跳頁縮圖目錄 -->
+                    <div v-if="showQuickNav && !activePin" class="w-72 max-w-[85vw] max-h-[55vh] bg-white/95 backdrop-blur-md border border-zinc-300 rounded-xl p-2 shadow-2xl overflow-y-auto touch-scrollable z-40">
+                        <div class="flex justify-between items-center px-1 pb-1.5 mb-1.5 border-b border-zinc-200">
+                            <span class="text-[11px] font-black text-zinc-800">📑 選擇圖紙頁數 ({{ pages.length }}頁)</span>
+                            <button @click="showQuickNav = false" class="text-xs font-bold text-zinc-400 px-1.5">✕</button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-1.5">
+                            <button v-for="(pg, idx) in pages" :key="pg.id" @click="switchPage(idx)"
+                                    :class="idx === activePageIndex ? 'ring-2 ring-blue-600 bg-blue-50 border-blue-500' : 'bg-zinc-50 border-zinc-200'"
+                                    class="border rounded-lg p-1 flex flex-col items-center text-left overflow-hidden">
+                                <div class="w-full h-12 bg-white rounded overflow-hidden flex items-center justify-center border border-zinc-200">
+                                    <img v-if="pg.photo" :src="pg.photo" class="w-full h-full object-cover">
+                                    <span v-else class="text-[10px] text-zinc-400 font-bold">空白</span>
+                                </div>
+                                <div class="w-full mt-1 flex items-center justify-between gap-0.5">
+                                    <span class="text-[11px] font-black text-zinc-900 shrink-0">P{{ idx + 1 }}</span>
+                                    <span class="text-[10px] text-zinc-500 truncate">{{ pg.space || '' }}</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-else class="flex items-center gap-1 flex-wrap">
+                        <span v-if="activeCanvas.space" class="bg-white/95 border border-zinc-300 text-zinc-800 px-2 py-0.5 rounded-md text-[11px] font-black shadow-sm">🏠 {{ activeCanvas.space }}</span>
+                        <button v-if="!activePin && masterPages.length && activePage?.space !== '總圖'" @click="switchPage(masterPages[0].idx)" class="bg-purple-50 text-purple-800 border border-purple-300 px-2 py-0.5 rounded-md text-[11px] font-black shadow-sm">🗺️ 返總圖</button>
+                    </div>
+                </div>
+
+                <!-- 右上浮動：畫布縮放 + 當前模式提示 -->
+                <div class="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end" @touchstart.stop @mousedown.stop>
+                    <div class="flex items-center bg-white/95 border border-zinc-300 rounded-md shadow-sm overflow-hidden">
+                        <button @click="stepZoom(-0.5)" :disabled="zoomScale <= 1" :class="zoomScale <= 1 ? 'opacity-30' : ''" class="px-2 py-1 text-xs font-black text-zinc-900 border-r border-zinc-200">➖</button>
+                        <button @click="resetZoom" :class="zoomScale > 1 ? 'bg-blue-600 text-white' : 'text-zinc-700'" class="px-1.5 py-1 text-[11px] font-black min-w-[40px] text-center">{{ Math.round(zoomScale * 100) }}%</button>
+                        <button @click="stepZoom(0.5)" :disabled="zoomScale >= 5" :class="zoomScale >= 5 ? 'opacity-30' : ''" class="px-2 py-1 text-xs font-black text-zinc-900 border-l border-zinc-200">➕</button>
+                    </div>
+                    <div class="pointer-events-none">
+                        <div v-if="mode === 'browse'" class="bg-zinc-900/90 text-white px-2 py-0.5 rounded-md text-[11px] font-bold shadow-sm">👆 睇圖 (點藍牌跳頁 / 點紅釘睇相)</div>
+                        <div v-else-if="mode === 'circle'" class="bg-red-600 text-white px-2 py-0.5 rounded-md text-[11px] font-bold shadow-sm">⭕ 手指或滑鼠直接圈出問題位</div>
+                        <div v-else-if="mode === 'text'" class="bg-blue-600 text-white px-2 py-0.5 rounded-md text-[11px] font-bold shadow-sm">💬 點一下圖紙位置寫留言</div>
+                        <div v-else-if="mode === 'move'" class="bg-amber-600 text-white px-2 py-0.5 rounded-md text-[11px] font-bold shadow-sm">✥ 拖拉你嘅留言或附圖擺位</div>
+                    </div>
+                </div>
+
+                <!-- 底部懸浮極簡批註工具列 -->
+                <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 max-w-[96vw]" @touchstart.stop @mousedown.stop>
+                    <!-- 顏色子列 (畫圈或留言時顯示) -->
+                    <div v-if="mode === 'circle' || mode === 'text'" class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full px-3 py-1 shadow-lg flex items-center gap-2">
+                        <span class="text-[11px] font-bold text-zinc-600">標記顏色：</span>
+                        <button v-for="c in ['#ef4444','#eab308','#2563eb']" :key="c" @click="fbColor = c"
+                                :style="{ backgroundColor: c }"
+                                :class="fbColor === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-70'"
+                                class="w-4 h-4 rounded-full border border-zinc-400 transition-transform"></button>
+                    </div>
+
+                    <!-- 主工具膠囊 -->
+                    <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-xl flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full">
+                        <button @click="mode = 'browse'" :class="mode === 'browse' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">👆 睇</button>
+                        <button @click="mode = 'circle'" :class="mode === 'circle' ? 'bg-red-600 text-white' : 'text-red-600 hover:bg-red-50'" class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">⭕ 畫圈</button>
+                        <button @click="mode = 'text'" :class="mode === 'text' ? 'bg-blue-600 text-white' : 'text-blue-700 hover:bg-blue-50'" class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">💬 留言</button>
+                        <label class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 text-emerald-700 hover:bg-emerald-50 cursor-pointer flex items-center gap-0.5">
+                            📷 影/貼圖
+                            <input type="file" accept="image/*" class="hidden" @change="handleAttachPhoto">
+                        </label>
+                        <button @click="mode = 'move'" :class="mode === 'move' ? 'bg-amber-600 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✥ 移</button>
+                        <div class="w-px h-4 bg-zinc-300 mx-0.5 shrink-0"></div>
+                        <button @click="undoDraft" :disabled="!fbHistory.length" :class="fbHistory.length ? 'text-zinc-900' : 'text-zinc-300'" class="px-2 py-1 rounded-full text-sm font-black shrink-0">↶</button>
+                        <button v-if="hasDraft" @click="clearDraft" class="px-2 py-1 rounded-full text-xs font-bold text-red-600 shrink-0">🗑️清空</button>
+                    </div>
+                </div>
+
+                <!-- 畫布區 -->
+                <div class="absolute inset-1 overflow-hidden bg-white shadow-sm border border-zinc-300 rounded-lg">
+                    <svg ref="svgCanvas" :view-box.camel="svgViewBox" preserveAspectRatio="xMidYMid meet"
+                         style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="canvas-touch-lock"
+                         @wheel.prevent="onStageWheel" @touchstart="onStageTouchStart" @touchmove="onStageTouchMove" @touchend="onStageTouchEnd" @touchcancel="onStageTouchEnd"
+                         @mousedown="onStageMouseDown" @mousemove="onStageMouseMove" @mouseup="onStageMouseUp">
                         <defs>
-                            <marker id="fs-arrow-gray" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#9ca3af" /></marker>
-                            <marker id="fs-arrow-white" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#ffffff" /></marker>
-                            <marker id="fs-arrow-red" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M 0 0.6 L 6 3 L 0 5.4 z" fill="#ef4444" /></marker>
+                            <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowId(c)" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                                <path d="M 0 0.6 L 6 3 L 0 5.4 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
+                            </marker>
                         </defs>
-                        <rect x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" fill="#ffffff" />
-                        <image :href="fullScreenItem.photo" x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" preserveAspectRatio="none" />
-                        
-                        <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
-                            <template v-if="m.type === 'image'">
-                                <image :href="m.data.b64" :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" preserveAspectRatio="none" />
-                            </template>
-                        </g>
 
-                        <g v-for="w in (fullScreenItem.walls || [])" :key="w.id">
+                        <!-- 底圖與主工程唯讀圖層 -->
+                        <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="#ffffff" />
+                        <image :href="activeCanvas.photo" x="0" y="0" :width="canvasW" :height="canvasH" preserveAspectRatio="none" />
+
+                        <g v-for="m in (activeCanvas.markers || [])" :key="'img-'+m.id" :transform="`translate(${m.x}, ${m.y})`" class="pointer-events-none">
+                            <image v-if="m.type === 'image'" :href="m.data.b64" :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" preserveAspectRatio="none" />
+                        </g>
+                        <g v-for="w in (activeCanvas.walls || [])" :key="'w-'+w.id" class="pointer-events-none">
                             <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" />
                         </g>
-                        
-                        <line v-for="l in (fullScreenItem.lines || [])" :key="l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
-                              :stroke="getLineStroke(l, 0.7)" :stroke-width="l.type === 'arrow-single' ? 4 : 6" stroke-linecap="round"
-                              :marker-end="l.type === 'arrow-single' ? `url(#fs-arrow-${l.color})` : null" />
-                              
-                        <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
-                        
-                        <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`">
+                        <line v-for="l in (activeCanvas.lines || [])" :key="'l-'+l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
+                              :stroke="getLineStroke(l, 0.75)" :stroke-width="(!l.type || l.type === 'measure') ? 5 : 4"
+                              :stroke-dasharray="(!l.type || l.type === 'measure') ? '14 10' : null" stroke-linecap="round"
+                              :marker-end="l.type === 'arrow-single' ? `url(#${getArrowId(l.color)})` : null" class="pointer-events-none" />
+                        <path v-for="p in (activeCanvas.paths || [])" :key="'p-'+p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" class="pointer-events-none" />
+
+                        <!-- 主工程文字標註 (支援點擊藍色跳頁傳送門) -->
+                        <g v-for="m in (activeCanvas.markers || [])" :key="'m-'+m.id" :transform="`translate(${m.x}, ${m.y})`"
+                           :class="(mode === 'browse' && m.type === 'page_link') ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'"
+                           @click.stop="onMasterMarkerClick(m)" @touchend.stop="onMasterMarkerClick(m)">
+                            <rect v-if="m.type === 'page_link'" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="14" fill="rgba(14,165,233,0.18)" stroke="#38bdf8" stroke-width="2.5" />
                             <template v-if="m.type !== 'image'">
-                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
-                                    <tspan v-for="(line, lIdx) in getMarkerLines(m)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
+                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text" style="font-size: 17px;">
+                                    <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
                                 </text>
                             </template>
                         </g>
-                        
-                        <g v-for="(pin, pIdx) in (fullScreenItem.pins || [])" :key="pin.id" :transform="`translate(${(pin.x / 100) * (fullScreenItem.w || 1200)}, ${(pin.y / 100) * (fullScreenItem.h || 900)})`">
-                            <polygon points="-10,-10 10,-10 0,4" fill="#dc2626" />
-                            <circle cx="0" cy="-24" r="20" fill="#dc2626" stroke="#ffffff" stroke-width="3" />
-                            <text x="0" y="-23" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="20" font-weight="900">{{ pIdx + 1 }}</text>
+
+                        <!-- 主工程紅釘 (點擊進入細節相) -->
+                        <template v-if="!activePin">
+                            <g v-for="(pin, index) in (activePage?.pins || [])" :key="'pin-'+pin.id" :transform="`translate(${(pin.x / 100) * canvasW}, ${(pin.y / 100) * canvasH})`"
+                               class="cursor-pointer pointer-events-auto" @touchstart.stop @mousedown.stop @click.stop="openPinSubPage(pin, index)">
+                                <circle cx="0" cy="-20" r="34" fill="transparent" />
+                                <polygon points="-11,-11 11,-11 0,5" fill="#dc2626" />
+                                <circle cx="0" cy="-26" r="22" fill="#dc2626" stroke="#ffffff" stroke-width="3.5" />
+                                <text x="0" y="-25" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="22" font-weight="900">{{ index + 1 }}</text>
+                            </g>
+                        </template>
+
+                        <!-- 師傅/業主新增嘅批註層 (圈圈 + 留言 + 附圖) -->
+                        <path v-for="fp in fbPaths" :key="fp.id" :d="fp.d" :stroke="fp.color" :stroke-width="7 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none" />
+                        <path v-if="currentFbPath" :d="currentFbPath" :stroke="fbColor" :stroke-width="7 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" class="pointer-events-none" />
+
+                        <g v-for="fm in fbMarkers" :key="fm.id" :transform="`translate(${fm.x}, ${fm.y})`"
+                           :class="mode === 'move' ? 'cursor-move pointer-events-auto' : (mode === 'browse' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none')"
+                           @touchstart="e => onFbMarkerStart(fm, e)" @mousedown="e => onFbMarkerStart(fm, e)">
+                            <rect v-if="mode === 'move'" :x="-fm.w/2 - 8" :y="-fm.h/2 - 8" :width="fm.w + 16" :height="fm.h + 16" rx="8" fill="rgba(217,119,6,0.12)" stroke="#d97706" :stroke-width="3 * invZoom" stroke-dasharray="6 4" />
+                            <template v-if="fm.type === 'image'">
+                                <rect :x="-fm.w/2 - 3" :y="-fm.h/2 - 3" :width="fm.w + 6" :height="fm.h + 6" rx="6" fill="#ffffff" stroke="#ef4444" :stroke-width="3 * invZoom" />
+                                <image :href="fm.b64" :x="-fm.w/2" :y="-fm.h/2" :width="fm.w" :height="fm.h" preserveAspectRatio="none" />
+                            </template>
+                            <template v-else>
+                                <rect :x="-fm.w/2 - 6" :y="-fm.h/2 - 4" :width="fm.w + 12" :height="fm.h + 8" rx="8" fill="rgba(255,255,255,0.92)" :stroke="fm.color" :stroke-width="2.5 * invZoom" />
+                                <text text-anchor="middle" dominant-baseline="central" :fill="fm.color" font-size="22" font-weight="900">{{ fm.text }}</text>
+                            </template>
                         </g>
                     </svg>
-                    <div v-else class="flex flex-col items-center justify-center text-zinc-500 gap-3">
-                        <div class="w-8 h-8 border-4 border-zinc-300 border-t-zinc-600 rounded-full animate-spin"></div>
-                        <span class="text-sm font-bold">載入高清圖中...</span>
-                    </div>
                 </div>
+            </div>
+        </main>
+
+        <!-- 留言 / 附圖編輯彈窗 -->
+        <div v-if="editingFbMarker" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="confirmEditFbMarker" @touchstart.stop @mousedown.stop>
+            <div class="bg-white border border-zinc-300 w-full max-w-xs rounded-xl p-4 shadow-2xl flex flex-col gap-3">
+                <div class="flex justify-between items-center border-b border-zinc-200 pb-2">
+                    <span class="text-sm font-black text-zinc-900">{{ editingFbMarker.type === 'image' ? '🖼️ 調整附圖大小' : '💬 輸入留言內容' }}</span>
+                    <button @click="deleteFbMarker(editingFbMarker.id)" class="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded">🗑️刪除</button>
+                </div>
+                <template v-if="editingFbMarker.type === 'image'">
+                    <div class="flex gap-2 justify-center py-2">
+                        <button @click="resizeFbImage(0.8)" class="flex-1 bg-zinc-100 border border-zinc-300 py-2 rounded-lg text-xs font-bold">➖ 縮小</button>
+                        <button @click="resizeFbImage(1.25)" class="flex-1 bg-zinc-100 border border-zinc-300 py-2 rounded-lg text-xs font-bold">➕ 放大</button>
+                    </div>
+                </template>
+                <template v-else>
+                    <input ref="fbTextInputRef" type="text" v-model="editingFbMarker.text" @input="updateFbTextSize(editingFbMarker)" @keyup.enter="confirmEditFbMarker" placeholder="例：呢度有條喉頂住 / 改 850mm" class="w-full bg-zinc-50 border-2 border-blue-500 rounded-lg p-2.5 text-sm font-bold focus:outline-none">
+                </template>
+                <button @click="confirmEditFbMarker" class="w-full bg-zinc-900 text-white py-2.5 rounded-lg text-xs font-bold">確定</button>
             </div>
         </div>
 
+        <!-- 提交成功提示彈窗 -->
+        <div v-if="showSubmitSuccess" class="fixed inset-0 bg-black/50 z-[90] flex items-center justify-center p-4">
+            <div class="bg-white border border-zinc-300 w-full max-w-xs rounded-xl p-5 text-center shadow-2xl flex flex-col gap-3">
+                <div class="text-3xl">✅</div>
+                <div class="text-base font-black text-zinc-900">意見已成功提交！</div>
+                <p class="text-xs text-zinc-600 font-bold leading-relaxed">設計師打開工程圖紙即可直接看到您圈出的位置與附圖並進行跟進。</p>
+                <button @click="clearDraft(); showSubmitSuccess = false" class="w-full bg-zinc-900 text-white py-2.5 rounded-lg text-xs font-bold">清空本頁草稿並繼續睇圖</button>
+                <button @click="showSubmitSuccess = false" class="w-full bg-white border border-zinc-300 text-zinc-700 py-2 rounded-lg text-xs font-bold">保留畫面標記</button>
+            </div>
+        </div>
     </div>
-    
-    <!-- 引入外部邏輯檔案 view.js -->
-    <script src="./view.js"></script>
+
+    <script>
+        const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp({
+                apiKey: "AIzaSyCSRfZdAVh8ADPNtayW5lyDtmE0xDsJXNg",
+                authDomain: "gen-lang-client-0208380044.firebaseapp.com",
+                databaseURL: "https://gen-lang-client-0208380044-default-rtdb.firebaseio.com",
+                projectId: "gen-lang-client-0208380044",
+                storageBucket: "gen-lang-client-0208380044.firebasestorage.app",
+                messagingSenderId: "17077391191",
+                appId: "1:17077391191:web:f167a311052c56bd3d7812"
+            });
+        }
+        const db = firebase.firestore();
+        db.settings({ experimentalAutoDetectLongPolling: true, ignoreUndefinedProperties: true });
+
+        const TAG_DEFS = {
+            door: { title: '門洞', fields: [{ key: 'w_in', label: '門闊' }, { key: 'h_in', label: '門高' }, { key: 't', label: '牆厚' }, { key: 't_frame', label: '門框厚' }, { key: 'h_top', label: '頂到天花' }, { key: 'w_side', label: '邊到牆' }] },
+            window: { title: '窗', fields: [{ key: 'w_in', label: '內闊' }, { key: 'h_in', label: '內高' }, { key: 'd_in', label: '內深' }, { key: 'h_bottom', label: '面到地' }, { key: 't_stone', label: '窗石厚' }, { key: 'd_stone', label: '窗石凸' }] },
+            beam: { title: '樑', fields: [{ key: 'w', label: '樑闊' }, { key: 'd', label: '樑深' }, { key: 'h_bottom', label: '底到地' }, { key: 'w_side', label: '樑邊到牆' }] },
+            column: { title: '柱', fields: [{ key: 'w', label: '柱闊' }, { key: 'd', label: '柱深' }, { key: 'h_top', label: '柱高' }, { key: 'd_out', label: '柱凸出' }] },
+            protrusion: { title: '凸', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
+            pipe: { title: '包喉', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
+            elec_box: { title: '電箱', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }, { key: 'h_bottom', label: '底到地' }] },
+            ac: { title: '冷氣', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }, { key: 'h_bottom', label: '底到地' }] },
+            fridge: { title: '雪柜', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
+            skirting: { title: '地腳線', fields: [{ key: 'h', label: '高' }, { key: 't', label: '厚' }] },
+            reserve: { title: '留位', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
+            avoid: { title: '避', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] }
+        };
+
+        const buildWallSegments = (w) => {
+            if (!w) return [];
+            const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = Math.hypot(dx, dy); if (L < 4) return [];
+            const ux = dx / L, uy = dy / L, nx = -uy, ny = ux, hw = 9;
+            const p1A = { x: w.x1 + nx * hw, y: w.y1 + ny * hw }, p2A = { x: w.x2 + nx * hw, y: w.y2 + ny * hw };
+            const p1B = { x: w.x1 - nx * hw, y: w.y1 - ny * hw }, p2B = { x: w.x2 - nx * hw, y: w.y2 - ny * hw };
+            const segs = [
+                { x1: p1A.x, y1: p1A.y, x2: p2A.x, y2: p2A.y, isHatch: false }, { x1: p1B.x, y1: p1B.y, x2: p2B.x, y2: p2B.y, isHatch: false },
+                { x1: p1A.x, y1: p1A.y, x2: p1B.x, y2: p1B.y, isHatch: false }, { x1: p2A.x, y1: p2A.y, x2: p2B.x, y2: p2B.y, isHatch: false }
+            ];
+            if (w.style === 'hatched') {
+                for (let c = -hw + 14; c < L + hw; c += 14) {
+                    const t0 = Math.max(-hw, -c), t1 = Math.min(hw, L - c);
+                    if (t1 - t0 > 0.5) segs.push({ x1: w.x1 + (c + t0) * ux + t0 * nx, y1: w.y1 + (c + t0) * uy + t0 * ny, x2: w.x1 + (c + t1) * ux + t1 * nx, y2: w.y1 + (c + t1) * uy + t1 * ny, isHatch: true });
+                }
+            }
+            return segs;
+        };
+
+        createApp({
+            setup() {
+                const inputCode = ref(''), isLoading = ref(false), loadingText = ref('正在載入圖紙...');
+                const toastMsg = ref(''), showToast = (m) => { toastMsg.value = m; setTimeout(() => { if (toastMsg.value === m) toastMsg.value = ''; }, 3000); };
+
+                const project = reactive({ code: '', name: '', date: '' });
+                const pages = ref([]), activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
+                const activePage = computed(() => pages.value[activePageIndex.value] || null);
+                const activeCanvas = computed(() => activePin.value || activePage.value);
+                const canvasW = computed(() => activeCanvas.value?.w || 1200);
+                const canvasH = computed(() => activeCanvas.value?.h || 900);
+                const masterPages = computed(() => pages.value.map((pg, idx) => ({ pg, idx })).filter(x => x.pg.space === '總圖'));
+                const showQuickNav = ref(false);
+
+                // 縮放與平移
+                const zoomScale = ref(1), vbX = ref(0), vbY = ref(0), svgCanvas = ref(null);
+                const invZoom = computed(() => 1 / Math.pow(zoomScale.value, 0.65));
+                const svgViewBox = computed(() => {
+                    const pw = canvasW.value, ph = canvasH.value;
+                    const vw = Math.round((pw / zoomScale.value) * 10) / 10, vh = Math.round((ph / zoomScale.value) * 10) / 10;
+                    const vx = Math.max(0, Math.min(pw - vw, vbX.value)), vy = Math.max(0, Math.min(ph - vh, vbY.value));
+                    return `${vx} ${vy} ${vw} ${vh}`;
+                });
+                const resetZoom = () => { zoomScale.value = 1; vbX.value = 0; vbY.value = 0; };
+                const applyZoomAt = (nextScale, clientX, clientY, anchorSvg) => {
+                    const svg = svgCanvas.value, pw = canvasW.value, ph = canvasH.value;
+                    const clamped = Math.max(1, Math.min(5, Math.round(nextScale * 100) / 100));
+                    if (clamped <= 1) { resetZoom(); return; }
+                    const vw = pw / clamped, vh = ph / clamped;
+                    if (svg && anchorSvg) {
+                        const r = svg.getBoundingClientRect(), baseFit = Math.min(r.width / pw, r.height / ph);
+                        const eff = baseFit * clamped, offX = r.left + (r.width - pw * baseFit) / 2, offY = r.top + (r.height - ph * baseFit) / 2;
+                        zoomScale.value = clamped;
+                        vbX.value = Math.max(0, Math.min(pw - vw, anchorSvg.x - (clientX - offX) / eff));
+                        vbY.value = Math.max(0, Math.min(ph - vh, anchorSvg.y - (clientY - offY) / eff));
+                    } else {
+                        const cx = vbX.value + (pw / zoomScale.value) / 2, cy = vbY.value + (ph / zoomScale.value) / 2;
+                        zoomScale.value = clamped;
+                        vbX.value = Math.max(0, Math.min(pw - vw, cx - vw / 2));
+                        vbY.value = Math.max(0, Math.min(ph - vh, cy - vh / 2));
+                    }
+                };
+                const stepZoom = (d) => applyZoomAt(zoomScale.value + d, null, null, null);
+                const onStageWheel = (e) => { if (svgCanvas.value && activeCanvas.value?.photo) applyZoomAt(zoomScale.value * (e.deltaY < 0 ? 1.2 : 0.82), e.clientX, e.clientY, getCoords(e)); };
+
+                const clientToSvgPoint = (clientX, clientY) => {
+                    const svg = svgCanvas.value; if (!svg || !activeCanvas.value) return { x: 0, y: 0 };
+                    const pw = canvasW.value, ph = canvasH.value;
+                    try {
+                        const ctm = svg.getScreenCTM();
+                        if (ctm) { const p = svg.createSVGPoint(); p.x = clientX; p.y = clientY; const loc = p.matrixTransform(ctm.inverse()); return { x: Math.round(Math.max(0, Math.min(pw, loc.x))), y: Math.round(Math.max(0, Math.min(ph, loc.y))) }; }
+                    } catch (_) {}
+                    const vw = pw / zoomScale.value, vh = ph / zoomScale.value, vx = Math.max(0, Math.min(pw - vw, vbX.value)), vy = Math.max(0, Math.min(ph - vh, vbY.value));
+                    const r = svg.getBoundingClientRect(), s = Math.min(r.width / vw, r.height / vh);
+                    return { x: Math.round(Math.max(0, Math.min(pw, vx + (clientX - r.left - (r.width - vw * s) / 2) / s))), y: Math.round(Math.max(0, Math.min(ph, vy + (clientY - r.top - (r.height - vh * s) / 2) / s))) };
+                };
+                const getCoords = (e) => { const pt = e.touches?.[0] || e.changedTouches?.[0] || e; return clientToSvgPoint(pt.clientX, pt.clientY); };
+
+                // 批註狀態 (僅存於本機，提交時送入獨立 feedback 集合)
+                const mode = ref('browse'), fbColor = ref('#ef4444');
+                const fbPaths = ref([]), fbMarkers = ref([]), fbHistory = ref([]);
+                const currentFbPath = ref(''), editingFbMarker = ref(null), fbTextInputRef = ref(null);
+                const isSubmitting = ref(false), showSubmitSuccess = ref(false);
+                const hasDraft = computed(() => fbPaths.value.length > 0 || fbMarkers.value.length > 0);
+                const draftCount = computed(() => fbPaths.value.length + fbMarkers.value.length);
+
+                const clearDraft = () => { fbPaths.value = []; fbMarkers.value = []; fbHistory.value = []; currentFbPath.value = ''; editingFbMarker.value = null; };
+                const undoDraft = () => {
+                    if (!fbHistory.value.length) return;
+                    const last = fbHistory.value.pop();
+                    if (last.type === 'path') fbPaths.value = fbPaths.value.filter(x => x.id !== last.id);
+                    else if (last.type === 'marker') fbMarkers.value = fbMarkers.value.filter(x => x.id !== last.id);
+                };
+
+                const switchPage = (idx) => {
+                    if (hasDraft.value && !confirm('切換頁面會清空本頁未提交的標記，確定切換嗎？')) return;
+                    clearDraft(); resetZoom(); showQuickNav.value = false; activePin.value = null; activePageIndex.value = idx; mode.value = 'browse';
+                };
+                const prevPage = () => { if (activePageIndex.value > 0) switchPage(activePageIndex.value - 1); };
+                const nextPage = () => { if (activePageIndex.value < pages.value.length - 1) switchPage(activePageIndex.value + 1); };
+                const openPinSubPage = (pin, idx) => {
+                    if (hasDraft.value && !confirm('進入細節釘會清空目前未提交的標記，確定繼續嗎？')) return;
+                    clearDraft(); resetZoom(); showQuickNav.value = false; activePin.value = pin; activePinIndex.value = idx; mode.value = 'browse';
+                };
+                const exitPinSubPage = () => {
+                    if (hasDraft.value && !confirm('返回主頁會清空目前未提交的標記，確定返回嗎？')) return;
+                    clearDraft(); resetZoom(); activePin.value = null; mode.value = 'browse';
+                };
+                const onMasterMarkerClick = (m) => {
+                    if (mode.value !== 'browse' || m.type !== 'page_link' || !m.data?.targetPageId) return;
+                    const idx = pages.value.findIndex(p => String(p.id) === String(m.data.targetPageId));
+                    if (idx !== -1) { switchPage(idx); showToast(`↪️ 已跳轉至 P${idx + 1}`); }
+                };
+
+                // 觸控與滑鼠手勢
+                let isDrawing = false, tempPts = [], isPinching = false, pinchDist = 0, pinchScale = 1, pinchAnchor = null;
+                let isPanning = false, panStart = { x: 0, y: 0 }, panVb = { x: 0, y: 0 };
+                let draggedFm = null, dragStart = { x: 0, y: 0 }, fmOrigin = { x: 0, y: 0 }, tapStartClient = null;
+
+                const onFbMarkerStart = (fm, e) => {
+                    if (e.touches?.length > 1 || isPinching) return;
+                    const pt = e.touches?.[0] || e;
+                    if (mode.value === 'move') {
+                        e.preventDefault(); e.stopPropagation();
+                        draggedFm = fm;
+                        const p = getCoords(e);
+                        dragStart = { x: p.x, y: p.y };
+                        fmOrigin = { x: fm.x, y: fm.y };
+                    } else if (mode.value === 'browse') {
+                        tapStartClient = { fm, x: pt.clientX, y: pt.clientY };
+                    }
+                };
+
+                const onStageTouchStart = (e) => {
+                    if (showQuickNav.value) showQuickNav.value = false;
+                    if (editingFbMarker.value) return;
+                    if (e.touches.length >= 2) {
+                        e.preventDefault(); isPinching = true; isDrawing = false; isPanning = false; currentFbPath.value = '';
+                        const t1 = e.touches[0], t2 = e.touches[1];
+                        pinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1;
+                        pinchScale = zoomScale.value;
+                        pinchAnchor = clientToSvgPoint((t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2);
+                        return;
+                    }
+                    if (e.touches.length === 1 && !draggedFm) {
+                        if (mode.value === 'browse') {
+                            isPanning = true; panStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; panVb = { x: vbX.value, y: vbY.value };
+                        } else if (mode.value === 'circle') {
+                            isDrawing = true; const p = getCoords(e); tempPts = [[p.x, p.y]]; currentFbPath.value = `M ${p.x} ${p.y}`;
+                        } else if (mode.value === 'text') {
+                            const p = getCoords(e); addFbTextAt(p.x, p.y);
+                        }
+                    }
+                };
+
+                const onStageTouchMove = (e) => {
+                    if (e.touches.length >= 2 && isPinching) {
+                        e.preventDefault();
+                        const t1 = e.touches[0], t2 = e.touches[1], cur = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1;
+                        applyZoomAt(pinchScale * (cur / pinchDist), (t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2, pinchAnchor);
+                        return;
+                    }
+                    if (isPinching || e.touches.length !== 1) return;
+                    if (tapStartClient && Math.hypot(e.touches[0].clientX - tapStartClient.x, e.touches[0].clientY - tapStartClient.y) > 8) tapStartClient = null;
+                    if (draggedFm) {
+                        e.preventDefault(); const p = getCoords(e);
+                        draggedFm.x = Math.round(Math.max(0, Math.min(canvasW.value, fmOrigin.x + (p.x - dragStart.x))));
+                        draggedFm.y = Math.round(Math.max(0, Math.min(canvasH.value, fmOrigin.y + (p.y - dragStart.y))));
+                    } else if (isPanning) {
+                        e.preventDefault(); panDelta(e.touches[0].clientX - panStart.x, e.touches[0].clientY - panStart.y);
+                    } else if (isDrawing && mode.value === 'circle') {
+                        e.preventDefault(); const p = getCoords(e); tempPts.push([p.x, p.y]);
+                        currentFbPath.value = `M ${tempPts.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`;
+                    }
+                };
+
+                const onStageTouchEnd = (e) => {
+                    if (e.touches.length === 0) {
+                        if (isPinching) { isPinching = false; return; }
+                        if (draggedFm) { draggedFm = null; return; }
+                        if (isPanning) {
+                            isPanning = false;
+                            if (tapStartClient) { const fm = tapStartClient.fm; tapStartClient = null; editingFbMarker.value = fm; }
+                            return;
+                        }
+                        if (isDrawing && mode.value === 'circle') {
+                            isDrawing = false;
+                            if (currentFbPath.value && tempPts.length > 2) {
+                                const id = 'fbp_' + Date.now();
+                                fbPaths.value.push({ id, d: currentFbPath.value, color: fbColor.value });
+                                fbHistory.value.push({ type: 'path', id });
+                            }
+                            currentFbPath.value = '';
+                        }
+                    }
+                };
+
+                const panDelta = (dx, dy) => {
+                    const svg = svgCanvas.value; if (!svg) return;
+                    const pw = canvasW.value, ph = canvasH.value, vw = pw / zoomScale.value, vh = ph / zoomScale.value;
+                    const r = svg.getBoundingClientRect(), fit = Math.min(r.width / vw, r.height / vh) || 1;
+                    vbX.value = Math.max(0, Math.min(pw - vw, panVb.x - dx / fit));
+                    vbY.value = Math.max(0, Math.min(ph - vh, panVb.y - dy / fit));
+                };
+
+                const onStageMouseDown = (e) => {
+                    if (showQuickNav.value) showQuickNav.value = false;
+                    if (editingFbMarker.value || draggedFm) return;
+                    if (mode.value === 'browse') {
+                        isPanning = true; panStart = { x: e.clientX, y: e.clientY }; panVb = { x: vbX.value, y: vbY.value };
+                    } else if (mode.value === 'circle') {
+                        isDrawing = true; const p = getCoords(e); tempPts = [[p.x, p.y]]; currentFbPath.value = `M ${p.x} ${p.y}`;
+                    } else if (mode.value === 'text') {
+                        const p = getCoords(e); addFbTextAt(p.x, p.y);
+                    }
+                };
+                const onStageMouseMove = (e) => {
+                    if (tapStartClient && Math.hypot(e.clientX - tapStartClient.x, e.clientY - tapStartClient.y) > 8) tapStartClient = null;
+                    if (draggedFm) {
+                        const p = getCoords(e);
+                        draggedFm.x = Math.round(Math.max(0, Math.min(canvasW.value, fmOrigin.x + (p.x - dragStart.x))));
+                        draggedFm.y = Math.round(Math.max(0, Math.min(canvasH.value, fmOrigin.y + (p.y - dragStart.y))));
+                    } else if (isPanning) {
+                        panDelta(e.clientX - panStart.x, e.clientY - panStart.y);
+                    } else if (isDrawing && mode.value === 'circle') {
+                        const p = getCoords(e); tempPts.push([p.x, p.y]);
+                        currentFbPath.value = `M ${tempPts.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`;
+                    }
+                };
+                const onStageMouseUp = () => {
+                    if (draggedFm) { draggedFm = null; return; }
+                    if (isPanning) {
+                        isPanning = false;
+                        if (tapStartClient) { const fm = tapStartClient.fm; tapStartClient = null; editingFbMarker.value = fm; }
+                        return;
+                    }
+                    if (isDrawing && mode.value === 'circle') {
+                        isDrawing = false;
+                        if (currentFbPath.value && tempPts.length > 2) {
+                            const id = 'fbp_' + Date.now();
+                            fbPaths.value.push({ id, d: currentFbPath.value, color: fbColor.value });
+                            fbHistory.value.push({ type: 'path', id });
+                        }
+                        currentFbPath.value = '';
+                    }
+                };
+
+                // 留言與附圖處理
+                const updateFbTextSize = (fm) => {
+                    const len = String(fm.text || '').length;
+                    fm.w = Math.max(90, len * 22 + 24);
+                    fm.h = 38;
+                };
+                const addFbTextAt = (x, y) => {
+                    const id = 'fbm_' + Date.now();
+                    const fm = { id, type: 'text', x, y, w: 120, h: 38, text: '', color: fbColor.value };
+                    fbMarkers.value.push(fm);
+                    fbHistory.value.push({ type: 'marker', id });
+                    editingFbMarker.value = fm;
+                    nextTick(() => fbTextInputRef.value?.focus());
+                };
+                const confirmEditFbMarker = () => {
+                    if (editingFbMarker.value?.type === 'text' && !String(editingFbMarker.value.text || '').trim()) {
+                        deleteFbMarker(editingFbMarker.value.id);
+                    }
+                    editingFbMarker.value = null;
+                };
+                const deleteFbMarker = (id) => {
+                    fbMarkers.value = fbMarkers.value.filter(x => x.id !== id);
+                    fbHistory.value = fbHistory.value.filter(x => x.id !== id);
+                    editingFbMarker.value = null;
+                };
+                const resizeFbImage = (factor) => {
+                    const fm = editingFbMarker.value; if (!fm || fm.type !== 'image') return;
+                    fm.w = Math.max(60, Math.min(canvasW.value * 0.9, Math.round(fm.w * factor)));
+                    fm.h = Math.max(60, Math.min(canvasH.value * 0.9, Math.round(fm.h * factor)));
+                };
+
+                const compressAttachImage = (blob) => new Promise((res) => {
+                    const r = new FileReader(); r.readAsDataURL(blob);
+                    r.onload = (e) => {
+                        const img = new Image(); img.src = e.target.result;
+                        img.onload = () => {
+                            const c = document.createElement('canvas'), MAX = 720;
+                            let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+                            if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; } }
+                            c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+                            res({ b64: c.toDataURL('image/jpeg', 0.62), w, h });
+                        };
+                    };
+                });
+
+                const appendAttachedBlob = async (blob) => {
+                    const res = await compressAttachImage(blob);
+                    const vw = canvasW.value / zoomScale.value, vh = canvasH.value / zoomScale.value;
+                    let tw = Math.min(res.w, canvasW.value * 0.35);
+                    let th = Math.round((res.h / res.w) * tw);
+                    const id = 'fbm_' + Date.now();
+                    const fm = { id, type: 'image', x: Math.round(vbX.value + vw / 2), y: Math.round(vbY.value + vh / 2), w: tw, h: th, b64: res.b64 };
+                    fbMarkers.value.push(fm);
+                    fbHistory.value.push({ type: 'marker', id });
+                    mode.value = 'move';
+                    showToast('✅ 已貼上附圖，可直接拖拉調整位置');
+                };
+
+                const handleAttachPhoto = async (e) => {
+                    const file = e.target.files?.[0]; if (!file) return;
+                    await appendAttachedBlob(file);
+                    e.target.value = '';
+                };
+
+                // 提交意見至獨立雲端意見箱 (絕不修改主圖資料)
+                const submitFeedback = async () => {
+                    if (!hasDraft.value) { showToast('請先用「⭕畫圈」、「💬留言」或「📷影/貼圖」標記問題位'); return; }
+                    let sender = localStorage.getItem('measure_viewer_name') || '';
+                    sender = prompt('👤 請輸入您的稱呼 (例：電工明哥、業主陳生)：', sender)?.trim();
+                    if (!sender) return;
+                    localStorage.setItem('measure_viewer_name', sender);
+
+                    const payload = {
+                        pageId: activePage.value.id,
+                        pinId: activePin.value ? String(activePin.value.id) : '',
+                        pageLabel: activePin.value ? `P${activePageIndex.value + 1} 釘#${activePinIndex.value + 1}` : `P${activePageIndex.value + 1}${activePage.value.space ? ' [' + activePage.value.space + ']' : ''}`,
+                        author: sender,
+                        createdAt: Date.now(),
+                        paths: JSON.parse(JSON.stringify(fbPaths.value)),
+                        markers: JSON.parse(JSON.stringify(fbMarkers.value))
+                    };
+                    if (JSON.stringify(payload).length > 900000) {
+                        alert('附圖檔案過大，請減少附圖數量後再提交');
+                        return;
+                    }
+                    isSubmitting.value = true;
+                    try {
+                        await db.collection('site_projects').doc(String(project.code)).collection('feedback').add(payload);
+                        showSubmitSuccess.value = true;
+                    } catch (err) {
+                        alert('提交失敗，請檢查網絡連線：' + err.message);
+                    } finally {
+                        isSubmitting.value = false;
+                    }
+                };
+
+                // 唯讀輔助渲染函數
+                const getArrowId = (c) => 'v-arrow-' + String(c || '#ef4444').replace('#', 'hex_');
+                const getLineStroke = (l, a = 0.75) => (!l.type || l.type === 'measure') ? `rgba(255,0,68,${a})` : ({ red: '#ef4444', gray: '#9ca3af', white: '#ffffff' }[l.color] || l.color || '#ef4444');
+                const getWallSegments = (w) => buildWallSegments(w);
+                const getStampColor = (m) => m.textColor || (m.type === 'space_tag' ? '#a855f7' : (m.type === 'page_link' ? '#38bdf8' : '#ffffff'));
+                const getMarkerLines = (m) => {
+                    const def = TAG_DEFS[m.type];
+                    if (def) return [def.title, ...def.fields.filter(f => m.data[f.key]).map(f => `${f.label}:${m.data[f.key]}`)];
+                    if (['stamp', 'text', 'space_tag', 'page_link'].includes(m.type)) return [m.data.val || ''];
+                    return [`${m.data.name ? m.data.name + ': ' : ''}${m.data.val || ''}`];
+                };
+
+                const downloadAnnotatedImage = async () => {
+                    if (!activeCanvas.value?.photo) return;
+                    const cObj = activeCanvas.value, img = new Image(); img.src = cObj.photo;
+                    await new Promise(r => { img.onload = r; img.onerror = r; });
+                    const c = document.createElement('canvas'), w = cObj.w || 1200, h = cObj.h || 900; c.width = w; c.height = h;
+                    const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+                    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                    (cObj.lines || []).forEach(l => {
+                        ctx.save(); if (!l.type || l.type === 'measure') ctx.setLineDash([14, 10]);
+                        ctx.strokeStyle = getLineStroke(l, 0.75); ctx.lineWidth = 4;
+                        ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore();
+                    });
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    (cObj.markers || []).forEach(m => {
+                        if (m.type !== 'image') {
+                            const lines = getMarkerLines(m); ctx.font = '900 17px sans-serif';
+                            lines.forEach((ln, i) => {
+                                const y = m.y - ((lines.length - 1) * 20) / 2 + i * 20;
+                                ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(ln, m.x, y);
+                                ctx.fillStyle = getStampColor(m); ctx.fillText(ln, m.x, y);
+                            });
+                        }
+                    });
+                    fbPaths.value.forEach(fp => { ctx.strokeStyle = fp.color; ctx.lineWidth = 7; ctx.stroke(new Path2D(fp.d)); });
+                    for (const fm of fbMarkers.value) {
+                        if (fm.type === 'image' && fm.b64) {
+                            const im = new Image(); im.src = fm.b64; await new Promise(r => { im.onload = r; im.onerror = r; });
+                            ctx.drawImage(im, fm.x - fm.w / 2, fm.y - fm.h / 2, fm.w, fm.h);
+                        } else if (fm.text) {
+                            ctx.font = '900 22px sans-serif'; ctx.lineWidth = 6; ctx.strokeStyle = '#fff'; ctx.strokeText(fm.text, fm.x, fm.y);
+                            ctx.fillStyle = fm.color; ctx.fillText(fm.text, fm.x, fm.y);
+                        }
+                    }
+                    const url = URL.createObjectURL(await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9)));
+                    const a = document.createElement('a'); a.href = url; a.download = `批註_${project.name || project.code}_P${activePageIndex.value + 1}.jpg`;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000);
+                };
+
+                // 唯讀載入雲端工程資料
+                const resolveMediaDoc = async (doc) => {
+                    const d = doc.data(); if (!d) return null; if (d.photo) return d.photo;
+                    if (d.chunked && d.totalChunks > 0) {
+                        const snap = await doc.ref.collection('chunks').get();
+                        const list = snap.docs.map(c => c.data()).sort((a, b) => (a.index || 0) - (b.index || 0));
+                        if (list.length === d.totalChunks) return list.map(c => c.data || '').join('');
+                    }
+                    return null;
+                };
+
+                const loadProjectData = async (code) => {
+                    code = String(code || '').trim(); if (!code) return;
+                    isLoading.value = true; loadingText.value = `正在載入工程 #${code}...`;
+                    try {
+                        const projRef = db.collection('site_projects').doc(code);
+                        const [projDoc, pagesSnap, mediaSnap] = await Promise.all([projRef.get(), projRef.collection('pages').get(), projRef.collection('media').get()]);
+                        if (!projDoc.exists) { alert('找不到工程碼 #' + code); project.code = ''; return; }
+                        const pd = projDoc.data();
+                        project.code = code; project.name = pd.name || ''; project.date = pd.date || '';
+                        const mediaMap = new Map();
+                        await Promise.all(mediaSnap.docs.map(async (m) => { const p = await resolveMediaDoc(m); if (p) mediaMap.set(String(m.id), p); }));
+                        const orderList = pd.pageIds || [], deletedSet = new Set(pd.deletedPageIds || []);
+                        const loaded = pagesSnap.docs.filter(d => !deletedSet.has(d.id)).map(doc => {
+                            const r = doc.data();
+                            return {
+                                id: doc.id, ...r,
+                                photo: (r.photoId && mediaMap.get(r.photoId)) || mediaMap.get('page_' + (r.id || doc.id)) || r.photo || null,
+                                pins: (r.pins || []).map(pin => ({ ...pin, photo: (pin.photoId && mediaMap.get(pin.photoId)) || mediaMap.get(String(pin.id)) || pin.photo || null }))
+                            };
+                        });
+                        pages.value = loaded.sort((a, b) => (orderList.indexOf(a.id) === -1 ? 9999 : orderList.indexOf(a.id)) - (orderList.indexOf(b.id) === -1 ? 9999 : orderList.indexOf(b.id)));
+                        activePageIndex.value = 0; activePin.value = null;
+                    } catch (e) {
+                        alert('載入失敗：' + e.message);
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                const loadByInputCode = () => { if (inputCode.value.trim().length === 6) loadProjectData(inputCode.value.trim()); else alert('請輸入 6 位數工程碼'); };
+
+                onMounted(() => {
+                    const params = new URLSearchParams(window.location.search);
+                    const c = params.get('code');
+                    if (c) loadProjectData(c);
+                    window.addEventListener('paste', async (e) => {
+                        if (!activeCanvas.value?.photo) return;
+                        const items = e.clipboardData?.items || [];
+                        for (let i = 0; i < items.length; i++) {
+                            if (items[i].type.indexOf('image') !== -1) { e.preventDefault(); await appendAttachedBlob(items[i].getAsFile()); return; }
+                        }
+                    });
+                });
+
+                return {
+                    inputCode, isLoading, loadingText, toastMsg, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH, masterPages, showQuickNav,
+                    zoomScale, invZoom, svgViewBox, svgCanvas, stepZoom, resetZoom, onStageWheel,
+                    mode, fbColor, fbPaths, fbMarkers, fbHistory, currentFbPath, editingFbMarker, fbTextInputRef, isSubmitting, showSubmitSuccess, hasDraft, draftCount,
+                    clearDraft, undoDraft, switchPage, prevPage, nextPage, openPinSubPage, exitPinSubPage, onMasterMarkerClick,
+                    onFbMarkerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp,
+                    updateFbTextSize, confirmEditFbMarker, deleteFbMarker, resizeFbImage, handleAttachPhoto, submitFeedback,
+                    getArrowId, getLineStroke, getWallSegments, getStampColor, getMarkerLines, downloadAnnotatedImage, loadByInputCode
+                };
+            }
+        }).mount('#app');
+    </script>
 </body>
 </html>
