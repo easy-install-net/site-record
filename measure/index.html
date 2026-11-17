@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v11.0</title>
+    <title>度尺寶 Pro v11.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -49,28 +49,29 @@
 </head>
 <body class="antialiased">
     <div id="boot-screen" style="position:fixed;inset:0;z-index:200;background:#ffffff;color:#111827;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
-        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v11.0...</div>
+        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v11.1...</div>
         <button id="boot-retry" onclick="location.reload()" style="display:none;margin-top:16px;background:#111827;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;">🔄 重新載入</button>
     </div>
 
     <div id="app" class="fixed inset-0 w-full h-full flex flex-col overflow-hidden bg-zinc-50" style="display:none;">
 
-        <!-- 極簡瘦身頂部導航欄 (去數字化・隱藏手動載入上傳) -->
-        <header class="shrink-0 h-11 w-full bg-white border-b border-zinc-200 px-2 flex justify-between items-center gap-1.5 z-30">
-            <div class="flex items-center gap-1.5 min-w-0 flex-1">
-                <span v-if="currentView === 'dir'" class="text-sm font-black text-zinc-900 truncate">工程目錄</span>
+        <!-- 極簡瘦身頂部導航欄 -->
+        <header class="shrink-0 h-11 w-full bg-white border-b border-zinc-200 px-2 flex justify-between items-center gap-1 z-30">
+            <div class="flex items-center gap-1 min-w-0 flex-1">
+                <span v-if="currentView === 'dir'" class="text-sm font-black text-zinc-900 truncate">目錄</span>
                 <template v-else>
                     <button @click="backToProjects" class="bg-zinc-100 hover:bg-zinc-200 text-zinc-800 px-2 py-1 rounded text-xs font-bold shrink-0">‹ 目錄</button>
                     <input v-model="project.name" @input="markProjectChanged" @blur="saveAll" @keyup.enter="$event.target.blur()" placeholder="輸入工程地址..." class="bg-transparent focus:bg-zinc-50 border border-transparent focus:border-blue-500 text-zinc-900 text-sm font-bold min-w-[60px] flex-1 px-1.5 py-0.5 rounded focus:outline-none truncate">
                 </template>
                 <span @click="showCloudDetail" :class="cloudStatusClass" class="text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer border">{{ cloudStatusText }}</span>
             </div>
-            <div class="flex gap-1.5 items-center shrink-0">
+            <div class="flex gap-1 items-center shrink-0">
                 <template v-if="currentView === 'dir'">
-                    <button @click="openCadManager" class="bg-blue-50 border border-blue-300 text-blue-800 px-2 py-1 rounded text-xs font-bold">🏛️圖庫</button>
-                    <button @click="openMergeProjectsModal" class="bg-indigo-50 border border-indigo-300 text-indigo-700 px-2 py-1 rounded text-xs font-bold">🔗合拼</button>
-                    <button @click="openCloudBrowser" class="bg-white border border-zinc-300 text-zinc-700 px-2 py-1 rounded text-xs font-bold">☁️雲端庫</button>
-                    <button @click="createNewProject" class="bg-zinc-900 text-white px-2.5 py-1 rounded text-xs font-bold">+新建</button>
+                    <button @click="openStampManager" class="bg-amber-50 border border-amber-300 text-amber-800 px-1.5 py-1 rounded text-xs font-bold">🏷️印章</button>
+                    <button @click="openCadManager" class="bg-blue-50 border border-blue-300 text-blue-800 px-1.5 py-1 rounded text-xs font-bold">🏛️圖庫</button>
+                    <button @click="openMergeProjectsModal" class="bg-indigo-50 border border-indigo-300 text-indigo-700 px-1.5 py-1 rounded text-xs font-bold">🔗合拼</button>
+                    <button @click="openCloudBrowser" class="bg-white border border-zinc-300 text-zinc-700 px-1.5 py-1 rounded text-xs font-bold">☁️雲端</button>
+                    <button @click="createNewProject" class="bg-zinc-900 text-white px-2 py-1 rounded text-xs font-bold">+新建</button>
                 </template>
                 <template v-else-if="currentView === 'preview'">
                     <button @click="enterEditMode(0)" class="bg-zinc-900 text-white px-2.5 py-1 rounded text-xs font-bold">✏️編輯</button>
@@ -86,21 +87,21 @@
 
         <div v-if="toastMsg" class="fixed top-12 left-1/2 -translate-x-1/2 z-[80] bg-zinc-900 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl border border-zinc-700 whitespace-nowrap">{{ toastMsg }}</div>
 
-        <!-- 1. 工程目錄視圖 (純帳號歸戶・隱藏6位數字・Google登入狀態欄) -->
+        <!-- 1. 工程目錄視圖 -->
         <main v-show="currentView === 'dir'" class="flex-1 min-h-0 w-full p-3 overflow-y-auto touch-scrollable">
             <div class="bg-white border border-zinc-200 rounded-lg p-2.5 mb-3 flex items-center justify-between gap-2 shadow-sm">
                 <div class="flex items-center gap-2 min-w-0">
                     <span class="text-base shrink-0">{{ currentUser ? '🟢' : '👤' }}</span>
                     <div class="min-w-0">
                         <div class="text-xs font-black text-zinc-900 truncate">{{ currentUser ? (currentUser.displayName || currentUser.email) : '未綁定 Google 帳號 (僅本機保存)' }}</div>
-                        <div class="text-[10px] text-zinc-500 font-bold truncate">{{ currentUser ? '已啟用帳號自動同步與退出上傳' : '綁定後跨裝置自動讀取你名下所有工程' }}</div>
+                        <div class="text-[10px] text-zinc-500 font-bold truncate">{{ currentUser ? '已啟用帳號自動同步、圖庫雲端備份與退出上傳' : '綁定後跨裝置自動讀取你名下所有工程與圖庫' }}</div>
                     </div>
                 </div>
                 <button v-if="!currentUser" @click="loginWithGoogle" class="bg-zinc-900 text-white px-3 py-1.5 rounded-md text-xs font-bold shrink-0 shadow-sm">🔒 綁定 Google</button>
                 <button v-else @click="logoutGoogle" class="bg-zinc-100 text-zinc-600 px-2.5 py-1 rounded-md text-[11px] font-bold shrink-0">登出</button>
             </div>
 
-            <div v-if="!projectList.length" class="text-center text-zinc-500 mt-16 text-sm font-bold">暫無名下工程。<br>點右上「+新建」開始，或到「☁️雲端庫」認領舊工程。</div>
+            <div v-if="!projectList.length" class="text-center text-zinc-500 mt-16 text-sm font-bold">暫無名下工程。<br>點右上「+新建」開始，或到「☁️雲端」認領舊工程。</div>
             <div v-for="proj in projectList" :key="proj.code" class="bg-white border border-zinc-300 p-3 rounded-lg mb-2.5 flex justify-between items-center shadow-sm">
                 <div class="flex-1 mr-2 cursor-pointer min-w-0" @click="loadProject(proj.code, true)">
                     <div class="flex items-center gap-1.5">
@@ -182,7 +183,8 @@
                                     <path v-for="p in (pg.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
                                     <g v-for="m in (pg.markers || [])" :key="m.id">
                                         <g v-if="m.type === 'cad' && getCadDef(m.data?.cadType)" :transform="getCadTransform(m)">
-                                            <template v-for="(s, sIdx) in getCadDef(m.data.cadType).shapes" :key="sIdx">
+                                            <image v-if="getCadDef(m.data.cadType).imgB64" :href="getCadDef(m.data.cadType).imgB64" :x="-(getCadDef(m.data.cadType).w || 70)/2" :y="-(getCadDef(m.data.cadType).h || 70)/2" :width="getCadDef(m.data.cadType).w || 70" :height="getCadDef(m.data.cadType).h || 70" preserveAspectRatio="xMidYMid meet" />
+                                            <template v-else v-for="(s, sIdx) in getCadDef(m.data.cadType).shapes" :key="sIdx">
                                                 <rect v-if="s.t === 'rect'" :x="s.x" :y="s.y" :width="s.w" :height="s.h" :rx="s.rx || 0" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :stroke-dasharray="s.dash ? s.dash.join(' ') : null" :fill="s.fillSolid ? (m.color || '#111827') : (s.fillBg ? 'rgba(255,255,255,0.72)' : 'none')" :fill-opacity="s.fillSolid ? 0.2 : 1" />
                                                 <line v-else-if="s.t === 'line'" :x1="s.x1" :y1="s.y1" :x2="s.x2" :y2="s.y2" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :stroke-dasharray="s.dash ? s.dash.join(' ') : null" stroke-linecap="round" />
                                                 <circle v-else-if="s.t === 'circle'" :cx="s.cx" :cy="s.cy" :r="s.r" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :fill="s.fillBg ? 'rgba(255,255,255,0.72)' : 'none'" />
@@ -261,7 +263,7 @@
                     <button v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff']" :key="c" @click="drawColor = c" :style="{backgroundColor: c}" :class="drawColor === c ? 'ring-2 ring-zinc-900 scale-110' : ''" class="w-4 h-4 rounded-full border border-zinc-400 shrink-0"></button>
                 </div>
 
-                <!-- 🏛️ AutoCAD 矢量圖塊快速選擇列 -->
+                <!-- 🏛️ AutoCAD 矢量/圖片圖塊快速選擇列 (帶迷你縮圖預覽) -->
                 <div v-if="!capsuleCollapsed && drawMode === 'cad'"
                      class="bg-white/95 backdrop-blur-md border border-indigo-300 rounded-2xl p-1.5 shadow-xl flex flex-col gap-1 max-w-[95vw]">
                     <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
@@ -274,7 +276,21 @@
                     <div class="flex items-center gap-1 overflow-x-auto no-scrollbar pt-0.5">
                         <button v-for="item in filteredCadList" :key="item.id" @click="selectedCadType = item.id"
                                 :class="selectedCadType === item.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-800 border-zinc-300'"
-                                class="px-2.5 py-1 rounded-lg border text-xs font-bold whitespace-nowrap shrink-0 shadow-sm">{{ item.pinned ? '⭐' : '' }}{{ item.label }}</button>
+                                class="px-2 py-1 rounded-lg border text-xs font-bold whitespace-nowrap shrink-0 shadow-sm flex items-center gap-1.5">
+                            <span class="w-5 h-5 rounded bg-white border border-zinc-200 flex items-center justify-center overflow-hidden shrink-0">
+                                <img v-if="item.imgB64" :src="item.imgB64" class="w-full h-full object-contain">
+                                <svg v-else :view-box.camel="getCadPreviewViewBox(item)" class="w-4 h-4">
+                                    <template v-for="(s, sIdx) in (item.shapes || [])" :key="sIdx">
+                                        <rect v-if="s.t === 'rect'" :x="s.x" :y="s.y" :width="s.w" :height="s.h" stroke="#111827" stroke-width="4" fill="none" />
+                                        <line v-else-if="s.t === 'line'" :x1="s.x1" :y1="s.y1" :x2="s.x2" :y2="s.y2" stroke="#111827" stroke-width="4" />
+                                        <circle v-else-if="s.t === 'circle'" :cx="s.cx" :cy="s.cy" :r="s.r" stroke="#111827" stroke-width="4" fill="none" />
+                                        <ellipse v-else-if="s.t === 'ellipse'" :cx="s.cx" :cy="s.cy" :rx="s.rx" :ry="s.ry" stroke="#111827" stroke-width="4" fill="none" />
+                                        <path v-else-if="s.t === 'path'" :d="s.d" stroke="#111827" stroke-width="4" fill="none" />
+                                    </template>
+                                </svg>
+                            </span>
+                            <span>{{ item.pinned ? '⭐' : '' }}{{ item.label }}</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -419,10 +435,11 @@
                                    @mousedown="e => onMarkerPointerStart(m, e, 'A')">
 
                                     <g v-if="m.type === 'cad' && getCadDef(m.data?.cadType)" :transform="getCadTransform(m)">
-                                        <rect :x="-getCadDef(m.data.cadType).w/2 - 6" :y="-getCadDef(m.data.cadType).h/2 - 6" :width="getCadDef(m.data.cadType).w + 12" :height="getCadDef(m.data.cadType).h + 12"
+                                        <rect :x="-(getCadDef(m.data.cadType).w || 70)/2 - 6" :y="-(getCadDef(m.data.cadType).h || 70)/2 - 6" :width="(getCadDef(m.data.cadType).w || 70) + 12" :height="(getCadDef(m.data.cadType).h || 70) + 12"
                                               :fill="activeMarker?.id === m.id ? 'rgba(79,70,229,0.08)' : 'transparent'"
                                               :stroke="activeMarker?.id === m.id ? '#4f46e5' : (drawMode === 'move' ? '#2563eb' : 'none')" stroke-width="2" stroke-dasharray="5 3" />
-                                        <template v-for="(s, sIdx) in getCadDef(m.data.cadType).shapes" :key="sIdx">
+                                        <image v-if="getCadDef(m.data.cadType).imgB64" :href="getCadDef(m.data.cadType).imgB64" :x="-(getCadDef(m.data.cadType).w || 70)/2" :y="-(getCadDef(m.data.cadType).h || 70)/2" :width="getCadDef(m.data.cadType).w || 70" :height="getCadDef(m.data.cadType).h || 70" preserveAspectRatio="xMidYMid meet" />
+                                        <template v-else v-for="(s, sIdx) in getCadDef(m.data.cadType).shapes" :key="sIdx">
                                             <rect v-if="s.t === 'rect'" :x="s.x" :y="s.y" :width="s.w" :height="s.h" :rx="s.rx || 0" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :stroke-dasharray="s.dash ? s.dash.join(' ') : null" :fill="s.fillSolid ? (m.color || '#111827') : (s.fillBg ? 'rgba(255,255,255,0.72)' : 'none')" :fill-opacity="s.fillSolid ? 0.2 : 1" />
                                             <line v-else-if="s.t === 'line'" :x1="s.x1" :y1="s.y1" :x2="s.x2" :y2="s.y2" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :stroke-dasharray="s.dash ? s.dash.join(' ') : null" stroke-linecap="round" />
                                             <circle v-else-if="s.t === 'circle'" :cx="s.cx" :cy="s.cy" :r="s.r" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :fill="s.fillBg ? 'rgba(255,255,255,0.72)' : 'none'" />
@@ -589,10 +606,11 @@
                                    @mousedown="e => onMarkerPointerStart(m, e, 'B')">
 
                                     <g v-if="m.type === 'cad' && getCadDef(m.data?.cadType)" :transform="getCadTransform(m)">
-                                        <rect :x="-getCadDef(m.data.cadType).w/2 - 6" :y="-getCadDef(m.data.cadType).h/2 - 6" :width="getCadDef(m.data.cadType).w + 12" :height="getCadDef(m.data.cadType).h + 12"
+                                        <rect :x="-(getCadDef(m.data.cadType).w || 70)/2 - 6" :y="-(getCadDef(m.data.cadType).h || 70)/2 - 6" :width="(getCadDef(m.data.cadType).w || 70) + 12" :height="(getCadDef(m.data.cadType).h || 70) + 12"
                                               :fill="activeMarker?.id === m.id ? 'rgba(79,70,229,0.08)' : 'transparent'"
                                               :stroke="activeMarker?.id === m.id ? '#4f46e5' : (drawMode === 'move' ? '#2563eb' : 'none')" stroke-width="2" stroke-dasharray="5 3" />
-                                        <template v-for="(s, sIdx) in getCadDef(m.data.cadType).shapes" :key="sIdx">
+                                        <image v-if="getCadDef(m.data.cadType).imgB64" :href="getCadDef(m.data.cadType).imgB64" :x="-(getCadDef(m.data.cadType).w || 70)/2" :y="-(getCadDef(m.data.cadType).h || 70)/2" :width="getCadDef(m.data.cadType).w || 70" :height="getCadDef(m.data.cadType).h || 70" preserveAspectRatio="xMidYMid meet" />
+                                        <template v-else v-for="(s, sIdx) in getCadDef(m.data.cadType).shapes" :key="sIdx">
                                             <rect v-if="s.t === 'rect'" :x="s.x" :y="s.y" :width="s.w" :height="s.h" :rx="s.rx || 0" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :stroke-dasharray="s.dash ? s.dash.join(' ') : null" :fill="s.fillSolid ? (m.color || '#111827') : (s.fillBg ? 'rgba(255,255,255,0.72)' : 'none')" :fill-opacity="s.fillSolid ? 0.2 : 1" />
                                             <line v-else-if="s.t === 'line'" :x1="s.x1" :y1="s.y1" :x2="s.x2" :y2="s.y2" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :stroke-dasharray="s.dash ? s.dash.join(' ') : null" stroke-linecap="round" />
                                             <circle v-else-if="s.t === 'circle'" :cx="s.cx" :cy="s.cy" :r="s.r" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :fill="s.fillBg ? 'rgba(255,255,255,0.72)' : 'none'" />
@@ -651,28 +669,109 @@
             </div>
         </main>
 
-        <!-- 🏛️ CAD 圖庫目錄管理彈窗 (自由加多減少・置頂常用) -->
-        <div v-if="showCadManager" class="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4" @click.self="showCadManager = false" @touchstart.stop @mousedown.stop>
-            <div class="bg-white border border-zinc-300 w-full max-w-md rounded-xl p-4 flex flex-col shadow-2xl max-h-[85dvh]">
+        <!-- 🏷️ 目錄印章管理彈窗 -->
+        <div v-if="showStampManagerModal" class="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4" @click.self="showStampManagerModal = false" @touchstart.stop @mousedown.stop>
+            <div class="bg-white border border-zinc-300 w-full max-w-md rounded-xl p-4 flex flex-col shadow-2xl max-h-[88dvh]">
                 <div class="flex justify-between items-center border-b border-zinc-200 pb-2 mb-3">
-                    <h3 class="text-[15px] font-black text-zinc-900">🏛️ CAD 圖庫管理 (自由增減)</h3>
+                    <h3 class="text-[15px] font-black text-zinc-900">🏷️ 印章庫管理 ({{ stampItems.length }})</h3>
+                    <div class="flex items-center gap-1.5">
+                        <button @click="syncStampLibraryCloud" class="bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-md text-xs font-bold">☁️同步</button>
+                        <button @click="showStampManagerModal = false" class="bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md text-xs font-bold">✕</button>
+                    </div>
+                </div>
+
+                <!-- 新增印章與分類 -->
+                <div class="bg-amber-50/70 border border-amber-200 rounded-lg p-2.5 mb-2.5 flex flex-col gap-2 shrink-0">
+                    <div class="flex gap-1.5 items-center">
+                        <select v-model="newStampCatId" @change="onSelectNewStampCat" class="bg-white border border-zinc-300 rounded px-2 py-1.5 text-xs font-bold shrink-0">
+                            <option v-for="c in stampCategories" :key="c.id" :value="c.id">{{ c.icon }} {{ c.name }}</option>
+                        </select>
+                        <input type="text" v-model="newStampText" @keyup.enter="addStampItem(false)" placeholder="輸入新印章字眼..." class="flex-1 min-w-0 bg-white border border-zinc-300 rounded px-2.5 py-1.5 text-xs font-bold">
+                        <div class="flex items-center gap-1 bg-white border border-zinc-300 rounded px-1.5 py-1 shrink-0">
+                            <button v-for="c in ['#ffffff','#ef4444','#eab308']" :key="c" @click="newStampColor = c" :style="{backgroundColor: c}" :class="newStampColor === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-65'" class="w-4 h-4 rounded-full border border-zinc-400"></button>
+                        </div>
+                        <button @click="addStampItem(false)" class="bg-zinc-900 text-white px-3 py-1.5 rounded text-xs font-bold shrink-0">加入</button>
+                    </div>
+                    <div class="flex gap-1.5 items-center pt-1 border-t border-amber-200/70">
+                        <span class="text-[11px] font-bold text-amber-900 shrink-0">+新分類:</span>
+                        <input type="text" v-model="newCatName" @keyup.enter="addStampCategory" placeholder="如: 泥水 / 雜項" class="flex-1 min-w-0 bg-white border border-zinc-300 rounded px-2 py-1 text-xs font-bold">
+                        <button @click="addStampCategory" class="bg-amber-700 text-white px-2.5 py-1 rounded text-[11px] font-bold shrink-0">建分類</button>
+                    </div>
+                </div>
+
+                <!-- 分類篩選 -->
+                <div class="flex gap-1 overflow-x-auto no-scrollbar pb-2 mb-2 border-b border-zinc-100 shrink-0">
+                    <button @click="managerCatFilter = 'all'" :class="managerCatFilter === 'all' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2.5 py-1 rounded text-xs font-bold shrink-0">全部</button>
+                    <button @click="managerCatFilter = 'pinned'" :class="managerCatFilter === 'pinned' ? 'bg-amber-500 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2.5 py-1 rounded text-xs font-bold shrink-0">⭐置頂</button>
+                    <button v-for="c in stampCategories" :key="c.id" @click="managerCatFilter = c.id" :class="managerCatFilter === c.id ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2.5 py-1 rounded text-xs font-bold shrink-0">{{ c.icon }}{{ c.name }}</button>
+                </div>
+
+                <!-- 印章列表 -->
+                <div class="overflow-y-auto flex-1 touch-scrollable space-y-1.5 pr-0.5">
+                    <div v-for="item in managerFilteredItems" :key="item.id" class="bg-white border border-zinc-200 rounded-lg px-2.5 py-2 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 min-w-0 flex-1">
+                            <button @click="toggleStampPin(item)" class="text-base shrink-0">{{ item.pinned ? '⭐' : '☆' }}</button>
+                            <span @click="editStampItemText(item)" class="text-xs font-black text-zinc-900 truncate cursor-pointer hover:underline">{{ item.text }}</span>
+                            <span class="text-[10px] text-zinc-400 shrink-0">{{ getCategoryById(item.catId).name }}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <div class="flex items-center gap-1 bg-zinc-100 border border-zinc-200 rounded-full px-1.5 py-0.5">
+                                <button v-for="c in ['#ffffff','#ef4444','#eab308']" :key="c" @click="setStampItemColor(item, c)" :style="{backgroundColor: c}" :class="(item.color || '#ffffff') === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-60'" class="w-3.5 h-3.5 rounded-full border border-zinc-400"></button>
+                            </div>
+                            <button @click="deleteStampItem(item.id)" class="bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded text-[11px] font-bold">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 pt-3 mt-2 border-t border-zinc-200 shrink-0">
+                    <button @click="restoreDefaultStamps" class="bg-zinc-100 text-zinc-700 px-3 py-2 rounded-lg text-xs font-bold">🔄 補回預設</button>
+                    <button @click="showStampManagerModal = false" class="flex-1 bg-zinc-900 text-white py-2 rounded-lg text-xs font-bold">完成</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🏛️ CAD 圖庫目錄管理彈窗 (實時縮圖預覽・上傳/貼上圖案・自由增減) -->
+        <div v-if="showCadManager" class="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4" @click.self="showCadManager = false" @touchstart.stop @mousedown.stop>
+            <div class="bg-white border border-zinc-300 w-full max-w-md rounded-xl p-4 flex flex-col shadow-2xl max-h-[88dvh]">
+                <div class="flex justify-between items-center border-b border-zinc-200 pb-2 mb-3">
+                    <h3 class="text-[15px] font-black text-zinc-900">🏛️ CAD 圖庫管理 (縮圖預覽・可加圖案)</h3>
                     <button @click="showCadManager = false" class="bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md text-xs font-bold">✕</button>
                 </div>
 
-                <!-- 新增自訂圖塊 -->
-                <div class="bg-blue-50/70 border border-blue-200 rounded-lg p-2.5 mb-3 flex flex-col gap-2">
-                    <div class="text-[11px] font-black text-blue-800">➕ 新增自訂常用符號圖塊</div>
-                    <div class="flex gap-1.5">
+                <!-- 新增自訂圖塊 / 圖案 (兩行清爽排版 + 即時預覽) -->
+                <div class="bg-blue-50/70 border border-blue-200 rounded-lg p-2.5 mb-2.5 flex flex-col gap-2 shrink-0">
+                    <div class="flex items-center justify-between gap-1.5">
                         <select v-model="newCadCat" class="bg-white border border-zinc-300 rounded px-2 py-1.5 text-xs font-bold">
                             <option v-for="c in CAD_CATEGORIES" :key="c.id" :value="c.id">{{ c.name }}</option>
                         </select>
-                        <select v-model="newCadShape" class="bg-white border border-zinc-300 rounded px-2 py-1.5 text-xs font-bold">
+                        <select v-model="newCadShape" @change="newCadImgB64 = ''" class="bg-white border border-zinc-300 rounded px-2 py-1.5 text-xs font-bold flex-1 min-w-0">
                             <option value="box">⬜ 方框符號</option>
                             <option value="circle">⭕ 圓形點位</option>
                             <option value="cross">❌ 交叉標記</option>
+                            <option value="switch">⚡ 電掣開關</option>
+                            <option value="socket">🔌 13A插座</option>
+                            <option value="light">💡 天花燈位</option>
+                            <option value="ac">❄️ 分體冷氣</option>
+                            <option value="drain">🌀 地台去水</option>
                         </select>
-                        <input type="text" v-model="newCadLabel" @keyup.enter="addCustomCadBlock" placeholder="名稱(如: 電箱)" class="flex-1 min-w-0 bg-white border border-zinc-300 rounded px-2 py-1.5 text-xs font-bold">
-                        <button @click="addCustomCadBlock" class="bg-zinc-900 text-white px-3 py-1.5 rounded text-xs font-bold shrink-0">加入</button>
+                        <label class="bg-indigo-600 text-white px-2.5 py-1.5 rounded text-xs font-bold cursor-pointer shrink-0 shadow-sm">
+                            🖼️ 選圖檔
+                            <input type="file" accept="image/*" class="hidden" @change="handleNewCadImage">
+                        </label>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-10 h-10 bg-white border border-zinc-300 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                            <img v-if="newCadImgB64" :src="newCadImgB64" class="w-full h-full object-contain">
+                            <svg v-else viewBox="-40 -40 80 80" class="w-8 h-8">
+                                <template v-for="(s, sIdx) in previewNewCadShapes" :key="sIdx">
+                                    <rect v-if="s.t === 'rect'" :x="s.x" :y="s.y" :width="s.w" :height="s.h" stroke="#111827" stroke-width="3" fill="none" />
+                                    <line v-else-if="s.t === 'line'" :x1="s.x1" :y1="s.y1" :x2="s.x2" :y2="s.y2" stroke="#111827" stroke-width="3" />
+                                    <circle v-else-if="s.t === 'circle'" :cx="s.cx" :cy="s.cy" :r="s.r" stroke="#111827" stroke-width="3" fill="none" />
+                                </template>
+                            </svg>
+                        </div>
+                        <input type="text" v-model="newCadLabel" @keyup.enter="addCustomCadBlock" placeholder="輸入圖塊名稱 (亦可直接 Ctrl+V 貼上圖案)..." class="flex-1 min-w-0 bg-white border border-zinc-300 rounded px-2.5 py-2 text-xs font-bold">
+                        <button @click="addCustomCadBlock" class="bg-zinc-900 text-white px-3.5 py-2 rounded text-xs font-bold shrink-0">加入</button>
                     </div>
                 </div>
 
@@ -682,15 +781,29 @@
                     <button v-for="c in CAD_CATEGORIES" :key="c.id" @click="cadMgrFilter = c.id" :class="cadMgrFilter === c.id ? 'bg-indigo-600 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2.5 py-1 rounded text-xs font-bold shrink-0">{{ c.name }}</button>
                 </div>
 
-                <!-- 圖塊列表 -->
+                <!-- 圖塊列表 (每項帶 40×40 實時縮圖框) -->
                 <div class="overflow-y-auto flex-1 touch-scrollable space-y-1.5 pr-0.5">
                     <div v-for="item in filteredCadManageList" :key="item.id"
                          :class="item.hidden ? 'opacity-50 bg-zinc-50' : 'bg-white'"
-                         class="border border-zinc-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
-                        <div class="flex items-center gap-2 min-w-0">
+                         class="border border-zinc-200 rounded-lg px-2.5 py-1.5 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2.5 min-w-0">
                             <button @click="togglePinCad(item.id)" class="text-base shrink-0">{{ item.pinned ? '⭐' : '☆' }}</button>
-                            <span class="text-xs font-black text-zinc-900 truncate">{{ item.label }}</span>
-                            <span v-if="item.isCustom" class="text-[10px] bg-blue-100 text-blue-700 px-1.5 rounded font-bold shrink-0">自訂</span>
+                            <div class="w-10 h-10 bg-zinc-50 border border-zinc-200 rounded-md flex items-center justify-center overflow-hidden shrink-0">
+                                <img v-if="item.imgB64" :src="item.imgB64" class="w-full h-full object-contain">
+                                <svg v-else :view-box.camel="getCadPreviewViewBox(item)" class="w-8 h-8">
+                                    <template v-for="(s, sIdx) in (item.shapes || [])" :key="sIdx">
+                                        <rect v-if="s.t === 'rect'" :x="s.x" :y="s.y" :width="s.w" :height="s.h" :rx="s.rx || 0" stroke="#111827" stroke-width="3" fill="none" />
+                                        <line v-else-if="s.t === 'line'" :x1="s.x1" :y1="s.y1" :x2="s.x2" :y2="s.y2" stroke="#111827" stroke-width="3" stroke-linecap="round" />
+                                        <circle v-else-if="s.t === 'circle'" :cx="s.cx" :cy="s.cy" :r="s.r" stroke="#111827" stroke-width="3" fill="none" />
+                                        <ellipse v-else-if="s.t === 'ellipse'" :cx="s.cx" :cy="s.cy" :rx="s.rx" :ry="s.ry" stroke="#111827" stroke-width="3" fill="none" />
+                                        <path v-else-if="s.t === 'path'" :d="s.d" stroke="#111827" stroke-width="3" fill="none" stroke-linecap="round" />
+                                    </template>
+                                </svg>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-xs font-black text-zinc-900 truncate">{{ item.label }}</div>
+                                <span v-if="item.isCustom" class="text-[10px] bg-blue-100 text-blue-700 px-1.5 rounded font-bold">自訂{{ item.imgB64 ? '圖案' : '符號' }}</span>
+                            </div>
                         </div>
                         <div class="flex items-center gap-1.5 shrink-0">
                             <button @click="toggleHideCad(item.id)" :class="item.hidden ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-zinc-100 text-zinc-600 border-zinc-300'" class="border px-2 py-1 rounded text-[11px] font-bold">
@@ -704,7 +817,7 @@
             </div>
         </div>
 
-        <!-- 🔗 兩個總號合拼彈窗 -->
+        <!-- 🔗 兩個工程合拼彈窗 -->
         <div v-if="showMergeProjectsModal" class="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4" @click.self="showMergeProjectsModal = false" @touchstart.stop @mousedown.stop>
             <div class="bg-white border border-zinc-300 w-full max-w-md rounded-xl p-4 flex flex-col gap-3 shadow-2xl">
                 <div class="flex justify-between items-center border-b border-zinc-200 pb-2">
@@ -865,14 +978,14 @@
             </div>
         </div>
 
-        <!-- 一體化面板 -->
+        <!-- 一體化面板 (優化字體大小與緊湊間距 + 專屬快捷度尺字眼 + 74個專業印章) -->
         <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/20 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
         <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-zinc-900 border-b border-x border-zinc-300 rounded-b-xl z-50 flex flex-col shadow-xl overflow-hidden max-h-[92dvh]" @touchstart.stop @mousedown.stop>
 
-            <div class="px-2 pt-2 bg-zinc-100 flex justify-between items-end border-b border-zinc-200 gap-1">
+            <div class="px-2 pt-1.5 bg-zinc-100 flex justify-between items-end border-b border-zinc-200 gap-1">
                 <div class="flex gap-1">
-                    <button @click="switchMarkerType('general', 'val')" :class="activeMarker.type !== 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'" class="px-2.5 py-2 text-[13px] relative z-10 border translate-y-[1px]">📏 度尺/標籤</button>
-                    <button @click="switchMarkerType('stamp', 'val')" :class="activeMarker.type === 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'" class="px-2.5 py-2 text-[13px] relative z-10 border translate-y-[1px]">🏷️ 工藝印章</button>
+                    <button @click="switchMarkerType('general', 'val')" :class="activeMarker.type !== 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'" class="px-2.5 py-1.5 text-[13px] relative z-10 border translate-y-[1px]">📏 度尺/標籤</button>
+                    <button @click="switchMarkerType('stamp', 'val')" :class="activeMarker.type === 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'" class="px-2.5 py-1.5 text-[13px] relative z-10 border translate-y-[1px]">🏷️ 工藝印章</button>
                 </div>
                 <div class="flex items-center gap-1.5 pb-1.5 shrink-0">
                     <div class="flex items-center gap-1 bg-white border border-zinc-300 rounded-full px-1.5 py-1 shadow-sm">
@@ -886,24 +999,25 @@
                 </div>
             </div>
 
+            <!-- 度尺/標籤頁 (放大快捷字眼、收緊數字鍵盤間距) -->
             <div v-if="activeMarker.type !== 'stamp'" class="flex flex-col flex-1 min-h-0">
-                <div class="p-2 bg-white border-b border-zinc-200 shrink-0 flex items-center justify-center gap-1.5">
+                <div class="p-1.5 bg-white border-b border-zinc-200 shrink-0 flex items-center justify-center gap-1.5">
                     <input type="text" v-model="activeMarker.data.name" @input="onMarkerTextInput" @focus="focusedInput = 'name'" class="w-[5.5em] border border-zinc-300 p-1.5 text-[15px] font-bold bg-zinc-50 rounded-md text-center focus:outline-none focus:border-blue-500" placeholder="標籤">
-                    <span class="font-black text-lg text-zinc-400">:</span>
-                    <input type="text" readonly :value="activeMarker.data[focusedInput === 'name' ? 'val' : focusedInput]" @click="focusedInput = (focusedInput === 'name' ? 'val' : focusedInput)" class="flex-1 min-w-0 border-2 border-blue-500 bg-blue-50 p-1.5 px-3 text-[15px] font-bold rounded-md cursor-pointer text-zinc-900" placeholder="點擊下方數字...">
+                    <span class="font-black text-base text-zinc-400">:</span>
+                    <input type="text" readonly :value="activeMarker.data[focusedInput === 'name' ? 'val' : focusedInput]" @click="focusedInput = (focusedInput === 'name' ? 'val' : focusedInput)" class="flex-1 min-w-0 border-2 border-blue-500 bg-blue-50 p-1.5 px-2.5 text-[15px] font-bold rounded-md cursor-pointer text-zinc-900" placeholder="點擊下方數字...">
                 </div>
 
-                <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[168px]">
+                <div class="p-2 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[195px]">
                     <div v-if="TAG_DEFS[activeMarker.type]" :class="getTagFields(activeMarker.type).length === 2 ? 'grid-cols-2' : 'grid-cols-3'" class="grid gap-1.5">
                         <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
-                            <label class="text-[11px] font-bold text-zinc-600 bg-zinc-100 border border-zinc-200 border-b-0 px-1 py-0.5 text-center rounded-t-md">{{ field.label }}</label>
+                            <label class="text-xs font-black text-zinc-700 bg-zinc-100 border border-zinc-200 border-b-0 px-1 py-0.5 text-center rounded-t-md">{{ field.label }}</label>
                             <input type="text" readonly :value="activeMarker.data[field.key]" @click="focusedInput = field.key" :class="focusedInput === field.key ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 z-10 relative' : 'border-zinc-300 bg-white'" class="w-full border p-1.5 text-[15px] font-bold text-zinc-900 text-center rounded-b-md cursor-pointer outline-none shadow-sm">
                         </div>
                     </div>
                     <div v-else class="flex flex-col gap-1.5">
-                        <div v-for="(row, rIdx) in DIM_QUICK_ROWS" :key="rIdx" class="flex gap-1.5 items-center flex-wrap">
-                            <span v-if="row.label" class="text-[11px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-1 rounded shrink-0">{{ row.label }}</span>
-                            <button v-for="w in row.items" :key="w" @click="applyTag(w)" class="micro-btn flex-1 min-w-[4.2em] text-center py-1.5">{{ w }}</button>
+                        <div v-for="(row, rIdx) in DIM_QUICK_ROWS" :key="rIdx" class="flex gap-1.5 items-center">
+                            <span v-if="row.label" class="text-xs font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-2 rounded-md shrink-0">{{ row.label }}</span>
+                            <button v-for="w in row.items" :key="w" @click="applyTag(w)" class="flex-1 min-w-0 bg-white active:bg-zinc-200 border border-zinc-300 rounded-md py-2 px-1 text-[14px] font-black text-zinc-900 text-center shadow-sm truncate">{{ w }}</button>
                         </div>
                     </div>
                 </div>
@@ -912,21 +1026,27 @@
                     <div v-for="(row, rIdx) in TEMPLATE_ROWS" :key="rIdx" :class="row.length === 7 ? 'grid-cols-7' : 'grid-cols-6'" class="grid gap-1">
                         <button v-for="t in row" :key="t.id" @click="switchMarkerType(t.id, t.f)"
                                 :class="activeMarker.type === t.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-800 border-zinc-300'"
-                                class="py-1.5 px-0.5 text-[11px] sm:text-[12px] font-bold rounded border shadow-sm text-center truncate">{{ t.l }}</button>
+                                class="py-1.5 px-0.5 text-xs font-bold rounded border shadow-sm text-center truncate">{{ t.l }}</button>
                     </div>
                 </div>
 
-                <div class="bg-zinc-100 p-2 border-t border-zinc-200 grid grid-cols-3 gap-1.5 shrink-0 pb-3">
+                <!-- 緊湊比例 3×4 數字鍵盤 (字體縮細、間距收緊) -->
+                <div class="bg-zinc-100 p-1.5 border-t border-zinc-200 grid grid-cols-3 gap-1 shrink-0 pb-2">
                     <button v-for="k in KEYPAD_KEYS" :key="k" @click.stop="handleKeypad(k)"
-                            :class="k === 'DEL' ? 'bg-white border-red-300 text-red-600 text-xl' : k === 'ENTER' ? 'bg-zinc-900 border-zinc-900 text-white text-[15px]' : 'bg-white border-zinc-300 text-zinc-900 text-xl'"
-                            class="border rounded-lg shadow-sm font-bold py-2.5 active:scale-95 transition-transform">{{ k === 'DEL' ? '⌫' : k === 'ENTER' ? '確定' : k }}</button>
+                            :class="k === 'DEL' ? 'bg-white border-red-300 text-red-600 text-base' : k === 'ENTER' ? 'bg-zinc-900 border-zinc-900 text-white text-sm' : 'bg-white border-zinc-300 text-zinc-900 text-base'"
+                            class="border rounded-md shadow-sm font-bold py-2 active:scale-95 transition-transform">{{ k === 'DEL' ? '⌫' : k === 'ENTER' ? '確定' : k }}</button>
                 </div>
             </div>
 
+            <!-- 工藝印章頁 -->
             <div v-else class="flex flex-col flex-1 min-h-0 bg-white">
                 <div class="p-2 border-b border-zinc-200 bg-zinc-50 shrink-0 flex flex-col gap-1.5">
-                    <button @click="promptCustomStamp" class="w-full bg-blue-50 border border-blue-200 text-blue-700 py-1.5 rounded-md text-[12px] font-bold shadow-sm">➕ 新增自訂印章</button>
+                    <div class="flex gap-1.5">
+                        <button @click="promptCustomStamp" class="flex-1 bg-blue-50 border border-blue-200 text-blue-700 py-1.5 rounded-md text-xs font-bold shadow-sm">➕ 快速新增印章</button>
+                        <button @click="closeTopSheet(); openStampManager()" class="bg-amber-50 border border-amber-300 text-amber-800 px-2.5 py-1.5 rounded-md text-xs font-bold shadow-sm">⚙️ 管理</button>
+                    </div>
                     <div class="flex gap-1 overflow-x-auto no-scrollbar pb-0.5">
+                        <button @click="stampFilter = 'pinned'" :class="stampFilter === 'pinned' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2 py-1 rounded-md text-[11px] font-bold border shrink-0">⭐置頂</button>
                         <button @click="stampFilter = 'all'" :class="stampFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2 py-1 rounded-md text-[11px] font-bold border shrink-0">全部</button>
                         <button v-for="g in STAMP_GROUPS" :key="g.id" @click="stampFilter = g.id"
                                 :class="stampFilter === g.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'"
@@ -935,16 +1055,21 @@
                 </div>
 
                 <div class="p-2.5 overflow-y-auto flex-1 touch-scrollable max-h-[380px] flex flex-col gap-2.5">
-                    <div v-if="customStamps.length && stampFilter === 'all'" class="flex items-center gap-1.5 flex-wrap">
-                        <span class="text-[10px] font-black text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">自訂</span>
-                        <button v-for="s in customStamps" :key="s" @click="applyStamp(s)" class="micro-btn">{{ s }}</button>
+                    <div v-if="stampFilter === 'pinned'" class="flex items-center gap-1.5 flex-wrap">
+                        <span v-if="!pinnedStampList.length" class="text-xs text-zinc-400 font-bold py-4 w-full text-center">尚未加星置頂任何印章，請點「⚙️管理」加星 ⭐</span>
+                        <button v-for="it in pinnedStampList" :key="it.id" @click="applyStamp(it)" class="micro-btn flex items-center gap-1">
+                            <span v-if="it.color && it.color !== '#ffffff'" :style="{backgroundColor: it.color}" class="w-2 h-2 rounded-full"></span>
+                            <span>{{ it.text }}</span>
+                        </button>
                     </div>
-                    <div v-for="g in filteredStampGroups" :key="g.id" class="flex flex-col gap-1.5">
-                        <div v-for="(row, rIdx) in g.rows" :key="rIdx" class="flex items-center gap-1.5 flex-wrap">
-                            <span v-if="rIdx === 0" :class="g.badgeClass" class="text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0">{{ g.icon }}{{ g.name }}</span>
-                            <button v-for="s in row" :key="s" @click="applyStamp(s)" :class="g.btnClass" class="micro-btn">{{ s }}</button>
+                    <template v-else>
+                        <div v-for="g in filteredStampGroups" :key="g.id" class="flex flex-col gap-1.5">
+                            <div v-for="(row, rIdx) in g.rows" :key="rIdx" class="flex items-center gap-1.5 flex-wrap">
+                                <span v-if="rIdx === 0" :class="g.badgeClass" class="text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0">{{ g.icon }}{{ g.name }}</span>
+                                <button v-for="s in row" :key="s" @click="applyStamp(s)" class="micro-btn">{{ s }}</button>
+                            </div>
                         </div>
-                    </div>
+                    </template>
                 </div>
             </div>
         </div>
@@ -962,7 +1087,7 @@
                     <input type="range" min="0.3" max="3.5" step="0.05" :value="activeMarker.scale || 1" @input="e => setMarkerScale(e.target.value)" class="flex-1 min-w-[60px] accent-indigo-600">
                     <span class="text-[10px] font-black text-zinc-700 w-9 text-right shrink-0">{{ Math.round((activeMarker.scale || 1) * 100) }}%</span>
                 </div>
-                <div class="flex items-center gap-1 shrink-0">
+                <div v-if="!getCadDef(activeMarker.data?.cadType)?.imgB64" class="flex items-center gap-1 shrink-0">
                     <button v-for="c in ['#111827','#ef4444','#3b82f6','#eab308','#ffffff']" :key="c" @click="setCadMarkerColor(c)" :style="{backgroundColor: c}" :class="(activeMarker.color || '#111827') === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-75'" class="w-4 h-4 rounded-full border border-zinc-400 shrink-0"></button>
                 </div>
                 <button @click="deleteMarkerTop" class="bg-white text-red-600 border border-zinc-300 px-2 py-1 rounded text-xs font-bold shrink-0">刪除</button>
@@ -1038,7 +1163,8 @@
                         <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" />
                         <g v-for="m in (fullScreenItem.markers || [])" :key="m.id">
                             <g v-if="m.type === 'cad' && getCadDef(m.data?.cadType)" :transform="getCadTransform(m)">
-                                <template v-for="(s, sIdx) in getCadDef(m.data.cadType).shapes" :key="sIdx">
+                                <image v-if="getCadDef(m.data.cadType).imgB64" :href="getCadDef(m.data.cadType).imgB64" :x="-(getCadDef(m.data.cadType).w || 70)/2" :y="-(getCadDef(m.data.cadType).h || 70)/2" :width="getCadDef(m.data.cadType).w || 70" :height="getCadDef(m.data.cadType).h || 70" preserveAspectRatio="xMidYMid meet" />
+                                <template v-else v-for="(s, sIdx) in getCadDef(m.data.cadType).shapes" :key="sIdx">
                                     <rect v-if="s.t === 'rect'" :x="s.x" :y="s.y" :width="s.w" :height="s.h" :rx="s.rx || 0" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :stroke-dasharray="s.dash ? s.dash.join(' ') : null" :fill="s.fillSolid ? (m.color || '#111827') : (s.fillBg ? 'rgba(255,255,255,0.72)' : 'none')" :fill-opacity="s.fillSolid ? 0.2 : 1" />
                                     <line v-else-if="s.t === 'line'" :x1="s.x1" :y1="s.y1" :x2="s.x2" :y2="s.y2" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :stroke-dasharray="s.dash ? s.dash.join(' ') : null" stroke-linecap="round" />
                                     <circle v-else-if="s.t === 'circle'" :cx="s.cx" :cy="s.cy" :r="s.r" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :fill="s.fillBg ? 'rgba(255,255,255,0.72)' : 'none'" />
@@ -1143,12 +1269,25 @@
             </div>
         </div>
 
+        <!-- ☁️ 雲端工程庫 (已認領或目錄已有自動隱藏，不再重複顯示) -->
         <div v-if="showCloudBrowser" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showCloudBrowser = false">
             <div class="bg-white border border-zinc-200 w-full max-w-md rounded-xl p-4 flex flex-col shadow-xl max-h-[82vh]">
-                <div class="flex justify-between items-center border-b border-zinc-200 pb-2.5 mb-3"><h3 class="text-[15px] font-black text-zinc-900">☁️ 雲端工程庫 ({{ cloudProjectList.length }})</h3><button @click="cleanCloudGarbage" class="bg-white border border-zinc-300 text-zinc-600 px-2.5 py-1 rounded-md text-[11px] font-bold shadow-sm">🧹 清理殘留垃圾</button></div>
+                <div class="flex justify-between items-center border-b border-zinc-200 pb-2.5 mb-3">
+                    <h3 class="text-[15px] font-black text-zinc-900">☁️ 待認領雲端工程 ({{ unclaimedCloudProjects.length }})</h3>
+                    <button @click="cleanCloudGarbage" class="bg-white border border-zinc-300 text-zinc-600 px-2.5 py-1 rounded-md text-[11px] font-bold shadow-sm">🧹 清理殘留垃圾</button>
+                </div>
                 <div class="overflow-y-auto flex-1 touch-scrollable no-scrollbar">
-                    <div v-if="!cloudProjectList.length" class="text-center text-zinc-400 py-10 text-sm font-bold">無雲端紀錄...</div>
-                    <div v-for="cp in cloudProjectList" :key="cp.code" class="bg-zinc-50 border border-zinc-200 rounded-lg p-3 mb-2 flex justify-between items-center"><div class="min-w-0 flex-1 pr-2"><div class="flex items-center gap-1"><span class="text-[14px] font-bold text-zinc-900 truncate">{{ cp.name || '未輸入地址' }}</span></div><div class="text-[10px] text-zinc-500 font-bold mt-1">更新: {{ cp.updatedAt ? new Date(cp.updatedAt).toLocaleString() : '未知' }}</div><div v-if="cp.lastModifiedBy" class="text-[10px] text-blue-600 font-bold">✍️ 由 {{ cp.lastModifiedBy }} 修改</div></div><button @click="downloadFromCloudBrowser(cp.code)" class="bg-white border border-zinc-300 text-zinc-900 px-3 py-1.5 rounded-md text-xs font-bold shrink-0 shadow-sm">⬇️認領載入</button></div>
+                    <div v-if="!unclaimedCloudProjects.length" class="text-center text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg py-10 px-4 text-sm font-bold">
+                        🎉 所有雲端工程均已歸戶至目錄！<br><span class="text-xs font-normal text-zinc-500 mt-1 block">無需重複認領，直接喺工程目錄點選即可。</span>
+                    </div>
+                    <div v-for="cp in unclaimedCloudProjects" :key="cp.code" class="bg-zinc-50 border border-zinc-200 rounded-lg p-3 mb-2 flex justify-between items-center">
+                        <div class="min-w-0 flex-1 pr-2">
+                            <div class="text-[14px] font-bold text-zinc-900 truncate">{{ cp.name || '未輸入地址' }}</div>
+                            <div class="text-[10px] text-zinc-500 font-bold mt-1">更新: {{ cp.updatedAt ? new Date(cp.updatedAt).toLocaleString() : '未知' }}</div>
+                            <div v-if="cp.lastModifiedBy" class="text-[10px] text-blue-600 font-bold">✍️ 由 {{ cp.lastModifiedBy }} 修改</div>
+                        </div>
+                        <button @click="downloadFromCloudBrowser(cp.code)" class="bg-zinc-900 text-white px-3 py-1.5 rounded-md text-xs font-bold shrink-0 shadow-sm">⬇️認領載入</button>
+                    </div>
                 </div>
                 <button @click="showCloudBrowser = false" class="mt-4 w-full bg-white border border-zinc-300 text-zinc-800 py-2 rounded-md text-xs font-bold">關閉</button>
             </div>
@@ -1176,8 +1315,8 @@
         </div>
     </div>
 
-    <script src="./data.js?v=11.0"></script>
-    <script src="./cad.js?v=11.0"></script>
-    <script src="./app.js?v=11.0"></script>
+    <script src="./data.js?v=11.1"></script>
+    <script src="./cad.js?v=11.1"></script>
+    <script src="./app.js?v=11.1"></script>
 </body>
 </html>
