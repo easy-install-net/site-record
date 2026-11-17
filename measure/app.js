@@ -15,7 +15,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
         navigator.serviceWorker.ready.then(() => { offlineReady.value = true; }).catch(() => {});
     }
 
-    let db = null;
+    let db = null, auth = null;
     try {
         if (window.firebase) {
             if (!firebase.apps.length) {
@@ -31,6 +31,10 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             }
             db = firebase.firestore();
             db.settings({ experimentalAutoDetectLongPolling: true, ignoreUndefinedProperties: true });
+            if (firebase.auth) {
+                auth = firebase.auth();
+                auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+            }
         }
     } catch (_) {}
 
@@ -96,6 +100,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
 
     createApp({
         setup() {
+            const currentUser = ref(null);
             const authorName = ref(''), hasUnsavedCloudChanges = ref(false), dirtyPageIds = new Set();
             let unsubPages = null, unsubFeedback = null, isPushing = false, isAutoQueueing = false;
 
@@ -103,20 +108,84 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const defaultTextColor = ref('#ffffff');
 
             // =========================================================================
-            // 🏷️ 全動態印章管理引擎 (出廠種子自動匯入 + 熱門排行 + 釘選 + 增減改色 + 雲端同步)
+            // 🔒 Google 帳號永久登入 ＆ 帳號工程自動同步
+            // =========================================================================
+            const loginWithGoogle = async () => {
+                if (!auth) return alert('登入模組未就緒，請重新整理網頁');
+                if (!navigator.onLine) return alert('請先連接網絡再綁定 Google 帳號');
+                isProcessing.value = true; processingText.value = '正在連接 Google 帳號...';
+                try {
+                    const provider = new firebase.auth.GoogleAuthProvider();
+                    const res = await auth.signInWithPopup(provider);
+                    if (res?.user) {
+                        currentUser.value = res.user;
+                        if (!authorName.value && res.user.displayName) {
+                            authorName.value = res.user.displayName;
+                            await localforage.setItem('measure_author_name', res.user.displayName);
+                        }
+                        await syncUserOwnedProjects();
+                        showToast(`✅ 已綁定 ${res.user.displayName || res.user.email}`);
+                    }
+                } catch (e) {
+                    if (e?.code !== 'auth/popup-closed-by-user') {
+                        alert('Google 登入失敗：' + (e.message || '請檢查瀏覽器彈窗設定'));
+                    }
+                } finally {
+                    isProcessing.value = false;
+                }
+            };
+
+            const logoutGoogle = async () => {
+                if (!confirm('確定要登出 Google 帳號嗎？（本機已下載的工程仍會保留）')) return;
+                if (auth) await auth.signOut().catch(() => {});
+                currentUser.value = null;
+                showToast('已登出 Google 帳號');
+            };
+
+            // 自動同步帳號名下工程（本機已有則自動靜默對齊最新版本，無需人手再次載入）
+            const syncUserOwnedProjects = async () => {
+                if (!db || !navigator.onLine || !currentUser.value) return;
+                const uid = currentUser.value.uid;
+                try {
+                    const snaps = await withTimeout(db.collection('site_projects').where('ownerId', '==', uid).get(), 12000);
+                    for (const doc of snaps.docs) {
+                        const code = String(doc.id);
+                        const pd = doc.data() || {};
+                        const localProj = await localforage.getItem('proj_' + code);
+                        // 若雲端較新或本機尚未有該名下工程，自動背景拉取最新進度
+                        if (!localProj || ((pd.updatedAt || 0) > (localProj.lastSyncAt || 0) && !localProj.pendingUpload)) {
+                            const fullData = await fetchCompleteProjectData(code);
+                            if (fullData) {
+                                fullData.ownerId = uid;
+                                fullData.pendingUpload = false;
+                                await localforage.setItem('proj_' + code, fullData);
+                            }
+                        }
+                    }
+                    await loadProjectList();
+                } catch (_) {}
+            };
+
+            // =========================================================================
+            // 🏷️ 全動態印章管理引擎 (兼容 index.html 與舊版印章面板)
             // =========================================================================
             const stampCategories = ref([]);
             const stampItems = ref([]);
             const stampUpdatedAt = ref(0);
-            const stampFilter = ref('hot'); // 預設打開 'hot' (🔥 熱門)
-            const showStampManagerModal = ref(false);
-            const managerCatFilter = ref('all');
-            const managerSearch = ref('');
-
-            // 新增分類與新增印章表單狀態
-            const newCatName = ref(''), newCatIcon = ref('🏷️'), newCatColor = ref('#38bdf8');
-            const newStampText = ref(''), newStampCatId = ref(''), newStampColor = ref('#ffffff');
-            const showQuickAddStamp = ref(false);
+            const stampFilter = ref('all');
+            const customStamps = computed(() => stampItems.value.filter(x => x.catId === 'cat_custom').map(x => x.text));
+            const STAMP_GROUPS = computed(() => stampCategories.value.map(c => {
+                const items = stampItems.value.filter(it => it.catId === c.id).map(it => it.text);
+                const rows = [];
+                for (let i = 0; i < items.length; i += 6) rows.push(items.slice(i, i + 6));
+                return {
+                    id: c.id, icon: c.icon || '🏷️', name: c.name,
+                    badgeClass: 'bg-zinc-100 text-zinc-700 border-zinc-300',
+                    btnClass: '',
+                    rows: rows.length ? rows : [[]]
+                };
+            }));
+            const filteredStampGroups = computed(() => STAMP_GROUPS.value.filter(g => stampFilter.value === 'all' || stampFilter.value === g.id));
 
             const saveStampStore = async () => {
                 stampUpdatedAt.value = Date.now();
@@ -132,14 +201,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 (DEFAULT_STAMP_SEED || []).forEach((g, gIdx) => {
                     cats.push({ id: g.id, icon: g.icon || '🏷️', name: g.name, defaultColor: g.defaultColor || '#ffffff' });
                     (g.items || []).forEach((txt, iIdx) => {
-                        items.push({
-                            id: `st_${g.id}_${iIdx}_${gIdx}`,
-                            catId: g.id,
-                            text: txt,
-                            color: g.defaultColor || '#ffffff',
-                            count: 0,
-                            pinned: false
-                        });
+                        items.push({ id: `st_${g.id}_${iIdx}_${gIdx}`, catId: g.id, text: txt, color: g.defaultColor || '#ffffff', count: 0, pinned: false });
                     });
                 });
                 return { cats, items };
@@ -153,237 +215,139 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     stampUpdatedAt.value = saved.updatedAt || Date.now();
                 } else {
                     const { cats, items } = buildSeedStampData();
-                    // 兼容遷移舊版自訂印章
-                    const legacyCustom = (await localforage.getItem('custom_stamps')) || [];
-                    if (legacyCustom.length) {
-                        cats.unshift({ id: 'cat_custom', icon: '⭐', name: '自訂', defaultColor: '#ffffff' });
-                        legacyCustom.forEach((txt, idx) => {
-                            if (!items.some(x => x.text === txt)) {
-                                items.unshift({ id: `st_legacy_${idx}`, catId: 'cat_custom', text: txt, color: '#ffffff', count: 1, pinned: true });
-                            }
-                        });
-                    }
                     stampCategories.value = cats;
                     stampItems.value = items;
                     await saveStampStore();
                 }
-                if (!newStampCatId.value && stampCategories.value.length) {
-                    newStampCatId.value = stampCategories.value[0].id;
+            };
+
+            const promptCustomStamp = async () => {
+                const txt = prompt('輸入自訂印章字眼：')?.trim();
+                if (!txt) return;
+                if (!stampCategories.value.some(c => c.id === 'cat_custom')) {
+                    stampCategories.value.unshift({ id: 'cat_custom', icon: '⭐', name: '自訂', defaultColor: '#ffffff' });
                 }
-            };
-
-            // 🔥 熱門印章自動計算 (手動加星 ⭐ 置頂 + 使用次數最高前 18 個)
-            const hotStamps = computed(() => {
-                const active = stampItems.value.filter(x => x.pinned || (x.count || 0) > 0);
-                if (active.length > 0) {
-                    return [...active]
-                        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.count || 0) - (a.count || 0))
-                        .slice(0, 18);
-                }
-                // 首次使用尚未有任何計數時，預設顯示前 12 個（例如「📐 收口」常用印）
-                return stampItems.value.slice(0, 12);
-            });
-
-            // 畫布內工藝印章面板分類清單
-            const filteredCanvasStampGroups = computed(() => {
-                return stampCategories.value
-                    .filter(c => stampFilter.value === 'all' || stampFilter.value === c.id)
-                    .map(c => ({
-                        ...c,
-                        items: stampItems.value.filter(it => it.catId === c.id)
-                    }))
-                    .filter(g => g.items.length > 0);
-            });
-
-            // 首頁「🏷️ 印章管理」篩選與搜尋結果
-            const managerFilteredItems = computed(() => {
-                const kw = String(managerSearch.value || '').trim().toLowerCase();
-                return stampItems.value.filter(it => {
-                    if (managerCatFilter.value === 'pinned' && !it.pinned) return false;
-                    if (managerCatFilter.value !== 'all' && managerCatFilter.value !== 'pinned' && it.catId !== managerCatFilter.value) return false;
-                    if (kw && !String(it.text || '').toLowerCase().includes(kw)) return false;
-                    return true;
-                });
-            });
-
-            const getCategoryById = (catId) => stampCategories.value.find(c => c.id === catId) || { id: catId, icon: '🏷️', name: '未分類', defaultColor: '#ffffff' };
-
-            const openStampManager = () => {
-                managerCatFilter.value = 'all';
-                managerSearch.value = '';
-                if (!newStampCatId.value && stampCategories.value.length) {
-                    newStampCatId.value = stampCategories.value[0].id;
-                    newStampColor.value = stampCategories.value[0].defaultColor || '#ffffff';
-                }
-                showStampManagerModal.value = true;
-            };
-
-            const onSelectNewStampCat = () => {
-                const cat = getCategoryById(newStampCatId.value);
-                if (cat?.defaultColor) newStampColor.value = cat.defaultColor;
-            };
-
-            const addStampCategory = async () => {
-                const name = String(newCatName.value || '').trim();
-                if (!name) return showToast('請輸入分類名稱（例如：收口、燈槽）');
-                if (stampCategories.value.some(c => c.name === name)) return showToast('此分類名稱已存在');
-                const id = 'cat_' + Date.now();
-                stampCategories.value.unshift({ id, icon: newCatIcon.value || '🏷️', name, defaultColor: newCatColor.value || '#ffffff' });
-                newCatName.value = '';
-                newStampCatId.value = id;
-                newStampColor.value = newCatColor.value || '#ffffff';
-                await saveStampStore();
-                showToast(`✅ 已新增分類「${name}」`);
-            };
-
-            const deleteStampCategory = async (catId) => {
-                const cat = getCategoryById(catId);
-                const count = stampItems.value.filter(x => x.catId === catId).length;
-                if (!confirm(`確定要刪除分類「${cat.name}」${count ? `及其內 ${count} 個印章` : ''}嗎？`)) return;
-                stampCategories.value = stampCategories.value.filter(c => c.id !== catId);
-                stampItems.value = stampItems.value.filter(it => it.catId !== catId);
-                if (managerCatFilter.value === catId) managerCatFilter.value = 'all';
-                if (stampFilter.value === catId) stampFilter.value = 'hot';
-                if (newStampCatId.value === catId) newStampCatId.value = stampCategories.value[0]?.id || '';
-                await saveStampStore();
-                showToast(`🗑️ 已刪除分類「${cat.name}」`);
-            };
-
-            const addStampItem = async (applyImmediately = false) => {
-                const txt = String(newStampText.value || '').trim();
-                if (!txt) return showToast('請輸入印章字眼');
-                const catId = newStampCatId.value || stampCategories.value[0]?.id || 'cat_finishing';
-                const color = newStampColor.value || '#ffffff';
-                let existing = stampItems.value.find(it => it.text === txt && it.catId === catId);
-                if (!existing) {
-                    existing = {
-                        id: 'st_' + Date.now() + '_' + Math.floor(Math.random() * 999),
-                        catId,
-                        text: txt,
-                        color,
-                        count: applyImmediately ? 0 : 0,
-                        pinned: false
-                    };
-                    stampItems.value.unshift(existing);
-                } else {
-                    existing.color = color;
-                }
-                newStampText.value = '';
-                showQuickAddStamp.value = false;
-                await saveStampStore();
-                if (applyImmediately && activeMarker.value) {
-                    applyStamp(existing);
-                } else {
-                    showToast(`✅ 已加入印章「${txt}」`);
-                }
-            };
-
-            const toggleStampPin = async (item) => {
-                item.pinned = !item.pinned;
-                await saveStampStore();
-                showToast(item.pinned ? `⭐ 已將「${item.text}」置頂到熱門` : `已取消「${item.text}」置頂`);
-            };
-
-            const setStampItemColor = async (item, hex) => {
-                item.color = hex;
-                await saveStampStore();
-            };
-
-            const editStampItemText = async (item) => {
-                const next = prompt('修改印章字眼：', item.text)?.trim();
-                if (next && next !== item.text) {
-                    item.text = next;
+                if (!stampItems.value.some(x => x.text === txt)) {
+                    stampItems.value.unshift({ id: 'st_custom_' + Date.now(), catId: 'cat_custom', text: txt, color: '#ffffff', count: 1, pinned: true });
                     await saveStampStore();
-                    showToast('✅ 已更新印章字眼');
                 }
-            };
-
-            const deleteStampItem = async (itemId) => {
-                stampItems.value = stampItems.value.filter(x => x.id !== itemId);
-                await saveStampStore();
-            };
-
-            const resetStampCounts = async () => {
-                if (!confirm('確定要將所有印章的使用次數歸零嗎？（手動加星 ⭐ 置頂會保留）')) return;
-                stampItems.value.forEach(it => { it.count = 0; });
-                await saveStampStore();
-                showToast('🔄 已重置熱門使用計數');
-            };
-
-            const restoreDefaultStamps = async () => {
-                if (!confirm('補回所有出廠預設分類與印章？（你自建的印章與計數會完整保留）')) return;
-                const { cats, items } = buildSeedStampData();
-                cats.forEach(c => {
-                    if (!stampCategories.value.some(x => x.id === c.id)) stampCategories.value.push(c);
-                });
-                items.forEach(it => {
-                    if (!stampItems.value.some(x => x.text === it.text && x.catId === it.catId)) stampItems.value.push(it);
-                });
-                await saveStampStore();
-                showToast('✅ 已補回全部出廠預設印章');
-            };
-
-            const syncStampLibraryCloud = async () => {
-                if (!db || !navigator.onLine) return alert('請檢查網絡連線後再同步印章庫');
-                await checkAuthorName();
-                const libKey = sanitizeFilename(authorName.value || 'shared_team') || 'shared_team';
-                isProcessing.value = true; processingText.value = `正在同步 [${authorName.value || '團隊'}] 的印章庫...`;
-                try {
-                    const docRef = db.collection('stamp_libraries').doc(libKey);
-                    const snap = await withTimeout(docRef.get(), 15000);
-                    if (snap.exists) {
-                        const cloud = snap.data() || {};
-                        const cCats = Array.isArray(cloud.categories) ? cloud.categories : [];
-                        const cItems = Array.isArray(cloud.items) ? cloud.items : [];
-                        const catMap = new Map();
-                        [...cCats, ...stampCategories.value].forEach(c => { if (c?.id) catMap.set(c.id, c); });
-                        stampCategories.value = Array.from(catMap.values());
-
-                        const itemMap = new Map();
-                        cItems.forEach(it => { if (it?.text) itemMap.set(`${it.catId}__${it.text}`, { ...it }); });
-                        stampItems.value.forEach(it => {
-                            const k = `${it.catId}__${it.text}`;
-                            const ex = itemMap.get(k);
-                            if (ex) {
-                                itemMap.set(k, {
-                                    ...it,
-                                    count: Math.max(it.count || 0, ex.count || 0),
-                                    pinned: !!(it.pinned || ex.pinned)
-                                });
-                            } else {
-                                itemMap.set(k, { ...it });
-                            }
-                        });
-                        stampItems.value = Array.from(itemMap.values());
-                    }
-                    await saveStampStore();
-                    await withTimeout(docRef.set({
-                        owner: authorName.value || '團隊',
-                        categories: JSON.parse(JSON.stringify(stampCategories.value)),
-                        items: JSON.parse(JSON.stringify(stampItems.value)),
-                        updatedAt: Date.now()
-                    }, { merge: true }), 15000);
-                    showToast(`☁️ 已雙向同步 ${stampItems.value.length} 個印章`);
-                } catch (e) {
-                    alert('印章庫同步失敗：' + e.message);
-                } finally {
-                    isProcessing.value = false;
-                }
+                applyStamp(txt);
             };
 
             // =========================================================================
-            // AutoCAD 圖塊狀態
+            // 🏛️ AutoCAD 圖庫目錄管理引擎 (自由加多減少・置頂常用・隱藏冷門)
             // =========================================================================
+            const showCadManager = ref(false), cadMgrFilter = ref('all');
+            const newCadCat = ref('arch'), newCadShape = ref('box'), newCadLabel = ref('');
+            const customCadBlocks = ref([]), pinnedCadIds = ref([]), hiddenCadIds = ref([]);
+
+            const loadCadStore = async () => {
+                const saved = await localforage.getItem('custom_cad_store_v1');
+                if (saved) {
+                    customCadBlocks.value = saved.custom || [];
+                    pinnedCadIds.value = saved.pinned || [];
+                    hiddenCadIds.value = saved.hidden || [];
+                }
+            };
+            const saveCadStore = async () => {
+                await localforage.setItem('custom_cad_store_v1', {
+                    custom: JSON.parse(JSON.stringify(customCadBlocks.value)),
+                    pinned: [...pinnedCadIds.value],
+                    hidden: [...hiddenCadIds.value]
+                });
+            };
+
+            const allCadManageList = computed(() => {
+                const builtIn = CAD_LIST.map(x => ({
+                    ...x, isCustom: false,
+                    pinned: pinnedCadIds.value.includes(x.id),
+                    hidden: hiddenCadIds.value.includes(x.id)
+                }));
+                const custom = customCadBlocks.value.map(x => ({
+                    ...x, isCustom: true,
+                    pinned: pinnedCadIds.value.includes(x.id),
+                    hidden: hiddenCadIds.value.includes(x.id)
+                }));
+                return [...custom, ...builtIn].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+            });
+
+            const filteredCadManageList = computed(() => allCadManageList.value.filter(x => cadMgrFilter.value === 'all' || x.cat === cadMgrFilter.value));
+
             const cadCategory = ref('arch'), selectedCadType = ref('door_single');
-            const filteredCadList = computed(() => CAD_LIST.filter(x => x.cat === cadCategory.value));
-            const getCadDef = (type) => CAD_DEFS[type] || null;
+            const filteredCadList = computed(() => allCadManageList.value.filter(x => !x.hidden && x.cat === cadCategory.value));
+
+            const getCadDef = (type) => {
+                if (CAD_DEFS[type]) return CAD_DEFS[type];
+                return customCadBlocks.value.find(x => x.id === type) || null;
+            };
             const getCadTransform = (m) => `translate(${m.x}, ${m.y}) rotate(${m.rot || 0}) scale(${(m.scale || 1) * (m.flipX || 1)}, ${(m.scale || 1) * (m.flipY || 1)})`;
 
+            const openCadManager = () => { cadMgrFilter.value = 'all'; newCadLabel.value = ''; showCadManager.value = true; };
+            const addCustomCadBlock = async () => {
+                const label = String(newCadLabel.value || '').trim();
+                if (!label) return showToast('請輸入圖塊名稱');
+                const id = 'cad_custom_' + Date.now();
+                let shapes = [];
+                if (newCadShape.value === 'circle') {
+                    shapes = [{ t: 'circle', cx: 0, cy: 0, r: 22, sw: 3, fillBg: true }, { t: 'circle', cx: 0, cy: 0, r: 6, sw: 2 }];
+                } else if (newCadShape.value === 'cross') {
+                    shapes = [{ t: 'rect', x: -22, y: -22, w: 44, h: 44, sw: 2.5, fillBg: true }, { t: 'line', x1: -22, y1: -22, x2: 22, y2: 22, sw: 2.5 }, { t: 'line', x1: 22, y1: -22, x2: -22, y2: 22, sw: 2.5 }];
+                } else {
+                    shapes = [{ t: 'rect', x: -28, y: -18, w: 56, h: 36, sw: 3, fillBg: true }, { t: 'line', x1: -28, y1: -18, x2: 28, y2: 18, sw: 2 }];
+                }
+                customCadBlocks.value.unshift({ id, cat: newCadCat.value || 'arch', label, w: 60, h: 60, shapes });
+                pinnedCadIds.value.push(id);
+                newCadLabel.value = '';
+                await saveCadStore();
+                showToast(`✅ 已加入圖塊「${label}」`);
+            };
+            const deleteCustomCadBlock = async (id) => {
+                if (!confirm('確定要刪除此自訂圖塊嗎？')) return;
+                customCadBlocks.value = customCadBlocks.value.filter(x => x.id !== id);
+                pinnedCadIds.value = pinnedCadIds.value.filter(x => x !== id);
+                await saveCadStore();
+                showToast('🗑️ 已刪除圖塊');
+            };
+            const togglePinCad = async (id) => {
+                if (pinnedCadIds.value.includes(id)) pinnedCadIds.value = pinnedCadIds.value.filter(x => x !== id);
+                else pinnedCadIds.value.push(id);
+                await saveCadStore();
+            };
+            const toggleHideCad = async (id) => {
+                if (hiddenCadIds.value.includes(id)) hiddenCadIds.value = hiddenCadIds.value.filter(x => x !== id);
+                else hiddenCadIds.value.push(id);
+                await saveCadStore();
+            };
+
+            const drawCustomCadOnCanvas = (ctx, m) => {
+                const def = getCadDef(m.data?.cadType);
+                if (!def) return;
+                if (CAD_DEFS[m.data?.cadType]) { drawCadOnCanvas(ctx, m); return; }
+                ctx.save();
+                ctx.translate(m.x, m.y);
+                ctx.rotate(((m.rot || 0) * Math.PI) / 180);
+                ctx.scale((m.scale || 1) * (m.flipX || 1), (m.scale || 1) * (m.flipY || 1));
+                ctx.strokeStyle = m.color || '#111827';
+                (def.shapes || []).forEach(s => {
+                    ctx.lineWidth = s.sw || 2.5;
+                    if (s.t === 'rect') {
+                        if (s.fillBg) { ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.fillRect(s.x, s.y, s.w, s.h); }
+                        ctx.strokeRect(s.x, s.y, s.w, s.h);
+                    } else if (s.t === 'circle') {
+                        ctx.beginPath(); ctx.arc(s.cx, s.cy, s.r, 0, Math.PI * 2);
+                        if (s.fillBg) { ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.fill(); }
+                        ctx.stroke();
+                    } else if (s.t === 'line') {
+                        ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+                    }
+                });
+                ctx.restore();
+            };
+            
             const projectList = ref([]), allProjectOptions = ref([]);
-            const project = reactive({ code: '', name: '', date: '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '' });
+            const project = reactive({ code: '', name: '', date: '', ownerId: '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '' });
             const pages = ref([]), photoPool = ref([]);
 
-            // ⊞ 雙頁分屏並排狀態 (Pane A = 主畫布, Pane B = 副畫布)
             const splitMode = ref(false), activePane = ref('A');
             const activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
             const pageIndexB = ref(0), pinB = ref(null), pinIndexB = ref(0);
@@ -408,29 +372,20 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const toggleSplitMode = () => {
                 splitMode.value = !splitMode.value;
                 if (splitMode.value) {
-                    if (pages.value.length > 1 && pageIndexB.value === activePageIndex.value) {
-                        pageIndexB.value = activePageIndex.value === 0 ? 1 : 0;
-                    }
-                    pinB.value = null;
-                    resetZoomB();
-                    activePane.value = 'A';
+                    if (pages.value.length > 1 && pageIndexB.value === activePageIndex.value) pageIndexB.value = activePageIndex.value === 0 ? 1 : 0;
+                    pinB.value = null; resetZoomB(); activePane.value = 'A';
                     showToast('⊞ 已開啟雙頁並排編輯（點選任一邊即可繪畫）');
-                } else {
-                    activePane.value = 'A';
-                }
+                } else activePane.value = 'A';
             };
 
-            // 💬 外部師傅/業主雲端意見箱
             const feedbackList = ref([]), showFeedbackOverlay = ref(true), showFeedbackModal = ref(false);
             const currentCanvasFeedbacks = computed(() => {
-                const pgId = String(activePage.value?.id || '');
-                const pinId = activePin.value ? String(activePin.value.id) : '';
+                const pgId = String(activePage.value?.id || ''), pinId = activePin.value ? String(activePin.value.id) : '';
                 if (!pgId) return [];
                 return feedbackList.value.filter(f => String(f.pageId || '') === pgId && String(f.pinId || '') === pinId);
             });
             const canvasBFeedbacks = computed(() => {
-                const pgId = String(pageB.value?.id || '');
-                const pinId = pinB.value ? String(pinB.value.id) : '';
+                const pgId = String(pageB.value?.id || ''), pinId = pinB.value ? String(pinB.value.id) : '';
                 if (!pgId) return [];
                 return feedbackList.value.filter(f => String(f.pageId || '') === pgId && String(f.pinId || '') === pinId);
             });
@@ -457,7 +412,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 } catch (_) { showToast('⚠️ 清除失敗，請稍後再試'); }
             };
 
-            // 總圖清單與快速跳頁目錄
             const masterPages = computed(() => pages.value.map((pg, idx) => ({ pg, idx })).filter(x => x.pg.space === '總圖'));
             const showQuickPageNav = ref(false), showQuickPageNavB = ref(false);
             const jumpToPage = (idx) => { showQuickPageNav.value = false; switchPage(idx, 'A'); };
@@ -465,23 +419,15 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const jumpToPageById = (targetId, pane = activePane.value) => {
                 if (!targetId) return;
                 const idx = pages.value.findIndex(p => String(p.id) === String(targetId));
-                if (idx !== -1) {
-                    switchPage(idx, pane);
-                    showToast(`↪️ 已跳轉至 P${idx + 1}${pages.value[idx].space ? ' [' + pages.value[idx].space + ']' : ''}`);
-                } else showToast('⚠️ 連結的目標頁面已不存在');
+                if (idx !== -1) { switchPage(idx, pane); showToast(`↪️ 已跳轉至 P${idx + 1}${pages.value[idx].space ? ' [' + pages.value[idx].space + ']' : ''}`); }
+                else showToast('⚠️ 連結的目標頁面已不存在');
             };
             const goToMasterPlan = (pane = 'A') => {
                 if (!masterPages.value.length) return;
-                if (masterPages.value.length === 1) {
-                    if (pane === 'B') jumpToPageB(masterPages.value[0].idx);
-                    else jumpToPage(masterPages.value[0].idx);
-                } else {
-                    if (pane === 'B') showQuickPageNavB.value = !showQuickPageNavB.value;
-                    else showQuickPageNav.value = !showQuickPageNav.value;
-                }
+                if (masterPages.value.length === 1) { pane === 'B' ? jumpToPageB(masterPages.value[0].idx) : jumpToPage(masterPages.value[0].idx); }
+                else { pane === 'B' ? (showQuickPageNavB.value = !showQuickPageNavB.value) : (showQuickPageNav.value = !showQuickPageNav.value); }
             };
 
-            // 中上方懸浮工具膠囊位置與收合狀態
             const capsuleOffset = reactive({ x: 0, y: 0 });
             const capsuleCollapsed = ref(false);
             const startCapsuleDrag = (e) => {
@@ -495,7 +441,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
             };
 
-            // 獨立縮放與視口 (Pane A & Pane B)
             const zoomScale = ref(1), vbX = ref(0), vbY = ref(0);
             const invZoom = computed(() => 1 / Math.pow(zoomScale.value, 0.65));
             const svgViewBox = computed(() => {
@@ -525,13 +470,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const applyZoomAtClientPoint = (nextScale, clientX, clientY, anchorSvg, pane = 'A') => {
-                const isB = pane === 'B';
-                const svg = isB ? svgCanvasB.value : svgCanvas.value;
-                const pw = isB ? canvasWB.value : canvasW.value;
-                const ph = isB ? canvasHB.value : canvasH.value;
-                const zRef = isB ? zoomScaleB : zoomScale;
-                const xRef = isB ? vbXB : vbX;
-                const yRef = isB ? vbYB : vbY;
+                const isB = pane === 'B', svg = isB ? svgCanvasB.value : svgCanvas.value, pw = isB ? canvasWB.value : canvasW.value, ph = isB ? canvasHB.value : canvasH.value;
+                const zRef = isB ? zoomScaleB : zoomScale, xRef = isB ? vbXB : vbX, yRef = isB ? vbYB : vbY;
                 const clampedScale = Math.max(1, Math.min(5, Math.round(nextScale * 100) / 100));
                 if (clampedScale <= 1) { isB ? resetZoomB() : resetZoom(); return; }
                 const vw = pw / clampedScale, vh = ph / clampedScale;
@@ -550,8 +490,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
             const stepZoom = (delta, pane = 'A') => applyZoomAtClientPoint((pane === 'B' ? zoomScaleB.value : zoomScale.value) + delta, null, null, null, pane);
             const onStageWheel = (e, pane = 'A') => {
-                const svg = pane === 'B' ? svgCanvasB.value : svgCanvas.value;
-                const cObj = pane === 'B' ? canvasB.value : activeCanvas.value;
+                const svg = pane === 'B' ? svgCanvasB.value : svgCanvas.value, cObj = pane === 'B' ? canvasB.value : activeCanvas.value;
                 if (svg && cObj?.photo) applyZoomAtClientPoint((pane === 'B' ? zoomScaleB.value : zoomScale.value) * (e.deltaY < 0 ? 1.2 : 0.82), e.clientX, e.clientY, getCoords(e, pane), pane);
             };
 
@@ -605,30 +544,23 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
             };
 
-            // 單行正中上方・高通透 CAD 圖籤膠囊
             const buildWatermarkBox = (item, itemDate, itemAuthor, canvasWidth = 1200) => {
-                const pName = project.name?.trim() || '';
-                const spName = item?.space?.trim() || '';
+                const pName = project.name?.trim() || '', spName = item?.space?.trim() || '';
                 const leftPart = [pName, spName].filter(Boolean).join(' · ');
-                const dStr = itemDate || item?.date || project.date || '';
-                const aStr = itemAuthor || item?.author || project.lastModifiedBy || '';
+                const dStr = itemDate || item?.date || project.date || '', aStr = itemAuthor || item?.author || project.lastModifiedBy || '';
                 const rightPart = [dStr, aStr].filter(Boolean).join(' · ');
                 const text = [leftPart, rightPart].filter(Boolean).join('  ｜  ');
                 if (!text) return null;
-                const w = Math.min(canvasWidth - 20, Math.max(120, Math.ceil(measureStrWidth(text, 13) + 24)));
-                const h = 26;
-                const x = Math.max(10, Math.round((canvasWidth - w) / 2));
-                const y = 8;
-                return { x, y, w, h, text };
+                const w = Math.min(canvasWidth - 20, Math.max(120, Math.ceil(measureStrWidth(text, 13) + 24))), h = 26;
+                return { x: Math.max(10, Math.round((canvasWidth - w) / 2)), y: 8, w, h, text };
             };
             const fullScreenWatermarkBox = computed(() => buildWatermarkBox(fullScreenItem.value, fullScreenDate.value, fullScreenAuthor.value, fullScreenItem.value?.w || 1200));
 
-            const showJoinModal = ref(false), inputJoinCode = ref(''), showAddPageModal = ref(false), showSpaceModal = ref(false), showMergeModal = ref(false), showPdfModal = ref(false);
+            const showAddPageModal = ref(false), showSpaceModal = ref(false), showMergeModal = ref(false), showPdfModal = ref(false);
             const spaceList = ref([...DEFAULT_SPACES]);
             const showManageModal = ref(false), manageProj = ref({}), showCloudBrowser = ref(false), cloudProjectList = ref([]), showBackupListModal = ref(false), backupList = ref([]);
             const showPhotoPoolModal = ref(false), photoPoolList = ref([]), photoPoolTarget = ref('newPage');
 
-            // 🔗 兩個總號合拼 & ↗️ 選圖轉檔 狀態
             const showMergeProjectsModal = ref(false), mergeProjCodeA = ref(''), mergeProjCodeB = ref(''), mergeProjNewName = ref('');
             const selectMode = ref(false), selectedPageIds = ref([]);
             const showTransferModal = ref(false), transferTargetCode = ref(''), transferMode = ref('copy'), transferNewProjName = ref('');
@@ -638,7 +570,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
             const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-            const cloudStatusText = computed(() => ({ syncing: '☁️上傳', offline: '📴離線', queued: '⏳待傳', ready: '☁️v10.1' }[cloudSyncState.value] || '☁️v10.1'));
+            const cloudStatusText = computed(() => ({ syncing: '☁️同步中', offline: '📴離線', queued: '⏳待傳', ready: '☁️v11.0' }[cloudSyncState.value] || '☁️v11.0'));
             const cloudStatusClass = computed(() =>
                 cloudSyncState.value === 'syncing' ? 'bg-amber-100 text-amber-900 border-amber-300' :
                 cloudSyncState.value === 'offline' ? 'bg-zinc-100 text-zinc-500 border-zinc-300' :
@@ -648,7 +580,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const showCloudDetail = () => {
                 if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                 else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                else showToast('v10.1 全動態印章管理・熱門自動排行');
+                else showToast('v11.0 帳號自動歸戶・退出自動上傳・CAD連續蓋印');
             };
 
             const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -685,13 +617,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     isSketch: !!c.isSketch, hasGrid: !!c.hasGrid, markers: c.markers || [], lines: c.lines || [], walls: c.walls || [], paths: c.paths || [], pins: c.pins || [], deletedPinIds: c.deletedPinIds || []
                 });
                 pages.value.push(newPg);
-                if (isB) {
-                    pageIndexB.value = pages.value.length - 1;
-                    if (oldPinId) pinB.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null;
-                } else {
-                    activePageIndex.value = pages.value.length - 1;
-                    if (oldPinId) activePin.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null;
-                }
+                if (isB) { pageIndexB.value = pages.value.length - 1; if (oldPinId) pinB.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null; }
+                else { activePageIndex.value = pages.value.length - 1; if (oldPinId) activePin.value = (newPg.pins || []).find(p => String(p.id) === oldPinId) || null; }
                 dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
                 showToast(`📋 已複製為 P${pages.value.length} (保留 [${branchOwner.value}] 原圖)`);
             };
@@ -708,11 +635,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const drawMode = ref('browse'), showTopSheet = ref(false), showTopTextBar = ref(false), activeMarker = ref(null);
             const isProcessing = ref(false), processingText = ref(''), focusedInput = ref('val'), topTextInputRef = ref(null), svgCanvas = ref(null), svgCanvasB = ref(null);
 
-            // 📝 編 (空間 / 編號索引專用彈窗狀態)
             const showIndexModal = ref(false), indexDraftPos = ref({ x: 0, y: 0 }), indexCustomCode = ref(''), editingIndexMarker = ref(null);
-            const openIndexModalAt = (x, y, existing = null) => {
-                indexDraftPos.value = { x, y }; editingIndexMarker.value = existing; indexCustomCode.value = existing?.data?.customCode || ''; showIndexModal.value = true;
-            };
+            const openIndexModalAt = (x, y, existing = null) => { indexDraftPos.value = { x, y }; editingIndexMarker.value = existing; indexCustomCode.value = existing?.data?.customCode || ''; showIndexModal.value = true; };
             const placeSpaceTag = (sp) => {
                 checkBranchNeed(() => {
                     const c = targetCanvas.value; if (!c) return;
@@ -728,10 +652,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     touchDirty(); saveAll(); showIndexModal.value = false; editingIndexMarker.value = null;
                 });
             };
-            const addCustomSpaceTag = () => {
-                const s = prompt('輸入空間或標籤名稱：')?.trim();
-                if (s) { if (!spaceList.value.includes(s)) spaceList.value.push(s); placeSpaceTag(s); }
-            };
+            const addCustomSpaceTag = () => { const s = prompt('輸入空間或標籤名稱：')?.trim(); if (s) { if (!spaceList.value.includes(s)) spaceList.value.push(s); placeSpaceTag(s); } };
             const placePageLink = (targetPg, targetIdx) => {
                 checkBranchNeed(() => {
                     const c = targetCanvas.value; if (!c) return;
@@ -750,17 +671,9 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     showToast(`🔗 已連結至 P${targetIdx + 1}`);
                 });
             };
-            const deleteEditingIndexMarker = () => {
-                if (!editingIndexMarker.value) return;
-                activeMarker.value = editingIndexMarker.value; showIndexModal.value = false; editingIndexMarker.value = null; deleteMarkerTop();
-            };
+            const deleteEditingIndexMarker = () => { if (!editingIndexMarker.value) return; activeMarker.value = editingIndexMarker.value; showIndexModal.value = false; editingIndexMarker.value = null; deleteMarkerTop(); };
 
-            const setMarkerTextColor = (colorHex) => {
-                defaultTextColor.value = colorHex;
-                if (activeMarker.value) {
-                    ensureMarkerBranched(() => { activeMarker.value.textColor = colorHex; touchDirty(); saveAll(); });
-                }
-            };
+            const setMarkerTextColor = (colorHex) => { defaultTextColor.value = colorHex; if (activeMarker.value) ensureMarkerBranched(() => { activeMarker.value.textColor = colorHex; touchDirty(); saveAll(); }); };
 
             const getArrowMarkerId = (c, suffix = '') => 'arrow-end-' + suffix + String(c || '#ef4444').replace('#', 'hex_');
             const getFsArrowMarkerId = (c) => 'fs-arrow-' + String(c || '#ef4444').replace('#', 'hex_');
@@ -809,18 +722,14 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
 
             const getClientPoint = (e) => e.touches?.[0] || e.changedTouches?.[0] || e;
             const clientToSvgPoint = (clientX, clientY, pane = 'A') => {
-                const isB = pane === 'B';
-                const svg = isB ? svgCanvasB.value : svgCanvas.value;
-                const cObj = isB ? canvasB.value : activeCanvas.value;
+                const isB = pane === 'B', svg = isB ? svgCanvasB.value : svgCanvas.value, cObj = isB ? canvasB.value : activeCanvas.value;
                 if (!svg || !cObj) return { x: 0, y: 0 };
                 const pw = cObj.w || 1200, ph = cObj.h || 900;
                 try {
                     const ctm = svg.getScreenCTM();
                     if (ctm) { const p = svg.createSVGPoint(); p.x = clientX; p.y = clientY; const loc = p.matrixTransform(ctm.inverse()); return { x: Math.round(Math.max(0, Math.min(pw, loc.x))), y: Math.round(Math.max(0, Math.min(ph, loc.y))) }; }
                 } catch (_) {}
-                const zVal = isB ? zoomScaleB.value : zoomScale.value;
-                const xVal = isB ? vbXB.value : vbX.value;
-                const yVal = isB ? vbYB.value : vbY.value;
+                const zVal = isB ? zoomScaleB.value : zoomScale.value, xVal = isB ? vbXB.value : vbX.value, yVal = isB ? vbYB.value : vbY.value;
                 const vw = pw / zVal, vh = ph / zVal, vx = Math.max(0, Math.min(pw - vw, xVal)), vy = Math.max(0, Math.min(ph - vh, yVal));
                 const r = svg.getBoundingClientRect(), s = Math.min(r.width / vw, r.height / vh);
                 return { x: Math.round(Math.max(0, Math.min(pw, vx + (clientX - r.left - (r.width - vw * s) / 2) / s))), y: Math.round(Math.max(0, Math.min(ph, vy + (clientY - r.top - (r.height - vh * s) / 2) / s))) };
@@ -892,30 +801,17 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const openPinSubPage = (pin, idx, pane = 'A') => {
-                const isB = pane === 'B';
-                isB ? resetZoomB() : resetZoom();
-                showQuickPageNav.value = false; showQuickPageNavB.value = false;
+                const isB = pane === 'B'; isB ? resetZoomB() : resetZoom(); showQuickPageNav.value = false; showQuickPageNavB.value = false;
                 const parentPg = isB ? pageB.value : activePage.value;
                 Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], walls: pin.walls || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || parentPg?.space || '' });
                 if (pin.isSketch && !pin.photo) { const size = getAdaptiveCanvasSize(); pin.photo = renderSketchDataUrl(size.w, size.h, !!pin.hasGrid); pin.w = size.w; pin.h = size.h; }
-                if (isB) { pinB.value = pin; pinIndexB.value = idx; }
-                else { activePin.value = pin; activePinIndex.value = idx; }
+                if (isB) { pinB.value = pin; pinIndexB.value = idx; } else { activePin.value = pin; activePinIndex.value = idx; }
                 drawMode.value = 'browse';
             };
-            const exitPinSubPage = (pane = 'A') => {
-                if (pane === 'B') { resetZoomB(); pinB.value = null; }
-                else { resetZoom(); activePin.value = null; }
-                drawMode.value = 'browse';
-            };
-            const onPinTap = (pin, index, pane = 'A') => {
-                focusPane(pane);
-                if (drawMode.value === 'eraser') { showToast('📍 落釘受保護，請點入內按「🗑️刪釘」移除'); return; }
-                openPinSubPage(pin, index, pane);
-            };
+            const exitPinSubPage = (pane = 'A') => { if (pane === 'B') { resetZoomB(); pinB.value = null; } else { resetZoom(); activePin.value = null; } drawMode.value = 'browse'; };
+            const onPinTap = (pin, index, pane = 'A') => { focusPane(pane); if (drawMode.value === 'eraser') { showToast('📍 落釘受保護，請點入內按「🗑️刪釘」移除'); return; } openPinSubPage(pin, index, pane); };
             const deleteActivePin = async (pane = activePane.value) => {
-                const isB = pane === 'B';
-                const pObj = isB ? pinB.value : activePin.value;
-                const pg = isB ? pageB.value : activePage.value;
+                const isB = pane === 'B', pObj = isB ? pinB.value : activePin.value, pg = isB ? pageB.value : activePage.value;
                 if (!pObj || !pg) return;
                 activePane.value = pane;
                 checkBranchNeed(async () => {
@@ -1004,42 +900,30 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     const c = targetCanvas.value; if (!c) return;
                     c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                     const markerId = Date.now();
-                    const newMarker = {
-                        id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType,
-                        textColor: forceType === 'stamp' ? null : defaultTextColor.value,
-                        data: makeBlankMarkerData()
-                    };
+                    const newMarker = { id: markerId, lineId: null, x, y, w: 140, h: 56, type: forceType, textColor: forceType === 'stamp' ? null : defaultTextColor.value, data: makeBlankMarkerData() };
                     updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId });
                     touchDirty(); activeMarker.value = newMarker;
-                    if (forceType === 'stamp') {
-                        stampFilter.value = 'hot';
-                        showQuickAddStamp.value = false;
-                        focusedInput.value = 'stamp';
-                        showTopSheet.value = true;
-                    } else {
-                        showTopTextBar.value = true;
-                        nextTick(() => topTextInputRef.value?.focus());
-                    }
+                    if (forceType === 'stamp') { stampFilter.value = 'all'; focusedInput.value = 'stamp'; showTopSheet.value = true; }
+                    else { showTopTextBar.value = true; nextTick(() => topTextInputRef.value?.focus()); }
                     saveAll();
                 });
             };
 
+            // 🏛️ CAD 圖塊連續蓋印（不自動彈出高位修改欄鎖定畫面）
             const placeCadBlockAt = (x, y) => {
-                const def = CAD_DEFS[selectedCadType.value];
+                const def = getCadDef(selectedCadType.value);
                 if (!def) return;
                 checkBranchNeed(() => {
                     const c = targetCanvas.value; if (!c) return;
                     c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                     const markerId = Date.now();
                     const newMarker = {
-                        id: markerId, lineId: null, x, y, w: def.w, h: def.h,
+                        id: markerId, lineId: null, x, y, w: def.w || 60, h: def.h || 60,
                         type: 'cad', color: drawColor.value, rot: 0, scale: 1, flipX: 1, flipY: 1,
                         data: { ...makeBlankMarkerData(), cadType: selectedCadType.value }
                     };
                     c.markers.push(newMarker);
                     c.historyStack.push({ type: 'marker', markerId });
-                    activeMarker.value = newMarker;
-                    showTopTextBar.value = true;
                     touchDirty(); saveAll();
                 });
             };
@@ -1081,7 +965,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     showTopTextBar.value = true;
                     if (m.type === 'text') nextTick(() => topTextInputRef.value?.focus());
                 } else {
-                    if (m.type === 'stamp') { stampFilter.value = 'hot'; showQuickAddStamp.value = false; }
+                    if (m.type === 'stamp') stampFilter.value = 'all';
                     showTopSheet.value = true;
                     focusedInput.value = TAG_DEFS[m.type]?.fields[0]?.key || 'val';
                 }
@@ -1108,9 +992,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         isPanningBrowse = true; panPane = pane;
                         panStartClient = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                         panStartVb = pane === 'B' ? { x: vbXB.value, y: vbYB.value } : { x: vbX.value, y: vbY.value };
-                    } else if (!['eraser', 'move'].includes(drawMode.value)) {
-                        beginStroke(e, pane);
-                    }
+                    } else if (!['eraser', 'move'].includes(drawMode.value)) beginStroke(e, pane);
                 }
             };
 
@@ -1149,16 +1031,11 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const panByClientDelta = (dxClient, dyClient, pane = 'A') => {
-                const isB = pane === 'B';
-                const svg = isB ? svgCanvasB.value : svgCanvas.value; if (!svg) return;
-                const pw = isB ? canvasWB.value : canvasW.value, ph = isB ? canvasHB.value : canvasH.value;
-                const zVal = isB ? zoomScaleB.value : zoomScale.value;
-                const vw = pw / zVal, vh = ph / zVal;
-                const r = svg.getBoundingClientRect(), fitScale = Math.min(r.width / vw, r.height / vh) || 1;
-                const nextX = Math.max(0, Math.min(pw - vw, panStartVb.x - dxClient / fitScale));
-                const nextY = Math.max(0, Math.min(ph - vh, panStartVb.y - dyClient / fitScale));
-                if (isB) { vbXB.value = nextX; vbYB.value = nextY; }
-                else { vbX.value = nextX; vbY.value = nextY; }
+                const isB = pane === 'B', svg = isB ? svgCanvasB.value : svgCanvas.value; if (!svg) return;
+                const pw = isB ? canvasWB.value : canvasW.value, ph = isB ? canvasHB.value : canvasH.value, zVal = isB ? zoomScaleB.value : zoomScale.value;
+                const vw = pw / zVal, vh = ph / zVal, r = svg.getBoundingClientRect(), fitScale = Math.min(r.width / vw, r.height / vh) || 1;
+                const nextX = Math.max(0, Math.min(pw - vw, panStartVb.x - dxClient / fitScale)), nextY = Math.max(0, Math.min(ph - vh, panStartVb.y - dyClient / fitScale));
+                if (isB) { vbXB.value = nextX; vbYB.value = nextY; } else { vbX.value = nextX; vbY.value = nextY; }
             };
 
             const onStageMouseDown = (e, pane = 'A') => {
@@ -1251,11 +1128,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         const lineType = drawMode.value === 'line' ? 'measure' : drawMode.value;
                         c.lines.push({ ...lSnap, id: lineId, type: lineType, color: lineType === 'measure' ? null : drawColor.value });
                         if (lineType !== 'measure') { c.historyStack.push({ type: 'line_marker', lineId, markerId: null }); touchDirty(); saveAll(); return; }
-                        const newMarker = {
-                            id: markerId, lineId,
-                            x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2),
-                            w: 140, h: 56, type: 'general', textColor: defaultTextColor.value, data: makeBlankMarkerData()
-                        };
+                        const newMarker = { id: markerId, lineId, x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2), w: 140, h: 56, type: 'general', textColor: defaultTextColor.value, data: makeBlankMarkerData() };
                         updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
                         touchDirty(); activeMarker.value = newMarker; focusedInput.value = 'val'; showTopSheet.value = true; saveAll();
                     });
@@ -1272,25 +1145,14 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (!activeMarker.value) return;
                 const s = Math.max(0.3, Math.min(3.5, Math.round(Number(val) * 100) / 100));
                 ensureMarkerBranched(() => {
-                    const m = activeMarker.value;
-                    m.scale = s;
-                    if (m.type === 'image') {
-                        if (!m.baseW) { m.baseW = m.w; m.baseH = m.h; }
-                        m.w = Math.round(m.baseW * s); m.h = Math.round(m.baseH * s);
-                    }
+                    const m = activeMarker.value; m.scale = s;
+                    if (m.type === 'image') { if (!m.baseW) { m.baseW = m.w; m.baseH = m.h; } m.w = Math.round(m.baseW * s); m.h = Math.round(m.baseH * s); }
                     touchDirty(); saveAll();
                 });
             };
             const resizeImageMarker = (factor) => { if (!activeMarker.value) return; setMarkerScale((activeMarker.value.scale || 1) * factor); };
             const rotateMarker = (deg) => { if (!activeMarker.value) return; ensureMarkerBranched(() => { activeMarker.value.rot = ((activeMarker.value.rot || 0) + deg + 360) % 360; touchDirty(); saveAll(); }); };
-            const flipMarker = (axis) => {
-                if (!activeMarker.value) return;
-                ensureMarkerBranched(() => {
-                    if (axis === 'x') activeMarker.value.flipX = (activeMarker.value.flipX || 1) * -1;
-                    else activeMarker.value.flipY = (activeMarker.value.flipY || 1) * -1;
-                    touchDirty(); saveAll();
-                });
-            };
+            const flipMarker = (axis) => { if (!activeMarker.value) return; ensureMarkerBranched(() => { if (axis === 'x') activeMarker.value.flipX = (activeMarker.value.flipX || 1) * -1; else activeMarker.value.flipY = (activeMarker.value.flipY || 1) * -1; touchDirty(); saveAll(); }); };
             const setCadMarkerColor = (hex) => { drawColor.value = hex; if (!activeMarker.value || activeMarker.value.type !== 'cad') return; ensureMarkerBranched(() => { activeMarker.value.color = hex; touchDirty(); saveAll(); }); };
 
             const undoLastAction = () => {
@@ -1331,16 +1193,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const deleteMarkerTop = () => ensureMarkerBranched(() => { const c = targetCanvas.value, m = activeMarker.value; if (!m || !c) return; if (m.lineId) c.lines = (c.lines || []).filter(l => l.id !== m.lineId); c.markers = (c.markers || []).filter(x => x.id !== m.id); if (c.historyStack) c.historyStack = c.historyStack.filter(h => h.markerId !== m.id); c.redoStack = []; touchDirty(); showTopSheet.value = false; showTopTextBar.value = false; activeMarker.value = null; saveAll(); });
-            const switchMarkerType = (t, fKey) => ensureMarkerBranched(() => {
-                activeMarker.value.type = t;
-                if (t === 'stamp') {
-                    stampFilter.value = 'hot';
-                    showQuickAddStamp.value = false;
-                } else if (!activeMarker.value.textColor) {
-                    activeMarker.value.textColor = defaultTextColor.value;
-                }
-                focusedInput.value = fKey; updateMarkerSize(activeMarker.value); touchDirty();
-            });
+            const switchMarkerType = (t, fKey) => ensureMarkerBranched(() => { activeMarker.value.type = t; if (t === 'stamp') stampFilter.value = 'all'; else if (!activeMarker.value.textColor) activeMarker.value.textColor = defaultTextColor.value; focusedInput.value = fKey; updateMarkerSize(activeMarker.value); touchDirty(); });
             const closeTopTextBar = () => { if (['stamp', 'text'].includes(activeMarker.value?.type) && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
             const closeTopSheet = () => { if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopSheet.value = false; saveAll(); };
 
@@ -1365,24 +1218,12 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (!activeMarker.value) return;
                 const isObj = typeof stampOrText === 'object' && stampOrText !== null;
                 const txt = isObj ? stampOrText.text : String(stampOrText || '');
-                const col = isObj ? (stampOrText.color || '#ffffff') : (stampItems.value.find(x => x.text === txt)?.color || '#ffffff');
-
-                if (isObj) {
-                    stampOrText.count = (stampOrText.count || 0) + 1;
-                    saveStampStore();
-                } else {
-                    const matched = stampItems.value.find(x => x.text === txt);
-                    if (matched) { matched.count = (matched.count || 0) + 1; saveStampStore(); }
-                }
-
+                const matched = stampItems.value.find(x => x.text === txt);
+                const col = isObj ? (stampOrText.color || '#ffffff') : (matched?.color || '#ffffff');
+                if (matched) { matched.count = (matched.count || 0) + 1; saveStampStore(); }
                 ensureMarkerBranched(() => {
-                    if (activeMarker.value.lineId) {
-                        targetCanvas.value.lines = (targetCanvas.value.lines || []).filter(l => l.id !== activeMarker.value.lineId);
-                        activeMarker.value.lineId = null;
-                    }
-                    activeMarker.value.type = 'stamp';
-                    activeMarker.value.textColor = col;
-                    activeMarker.value.data.val = txt;
+                    if (activeMarker.value.lineId) { targetCanvas.value.lines = (targetCanvas.value.lines || []).filter(l => l.id !== activeMarker.value.lineId); activeMarker.value.lineId = null; }
+                    activeMarker.value.type = 'stamp'; activeMarker.value.textColor = col; activeMarker.value.data.val = txt;
                     updateMarkerSize(activeMarker.value); touchDirty(); closeTopSheet();
                 });
             };
@@ -1398,10 +1239,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (m.textColor) return m.textColor;
                 if (m.type === 'space_tag') return '#a855f7';
                 if (m.type === 'page_link') return '#38bdf8';
-                if (m.type === 'stamp') {
-                    const found = stampItems.value.find(x => x.text === m.data?.val);
-                    if (found?.color) return found.color;
-                }
+                if (m.type === 'stamp') { const found = stampItems.value.find(x => x.text === m.data?.val); if (found?.color) return found.color; }
                 return '#ffffff';
             };
 
@@ -1438,10 +1276,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                             if (firstAddedIdx === -1) firstAddedIdx = pages.value.length - 1;
                         }
                     }
-                    if (firstAddedIdx !== -1 && !targetPin.value) {
-                        if (splitMode.value && activePane.value === 'B') pageIndexB.value = firstAddedIdx;
-                        else activePageIndex.value = firstAddedIdx;
-                    }
+                    if (firstAddedIdx !== -1 && !targetPin.value) { if (splitMode.value && activePane.value === 'B') pageIndexB.value = firstAddedIdx; else activePageIndex.value = firstAddedIdx; }
                     drawMode.value = 'browse'; await saveAll(); if (isBatch) showToast(`✅ 已匯入 ${files.length} 張圖紙`);
                 } finally { isProcessing.value = false; e.target.value = ''; }
             };
@@ -1461,12 +1296,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                             const c = targetCanvas.value; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                             let tw = res.w, th = res.h; const maxS = Math.min(targetCanvasW.value, targetCanvasH.value) * 0.7;
                             if (tw > maxS || th > maxS) { if (tw > th) { th = Math.round(th * maxS / tw); tw = maxS; } else { tw = Math.round(tw * maxS / th); th = maxS; } }
-                            const isB = splitMode.value && activePane.value === 'B';
-                            const zVal = isB ? zoomScaleB.value : zoomScale.value;
-                            const vx = isB ? vbXB.value : vbX.value;
-                            const vy = isB ? vbYB.value : vbY.value;
-                            const vw = targetCanvasW.value / zVal, vh = targetCanvasH.value / zVal;
-                            const markerId = Date.now();
+                            const isB = splitMode.value && activePane.value === 'B', zVal = isB ? zoomScaleB.value : zoomScale.value, vx = isB ? vbXB.value : vbX.value, vy = isB ? vbYB.value : vbY.value;
+                            const vw = targetCanvasW.value / zVal, vh = targetCanvasH.value / zVal, markerId = Date.now();
                             const newMarker = { id: markerId, x: Math.round(vx + vw / 2), y: Math.round(vy + vh / 2), w: tw, h: th, baseW: tw, baseH: th, scale: 1, rot: 0, type: 'image', data: { b64: res.b64 } };
                             c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId }); activeMarker.value = newMarker; showTopTextBar.value = true; touchDirty(); showToast('✅ 貼圖成功（可用滑桿調大細）');
                         });
@@ -1488,9 +1319,10 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
 
             const saveAll = async () => {
                 const code = String(project.code || '').trim(); if (!code) return;
+                if (currentUser.value?.uid && !project.ownerId) project.ownerId = currentUser.value.uid;
                 const cleanPages = JSON.parse(JSON.stringify(pages.value || [])).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
                 const hasPending = hasUnsavedCloudChanges.value || dirtyPageIds.size > 0;
-                await localforage.setItem('proj_' + code, { code, name: String(project.name || ''), date: String(project.date || ''), pages: cleanPages, photoPool: JSON.parse(JSON.stringify(photoPool.value || [])), deletedPageIds: JSON.parse(JSON.stringify(project.deletedPageIds || [])), deletedPinIds: JSON.parse(JSON.stringify(project.deletedPinIds || [])), pageOrderUpdatedAt: Number(project.pageOrderUpdatedAt || 0), updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0), lastModifiedBy: String(project.lastModifiedBy || authorName.value || ''), pendingUpload: hasPending });
+                await localforage.setItem('proj_' + code, { code, name: String(project.name || ''), date: String(project.date || ''), ownerId: String(project.ownerId || ''), pages: cleanPages, photoPool: JSON.parse(JSON.stringify(photoPool.value || [])), deletedPageIds: JSON.parse(JSON.stringify(project.deletedPageIds || [])), deletedPinIds: JSON.parse(JSON.stringify(project.deletedPinIds || [])), pageOrderUpdatedAt: Number(project.pageOrderUpdatedAt || 0), updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0), lastModifiedBy: String(project.lastModifiedBy || authorName.value || ''), pendingUpload: hasPending });
                 await updateQueue(code, hasPending);
             };
 
@@ -1517,7 +1349,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     const projRef = db.collection('site_projects').doc(code);
                     const [projDoc, pagesSnap, mediaMap] = await Promise.all([withRetry(() => withTimeout(projRef.get())), withRetry(() => withTimeout(projRef.collection('pages').get())), loadMediaMapFromRef(projRef)]);
                     if (!projDoc.exists) { cloudSyncState.value = hasUnsavedCloudChanges.value ? 'queued' : 'ready'; return; }
-                    const pd = projDoc.data(); if (pd.name) project.name = pd.name; if (pd.date) project.date = pd.date; if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy;
+                    const pd = projDoc.data(); if (pd.name) project.name = pd.name; if (pd.date) project.date = pd.date; if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy; if (pd.ownerId) project.ownerId = pd.ownerId;
                     const deletedSet = new Set([...(project.deletedPageIds || []), ...(pd.deletedPageIds || [])]); project.deletedPageIds = [...deletedSet];
                     const deletedPins = new Set([...(project.deletedPinIds || []).map(String), ...((pd.deletedPinIds || []).map(String))]); project.deletedPinIds = [...deletedPins];
                     const cloudPages = pagesSnap.docs.map(doc => { const r = doc.data(); return makeEmptyPage({ id: doc.id, ...r, date: r.date || pd.date || getTodayStr(), photo: (r.photoId && mediaMap.get(r.photoId)?.photo) || mediaMap.get('page_' + (r.id || doc.id))?.photo || r.photo || null, pins: (r.pins || []).map(pin => ({ ...pin, photo: (pin.photoId && mediaMap.get(pin.photoId)?.photo) || mediaMap.get(String(pin.id))?.photo || pin.photo || null })) }); });
@@ -1544,7 +1376,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 unsubPages = db.collection('site_projects').doc(String(code)).collection('pages').onSnapshot(async (snap) => {
                     if (first) { first = false; return; }
                     if (isPushing || currentView.value === 'dir' || snap.metadata.hasPendingWrites || isDrawing.value || isPinching || showTopSheet.value || showTopTextBar.value || showIndexModal.value) return;
-                    await pullAndMergeFromCloud(code, false); showToast('🔄 已同步同事最新圖紙');
+                    await pullAndMergeFromCloud(code, false); showToast('🔄 已同步最新圖紙');
                 }, () => {});
 
                 let fbFirst = true;
@@ -1570,6 +1402,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 const targetList = isCurrentOpen ? rawPages.filter(pg => dirtyPageIds.has(pg.id) || (pg.updatedAt || 0) > lastSync) : rawPages;
                 const dirtyPages = JSON.parse(JSON.stringify(targetList)).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
                 const projPatch = { code, name: projObj.name || '', date: projObj.date || getTodayStr(), pageIds: rawPages.map(p => p.id), pageOrderUpdatedAt: projObj.pageOrderUpdatedAt || now, deletedPageIds: projObj.deletedPageIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPageIds) : [], deletedPinIds: projObj.deletedPinIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPinIds) : [], updatedAt: now };
+                const ownerUid = projObj.ownerId || currentUser.value?.uid;
+                if (ownerUid) projPatch.ownerId = ownerUid;
                 if (dirtyPages.length > 0 && authorName.value) projPatch.lastModifiedBy = authorName.value;
                 await withRetry(() => withTimeout(projRef.set(projPatch, { merge: true }), 15000));
                 for (let idx = 0; idx < dirtyPages.length; idx++) {
@@ -1591,7 +1425,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (!navigator.onLine) { await saveAll(); cloudSyncState.value = 'offline'; if (throwErr) throw new Error('目前無網絡'); return; }
                 isPushing = true; cloudSyncState.value = 'syncing';
                 try {
-                    const now = await pushProjectPayload({ code, name: project.name, date: project.date, pages: pages.value, deletedPageIds: project.deletedPageIds, deletedPinIds: project.deletedPinIds, pageOrderUpdatedAt: project.pageOrderUpdatedAt, lastSyncAt: project.lastSyncAt }, true, onProgress);
+                    const now = await pushProjectPayload({ code, name: project.name, date: project.date, ownerId: project.ownerId, pages: pages.value, deletedPageIds: project.deletedPageIds, deletedPinIds: project.deletedPinIds, pageOrderUpdatedAt: project.pageOrderUpdatedAt, lastSyncAt: project.lastSyncAt }, true, onProgress);
                     dirtyPageIds.clear(); project.lastSyncAt = now; cloudSyncState.value = 'ready'; hasUnsavedCloudChanges.value = false; await saveAll();
                 } catch (e) { await saveAll(); cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; if (throwErr) throw e; } finally { setTimeout(() => { isPushing = false; }, 1000); }
             };
@@ -1610,40 +1444,24 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 try {
                     for (const qCode of [...queue]) {
                         if (!navigator.onLine) break;
-                        if (currentView.value !== 'dir' && String(project.code) === String(qCode)) { await pullAndMergeFromCloud(qCode, false); await pushToCloud(true); await createCloudBackup(qCode); if (!silent) showToast(`✅ #${qCode} 已自動上傳`); }
-                        else { const saved = await localforage.getItem('proj_' + qCode); if (!saved) { await updateQueue(qCode, false); continue; } saved.lastSyncAt = await pushProjectPayload(saved, false, null); saved.pendingUpload = false; await localforage.setItem('proj_' + qCode, saved); await createCloudBackup(qCode); showToast(`✅ 網絡已恢復，#${qCode} 已自動上傳`); }
+                        if (currentView.value !== 'dir' && String(project.code) === String(qCode)) { await pullAndMergeFromCloud(qCode, false); await pushToCloud(true); await createCloudBackup(qCode); if (!silent) showToast(`✅ 已自動上傳`); }
+                        else { const saved = await localforage.getItem('proj_' + qCode); if (!saved) { await updateQueue(qCode, false); continue; } saved.lastSyncAt = await pushProjectPayload(saved, false, null); saved.pendingUpload = false; await localforage.setItem('proj_' + qCode, saved); await createCloudBackup(qCode); if (!silent) showToast(`✅ 背景自動同步完成`); }
                     }
                     if (currentView.value === 'dir') await loadProjectList();
                 } catch (_) {} finally { isAutoQueueing = false; }
             };
 
-            const uploadNow = async () => {
-                if (!project.code) return; await saveAll(); if (!navigator.onLine) { cloudSyncState.value = 'offline'; showToast('📴 無網絡：已鎖入本機，有訊號自動上傳'); return; }
-                isProcessing.value = true; processingText.value = '正在智能合併並分片上傳...';
-                try { await pullAndMergeFromCloud(project.code, false); await pushToCloud(true, (st) => { processingText.value = st; }); await createCloudBackup(project.code); showToast('✅ 100% 上傳成功'); } catch (_) { showToast('⚠️ 網絡波動，已加入自動補傳隊列'); } finally { isProcessing.value = false; }
-            };
-            const downloadNow = async () => {
-                if (!project.code) return; if (!navigator.onLine) { showToast('📴 目前無網絡，顯示本機最新資料'); return; }
-                isProcessing.value = true; processingText.value = '正在載入最新進度...';
-                try { await pullAndMergeFromCloud(project.code, true); showToast('✅ 已合併雲端最新資料'); } catch (e) { alert('載入失敗：' + e.message); } finally { isProcessing.value = false; }
-            };
-
             const createNewProject = async () => {
                 await checkAuthorName(); resetZoom(); const today = getTodayStr(), firstPg = makeEmptyPage({ date: today });
-                Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: today, deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
+                Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: today, ownerId: currentUser.value?.uid || '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
                 pages.value = [firstPg]; photoPool.value = []; feedbackList.value = []; activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; splitMode.value = false; activePane.value = 'A'; dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id); hasUnsavedCloudChanges.value = true;
                 cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; currentView.value = 'proj'; await saveAll(); startRealtimeListener(project.code);
             };
-            const copyCode = (code) => { navigator.clipboard?.writeText(code); showToast('已複製工程碼：#' + code); showManageModal.value = false; };
-            const joinProjectByCode = async () => {
-                await checkAuthorName(); const code = String(inputJoinCode.value || '').trim(); if (code.length !== 6) return alert('請輸入 6 位數字工程碼'); if (!navigator.onLine) return alert('連通新工程碼需要網絡連線');
-                isProcessing.value = true; processingText.value = '正在連通 #' + code + '...';
-                try { const doc = await withRetry(() => withTimeout(db.collection('site_projects').doc(code).get(), 15000)); if (!doc.exists) return alert('雲端找不到工程碼 #' + code); showJoinModal.value = false; inputJoinCode.value = ''; await loadProject(code, true); showToast('✅ 已連通 #' + code); } catch (e) { alert('連線失敗：' + e.message); } finally { isProcessing.value = false; }
-            };
+            const copyCode = (code) => { navigator.clipboard?.writeText(code); showToast('已複製編號'); showManageModal.value = false; };
             const loadProject = async (code, openAsPreview = true) => {
                 resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; code = String(code); project.code = code; project.deletedPageIds = []; project.deletedPinIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; feedbackList.value = []; dirtyPageIds.clear();
                 const d = await localforage.getItem('proj_' + code);
-                if (d) { Object.assign(project, { name: d.name || '', date: d.date || '', deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' }); if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg)); if (d.photoPool) photoPool.value = d.photoPool; hasUnsavedCloudChanges.value = !!d.pendingUpload; } else hasUnsavedCloudChanges.value = false;
+                if (d) { Object.assign(project, { name: d.name || '', date: d.date || '', ownerId: d.ownerId || currentUser.value?.uid || '', deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' }); if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg)); if (d.photoPool) photoPool.value = d.photoPool; hasUnsavedCloudChanges.value = !!d.pendingUpload; } else hasUnsavedCloudChanges.value = false;
                 activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; currentView.value = openAsPreview ? 'preview' : 'proj';
                 await pullAndMergeFromCloud(code, false); if (!pages.value.length) pages.value = [makeEmptyPage()]; drawMode.value = 'browse'; startRealtimeListener(code);
             };
@@ -1653,13 +1471,9 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 const newName = prompt('請輸入新的地址 / 名稱：', manageProj.value.name);
                 if (newName !== null) { const trimmed = newName.trim(), code = String(manageProj.value.code), d = await localforage.getItem('proj_' + code); if (d) { d.name = trimmed; d.pendingUpload = true; await localforage.setItem('proj_' + code, d); await updateQueue(code, true); } manageProj.value.name = trimmed; if (db && navigator.onLine) db.collection('site_projects').doc(code).set({ name: trimmed, updatedAt: Date.now() }, { merge: true }).catch(() => {}); await loadProjectList(); showToast('✅ 已更新地址'); }
             };
-            const duplicateProject = async () => { const d = await localforage.getItem('proj_' + manageProj.value.code); if (!d) return; const newCode = Math.floor(100000 + Math.random() * 900000).toString(); d.code = newCode; d.name = (d.name || '工程') + ' (副本)'; d.lastSyncAt = 0; d.pendingUpload = true; await localforage.setItem('proj_' + newCode, d); await updateQueue(newCode, true); showManageModal.value = false; await loadProjectList(); showToast('✅ 已複製為 #' + newCode); };
+            const duplicateProject = async () => { const d = await localforage.getItem('proj_' + manageProj.value.code); if (!d) return; const newCode = Math.floor(100000 + Math.random() * 900000).toString(); d.code = newCode; d.name = (d.name || '工程') + ' (副本)'; d.ownerId = currentUser.value?.uid || ''; d.lastSyncAt = 0; d.pendingUpload = true; await localforage.setItem('proj_' + newCode, d); await updateQueue(newCode, true); showManageModal.value = false; await loadProjectList(); showToast('✅ 已複製為新檔'); };
             const batchDeleteDocs = async (docs) => { for (let i = 0; i < docs.length; i += 400) { const b = db.batch(); docs.slice(i, i + 400).forEach(d => b.delete(d.ref)); await b.commit(); } };
-            const clearLocalMediaCacheForCode = async (code) => {
-                const prefix = `synced_media_${code}_`;
-                const keys = await localforage.keys();
-                for (const k of keys) { if (k.startsWith(prefix)) await localforage.removeItem(k); }
-            };
+            const clearLocalMediaCacheForCode = async (code) => { const prefix = `synced_media_${code}_`; const keys = await localforage.keys(); for (const k of keys) { if (k.startsWith(prefix)) await localforage.removeItem(k); } };
             const deleteProject = async (code) => {
                 if (prompt('⚠️ 輸入 "dd" 確認刪除此工程：')?.trim().toLowerCase() !== 'dd') return; isProcessing.value = true; processingText.value = '正在徹底刪除工程...';
                 try { await localforage.removeItem('proj_' + code); await clearLocalMediaCacheForCode(code); await updateQueue(code, false); if (db && navigator.onLine) { const ref = db.collection('site_projects').doc(String(code)); const delCol = async (sub) => { const snap = await ref.collection(sub).get(); if (sub === 'media') { for (const doc of snap.docs) await batchDeleteDocs((await doc.ref.collection('chunks').get()).docs); } await batchDeleteDocs(snap.docs); }; await Promise.all([delCol('pages'), delCol('media'), delCol('backups'), delCol('feedback')]); await ref.delete(); } showManageModal.value = false; await loadProjectList(); showToast('🗑️ 已徹底刪除'); } catch (e) { alert('清理異常：' + e.message); } finally { isProcessing.value = false; }
@@ -1673,72 +1487,26 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     const projSnap = await withTimeout(db.collection('site_projects').get(), 15000);
                     const activeIds = new Set(projSnap.docs.map(d => d.id));
                     let removedDocs = 0, removedOrphanMedia = 0;
-
                     for (const sub of ['pages', 'media', 'backups', 'feedback']) {
                         processingText.value = `正在清理殘留 ${sub}...`;
                         const snap = await withTimeout(db.collectionGroup(sub).get(), 20000);
-                        const orphans = snap.docs.filter(d => {
-                            const p = d.ref.path.split('/');
-                            return p[0] === 'site_projects' && p[1] && !activeIds.has(p[1]);
-                        });
-                        if (sub === 'media') {
-                            for (const mDoc of orphans) {
-                                const cSnap = await withTimeout(mDoc.ref.collection('chunks').get(), 15000);
-                                if (cSnap.docs.length) { await batchDeleteDocs(cSnap.docs); removedDocs += cSnap.docs.length; }
-                            }
-                        }
-                        if (orphans.length) {
-                            await batchDeleteDocs(orphans);
-                            removedDocs += orphans.length;
-                        }
+                        const orphans = snap.docs.filter(d => { const p = d.ref.path.split('/'); return p[0] === 'site_projects' && p[1] && !activeIds.has(p[1]); });
+                        if (sub === 'media') { for (const mDoc of orphans) { const cSnap = await withTimeout(mDoc.ref.collection('chunks').get(), 15000); if (cSnap.docs.length) { await batchDeleteDocs(cSnap.docs); removedDocs += cSnap.docs.length; } } }
+                        if (orphans.length) { await batchDeleteDocs(orphans); removedDocs += orphans.length; }
                     }
-
                     const safeCutoff = Date.now() - 5 * 60 * 1000;
                     for (let i = 0; i < projSnap.docs.length; i++) {
-                        const pDoc = projSnap.docs[i];
-                        processingText.value = `正在核對工程 #${pDoc.id} (${i + 1}/${projSnap.docs.length})...`;
-                        const [pSnap, mSnap] = await Promise.all([
-                            withTimeout(pDoc.ref.collection('pages').get(), 15000),
-                            withTimeout(pDoc.ref.collection('media').get(), 15000)
-                        ]);
+                        const pDoc = projSnap.docs[i]; processingText.value = `正在核對工程 (${i + 1}/${projSnap.docs.length})...`;
+                        const [pSnap, mSnap] = await Promise.all([withTimeout(pDoc.ref.collection('pages').get(), 15000), withTimeout(pDoc.ref.collection('media').get(), 15000)]);
                         const usedIds = new Set();
-                        pSnap.docs.forEach(pgDoc => {
-                            const pg = pgDoc.data() || {};
-                            if (pg.photoId) usedIds.add(String(pg.photoId));
-                            usedIds.add('page_' + (pg.id || pgDoc.id));
-                            (pg.pins || []).forEach(pin => {
-                                if (pin.photoId) usedIds.add(String(pin.photoId));
-                                if (pin.id) usedIds.add(String(pin.id));
-                            });
-                        });
-                        for (const mDoc of mSnap.docs) {
-                            const mData = mDoc.data() || {};
-                            if (!usedIds.has(String(mDoc.id)) && (!mData.updatedAt || mData.updatedAt < safeCutoff)) {
-                                const cSnap = await withTimeout(mDoc.ref.collection('chunks').get(), 15000);
-                                if (cSnap.docs.length) await batchDeleteDocs(cSnap.docs);
-                                await mDoc.ref.delete();
-                                removedOrphanMedia++;
-                            }
-                        }
+                        pSnap.docs.forEach(pgDoc => { const pg = pgDoc.data() || {}; if (pg.photoId) usedIds.add(String(pg.photoId)); usedIds.add('page_' + (pg.id || pgDoc.id)); (pg.pins || []).forEach(pin => { if (pin.photoId) usedIds.add(String(pin.photoId)); if (pin.id) usedIds.add(String(pin.id)); }); });
+                        for (const mDoc of mSnap.docs) { const mData = mDoc.data() || {}; if (!usedIds.has(String(mDoc.id)) && (!mData.updatedAt || mData.updatedAt < safeCutoff)) { const cSnap = await withTimeout(mDoc.ref.collection('chunks').get(), 15000); if (cSnap.docs.length) await batchDeleteDocs(cSnap.docs); await mDoc.ref.delete(); removedOrphanMedia++; } }
                     }
-
                     const lKeys = await localforage.keys();
-                    for (const k of lKeys) {
-                        if (k.startsWith('synced_media_')) {
-                            const cPart = k.split('_')[2];
-                            if (cPart && !activeIds.has(cPart) && !(await localforage.getItem('proj_' + cPart))) {
-                                await localforage.removeItem(k);
-                            }
-                        }
-                    }
-
+                    for (const k of lKeys) { if (k.startsWith('synced_media_')) { const cPart = k.split('_')[2]; if (cPart && !activeIds.has(cPart) && !(await localforage.getItem('proj_' + cPart))) await localforage.removeItem(k); } }
                     const total = removedDocs + removedOrphanMedia;
                     showToast(total > 0 ? `🧹 已徹底清理 ${removedDocs} 筆殘留及 ${removedOrphanMedia} 張孤兒相` : '✨ 雲端與本機非常乾淨');
-                } catch (e) {
-                    alert('清理失敗：' + e.message);
-                } finally {
-                    isProcessing.value = false;
-                }
+                } catch (e) { alert('清理失敗：' + e.message); } finally { isProcessing.value = false; }
             };
 
             const openBackupList = async () => { showManageModal.value = false; isProcessing.value = true; processingText.value = '正在搜尋備份...'; try { const snaps = await withTimeout(db.collection('site_projects').doc(manageProj.value.code).collection('backups').get(), 15000); backupList.value = snaps.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); showBackupListModal.value = true; } catch (e) { alert('讀取失敗：' + e.message); } finally { isProcessing.value = false; } };
@@ -1747,48 +1515,30 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 try {
                     const doc = await withTimeout(db.collection('site_projects').doc(manageProj.value.code).collection('backups').doc(bkId).get(), 15000);
                     const bData = JSON.parse(doc.data().data), newCode = Math.floor(100000 + Math.random() * 900000).toString();
-                    bData.code = newCode; bData.name = (bData.name || '工程') + ' (還原檔)'; bData.lastSyncAt = 0; bData.pendingUpload = true;
+                    bData.code = newCode; bData.name = (bData.name || '工程') + ' (還原檔)'; bData.ownerId = currentUser.value?.uid || ''; bData.lastSyncAt = 0; bData.pendingUpload = true;
                     const curLocal = await localforage.getItem('proj_' + manageProj.value.code);
                     if (curLocal) { const pMap = new Map(); curLocal.pages.forEach(p => { if (p.photo) pMap.set(p.id, p.photo); (p.pins || []).forEach(pin => { if (pin.photo) pMap.set(pin.id, pin.photo); }); }); bData.pages.forEach(p => { p.photo = pMap.get(p.id) || null; (p.pins || []).forEach(pin => { pin.photo = pMap.get(pin.id) || null; }); }); }
-                    await localforage.setItem('proj_' + newCode, bData); await updateQueue(newCode, true); showBackupListModal.value = false; await loadProjectList(); showToast('✅ 已還原為 #' + newCode);
+                    await localforage.setItem('proj_' + newCode, bData); await updateQueue(newCode, true); showBackupListModal.value = false; await loadProjectList(); showToast('✅ 已還原為新檔');
                 } catch (e) { alert('還原失敗：' + e.message); } finally { isProcessing.value = false; }
             };
 
-            // 🔗 讀取完整工程資料 (本機 + 雲端底圖合併)，供合拼與轉檔使用
             const fetchCompleteProjectData = async (code) => {
                 code = String(code || '').trim();
                 const localObj = await localforage.getItem('proj_' + code);
                 let result = localObj ? JSON.parse(JSON.stringify(localObj)) : null;
-
                 if (db && navigator.onLine) {
                     try {
                         const projRef = db.collection('site_projects').doc(code);
-                        const [projDoc, pagesSnap, mediaMap] = await Promise.all([
-                            withRetry(() => withTimeout(projRef.get(), 15000)),
-                            withRetry(() => withTimeout(projRef.collection('pages').get(), 15000)),
-                            loadMediaMapFromRef(projRef)
-                        ]);
+                        const [projDoc, pagesSnap, mediaMap] = await Promise.all([withRetry(() => withTimeout(projRef.get(), 15000)), withRetry(() => withTimeout(projRef.collection('pages').get(), 15000)), loadMediaMapFromRef(projRef)]);
                         if (projDoc.exists) {
                             const pd = projDoc.data();
                             const cloudPages = pagesSnap.docs.map(doc => {
                                 const r = doc.data();
-                                return makeEmptyPage({
-                                    id: doc.id, ...r, date: r.date || pd.date || getTodayStr(),
-                                    photo: (r.photoId && mediaMap.get(r.photoId)?.photo) || mediaMap.get('page_' + (r.id || doc.id))?.photo || r.photo || null,
-                                    pins: (r.pins || []).map(pin => ({
-                                        ...pin,
-                                        photo: (pin.photoId && mediaMap.get(pin.photoId)?.photo) || mediaMap.get(String(pin.id))?.photo || pin.photo || null
-                                    }))
-                                });
+                                return makeEmptyPage({ id: doc.id, ...r, date: r.date || pd.date || getTodayStr(), photo: (r.photoId && mediaMap.get(r.photoId)?.photo) || mediaMap.get('page_' + (r.id || doc.id))?.photo || r.photo || null, pins: (r.pins || []).map(pin => ({ ...pin, photo: (pin.photoId && mediaMap.get(pin.photoId)?.photo) || mediaMap.get(String(pin.id))?.photo || pin.photo || null })) });
                             });
                             if (!result) {
                                 const delSet = new Set(pd.deletedPageIds || []);
-                                result = {
-                                    code, name: pd.name || '', date: pd.date || getTodayStr(),
-                                    pages: cloudPages.filter(p => !delSet.has(p.id)).sort((a, b) => ((pd.pageIds || []).indexOf(a.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(a.id)) - ((pd.pageIds || []).indexOf(b.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(b.id))),
-                                    photoPool: [], deletedPageIds: pd.deletedPageIds || [], deletedPinIds: pd.deletedPinIds || [],
-                                    pageOrderUpdatedAt: pd.pageOrderUpdatedAt || 0, lastSyncAt: Date.now(), lastModifiedBy: pd.lastModifiedBy || ''
-                                };
+                                result = { code, name: pd.name || '', date: pd.date || getTodayStr(), ownerId: pd.ownerId || '', pages: cloudPages.filter(p => !delSet.has(p.id)).sort((a, b) => ((pd.pageIds || []).indexOf(a.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(a.id)) - ((pd.pageIds || []).indexOf(b.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(b.id))), photoPool: [], deletedPageIds: pd.deletedPageIds || [], deletedPinIds: pd.deletedPinIds || [], pageOrderUpdatedAt: pd.pageOrderUpdatedAt || 0, lastSyncAt: Date.now(), lastModifiedBy: pd.lastModifiedBy || '' };
                             } else {
                                 const delSet = new Set([...(result.deletedPageIds || []), ...(pd.deletedPageIds || [])]);
                                 const orderList = [...(pd.pageIds || []), ...(result.pages || []).map(p => p.id)];
@@ -1802,28 +1552,12 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const clonePagesWithFreshIds = (rawPages) => {
-                const cloned = JSON.parse(JSON.stringify(rawPages || []));
-                const idMap = new Map();
-                const now = Date.now();
-                cloned.forEach((pg, idx) => {
-                    const oldId = String(pg.id);
-                    const newId = `pg_${now}_${idx}_${Math.floor(Math.random() * 99999)}`;
-                    idMap.set(oldId, newId);
-                });
+                const cloned = JSON.parse(JSON.stringify(rawPages || [])), idMap = new Map(), now = Date.now();
+                cloned.forEach((pg, idx) => idMap.set(String(pg.id), `pg_${now}_${idx}_${Math.floor(Math.random() * 99999)}`));
                 return cloned.map((pg, idx) => {
-                    const newId = idMap.get(String(pg.id));
-                    delete pg.historyStack;
-                    delete pg.redoStack;
-                    (pg.markers || []).forEach(m => {
-                        if (m.type === 'page_link' && m.data?.targetPageId && idMap.has(String(m.data.targetPageId))) {
-                            m.data.targetPageId = idMap.get(String(m.data.targetPageId));
-                        }
-                    });
-                    (pg.pins || []).forEach((pin, pIdx) => {
-                        pin.id = `pin_${now}_${idx}_${pIdx}_${Math.floor(Math.random() * 99999)}`;
-                        delete pin.historyStack;
-                        delete pin.redoStack;
-                    });
+                    const newId = idMap.get(String(pg.id)); delete pg.historyStack; delete pg.redoStack;
+                    (pg.markers || []).forEach(m => { if (m.type === 'page_link' && m.data?.targetPageId && idMap.has(String(m.data.targetPageId))) m.data.targetPageId = idMap.get(String(m.data.targetPageId)); });
+                    (pg.pins || []).forEach((pin, pIdx) => { pin.id = `pin_${now}_${idx}_${pIdx}_${Math.floor(Math.random() * 99999)}`; delete pin.historyStack; delete pin.redoStack; });
                     return makeEmptyPage({ ...pg, id: newId, updatedAt: now });
                 });
             };
@@ -1835,222 +1569,139 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (db && navigator.onLine) {
                     try {
                         const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(50).get(), 10000);
-                        snaps.docs.forEach(d => {
-                            const data = d.data() || {};
-                            const c = String(d.id);
-                            if (data.name || data.updatedAt) {
-                                const ex = map.get(c);
-                                map.set(c, {
-                                    code: c,
-                                    name: data.name || ex?.name || '',
-                                    date: data.date || ex?.date || '',
-                                    pageCount: (data.pageIds?.length) || ex?.pageCount || 1,
-                                    updatedAt: Math.max(data.updatedAt || 0, ex?.updatedAt || 0)
-                                });
-                            }
-                        });
+                        snaps.docs.forEach(d => { const data = d.data() || {}, c = String(d.id); if (data.name || data.updatedAt) { const ex = map.get(c); map.set(c, { code: c, name: data.name || ex?.name || '', date: data.date || ex?.date || '', pageCount: (data.pageIds?.length) || ex?.pageCount || 1, updatedAt: Math.max(data.updatedAt || 0, ex?.updatedAt || 0) }); } });
                     } catch (_) {}
                 }
                 allProjectOptions.value = Array.from(map.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
             };
 
-            // 🔗 兩個總號合拼
             const openMergeProjectsModal = async () => {
                 isProcessing.value = true; processingText.value = '正在讀取工程清單...';
                 try {
                     await refreshAllProjectOptions();
                     if (allProjectOptions.value.length < 2) { alert('至少需要 2 個工程才能合拼'); return; }
-                    mergeProjCodeA.value = allProjectOptions.value[0]?.code || '';
-                    mergeProjCodeB.value = allProjectOptions.value[1]?.code || '';
-                    updateMergeDefaultName();
-                    showMergeProjectsModal.value = true;
+                    mergeProjCodeA.value = allProjectOptions.value[0]?.code || ''; mergeProjCodeB.value = allProjectOptions.value[1]?.code || '';
+                    updateMergeDefaultName(); showMergeProjectsModal.value = true;
                 } finally { isProcessing.value = false; }
             };
             const updateMergeDefaultName = () => {
                 const a = allProjectOptions.value.find(x => String(x.code) === String(mergeProjCodeA.value));
                 const b = allProjectOptions.value.find(x => String(x.code) === String(mergeProjCodeB.value));
-                const nA = a?.name?.trim() || `#${mergeProjCodeA.value}`;
-                const nB = b?.name?.trim() || `#${mergeProjCodeB.value}`;
-                mergeProjNewName.value = (mergeProjCodeA.value && mergeProjCodeB.value) ? `${nA} + ${nB}` : '';
+                mergeProjNewName.value = (mergeProjCodeA.value && mergeProjCodeB.value) ? `${a?.name?.trim() || '工程A'} + ${b?.name?.trim() || '工程B'}` : '';
             };
             const executeMergeProjects = async () => {
-                const cA = String(mergeProjCodeA.value || '').trim();
-                const cB = String(mergeProjCodeB.value || '').trim();
+                const cA = String(mergeProjCodeA.value || '').trim(), cB = String(mergeProjCodeB.value || '').trim();
                 if (!cA || !cB) return alert('請選擇兩個要合拼的工程');
-                if (cA === cB) return alert('請選擇兩個不同的工程總號');
-
-                showMergeProjectsModal.value = false;
-                isProcessing.value = true; processingText.value = `正在讀取 #${cA} 與 #${cB} 圖紙...`;
+                if (cA === cB) return alert('請選擇兩個不同的工程');
+                showMergeProjectsModal.value = false; isProcessing.value = true; processingText.value = '正在合拼圖紙...';
                 try {
                     const [dataA, dataB] = await Promise.all([fetchCompleteProjectData(cA), fetchCompleteProjectData(cB)]);
-                    if (!dataA || !dataB) throw new Error('無法讀取其中一份工程資料，請檢查網絡連線');
-
+                    if (!dataA || !dataB) throw new Error('無法讀取其中一份工程資料');
                     const mergedPages = [...clonePagesWithFreshIds(dataA.pages), ...clonePagesWithFreshIds(dataB.pages)];
                     if (!mergedPages.length) mergedPages.push(makeEmptyPage());
-
                     const seenFp = new Set(), mergedPool = [];
-                    [...(dataA.photoPool || []), ...(dataB.photoPool || [])].forEach(item => {
-                        if (!item?.photo) return;
-                        const fp = photoFingerprint(item.photo);
-                        if (!seenFp.has(fp)) { seenFp.add(fp); mergedPool.push(item); }
-                    });
-
+                    [...(dataA.photoPool || []), ...(dataB.photoPool || [])].forEach(item => { if (!item?.photo) return; const fp = photoFingerprint(item.photo); if (!seenFp.has(fp)) { seenFp.add(fp); mergedPool.push(item); } });
                     const existingCodes = new Set(allProjectOptions.value.map(x => String(x.code)));
-                    let newCode = '';
-                    do { newCode = Math.floor(100000 + Math.random() * 900000).toString(); } while (existingCodes.has(newCode));
-
-                    const finalName = mergeProjNewName.value.trim() || `${dataA.name || '#' + cA} + ${dataB.name || '#' + cB}`;
-                    const newProjObj = {
-                        code: newCode, name: finalName, date: getTodayStr(),
-                        pages: mergedPages, photoPool: mergedPool,
-                        deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(),
-                        updatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true
-                    };
-
-                    await localforage.setItem('proj_' + newCode, newProjObj);
-                    await updateQueue(newCode, true);
-
-                    if (db && navigator.onLine) {
-                        try {
-                            const syncTs = await pushProjectPayload(newProjObj, false, (st) => { processingText.value = st; });
-                            if (syncTs) { newProjObj.lastSyncAt = syncTs; newProjObj.pendingUpload = false; await localforage.setItem('proj_' + newCode, newProjObj); }
-                        } catch (_) {}
-                    }
-
-                    await loadProjectList();
-                    showToast(`✅ 已合拼為新總號 #${newCode}（共 ${mergedPages.length} 頁，保留原檔）`);
-                } catch (e) {
-                    alert('合拼失敗：' + e.message);
-                } finally {
-                    isProcessing.value = false;
-                }
+                    let newCode = ''; do { newCode = Math.floor(100000 + Math.random() * 900000).toString(); } while (existingCodes.has(newCode));
+                    const finalName = mergeProjNewName.value.trim() || `${dataA.name || '工程A'} + ${dataB.name || '工程B'}`;
+                    const newProjObj = { code: newCode, name: finalName, date: getTodayStr(), ownerId: currentUser.value?.uid || '', pages: mergedPages, photoPool: mergedPool, deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(), updatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true };
+                    await localforage.setItem('proj_' + newCode, newProjObj); await updateQueue(newCode, true);
+                    if (db && navigator.onLine) { try { const syncTs = await pushProjectPayload(newProjObj, false, (st) => { processingText.value = st; }); if (syncTs) { newProjObj.lastSyncAt = syncTs; newProjObj.pendingUpload = false; await localforage.setItem('proj_' + newCode, newProjObj); } } catch (_) {} }
+                    await loadProjectList(); showToast(`✅ 已合拼為「${finalName}」（共 ${mergedPages.length} 頁）`);
+                } catch (e) { alert('合拼失敗：' + e.message); } finally { isProcessing.value = false; }
             };
 
-            // ↗️ 工程內選圖轉檔 (複製或移動至另一工程)
             const toggleSelectMode = () => { selectMode.value = !selectMode.value; selectedPageIds.value = []; };
-            const togglePageSelection = (pgId) => {
-                const idStr = String(pgId);
-                const idx = selectedPageIds.value.indexOf(idStr);
-                if (idx === -1) selectedPageIds.value.push(idStr);
-                else selectedPageIds.value.splice(idx, 1);
-            };
-            const selectAllPages = () => {
-                if (selectedPageIds.value.length === pages.value.length) selectedPageIds.value = [];
-                else selectedPageIds.value = pages.value.map(p => String(p.id));
-            };
+            const togglePageSelection = (pgId) => { const idStr = String(pgId), idx = selectedPageIds.value.indexOf(idStr); if (idx === -1) selectedPageIds.value.push(idStr); else selectedPageIds.value.splice(idx, 1); };
+            const selectAllPages = () => { if (selectedPageIds.value.length === pages.value.length) selectedPageIds.value = []; else selectedPageIds.value = pages.value.map(p => String(p.id)); };
             const openTransferModal = async (singlePageId = null) => {
                 if (singlePageId) selectedPageIds.value = [String(singlePageId)];
                 if (!selectedPageIds.value.length) { showToast('請先點選要轉檔的圖紙'); return; }
                 isProcessing.value = true; processingText.value = '正在讀取工程選列...';
-                try {
-                    await refreshAllProjectOptions();
-                    transferTargetCode.value = otherProjectOptions.value[0]?.code || '__NEW__';
-                    transferMode.value = 'copy';
-                    transferNewProjName.value = '';
-                    showTransferModal.value = true;
-                } finally { isProcessing.value = false; }
+                try { await refreshAllProjectOptions(); transferTargetCode.value = otherProjectOptions.value[0]?.code || '__NEW__'; transferMode.value = 'copy'; transferNewProjName.value = ''; showTransferModal.value = true; } finally { isProcessing.value = false; }
             };
             const executeTransferPages = async () => {
                 if (!selectedPageIds.value.length || !transferTargetCode.value) return;
-                const selectedSet = new Set(selectedPageIds.value.map(String));
-                const pickedRaw = pages.value.filter(p => selectedSet.has(String(p.id)));
+                const selectedSet = new Set(selectedPageIds.value.map(String)), pickedRaw = pages.value.filter(p => selectedSet.has(String(p.id)));
                 if (!pickedRaw.length) return;
-
-                if (transferMode.value === 'move' && !confirm(`確定要將選中的 ${pickedRaw.length} 頁「移動」過去嗎？\n（移動後將從目前工程 #${project.code} 移除）`)) return;
-
-                showTransferModal.value = false;
-                isProcessing.value = true; processingText.value = `正在轉移 ${pickedRaw.length} 頁圖紙...`;
+                if (transferMode.value === 'move' && !confirm(`確定要將選中的 ${pickedRaw.length} 頁「移動」過去嗎？`)) return;
+                showTransferModal.value = false; isProcessing.value = true; processingText.value = `正在轉移 ${pickedRaw.length} 頁圖紙...`;
                 try {
-                    const clonedPages = clonePagesWithFreshIds(pickedRaw);
-                    let targetCode = String(transferTargetCode.value);
-
+                    const clonedPages = clonePagesWithFreshIds(pickedRaw); let targetCode = String(transferTargetCode.value);
                     if (targetCode === '__NEW__') {
                         const existingCodes = new Set(allProjectOptions.value.map(x => String(x.code)));
                         do { targetCode = Math.floor(100000 + Math.random() * 900000).toString(); } while (existingCodes.has(targetCode));
                         const targetName = transferNewProjName.value.trim() || `${project.name || '工程'} (分拆)`;
-                        const newProjObj = {
-                            code: targetCode, name: targetName, date: getTodayStr(),
-                            pages: clonedPages, photoPool: [],
-                            deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(),
-                            updatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true
-                        };
-                        await localforage.setItem('proj_' + targetCode, newProjObj);
-                        await updateQueue(targetCode, true);
-                        if (db && navigator.onLine) {
-                            try {
-                                const syncTs = await pushProjectPayload(newProjObj, false, (st) => { processingText.value = st; });
-                                if (syncTs) { newProjObj.lastSyncAt = syncTs; newProjObj.pendingUpload = false; await localforage.setItem('proj_' + targetCode, newProjObj); }
-                            } catch (_) {}
-                        }
+                        const newProjObj = { code: targetCode, name: targetName, date: getTodayStr(), ownerId: currentUser.value?.uid || '', pages: clonedPages, photoPool: [], deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(), updatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true };
+                        await localforage.setItem('proj_' + targetCode, newProjObj); await updateQueue(targetCode, true);
+                        if (db && navigator.onLine) { try { const syncTs = await pushProjectPayload(newProjObj, false, (st) => { processingText.value = st; }); if (syncTs) { newProjObj.lastSyncAt = syncTs; newProjObj.pendingUpload = false; await localforage.setItem('proj_' + targetCode, newProjObj); } } catch (_) {} }
                     } else {
-                        const targetProj = await fetchCompleteProjectData(targetCode);
-                        if (!targetProj) throw new Error(`找不到目標工程 #${targetCode}`);
-                        targetProj.pages = [...(targetProj.pages || []), ...clonedPages];
-                        targetProj.updatedAt = Date.now();
-                        targetProj.pendingUpload = true;
-                        await localforage.setItem('proj_' + targetCode, targetProj);
-                        await updateQueue(targetCode, true);
-                        if (db && navigator.onLine) {
-                            try {
-                                const syncTs = await pushProjectPayload(targetProj, false, (st) => { processingText.value = st; });
-                                if (syncTs) { targetProj.lastSyncAt = syncTs; targetProj.pendingUpload = false; await localforage.setItem('proj_' + targetCode, targetProj); }
-                            } catch (_) {}
-                        }
+                        const targetProj = await fetchCompleteProjectData(targetCode); if (!targetProj) throw new Error('找不到目標工程');
+                        targetProj.pages = [...(targetProj.pages || []), ...clonedPages]; targetProj.updatedAt = Date.now(); targetProj.pendingUpload = true;
+                        await localforage.setItem('proj_' + targetCode, targetProj); await updateQueue(targetCode, true);
+                        if (db && navigator.onLine) { try { const syncTs = await pushProjectPayload(targetProj, false, (st) => { processingText.value = st; }); if (syncTs) { targetProj.lastSyncAt = syncTs; targetProj.pendingUpload = false; await localforage.setItem('proj_' + targetCode, targetProj); } } catch (_) {} }
                     }
-
                     if (transferMode.value === 'move') {
-                        project.deletedPageIds ||= [];
-                        pickedRaw.forEach(pg => {
-                            if (!project.deletedPageIds.includes(pg.id)) project.deletedPageIds.push(pg.id);
-                            dirtyPageIds.delete(pg.id);
-                        });
-                        pages.value = pages.value.filter(p => !selectedSet.has(String(p.id)));
-                        if (!pages.value.length) pages.value = [makeEmptyPage()];
-                        activePageIndex.value = Math.min(activePageIndex.value, pages.value.length - 1);
-                        pageIndexB.value = Math.min(pageIndexB.value, pages.value.length - 1);
-                        project.pageOrderUpdatedAt = Date.now();
-                        hasUnsavedCloudChanges.value = true;
-                        await saveAll();
-
-                        if (db && navigator.onLine && project.code) {
-                            const curRef = db.collection('site_projects').doc(String(project.code));
-                            pickedRaw.forEach(pg => curRef.collection('pages').doc(pg.id).delete().catch(() => {}));
-                            curRef.set({
-                                pageIds: pages.value.map(p => p.id),
-                                deletedPageIds: firebase.firestore.FieldValue.arrayUnion(...pickedRaw.map(p => p.id)),
-                                updatedAt: Date.now()
-                            }, { merge: true }).catch(() => {});
-                        }
+                        project.deletedPageIds ||= []; pickedRaw.forEach(pg => { if (!project.deletedPageIds.includes(pg.id)) project.deletedPageIds.push(pg.id); dirtyPageIds.delete(pg.id); });
+                        pages.value = pages.value.filter(p => !selectedSet.has(String(p.id))); if (!pages.value.length) pages.value = [makeEmptyPage()];
+                        activePageIndex.value = Math.min(activePageIndex.value, pages.value.length - 1); pageIndexB.value = Math.min(pageIndexB.value, pages.value.length - 1);
+                        project.pageOrderUpdatedAt = Date.now(); hasUnsavedCloudChanges.value = true; await saveAll();
+                        if (db && navigator.onLine && project.code) { const curRef = db.collection('site_projects').doc(String(project.code)); pickedRaw.forEach(pg => curRef.collection('pages').doc(pg.id).delete().catch(() => {})); curRef.set({ pageIds: pages.value.map(p => p.id), deletedPageIds: firebase.firestore.FieldValue.arrayUnion(...pickedRaw.map(p => p.id)), updatedAt: Date.now() }, { merge: true }).catch(() => {}); }
                     }
-
-                    selectMode.value = false;
-                    selectedPageIds.value = [];
-                    showToast(`✅ 已${transferMode.value === 'move' ? '移動' : '複製'} ${clonedPages.length} 頁至 #${targetCode}`);
-                } catch (e) {
-                    alert('轉檔失敗：' + e.message);
-                } finally {
-                    isProcessing.value = false;
-                }
+                    selectMode.value = false; selectedPageIds.value = []; showToast(`✅ 已${transferMode.value === 'move' ? '移動' : '複製'} ${clonedPages.length} 頁`);
+                } catch (e) { alert('轉檔失敗：' + e.message); } finally { isProcessing.value = false; }
             };
 
             const openCloudBrowser = async () => { if (!db || !navigator.onLine) return alert('請檢查網路連線'); isProcessing.value = true; processingText.value = '正在讀取雲端目錄...'; try { const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(30).get(), 10000); cloudProjectList.value = snaps.docs.map(d => ({ code: d.id, ...d.data() })).filter(d => d.name || d.updatedAt); showCloudBrowser.value = true; } catch (e) { alert('讀取目錄失敗：' + e.message); } finally { isProcessing.value = false; } };
-            const downloadFromCloudBrowser = async (code) => { showCloudBrowser.value = false; await loadProject(code, true); showToast('✅ 已載入 #' + code); };
+            const downloadFromCloudBrowser = async (code) => {
+                showCloudBrowser.value = false;
+                await loadProject(code, true);
+                if (currentUser.value?.uid && !project.ownerId) { project.ownerId = currentUser.value.uid; hasUnsavedCloudChanges.value = true; await saveAll(); }
+                showToast('✅ 已認領並載入工程');
+            };
             const loadProjectList = async () => { const keys = await localforage.keys(), q = (await localforage.getItem('pending_upload_queue')) || [], list = []; for (const k of keys) { if (k.startsWith('proj_')) { const d = await localforage.getItem(k); if (d?.code) { const pgs = d.pages || []; list.push({ code: d.code, name: d.name, date: d.date, pageCount: pgs.length || 1, pinCount: pgs.reduce((s, p) => s + (p.pins?.length || 0), 0), updatedAt: d.updatedAt || 0, lastModifiedBy: d.lastModifiedBy || '', pendingUpload: !!d.pendingUpload || q.includes(String(d.code)) }); } } } projectList.value = list.sort((a, b) => b.updatedAt - a.updatedAt); };
-            const backToProjects = async () => { resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; if (unsubPages) { unsubPages(); unsubPages = null; } if (unsubFeedback) { unsubFeedback(); unsubFeedback = null; } await saveAll(); if ((hasUnsavedCloudChanges.value || dirtyPageIds.size > 0) && project.code && db) { if (!navigator.onLine) showToast('📴 無網絡模式：已鎖入本機，有訊號自動上傳'); else { isProcessing.value = true; processingText.value = '正在自動上傳並返回目錄...'; try { await pullAndMergeFromCloud(project.code, false); await pushToCloud(true, (st) => { processingText.value = st; }); await createCloudBackup(project.code); showToast('✅ 已自動同步雲端'); } catch (_) { showToast('⚠️ 已排入自動補傳隊列'); } finally { isProcessing.value = false; } } } dirtyPageIds.clear(); hasUnsavedCloudChanges.value = false; feedbackList.value = []; await loadProjectList(); currentView.value = 'dir'; };
-            const checkAuthorName = async () => { let name = await localforage.getItem('measure_author_name'); if (!name) { name = prompt('👤 請輸入您的稱呼或設備名稱 (例: 明哥、強哥iPad)：')?.trim(); if (name) await localforage.setItem('measure_author_name', name); } authorName.value = name || ''; };
+
+            // 🚪 退出畫布自動背後同步上傳（免人手按上傳先敢走）
+            const backToProjects = async () => {
+                resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A';
+                if (unsubPages) { unsubPages(); unsubPages = null; }
+                if (unsubFeedback) { unsubFeedback(); unsubFeedback = null; }
+                const needSync = (hasUnsavedCloudChanges.value || dirtyPageIds.size > 0) && project.code && db;
+                const syncCode = String(project.code || '');
+                await saveAll();
+                dirtyPageIds.clear(); hasUnsavedCloudChanges.value = false; feedbackList.value = [];
+                await loadProjectList();
+                currentView.value = 'dir';
+                if (needSync) {
+                    if (!navigator.onLine) showToast('📴 離線已保存，有網絡自動上傳');
+                    else { showToast('☁️ 正在背後自動同步上傳...'); processPendingUploadQueue(false); }
+                }
+            };
+
+            const checkAuthorName = async () => { let name = await localforage.getItem('measure_author_name'); if (!name && currentUser.value?.displayName) { name = currentUser.value.displayName; await localforage.setItem('measure_author_name', name); } if (!name) { name = prompt('👤 請輸入您的稱呼或設備名稱 (例: 明哥、強哥iPad)：')?.trim(); if (name) await localforage.setItem('measure_author_name', name); } authorName.value = name || ''; };
             const changeAuthorName = async () => { const name = prompt('👤 更新設備稱呼：', authorName.value)?.trim(); if (name) { authorName.value = name; await localforage.setItem('measure_author_name', name); } };
 
             const fallbackCopyTextToClipboard = (text) => { const textArea = document.createElement("textarea"); textArea.value = text; textArea.style.position = "fixed"; textArea.style.top = "0"; textArea.style.left = "0"; document.body.appendChild(textArea); textArea.focus(); textArea.select(); try { document.execCommand('copy'); showToast('🔗 已複製 WhatsApp 專屬連結'); } catch (_) { window.prompt("請手動複製以下連結：", text); } document.body.removeChild(textArea); };
             const copyShareLink = () => {
-                const code = String(project.code || '').trim(); if (!code) return; let baseUrl = window.location.href.split('index.html')[0]; if (!baseUrl.endsWith('/')) baseUrl += '/'; const link = baseUrl + 'view.html?code=' + code; const msg = `📋 工程度尺圖 (#${code})\n📍 地址：${project.name || '未標題'}\n👉 點擊檢視及標註意見：\n${link}`;
+                const code = String(project.code || '').trim(); if (!code) return; let baseUrl = window.location.href.split('index.html')[0]; if (!baseUrl.endsWith('/')) baseUrl += '/'; const link = baseUrl + 'view.html?code=' + code; const msg = `📋 工程度尺圖\n📍 地址：${project.name || '未標題'}\n👉 點擊檢視及標註意見：\n${link}`;
                 if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(msg).then(() => showToast('🔗 已複製 WhatsApp 專屬連結')).catch(() => fallbackCopyTextToClipboard(msg));
                 else fallbackCopyTextToClipboard(msg);
             };
 
             onMounted(async () => {
                 const bs = document.getElementById('boot-screen'); if (bs) bs.remove(); document.getElementById('app').style.display = 'flex';
-                await loadStampStore(); await checkAuthorName(); await loadProjectList();
-                window.addEventListener('online', () => { cloudSyncState.value = 'ready'; showToast('🌐 網絡已恢復'); processPendingUploadQueue(false); });
+                await loadStampStore(); await loadCadStore(); await loadProjectList();
+                if (auth) {
+                    auth.onAuthStateChanged(async (user) => {
+                        currentUser.value = user || null;
+                        if (user) {
+                            if (!authorName.value && user.displayName) { authorName.value = user.displayName; await localforage.setItem('measure_author_name', user.displayName); }
+                            await syncUserOwnedProjects();
+                        }
+                    });
+                }
+                await checkAuthorName();
+                window.addEventListener('online', () => { cloudSyncState.value = 'ready'; showToast('🌐 網絡已恢復'); processPendingUploadQueue(false); syncUserOwnedProjects(); });
                 window.addEventListener('offline', () => { cloudSyncState.value = 'offline'; });
                 window.addEventListener('paste', handleGlobalPaste);
                 window.addEventListener('keydown', handleGlobalKeydown);
@@ -2059,11 +1710,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 setInterval(() => { if (navigator.onLine) processPendingUploadQueue(true); }, 15000);
             });
 
-            onUnmounted(() => {
-                window.removeEventListener('paste', handleGlobalPaste);
-                window.removeEventListener('keydown', handleGlobalKeydown);
-                window.removeEventListener('keyup', handleGlobalKeyup);
-            });
+            onUnmounted(() => { window.removeEventListener('paste', handleGlobalPaste); window.removeEventListener('keydown', handleGlobalKeydown); window.removeEventListener('keyup', handleGlobalKeyup); });
 
             const renderAnnotatedCanvas = (canvasObj, includeStamp = true, itemDate = '', itemAuthor = '') => new Promise(async (resolve) => {
                 const img = new Image(); img.src = canvasObj.photo; await new Promise(r => { img.onload = r; img.onerror = r; });
@@ -2071,54 +1718,28 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 const markerImages = {}; for (const m of (canvasObj.markers || [])) { if (m.type === 'image' && m.data.b64) { const im = new Image(); im.src = m.data.b64; await new Promise(r => { im.onload = r; im.onerror = r; }); markerImages[m.id] = im; } }
                 if (includeStamp) {
                     const wm = buildWatermarkBox(canvasObj, itemDate, itemAuthor, w);
-                    if (wm) {
-                        ctx.save();
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.56)';
-                        drawRoundRect(ctx, wm.x, wm.y, wm.w, wm.h, 6);
-                        ctx.fill();
-                        ctx.lineWidth = 1.2;
-                        ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
-                        ctx.stroke();
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.font = 'bold 13px sans-serif';
-                        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-                        ctx.fillText(wm.text, wm.x + wm.w / 2, wm.y + wm.h / 2);
-                        ctx.restore();
-                    }
+                    if (wm) { ctx.save(); ctx.fillStyle = 'rgba(255, 255, 255, 0.56)'; drawRoundRect(ctx, wm.x, wm.y, wm.w, wm.h, 6); ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)'; ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = 'rgba(15, 23, 42, 0.85)'; ctx.fillText(wm.text, wm.x + wm.w / 2, wm.y + wm.h / 2); ctx.restore(); }
                 }
                 ctx.lineCap = 'round'; ctx.lineJoin = 'round';
                 (canvasObj.walls || []).forEach(wObj => { ctx.strokeStyle = wObj.color || '#111827'; buildWallSegments(wObj).forEach(seg => { ctx.lineWidth = seg.isHatch ? 2.5 : 3.5; ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke(); }); });
                 (canvasObj.lines || []).forEach(l => {
-                    if (l.type === 'arrow-single') {
-                        const hex = getLineStroke(l); ctx.strokeStyle = hex; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
-                        ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(Math.atan2(l.y2 - l.y1, l.x2 - l.x1)); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-9, 4.5); ctx.lineTo(-9, -4.5); ctx.closePath(); ctx.fill(); ctx.restore();
-                    } else if (l.type === 'straight') {
-                        ctx.strokeStyle = getLineStroke(l); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
-                    } else {
-                        ctx.save(); ctx.setLineDash([14, 10]); ctx.strokeStyle = getLineStroke(l, 0.7); ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore();
-                    }
+                    if (l.type === 'arrow-single') { const hex = getLineStroke(l); ctx.strokeStyle = hex; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(Math.atan2(l.y2 - l.y1, l.x2 - l.x1)); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-9, 4.5); ctx.lineTo(-9, -4.5); ctx.closePath(); ctx.fill(); ctx.restore(); }
+                    else if (l.type === 'straight') { ctx.strokeStyle = getLineStroke(l); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }
+                    else { ctx.save(); ctx.setLineDash([14, 10]); ctx.strokeStyle = getLineStroke(l, 0.7); ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore(); }
                 });
                 (canvasObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 6; ctx.stroke(new Path2D(p.d)); });
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 (canvasObj.markers || []).forEach(m => {
-                    if (m.type === 'cad') {
-                        drawCadOnCanvas(ctx, m);
-                    } else if (m.type === 'image') {
-                        if (markerImages[m.id]) {
-                            ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(((m.rot || 0) * Math.PI) / 180);
-                            ctx.drawImage(markerImages[m.id], -m.w / 2, -m.h / 2, m.w, m.h); ctx.restore();
-                        }
-                    } else {
-                        const lines = getMarkerLines(m), color = getStampColor(m); ctx.font = `900 ${28 * globalFontScale.value}px sans-serif`; const startY = m.y - ((lines.length - 1) * 34 * globalFontScale.value) / 2; lines.forEach((line, i) => { const y = startY + i * 34 * globalFontScale.value; ctx.lineWidth = 7 * globalFontScale.value; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); });
-                    }
+                    if (m.type === 'cad') drawCustomCadOnCanvas(ctx, m);
+                    else if (m.type === 'image') { if (markerImages[m.id]) { ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(((m.rot || 0) * Math.PI) / 180); ctx.drawImage(markerImages[m.id], -m.w / 2, -m.h / 2, m.w, m.h); ctx.restore(); } }
+                    else { const lines = getMarkerLines(m), color = getStampColor(m); ctx.font = `900 ${28 * globalFontScale.value}px sans-serif`; const startY = m.y - ((lines.length - 1) * 34 * globalFontScale.value) / 2; lines.forEach((line, i) => { const y = startY + i * 34 * globalFontScale.value; ctx.lineWidth = 7 * globalFontScale.value; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); }); }
                 });
                 (canvasObj.pins || []).forEach((pin, idx) => { const px = (pin.x / 100) * w, py = (pin.y / 100) * h; ctx.beginPath(); ctx.arc(px, py - 22, 20, 0, 2 * Math.PI); ctx.fillStyle = '#dc2626'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(idx + 1, px, py - 22); });
                 resolve(c);
             });
 
             const copyFullScreenImage = async () => { if (!fullScreenItem.value?.photo) return; const c = await renderAnnotatedCanvas(fullScreenItem.value, showWatermark.value, fullScreenDate.value, fullScreenAuthor.value); try { if (navigator.clipboard && window.ClipboardItem) { const blob = await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(), 'image/png')); await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); showToast('✅ 已複製圖片'); return; } } catch (_) {} try { const blob = await new Promise(res => c.toBlob(res, 'image/png')); const file = new File([blob], 'measure.png', { type: 'image/png' }); if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); return; } } catch (_) {} alert('此瀏覽器不支援直接複製圖片，請按旁邊「⬇️下載」'); };
-            const downloadFullScreenImage = async () => { if (!fullScreenItem.value?.photo) return; try { const dStr = sanitizeFilename(fullScreenDate.value || getTodayStr()); const c = await renderAnnotatedCanvas(fullScreenItem.value, showWatermark.value, fullScreenDate.value, fullScreenAuthor.value); const url = URL.createObjectURL(await new Promise(res => c.toBlob(res, 'image/jpeg', 0.92))); const a = document.createElement('a'); a.href = url; a.download = `${sanitizeFilename(project.name || '工程')}_#${project.code}_${sanitizeFilename(currentFullScreen.value?.label || '圖紙')}_${dStr}.jpg`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000); showToast('✅ 已下載圖片'); } catch (_) { alert('下載圖片失敗'); } };
+            const downloadFullScreenImage = async () => { if (!fullScreenItem.value?.photo) return; try { const dStr = sanitizeFilename(fullScreenDate.value || getTodayStr()); const c = await renderAnnotatedCanvas(fullScreenItem.value, showWatermark.value, fullScreenDate.value, fullScreenAuthor.value); const url = URL.createObjectURL(await new Promise(res => c.toBlob(res, 'image/jpeg', 0.92))); const a = document.createElement('a'); a.href = url; a.download = `${sanitizeFilename(project.name || '工程')}_${sanitizeFilename(currentFullScreen.value?.label || '圖紙')}_${dStr}.jpg`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000); showToast('✅ 已下載圖片'); } catch (_) { alert('下載圖片失敗'); } };
 
             const exportPdfReport = async (perPage = 1) => {
                 showPdfModal.value = false; isProcessing.value = true; processingText.value = `正在產生 PDF (每頁 ${perPage} 張)...`;
@@ -2130,9 +1751,9 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         if (!validPages.length) return alert('沒有可輸出的圖紙！');
                         const uniqueDates = [...new Set(validPages.map(p => p.date).filter(Boolean))]; const headerDate = uniqueDates.length > 1 ? `${uniqueDates[0]} ~ ${uniqueDates[uniqueDates.length - 1]}` : (uniqueDates[0] || getTodayStr()); const fileDateTag = sanitizeFilename(uniqueDates[uniqueDates.length - 1] || getTodayStr());
                         if (perPage > 1) {
-                            const cols = perPage === 4 ? 2 : 1, rows = 2; const totalPdf = Math.ceil(validPages.length / perPage), mx = 45, topY = 115, gap = 24; const cellW = Math.floor((PAGE_W - mx * 2 - (cols - 1) * gap) / cols); const cellH = Math.floor((PAGE_H - topY - 45 - (rows - 1) * gap) / rows);
+                            const cols = perPage === 4 ? 2 : 1, rows = 2, totalPdf = Math.ceil(validPages.length / perPage), mx = 45, topY = 115, gap = 24; const cellW = Math.floor((PAGE_W - mx * 2 - (cols - 1) * gap) / cols), cellH = Math.floor((PAGE_H - topY - 45 - (rows - 1) * gap) / rows);
                             for (let pIdx = 0; pIdx < totalPdf; pIdx++) {
-                                if (pIdx > 0) doc.addPage(); const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H); ctx.fillStyle = '#000'; ctx.font = 'bold 34px sans-serif'; ctx.fillText(`${project.name || '工程度尺'} (#${project.code})`, mx, 60); ctx.font = 'bold 21px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${headerDate}   |   共 ${validPages.length} 張   |   第 ${pIdx + 1} / ${totalPdf} 頁`, mx, 94);
+                                if (pIdx > 0) doc.addPage(); const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H); ctx.fillStyle = '#000'; ctx.font = 'bold 34px sans-serif'; ctx.fillText(`${project.name || '工程度尺'}`, mx, 60); ctx.font = 'bold 21px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${headerDate}   |   共 ${validPages.length} 張   |   第 ${pIdx + 1} / ${totalPdf} 頁`, mx, 94);
                                 for (let j = 0; j < perPage; j++) {
                                     const pg = validPages[pIdx * perPage + j]; if (!pg) break; const cx = mx + (j % cols) * (cellW + gap), cy = topY + Math.floor(j / cols) * (cellH + gap); ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 2; ctx.strokeRect(cx, cy, cellW, cellH); ctx.fillStyle = '#f3f4f6'; ctx.fillRect(cx + 1, cy + 1, cellW - 2, 44); ctx.fillStyle = '#111827'; ctx.font = 'bold 20px sans-serif'; ctx.fillText(`${pg.pdfLabel} (${pg.date})`.slice(0, cols === 1 ? 56 : 32), cx + 14, cy + 30);
                                     const im = await renderAnnotatedCanvas(pg, true, pg.date, pg.author); const maxW = cellW - 20, maxH = cellH - 60; let dw = maxW, dh = (im.height / im.width) * dw; if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; } ctx.drawImage(im, cx + 10 + (maxW - dw) / 2, cy + 52 + (maxH - dh) / 2, dw, dh);
@@ -2141,21 +1762,22 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                             }
                         } else {
                             for (let i = 0; i < validPages.length; i++) {
-                                if (i > 0) doc.addPage(); const pg = validPages[i], c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H); ctx.fillStyle = '#000'; ctx.font = 'bold 38px sans-serif'; ctx.fillText(`${project.name || '工程度尺'} (#${project.code}) — ${pg.pdfLabel}`, 50, 65); ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${pg.date}   |   最後修改: ${pg.author}`, 50, 102);
+                                if (i > 0) doc.addPage(); const pg = validPages[i], c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PAGE_W, PAGE_H); ctx.fillStyle = '#000'; ctx.font = 'bold 38px sans-serif'; ctx.fillText(`${project.name || '工程度尺'} — ${pg.pdfLabel}`, 50, 65); ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#4b5563'; ctx.fillText(`日期: ${pg.date}   |   最後修改: ${pg.author}`, 50, 102);
                                 const im = await renderAnnotatedCanvas(pg, true, pg.date, pg.author); const maxW = PAGE_W - 100, maxH = PAGE_H - 180; let dw = maxW, dh = (im.height / im.width) * dw; if (dh > maxH) { dh = maxH; dw = (im.width / im.height) * dh; } ctx.drawImage(im, 50 + (maxW - dw) / 2, 130, dw, dh); doc.addImage(c.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, 297);
                             }
                         }
-                        const modeTag = perPage === 4 ? '4合1' : perPage === 2 ? '2合1' : '單頁'; doc.save(`${sanitizeFilename(project.name || '工程')}_#${project.code}_${fileDateTag}_${modeTag}.pdf`);
+                        const modeTag = perPage === 4 ? '4合1' : perPage === 2 ? '2合1' : '單頁'; doc.save(`${sanitizeFilename(project.name || '工程')}_${fileDateTag}_${modeTag}.pdf`);
                     } catch (_) { alert('生成 PDF 失敗'); } finally { isProcessing.value = false; }
                 }, 50);
             };
 
             return {
-                offlineReady, currentView, TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_PALETTE,
-                stampCategories, stampItems, stampFilter, hotStamps, filteredCanvasStampGroups, showStampManagerModal, managerCatFilter, managerSearch, managerFilteredItems,
-                newCatName, newCatIcon, newCatColor, newStampText, newStampCatId, newStampColor, showQuickAddStamp,
-                getCategoryById, openStampManager, onSelectNewStampCat, addStampCategory, deleteStampCategory, addStampItem, toggleStampPin, setStampItemColor, editStampItemText, deleteStampItem, resetStampCounts, restoreDefaultStamps, syncStampLibraryCloud,
+                offlineReady, currentView, currentUser, loginWithGoogle, logoutGoogle,
+                TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_PALETTE,
+                stampFilter, customStamps, STAMP_GROUPS, filteredStampGroups, promptCustomStamp,
                 CAD_CATEGORIES, cadCategory, selectedCadType, filteredCadList, getCadDef, getCadTransform, setMarkerScale, rotateMarker, flipMarker, setCadMarkerColor,
+                showCadManager, cadMgrFilter, newCadCat, newCadShape, newCadLabel, allCadManageList, filteredCadManageList,
+                openCadManager, addCustomCadBlock, deleteCustomCadBlock, togglePinCad, toggleHideCad,
                 defaultTextColor, setMarkerTextColor, getArrowMarkerId, getFsArrowMarkerId,
                 allProjectOptions, otherProjectOptions, showMergeProjectsModal, mergeProjCodeA, mergeProjCodeB, mergeProjNewName, openMergeProjectsModal, updateMergeDefaultName, executeMergeProjects,
                 selectMode, selectedPageIds, toggleSelectMode, togglePageSelection, selectAllPages, showTransferModal, transferTargetCode, transferMode, transferNewProjName, openTransferModal, executeTransferPages,
@@ -2171,12 +1793,12 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 openFullScreenPreview, prevFullScreen, nextFullScreen, editFromFullScreen, copyFullScreenImage, downloadFullScreenImage, enterEditMode, switchToPreview, duplicateCurrentPage,
                 showMergeModal, mergeableGroups, mergePageGroup, showPdfModal, showPhotoPoolModal, photoPoolList, openPhotoPool, selectFromPhotoPool, deleteFromPhotoPool,
                 projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH,
-                showJoinModal, inputJoinCode, showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges, markProjectChanged,
+                showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges, markProjectChanged,
                 showManageModal, manageProj, openManageMenu, renameProject, duplicateProject, showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
                 showBackupListModal, backupList, openBackupList, restoreBackup, drawColor, wallStyle, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg, copyShareLink,
                 drawMode, drawingPane, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
                 showBranchPrompt, branchOwner, branchInputValue, confirmBranch, cancelBranch, svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
-                createNewProject, loadProject, deleteProject, backToProjects, copyCode, joinProjectByCode, saveAll, downloadNow, uploadNow, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, onPinTap, deleteActivePin,
+                createNewProject, loadProject, deleteProject, backToProjects, copyCode, saveAll, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, onPinTap, deleteActivePin,
                 setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload, pasteFromClipboard,
                 onEraseTap, resizeImageMarker, onMarkerPointerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
                 deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, onMarkerTextInput, handleKeypad, applyTag, applyStamp, getStampColor, getMarkerLines, getTagFields, exportPdfReport,
