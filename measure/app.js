@@ -153,14 +153,16 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 currentUser.value = null;
                 showToast('已登出 Google 帳號');
             };
-
-            const syncUserOwnedProjects = async () => {
+const syncUserOwnedProjects = async () => {
                 if (!db || !navigator.onLine || !currentUser.value) return;
                 const uid = currentUser.value.uid;
                 try {
+                    const hiddenList = (await localforage.getItem('local_hidden_projects')) || [];
+                    const hiddenSet = new Set(hiddenList.map(String));
                     const snaps = await withTimeout(db.collection('site_projects').where('ownerId', '==', uid).get(), 12000);
                     for (const doc of snaps.docs) {
                         const code = String(doc.id);
+                        if (hiddenSet.has(code)) continue;
                         const pd = doc.data() || {};
                         const localProj = await localforage.getItem('proj_' + code);
                         if (!localProj || ((pd.updatedAt || 0) > (localProj.lastSyncAt || 0) && !localProj.pendingUpload)) {
@@ -175,6 +177,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     await loadProjectList();
                 } catch (_) {}
             };
+
+            
 
             // =========================================================================
             // 🏷️ 目錄印章管理引擎 (7 大分類・74 個專業預設印章・加星置頂・改色・雲端同步)
