@@ -1317,6 +1317,8 @@
                 <button @click="renameProject" class="p-4 text-[14px] font-bold text-left text-zinc-800 hover:bg-zinc-50 border-b border-zinc-100">✏️ 修改地址 / 名稱</button>
                 <button @click="duplicateProject" class="p-4 text-[14px] font-bold text-left text-zinc-800 hover:bg-zinc-50 border-b border-zinc-100">👯‍♂️ 複製為新檔</button>
                 <button @click="openBackupList" class="p-4 text-[14px] font-bold text-left text-blue-600 hover:bg-zinc-50 border-b border-zinc-100">⏳ 歷史備份與還原</button>
+
+                <button @click="removeProjectLocalOnly(manageProj.code)" class="w-full py-2.5 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 rounded-lg text-xs font-bold flex items-center gap-2">📱 僅從本機移除（保留雲端）</button>
                 <button @click="deleteProject(manageProj.code)" class="p-4 text-[14px] font-bold text-left text-red-600 hover:bg-red-50">🗑️ 刪除此工程</button>
                 <button @click="showManageModal = false" class="p-3 text-xs font-bold text-zinc-500 bg-white text-center border-t border-zinc-200">取消</button>
             </div>
