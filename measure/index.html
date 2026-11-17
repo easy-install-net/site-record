@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v9.9</title>
+    <title>度尺寶 Pro v10.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -57,7 +57,7 @@
 </head>
 <body class="antialiased">
     <div id="boot-screen" style="position:fixed;inset:0;z-index:200;background:#ffffff;color:#111827;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
-        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v9.9...</div>
+        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v10.0...</div>
         <button id="boot-retry" onclick="location.reload()" style="display:none;margin-top:16px;background:#111827;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;">🔄 重新載入</button>
     </div>
 
@@ -79,6 +79,7 @@
             </div>
             <div class="flex gap-1 items-center shrink-0">
                 <template v-if="currentView === 'dir'">
+                    <button @click="openMergeProjectsModal" class="bg-indigo-50 border border-indigo-300 text-indigo-700 px-2 py-1 rounded-md text-xs font-bold">🔗合拼</button>
                     <button @click="openCloudBrowser" class="bg-white border border-zinc-300 text-zinc-800 px-2 py-1 rounded-md text-xs font-bold">☁️雲端庫</button>
                     <button @click="showJoinModal = true" class="bg-white border border-zinc-300 text-zinc-800 px-2 py-1 rounded-md text-xs font-bold">🔑組合</button>
                     <button @click="createNewProject" class="bg-zinc-900 text-white px-2.5 py-1 rounded-md text-xs font-bold">+新建</button>
@@ -125,37 +126,52 @@
             </div>
         </main>
 
-        <!-- 2. 全檔預覽總覽視圖 -->
+        <!-- 2. 全檔預覽總覽視圖 (含多選轉檔 & 單頁快捷轉檔) -->
         <main v-show="currentView === 'preview'" class="flex-1 min-h-0 w-full flex flex-col overflow-hidden bg-zinc-100">
-            <div class="bg-white border-b border-zinc-200 px-3 py-2 flex items-center justify-between shrink-0 gap-1">
+            <div class="bg-white border-b border-zinc-200 px-3 py-2 flex items-center justify-between shrink-0 gap-1 flex-wrap">
                 <span class="text-xs font-black text-zinc-900">🖼️ 圖紙總覽 ({{ pages.length }}頁)</span>
-                <div class="flex items-center gap-1.5">
-                    <button v-if="feedbackList.length" @click="showFeedbackModal = true" class="bg-rose-600 text-white px-2.5 py-1 rounded-md text-xs font-bold shadow-sm animate-pulse">💬 意見箱 ({{ feedbackList.length }})</button>
-                    <button v-if="mergeableGroups.length" @click="showMergeModal = true" class="bg-indigo-50 text-indigo-700 border border-indigo-300 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">🔗 合併 ({{ mergeableGroups.length }})</button>
-                    <span v-if="!feedbackList.length && !mergeableGroups.length" class="text-[11px] text-zinc-500 font-bold">按住 ⠿P1 拖拉改頁數</span>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <template v-if="selectMode">
+                        <button @click="selectAllPages" class="bg-white border border-zinc-300 text-zinc-800 px-2 py-1 rounded-md text-xs font-bold">{{ selectedPageIds.length === pages.length ? '取消全選' : '全選' }}</button>
+                        <button @click="openTransferModal()" :disabled="!selectedPageIds.length" :class="selectedPageIds.length ? 'bg-blue-600 text-white border-blue-600' : 'bg-zinc-200 text-zinc-400 border-zinc-200'" class="px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm">↗️ 轉入他檔 ({{ selectedPageIds.length }})</button>
+                        <button @click="toggleSelectMode" class="bg-zinc-100 text-zinc-700 px-2 py-1 rounded-md text-xs font-bold">✕完成</button>
+                    </template>
+                    <template v-else>
+                        <button v-if="feedbackList.length" @click="showFeedbackModal = true" class="bg-rose-600 text-white px-2.5 py-1 rounded-md text-xs font-bold shadow-sm animate-pulse">💬 意見箱 ({{ feedbackList.length }})</button>
+                        <button v-if="mergeableGroups.length" @click="showMergeModal = true" class="bg-indigo-50 text-indigo-700 border border-indigo-300 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">🔗 同底合併 ({{ mergeableGroups.length }})</button>
+                        <button @click="toggleSelectMode" class="bg-blue-50 text-blue-700 border border-blue-300 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">☑️ 選圖轉檔</button>
+                    </template>
                 </div>
             </div>
 
             <div class="flex-1 overflow-y-auto p-2 touch-scrollable">
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     <div v-for="(pg, idx) in pages" :key="pg.id" :data-page-idx="idx"
-                         :class="[draggingPageIdx === idx ? 'opacity-40 scale-95 ring-2 ring-blue-500' : '', dragOverPageIdx === idx && draggingPageIdx !== idx ? 'ring-2 ring-blue-500 bg-blue-50' : '']"
-                         class="bg-white border border-zinc-300 rounded-lg overflow-hidden shadow-sm flex flex-col justify-between transition-all duration-150">
+                         @click="selectMode ? togglePageSelection(pg.id) : null"
+                         :class="[
+                             draggingPageIdx === idx ? 'opacity-40 scale-95 ring-2 ring-blue-500' : '',
+                             dragOverPageIdx === idx && draggingPageIdx !== idx ? 'ring-2 ring-blue-500 bg-blue-50' : '',
+                             selectMode && selectedPageIds.includes(String(pg.id)) ? 'ring-2 ring-blue-600 bg-blue-50/40 border-blue-500' : 'bg-white border-zinc-300',
+                             selectMode ? 'cursor-pointer' : ''
+                         ]"
+                         class="border rounded-lg overflow-hidden shadow-sm flex flex-col justify-between transition-all duration-150">
                         <div class="bg-zinc-50 px-2 py-1.5 border-b border-zinc-200 flex flex-col gap-0.5">
                             <div class="flex items-center justify-between gap-1">
                                 <div class="flex items-center gap-1 min-w-0">
-                                    <span @pointerdown.stop.prevent="startPageDrag(idx)" style="touch-action:none" class="cursor-grab active:cursor-grabbing bg-white text-zinc-900 border border-zinc-300 text-[11px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                    <input v-if="selectMode" type="checkbox" :checked="selectedPageIds.includes(String(pg.id))" @click.stop="togglePageSelection(pg.id)" class="w-4 h-4 accent-blue-600 shrink-0 cursor-pointer">
+                                    <span v-else @pointerdown.stop.prevent="startPageDrag(idx)" style="touch-action:none" class="cursor-grab active:cursor-grabbing bg-white text-zinc-900 border border-zinc-300 text-[11px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
                                         <span class="text-zinc-400">⠿</span>P{{ idx + 1 }}
                                     </span>
+                                    <span v-if="selectMode" class="text-zinc-900 font-black text-[11px] shrink-0">P{{ idx + 1 }}</span>
                                     <span :class="pg.space === '總圖' ? 'text-purple-700' : 'text-zinc-900'" class="font-bold text-xs truncate">{{ pg.space || '未標空間' }}</span>
                                     <span v-if="pageFeedbackCount(pg.id)" @click.stop="showFeedbackModal = true" class="bg-rose-100 text-rose-700 border border-rose-300 text-[10px] font-black px-1 rounded cursor-pointer shrink-0">💬{{ pageFeedbackCount(pg.id) }}</span>
                                 </div>
-                                <button @click="enterEditMode(idx)" class="bg-zinc-900 text-white px-2 py-0.5 rounded text-[11px] font-bold shrink-0">✏️改</button>
+                                <button v-if="!selectMode" @click.stop="enterEditMode(idx)" class="bg-zinc-900 text-white px-2 py-0.5 rounded text-[11px] font-bold shrink-0">✏️改</button>
                             </div>
                             <div class="text-[10px] text-zinc-500 font-bold truncate">📅{{ pg.date || project.date }} ✍️{{ pg.author || project.lastModifiedBy || '未知' }}</div>
                         </div>
 
-                        <div v-if="pg.photo" @click="openFullScreenPreview(pg)" class="h-40 relative bg-zinc-100 cursor-pointer active:bg-zinc-200 overflow-hidden flex items-center justify-center">
+                        <div v-if="pg.photo" @click.stop="selectMode ? togglePageSelection(pg.id) : openFullScreenPreview(pg)" class="h-40 relative bg-zinc-100 cursor-pointer active:bg-zinc-200 overflow-hidden flex items-center justify-center">
                             <div class="absolute inset-1 overflow-hidden flex items-center justify-center">
                                 <svg :view-box.camel="`0 0 ${pg.w || 1200} ${pg.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="pointer-events-none">
                                     <rect x="0" y="0" :width="pg.w || 1200" :height="pg.h || 900" fill="#ffffff" />
@@ -196,7 +212,10 @@
                                 <button v-for="(pin, pIdx) in pg.pins" :key="pin.id" @click.stop="pin.photo ? openFullScreenPreview(pin) : enterEditMode(idx)" class="bg-red-50 border border-red-300 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded">📍釘#{{ pIdx + 1 }}</button>
                             </div>
                             <span v-else class="text-[11px] text-zinc-400 font-bold">無落釘</span>
-                            <span v-if="pg.photo" @click="openFullScreenPreview(pg)" class="text-[11px] text-zinc-500 font-bold cursor-pointer hover:text-zinc-800">🔍全圖</span>
+                            <div v-if="!selectMode" class="flex items-center gap-1.5 shrink-0">
+                                <button @click.stop="openTransferModal(pg.id)" class="text-[11px] text-blue-600 font-bold hover:underline">↗️轉檔</button>
+                                <span v-if="pg.photo" @click.stop="openFullScreenPreview(pg)" class="text-[11px] text-zinc-500 font-bold cursor-pointer hover:text-zinc-800">🔍全圖</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -261,7 +280,7 @@
                 </div>
             </div>
 
-            <!-- 雙屏 / 單屏並排主容器 (電腦/iPad橫屏左右並排，手機豎屏上下並排) -->
+            <!-- 雙屏 / 單屏並排主容器 -->
             <div class="flex-1 min-h-0 w-full flex flex-col md:flex-row gap-1.5 p-1 overflow-hidden">
 
                 <!-- === PANE A (主畫布 / 左屏) === -->
@@ -642,6 +661,88 @@
                 </div>
             </div>
         </main>
+
+        <!-- 🔗 兩個總號合拼彈窗 -->
+        <div v-if="showMergeProjectsModal" class="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4" @click.self="showMergeProjectsModal = false" @touchstart.stop @mousedown.stop>
+            <div class="bg-white border border-zinc-300 w-full max-w-md rounded-xl p-4 flex flex-col gap-3 shadow-2xl">
+                <div class="flex justify-between items-center border-b border-zinc-200 pb-2">
+                    <h3 class="text-[15px] font-black text-zinc-900">🔗 兩個總號合拼為新工程</h3>
+                    <button @click="showMergeProjectsModal = false" class="bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md text-xs font-bold">✕</button>
+                </div>
+
+                <div class="flex flex-col gap-2.5">
+                    <div>
+                        <label class="text-xs font-black text-zinc-700 block mb-1">1️⃣ 選擇第一個總號 (排在前面)</label>
+                        <select v-model="mergeProjCodeA" @change="updateMergeDefaultName" class="w-full bg-zinc-50 border border-zinc-300 rounded-lg p-2 text-sm font-bold focus:outline-none focus:border-indigo-500">
+                            <option v-for="p in allProjectOptions" :key="'ma-'+p.code" :value="p.code">#{{ p.code }} — {{ p.name || '未輸入地址' }} ({{ p.pageCount || 1 }}頁)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-black text-zinc-700 block mb-1">2️⃣ 選擇第二個總號 (接在後面)</label>
+                        <select v-model="mergeProjCodeB" @change="updateMergeDefaultName" class="w-full bg-zinc-50 border border-zinc-300 rounded-lg p-2 text-sm font-bold focus:outline-none focus:border-indigo-500">
+                            <option v-for="p in allProjectOptions" :key="'mb-'+p.code" :value="p.code">#{{ p.code }} — {{ p.name || '未輸入地址' }} ({{ p.pageCount || 1 }}頁)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-black text-zinc-700 block mb-1">🏠 合拼後的新工程地址 / 名稱</label>
+                        <input type="text" v-model="mergeProjNewName" placeholder="輸入新工程名稱..." class="w-full bg-white border border-zinc-300 rounded-lg p-2 text-sm font-bold focus:outline-none focus:border-indigo-500">
+                    </div>
+
+                    <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-2.5 text-[11px] text-indigo-900 font-bold leading-relaxed">
+                        💡 系統會自動讀取兩份工程的所有圖紙、紅釘細節相及底圖，生成一個<b>全新 6 位數總號</b>，原本兩份工程會完整保留不會改動。
+                    </div>
+                </div>
+
+                <div class="flex gap-2 pt-1">
+                    <button @click="showMergeProjectsModal = false" class="flex-1 bg-white border border-zinc-300 text-zinc-700 py-2.5 rounded-lg text-xs font-bold">取消</button>
+                    <button @click="executeMergeProjects" class="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg text-xs font-bold shadow-sm">✨ 立即合拼為新總號</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ↗️ 工程內選圖轉檔彈窗 -->
+        <div v-if="showTransferModal" class="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4" @click.self="showTransferModal = false" @touchstart.stop @mousedown.stop>
+            <div class="bg-white border border-zinc-300 w-full max-w-md rounded-xl p-4 flex flex-col gap-3 shadow-2xl">
+                <div class="flex justify-between items-center border-b border-zinc-200 pb-2">
+                    <h3 class="text-[15px] font-black text-zinc-900">↗️ 將已選 {{ selectedPageIds.length }} 張圖紙轉入其他工程</h3>
+                    <button @click="showTransferModal = false" class="bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md text-xs font-bold">✕</button>
+                </div>
+
+                <div class="flex flex-col gap-2.5">
+                    <div>
+                        <label class="text-xs font-black text-zinc-700 block mb-1">📂 選擇目標工程總號</label>
+                        <select v-model="transferTargetCode" class="w-full bg-zinc-50 border border-zinc-300 rounded-lg p-2 text-sm font-bold focus:outline-none focus:border-blue-500">
+                            <option value="__NEW__">➕ 新建空白工程並轉入</option>
+                            <option v-for="p in otherProjectOptions" :key="'tr-'+p.code" :value="p.code">#{{ p.code }} — {{ p.name || '未輸入地址' }} ({{ p.pageCount || 1 }}頁)</option>
+                        </select>
+                    </div>
+
+                    <div v-if="transferTargetCode === '__NEW__'">
+                        <label class="text-xs font-black text-zinc-700 block mb-1">🏠 新工程地址 / 名稱</label>
+                        <input type="text" v-model="transferNewProjName" placeholder="留空則自動命名為「原工程 (分拆)」" class="w-full bg-white border border-zinc-300 rounded-lg p-2 text-sm font-bold focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-black text-zinc-700 block mb-1">🔄 轉移方式</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button @click="transferMode = 'copy'" :class="transferMode === 'copy' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-zinc-700 border-zinc-300'" class="border rounded-lg py-2 px-2 text-xs font-bold text-center">
+                                📋 複製過去<br><span class="text-[10px] font-normal opacity-90">(目前工程保留)</span>
+                            </button>
+                            <button @click="transferMode = 'move'" :class="transferMode === 'move' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-zinc-700 border-zinc-300'" class="border rounded-lg py-2 px-2 text-xs font-bold text-center">
+                                ✂️ 移動過去<br><span class="text-[10px] font-normal opacity-90">(從目前工程移除)</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 pt-1">
+                    <button @click="showTransferModal = false" class="flex-1 bg-white border border-zinc-300 text-zinc-700 py-2.5 rounded-lg text-xs font-bold">取消</button>
+                    <button @click="executeTransferPages" class="flex-1 bg-zinc-900 text-white py-2.5 rounded-lg text-xs font-bold shadow-sm">確定轉檔</button>
+                </div>
+            </div>
+        </div>
 
         <!-- 💬 外部師傅/業主意見箱跟進彈窗 -->
         <div v-if="showFeedbackModal" class="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4" @click.self="showFeedbackModal = false" @touchstart.stop @mousedown.stop>
@@ -1039,8 +1140,8 @@
         </div>
     </div>
 
-    <script src="./data.js?v=9.9"></script>
-    <script src="./cad.js?v=9.9"></script>
-    <script src="./app.js?v=9.9"></script>
+    <script src="./data.js?v=10.0"></script>
+    <script src="./cad.js?v=10.0"></script>
+    <script src="./app.js?v=10.0"></script>
 </body>
 </html>
