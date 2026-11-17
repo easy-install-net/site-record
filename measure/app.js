@@ -98,6 +98,17 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
         return segs;
     };
 
+    const CAD_SHAPE_PRESETS = {
+        box: [{ t: 'rect', x: -26, y: -16, w: 52, h: 32, sw: 3, fillBg: true }, { t: 'line', x1: -26, y1: -16, x2: 26, y2: 16, sw: 2 }],
+        circle: [{ t: 'circle', cx: 0, cy: 0, r: 22, sw: 3, fillBg: true }, { t: 'circle', cx: 0, cy: 0, r: 5, sw: 2.5 }],
+        cross: [{ t: 'rect', x: -20, y: -20, w: 40, h: 40, sw: 2.5, fillBg: true }, { t: 'line', x1: -20, y1: -20, x2: 20, y2: 20, sw: 2.5 }, { t: 'line', x1: 20, y1: -20, x2: -20, y2: 20, sw: 2.5 }],
+        switch: [{ t: 'circle', cx: -10, cy: 10, r: 7, sw: 3, fillBg: true }, { t: 'line', x1: -5, y1: 5, x2: 16, y2: -16, sw: 3 }, { t: 'line', x1: 10, y1: -16, x2: 18, y2: -8, sw: 2.5 }],
+        socket: [{ t: 'circle', cx: 0, cy: 4, r: 16, sw: 3, fillBg: true }, { t: 'line', x1: -18, y1: 20, x2: 18, y2: 20, sw: 3 }, { t: 'line', x1: -6, y1: -4, x2: -6, y2: 8, sw: 2.5 }, { t: 'line', x1: 6, y1: -4, x2: 6, y2: 8, sw: 2.5 }],
+        light: [{ t: 'circle', cx: 0, cy: 0, r: 16, sw: 3, fillBg: true }, { t: 'line', x1: -24, y1: 0, x2: -18, y2: 0, sw: 2.5 }, { t: 'line', x1: 18, y1: 0, x2: 24, y2: 0, sw: 2.5 }, { t: 'line', x1: 0, y1: -24, x2: 0, y2: -18, sw: 2.5 }, { t: 'line', x1: 0, y1: 18, x2: 0, y2: 24, sw: 2.5 }],
+        ac: [{ t: 'rect', x: -30, y: -14, w: 60, h: 28, rx: 3, sw: 3, fillBg: true }, { t: 'line', x1: -24, y1: 6, x2: 24, y2: 6, sw: 2.5 }, { t: 'line', x1: -24, y1: 10, x2: 24, y2: 10, sw: 2 }],
+        drain: [{ t: 'circle', cx: 0, cy: 0, r: 20, sw: 3, fillBg: true }, { t: 'circle', cx: 0, cy: 0, r: 9, sw: 2 }, { t: 'line', x1: -20, y1: 0, x2: 20, y2: 0, sw: 2 }, { t: 'line', x1: 0, y1: -20, x2: 0, y2: 20, sw: 2 }]
+    };
+
     createApp({
         setup() {
             const currentUser = ref(null);
@@ -108,7 +119,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const defaultTextColor = ref('#ffffff');
 
             // =========================================================================
-            // 🔒 Google 帳號永久登入 ＆ 帳號工程自動同步
+            // 🔒 Google 帳號永久登入 ＆ 帳號工程/圖庫自動同步
             // =========================================================================
             const loginWithGoogle = async () => {
                 if (!auth) return alert('登入模組未就緒，請重新整理網頁');
@@ -124,6 +135,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                             await localforage.setItem('measure_author_name', res.user.displayName);
                         }
                         await syncUserOwnedProjects();
+                        await syncUserLibrariesCloud(true);
                         showToast(`✅ 已綁定 ${res.user.displayName || res.user.email}`);
                     }
                 } catch (e) {
@@ -142,7 +154,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 showToast('已登出 Google 帳號');
             };
 
-            // 自動同步帳號名下工程（本機已有則自動靜默對齊最新版本，無需人手再次載入）
             const syncUserOwnedProjects = async () => {
                 if (!db || !navigator.onLine || !currentUser.value) return;
                 const uid = currentUser.value.uid;
@@ -152,7 +163,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         const code = String(doc.id);
                         const pd = doc.data() || {};
                         const localProj = await localforage.getItem('proj_' + code);
-                        // 若雲端較新或本機尚未有該名下工程，自動背景拉取最新進度
                         if (!localProj || ((pd.updatedAt || 0) > (localProj.lastSyncAt || 0) && !localProj.pendingUpload)) {
                             const fullData = await fetchCompleteProjectData(code);
                             if (fullData) {
@@ -167,13 +177,16 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             // =========================================================================
-            // 🏷️ 全動態印章管理引擎 (兼容 index.html 與舊版印章面板)
+            // 🏷️ 目錄印章管理引擎 (7 大分類・74 個專業預設印章・加星置頂・改色・雲端同步)
             // =========================================================================
             const stampCategories = ref([]);
             const stampItems = ref([]);
             const stampUpdatedAt = ref(0);
             const stampFilter = ref('all');
-            const customStamps = computed(() => stampItems.value.filter(x => x.catId === 'cat_custom').map(x => x.text));
+            const showStampManagerModal = ref(false);
+            const managerCatFilter = ref('all');
+            const newCatName = ref(''), newStampText = ref(''), newStampCatId = ref(''), newStampColor = ref('#ffffff');
+
             const STAMP_GROUPS = computed(() => stampCategories.value.map(c => {
                 const items = stampItems.value.filter(it => it.catId === c.id).map(it => it.text);
                 const rows = [];
@@ -181,19 +194,29 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 return {
                     id: c.id, icon: c.icon || '🏷️', name: c.name,
                     badgeClass: 'bg-zinc-100 text-zinc-700 border-zinc-300',
-                    btnClass: '',
                     rows: rows.length ? rows : [[]]
                 };
             }));
             const filteredStampGroups = computed(() => STAMP_GROUPS.value.filter(g => stampFilter.value === 'all' || stampFilter.value === g.id));
+            const pinnedStampList = computed(() => stampItems.value.filter(x => x.pinned));
+            const managerFilteredItems = computed(() => {
+                if (managerCatFilter.value === 'pinned') return stampItems.value.filter(x => x.pinned);
+                if (managerCatFilter.value === 'all') return stampItems.value;
+                return stampItems.value.filter(x => x.catId === managerCatFilter.value);
+            });
+            const getCategoryById = (catId) => stampCategories.value.find(c => c.id === catId) || { id: catId, icon: '🏷️', name: '其他', defaultColor: '#ffffff' };
 
             const saveStampStore = async () => {
                 stampUpdatedAt.value = Date.now();
-                await localforage.setItem('dynamic_stamp_store_v1', {
+                await localforage.setItem('dynamic_stamp_store_v11', {
+                    seedVersion: 'v11.1',
                     categories: JSON.parse(JSON.stringify(stampCategories.value || [])),
                     items: JSON.parse(JSON.stringify(stampItems.value || [])),
                     updatedAt: stampUpdatedAt.value
                 });
+                if (currentUser.value?.uid && db && navigator.onLine) {
+                    syncUserLibrariesCloud(true).catch(() => {});
+                }
             };
 
             const buildSeedStampData = () => {
@@ -208,38 +231,147 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const loadStampStore = async () => {
-                const saved = await localforage.getItem('dynamic_stamp_store_v1');
-                if (saved && Array.isArray(saved.categories) && Array.isArray(saved.items) && saved.categories.length) {
+                const saved = await localforage.getItem('dynamic_stamp_store_v11');
+                if (saved && saved.seedVersion === 'v11.1' && Array.isArray(saved.categories) && saved.categories.length) {
                     stampCategories.value = saved.categories;
-                    stampItems.value = saved.items;
+                    stampItems.value = saved.items || [];
                     stampUpdatedAt.value = saved.updatedAt || Date.now();
                 } else {
                     const { cats, items } = buildSeedStampData();
+                    // 保留舊版中用戶自建的印章
+                    const oldSaved = await localforage.getItem('dynamic_stamp_store_v1');
+                    if (oldSaved?.items?.length) {
+                        const customOld = oldSaved.items.filter(x => String(x.id).startsWith('st_custom_') || String(x.id).startsWith('st_legacy_') || x.pinned);
+                        if (customOld.length) {
+                            cats.unshift({ id: 'cat_custom', icon: '⭐', name: '自訂', defaultColor: '#ffffff' });
+                            customOld.forEach((it, idx) => {
+                                if (!items.some(x => x.text === it.text)) {
+                                    items.unshift({ id: `st_migrated_${idx}`, catId: 'cat_custom', text: it.text, color: it.color || '#ffffff', count: it.count || 0, pinned: true });
+                                }
+                            });
+                        }
+                    }
                     stampCategories.value = cats;
                     stampItems.value = items;
                     await saveStampStore();
                 }
+                if (!newStampCatId.value && stampCategories.value.length) newStampCatId.value = stampCategories.value[0].id;
             };
 
+            const openStampManager = () => {
+                managerCatFilter.value = 'all';
+                if (!newStampCatId.value && stampCategories.value.length) {
+                    newStampCatId.value = stampCategories.value[0].id;
+                    newStampColor.value = stampCategories.value[0].defaultColor || '#ffffff';
+                }
+                showStampManagerModal.value = true;
+            };
+            const onSelectNewStampCat = () => {
+                const cat = getCategoryById(newStampCatId.value);
+                if (cat?.defaultColor) newStampColor.value = cat.defaultColor;
+            };
+            const addStampCategory = async () => {
+                const name = String(newCatName.value || '').trim();
+                if (!name) return showToast('請輸入新分類名稱');
+                if (stampCategories.value.some(c => c.name === name)) return showToast('此分類已存在');
+                const id = 'cat_' + Date.now();
+                stampCategories.value.unshift({ id, icon: '🏷️', name, defaultColor: '#ffffff' });
+                newCatName.value = '';
+                newStampCatId.value = id;
+                await saveStampStore();
+                showToast(`✅ 已建立分類「${name}」`);
+            };
+            const addStampItem = async (applyImmediately = false) => {
+                const txt = String(newStampText.value || '').trim();
+                if (!txt) return showToast('請輸入印章字眼');
+                const catId = newStampCatId.value || stampCategories.value[0]?.id || 'cat_elec';
+                const color = newStampColor.value || '#ffffff';
+                let existing = stampItems.value.find(it => it.text === txt && it.catId === catId);
+                if (!existing) {
+                    existing = { id: 'st_custom_' + Date.now(), catId, text: txt, color, count: 0, pinned: true };
+                    stampItems.value.unshift(existing);
+                } else {
+                    existing.color = color;
+                    existing.pinned = true;
+                }
+                newStampText.value = '';
+                await saveStampStore();
+                if (applyImmediately && activeMarker.value) applyStamp(existing);
+                else showToast(`✅ 已加入印章「${txt}」`);
+            };
+            const toggleStampPin = async (item) => { item.pinned = !item.pinned; await saveStampStore(); };
+            const setStampItemColor = async (item, hex) => { item.color = hex; await saveStampStore(); };
+            const editStampItemText = async (item) => {
+                const next = prompt('修改印章字眼：', item.text)?.trim();
+                if (next && next !== item.text) { item.text = next; await saveStampStore(); showToast('✅ 已更新印章'); }
+            };
+            const deleteStampItem = async (itemId) => { stampItems.value = stampItems.value.filter(x => x.id !== itemId); await saveStampStore(); };
+            const restoreDefaultStamps = async () => {
+                if (!confirm('補回所有預設 74 個專業印章？（你自訂的印章會保留）')) return;
+                const { cats, items } = buildSeedStampData();
+                cats.forEach(c => { if (!stampCategories.value.some(x => x.id === c.id)) stampCategories.value.push(c); });
+                items.forEach(it => { if (!stampItems.value.some(x => x.text === it.text && x.catId === it.catId)) stampItems.value.push(it); });
+                await saveStampStore();
+                showToast('✅ 已補回全部預設印章');
+            };
             const promptCustomStamp = async () => {
                 const txt = prompt('輸入自訂印章字眼：')?.trim();
                 if (!txt) return;
                 if (!stampCategories.value.some(c => c.id === 'cat_custom')) {
                     stampCategories.value.unshift({ id: 'cat_custom', icon: '⭐', name: '自訂', defaultColor: '#ffffff' });
                 }
-                if (!stampItems.value.some(x => x.text === txt)) {
-                    stampItems.value.unshift({ id: 'st_custom_' + Date.now(), catId: 'cat_custom', text: txt, color: '#ffffff', count: 1, pinned: true });
+                let item = stampItems.value.find(x => x.text === txt);
+                if (!item) {
+                    item = { id: 'st_custom_' + Date.now(), catId: 'cat_custom', text: txt, color: '#ffffff', count: 1, pinned: true };
+                    stampItems.value.unshift(item);
                     await saveStampStore();
                 }
-                applyStamp(txt);
+                applyStamp(item);
             };
 
             // =========================================================================
-            // 🏛️ AutoCAD 圖庫目錄管理引擎 (自由加多減少・置頂常用・隱藏冷門)
+            // 🏛️ AutoCAD 圖庫目錄管理引擎 (實時縮圖預覽・上傳/貼上圖案・自由增減)
             // =========================================================================
             const showCadManager = ref(false), cadMgrFilter = ref('all');
-            const newCadCat = ref('arch'), newCadShape = ref('box'), newCadLabel = ref('');
+            const newCadCat = ref('arch'), newCadShape = ref('box'), newCadLabel = ref(''), newCadImgB64 = ref('');
             const customCadBlocks = ref([]), pinnedCadIds = ref([]), hiddenCadIds = ref([]);
+
+            const previewNewCadShapes = computed(() => CAD_SHAPE_PRESETS[newCadShape.value] || CAD_SHAPE_PRESETS.box);
+
+            const getCadPreviewViewBox = (item) => {
+                const hw = Math.max(42, Math.round((item?.w || 80) * 0.65));
+                const hh = Math.max(42, Math.round((item?.h || 80) * 0.65));
+                return `${-hw} ${-hh} ${hw * 2} ${hh * 2}`;
+            };
+
+            const compressCadIcon = (fileOrBlob) => new Promise((res) => {
+                const reader = new FileReader(); reader.readAsDataURL(fileOrBlob);
+                reader.onload = (e) => {
+                    const img = new Image(); img.src = e.target.result;
+                    img.onload = () => {
+                        const c = document.createElement('canvas'), MAX = 180;
+                        let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+                        if (w > MAX || h > MAX) {
+                            if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+                            else { w = Math.round(w * MAX / h); h = MAX; }
+                        }
+                        c.width = w; c.height = h;
+                        c.getContext('2d').drawImage(img, 0, 0, w, h);
+                        res(c.toDataURL('image/png'));
+                    };
+                };
+            });
+
+            const handleNewCadImage = async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                newCadImgB64.value = await compressCadIcon(f);
+                if (!newCadLabel.value.trim()) {
+                    newCadLabel.value = f.name.replace(/\.[^.]+$/, '').slice(0, 12);
+                }
+                e.target.value = '';
+                showToast('✅ 已載入圖案預覽，按「加入」即可存入圖庫');
+            };
 
             const loadCadStore = async () => {
                 const saved = await localforage.getItem('custom_cad_store_v1');
@@ -255,7 +387,44 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     pinned: [...pinnedCadIds.value],
                     hidden: [...hiddenCadIds.value]
                 });
+                if (currentUser.value?.uid && db && navigator.onLine) {
+                    syncUserLibrariesCloud(true).catch(() => {});
+                }
             };
+
+            const syncUserLibrariesCloud = async (silent = false) => {
+                if (!db || !navigator.onLine) {
+                    if (!silent) alert('請先連接網絡再同步');
+                    return;
+                }
+                const uid = currentUser.value?.uid;
+                if (!uid) {
+                    if (!silent) alert('請先綁定 Google 帳號即可跨裝置自動同步圖庫與印章');
+                    return;
+                }
+                if (!silent) { isProcessing.value = true; processingText.value = '正在同步印章與圖庫...'; }
+                try {
+                    const docRef = db.collection('user_libraries').doc(String(uid));
+                    const snap = await withTimeout(docRef.get(), 12000);
+                    if (snap.exists && silent) {
+                        // 上傳本機最新狀態覆蓋雲端
+                    }
+                    await withTimeout(docRef.set({
+                        stampCategories: JSON.parse(JSON.stringify(stampCategories.value)),
+                        stampItems: JSON.parse(JSON.stringify(stampItems.value)),
+                        customCadBlocks: JSON.parse(JSON.stringify(customCadBlocks.value)),
+                        pinnedCadIds: [...pinnedCadIds.value],
+                        hiddenCadIds: [...hiddenCadIds.value],
+                        updatedAt: Date.now()
+                    }, { merge: true }), 12000);
+                    if (!silent) showToast(`☁️ 已同步 ${stampItems.value.length} 個印章與圖庫至帳號`);
+                } catch (e) {
+                    if (!silent) alert('同步失敗：' + e.message);
+                } finally {
+                    if (!silent) isProcessing.value = false;
+                }
+            };
+            const syncStampLibraryCloud = () => syncUserLibrariesCloud(false);
 
             const allCadManageList = computed(() => {
                 const builtIn = CAD_LIST.map(x => ({
@@ -282,22 +451,20 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
             const getCadTransform = (m) => `translate(${m.x}, ${m.y}) rotate(${m.rot || 0}) scale(${(m.scale || 1) * (m.flipX || 1)}, ${(m.scale || 1) * (m.flipY || 1)})`;
 
-            const openCadManager = () => { cadMgrFilter.value = 'all'; newCadLabel.value = ''; showCadManager.value = true; };
+            const openCadManager = () => { cadMgrFilter.value = 'all'; newCadLabel.value = ''; newCadImgB64.value = ''; showCadManager.value = true; };
             const addCustomCadBlock = async () => {
                 const label = String(newCadLabel.value || '').trim();
                 if (!label) return showToast('請輸入圖塊名稱');
                 const id = 'cad_custom_' + Date.now();
-                let shapes = [];
-                if (newCadShape.value === 'circle') {
-                    shapes = [{ t: 'circle', cx: 0, cy: 0, r: 22, sw: 3, fillBg: true }, { t: 'circle', cx: 0, cy: 0, r: 6, sw: 2 }];
-                } else if (newCadShape.value === 'cross') {
-                    shapes = [{ t: 'rect', x: -22, y: -22, w: 44, h: 44, sw: 2.5, fillBg: true }, { t: 'line', x1: -22, y1: -22, x2: 22, y2: 22, sw: 2.5 }, { t: 'line', x1: 22, y1: -22, x2: -22, y2: 22, sw: 2.5 }];
+                if (newCadImgB64.value) {
+                    customCadBlocks.value.unshift({ id, cat: newCadCat.value || 'arch', label, w: 72, h: 72, imgB64: newCadImgB64.value });
                 } else {
-                    shapes = [{ t: 'rect', x: -28, y: -18, w: 56, h: 36, sw: 3, fillBg: true }, { t: 'line', x1: -28, y1: -18, x2: 28, y2: 18, sw: 2 }];
+                    const shapes = JSON.parse(JSON.stringify(CAD_SHAPE_PRESETS[newCadShape.value] || CAD_SHAPE_PRESETS.box));
+                    customCadBlocks.value.unshift({ id, cat: newCadCat.value || 'arch', label, w: 64, h: 64, shapes });
                 }
-                customCadBlocks.value.unshift({ id, cat: newCadCat.value || 'arch', label, w: 60, h: 60, shapes });
                 pinnedCadIds.value.push(id);
                 newCadLabel.value = '';
+                newCadImgB64.value = '';
                 await saveCadStore();
                 showToast(`✅ 已加入圖塊「${label}」`);
             };
@@ -319,7 +486,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 await saveCadStore();
             };
 
-            const drawCustomCadOnCanvas = (ctx, m) => {
+            const drawCustomCadOnCanvas = (ctx, m, customCadImages = {}) => {
                 const def = getCadDef(m.data?.cadType);
                 if (!def) return;
                 if (CAD_DEFS[m.data?.cadType]) { drawCadOnCanvas(ctx, m); return; }
@@ -327,23 +494,27 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 ctx.translate(m.x, m.y);
                 ctx.rotate(((m.rot || 0) * Math.PI) / 180);
                 ctx.scale((m.scale || 1) * (m.flipX || 1), (m.scale || 1) * (m.flipY || 1));
-                ctx.strokeStyle = m.color || '#111827';
-                (def.shapes || []).forEach(s => {
-                    ctx.lineWidth = s.sw || 2.5;
-                    if (s.t === 'rect') {
-                        if (s.fillBg) { ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.fillRect(s.x, s.y, s.w, s.h); }
-                        ctx.strokeRect(s.x, s.y, s.w, s.h);
-                    } else if (s.t === 'circle') {
-                        ctx.beginPath(); ctx.arc(s.cx, s.cy, s.r, 0, Math.PI * 2);
-                        if (s.fillBg) { ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.fill(); }
-                        ctx.stroke();
-                    } else if (s.t === 'line') {
-                        ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
-                    }
-                });
+                if (def.imgB64 && customCadImages[def.id]) {
+                    const dw = def.w || 72, dh = def.h || 72;
+                    ctx.drawImage(customCadImages[def.id], -dw / 2, -dh / 2, dw, dh);
+                } else {
+                    ctx.strokeStyle = m.color || '#111827';
+                    (def.shapes || []).forEach(s => {
+                        ctx.lineWidth = s.sw || 2.5;
+                        if (s.t === 'rect') {
+                            if (s.fillBg) { ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.fillRect(s.x, s.y, s.w, s.h); }
+                            ctx.strokeRect(s.x, s.y, s.w, s.h);
+                        } else if (s.t === 'circle') {
+                            ctx.beginPath(); ctx.arc(s.cx, s.cy, s.r, 0, Math.PI * 2);
+                            if (s.fillBg) { ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.fill(); }
+                            ctx.stroke();
+                        } else if (s.t === 'line') {
+                            ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+                        }
+                    });
+                }
                 ctx.restore();
             };
-            
             const projectList = ref([]), allProjectOptions = ref([]);
             const project = reactive({ code: '', name: '', date: '', ownerId: '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '' });
             const pages = ref([]), photoPool = ref([]);
@@ -561,6 +732,17 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const showManageModal = ref(false), manageProj = ref({}), showCloudBrowser = ref(false), cloudProjectList = ref([]), showBackupListModal = ref(false), backupList = ref([]);
             const showPhotoPoolModal = ref(false), photoPoolList = ref([]), photoPoolTarget = ref('newPage');
 
+            const unclaimedCloudProjects = computed(() => {
+                const localCodes = new Set(projectList.value.map(p => String(p.code)));
+                const uid = currentUser.value?.uid ? String(currentUser.value.uid) : '';
+                return cloudProjectList.value.filter(cp => {
+                    const code = String(cp.code);
+                    if (localCodes.has(code)) return false;
+                    if (uid && cp.ownerId && String(cp.ownerId) === uid) return false;
+                    return true;
+                });
+            });
+
             const showMergeProjectsModal = ref(false), mergeProjCodeA = ref(''), mergeProjCodeB = ref(''), mergeProjNewName = ref('');
             const selectMode = ref(false), selectedPageIds = ref([]);
             const showTransferModal = ref(false), transferTargetCode = ref(''), transferMode = ref('copy'), transferNewProjName = ref('');
@@ -570,7 +752,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
             const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-            const cloudStatusText = computed(() => ({ syncing: '☁️同步中', offline: '📴離線', queued: '⏳待傳', ready: '☁️v11.0' }[cloudSyncState.value] || '☁️v11.0'));
+            const cloudStatusText = computed(() => ({ syncing: '☁️同步中', offline: '📴離線', queued: '⏳待傳', ready: '☁️v11.1' }[cloudSyncState.value] || '☁️v11.1'));
             const cloudStatusClass = computed(() =>
                 cloudSyncState.value === 'syncing' ? 'bg-amber-100 text-amber-900 border-amber-300' :
                 cloudSyncState.value === 'offline' ? 'bg-zinc-100 text-zinc-500 border-zinc-300' :
@@ -580,7 +762,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const showCloudDetail = () => {
                 if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                 else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                else showToast('v11.0 帳號自動歸戶・退出自動上傳・CAD連續蓋印');
+                else showToast('v11.1 帳號自動同步・CAD縮圖圖庫・74專業印章');
             };
 
             const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -909,7 +1091,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 });
             };
 
-            // 🏛️ CAD 圖塊連續蓋印（不自動彈出高位修改欄鎖定畫面）
             const placeCadBlockAt = (x, y) => {
                 const def = getCadDef(selectedCadType.value);
                 if (!def) return;
@@ -918,7 +1099,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                     const markerId = Date.now();
                     const newMarker = {
-                        id: markerId, lineId: null, x, y, w: def.w || 60, h: def.h || 60,
+                        id: markerId, lineId: null, x, y, w: def.w || 64, h: def.h || 64,
                         type: 'cad', color: drawColor.value, rot: 0, scale: 1, flipX: 1, flipY: 1,
                         data: { ...makeBlankMarkerData(), cadType: selectedCadType.value }
                     };
@@ -1307,7 +1488,25 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const pasteFromClipboard = async (forceNewPage = false) => { try { const items = await navigator.clipboard.read(); for (const item of items) { if (item.types.some(t => t.startsWith('image/'))) { await processPastedBlob(await item.getType(item.types.find(t => t.startsWith('image/'))), forceNewPage); return; } } showToast('剪貼簿內無圖片'); } catch (_) { showToast('請使用 Ctrl+V (或 Cmd+V) 貼上'); } };
-            const handleGlobalPaste = async (e) => { if (currentView.value !== 'proj' || ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return; const items = e.clipboardData?.items; if (!items) return; for (let i = 0; i < items.length; i++) { if (items[i].type.indexOf('image') !== -1) { e.preventDefault(); await processPastedBlob(items[i].getAsFile(), false); return; } } };
+            const handleGlobalPaste = async (e) => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                // 若正在開啟 CAD 圖庫管理視窗，Ctrl+V 直接貼成新圖案預覽
+                if (showCadManager.value) {
+                    for (let i = 0; i < items.length; i++) {
+                        if (items[i].type.indexOf('image') !== -1) {
+                            e.preventDefault();
+                            newCadImgB64.value = await compressCadIcon(items[i].getAsFile());
+                            showToast('✅ 已貼上圖案，輸入名稱後按「加入」');
+                            return;
+                        }
+                    }
+                }
+                if (currentView.value !== 'proj' || ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) { e.preventDefault(); await processPastedBlob(items[i].getAsFile(), false); return; }
+                }
+            };
             const handleGlobalKeydown = (e) => {
                 if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) isSpaceDown = true;
                 if (fullScreenIndex.value === -1) return;
@@ -1479,34 +1678,189 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 try { await localforage.removeItem('proj_' + code); await clearLocalMediaCacheForCode(code); await updateQueue(code, false); if (db && navigator.onLine) { const ref = db.collection('site_projects').doc(String(code)); const delCol = async (sub) => { const snap = await ref.collection(sub).get(); if (sub === 'media') { for (const doc of snap.docs) await batchDeleteDocs((await doc.ref.collection('chunks').get()).docs); } await batchDeleteDocs(snap.docs); }; await Promise.all([delCol('pages'), delCol('media'), delCol('backups'), delCol('feedback')]); await ref.delete(); } showManageModal.value = false; await loadProjectList(); showToast('🗑️ 已徹底刪除'); } catch (e) { alert('清理異常：' + e.message); } finally { isProcessing.value = false; }
             };
 
+            // 🧹 垃圾庫清單預覽 ＆ 確認徹底清除
+            const showGarbagePreviewModal = (items, totalBytes, onConfirm) => {
+                const old = document.getElementById('garbage-preview-modal');
+                if (old) old.remove();
+                const mb = (totalBytes / (1024 * 1024)).toFixed(2);
+                const overlay = document.createElement('div');
+                overlay.id = 'garbage-preview-modal';
+                overlay.style.cssText = 'position:fixed;inset:0;z-index:110;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:16px;';
+                const rowsHtml = items.map(it => `
+                    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                        <div style="min-width:0;flex:1;">
+                            <div style="font-size:12px;font-weight:900;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.title}</div>
+                            <div style="font-size:11px;color:#6b7280;font-weight:700;margin-top:2px;">${it.desc}</div>
+                        </div>
+                        <span style="font-size:11px;font-weight:900;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:2px 6px;border-radius:6px;white-space:nowrap;">${it.sizeLabel}</span>
+                    </div>
+                `).join('');
+                overlay.innerHTML = `
+                    <div style="background:#fff;border:1px solid #d1d5db;border-radius:14px;width:100%;max-width:420px;max-height:82vh;display:flex;flex-direction:column;padding:16px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.2);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5e7eb;padding-bottom:8px;margin-bottom:10px;">
+                            <div style="font-size:15px;font-weight:900;color:#111827;">🧹 雲端垃圾庫清單 (${items.length} 項)</div>
+                            <span style="font-size:11px;font-weight:900;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:99px;">可釋放約 ${mb} MB</span>
+                        </div>
+                        <div style="font-size:11px;color:#4b5563;font-weight:700;margin-bottom:8px;">以下均為已刪除工程的殘留碎片，或所有現存圖紙均無使用的廢棄舊相片：</div>
+                        <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px;">${rowsHtml}</div>
+                        <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;">
+                            <button id="gp-cancel" style="flex:1;background:#fff;border:1px solid #d1d5db;color:#374151;padding:10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">取消 (保留不動)</button>
+                            <button id="gp-confirm" style="flex:1;background:#dc2626;border:none;color:#fff;padding:10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">🗑️ 確認徹底清除</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+                overlay.querySelector('#gp-cancel').onclick = () => overlay.remove();
+                overlay.querySelector('#gp-confirm').onclick = async () => { overlay.remove(); await onConfirm(); };
+            };
+
             const cleanCloudGarbage = async () => {
                 if (!db || !navigator.onLine) return alert('請檢查網路連線');
-                if (!confirm('🧹 掃描並徹底清除已刪除工程的殘留碎片及無用孤兒相片？')) return;
-                isProcessing.value = true; processingText.value = '正在掃描雲端索引...';
+                isProcessing.value = true; processingText.value = '正在掃描雲端垃圾清單...';
                 try {
-                    const projSnap = await withTimeout(db.collection('site_projects').get(), 15000);
-                    const activeIds = new Set(projSnap.docs.map(d => d.id));
-                    let removedDocs = 0, removedOrphanMedia = 0;
-                    for (const sub of ['pages', 'media', 'backups', 'feedback']) {
-                        processingText.value = `正在清理殘留 ${sub}...`;
-                        const snap = await withTimeout(db.collectionGroup(sub).get(), 20000);
-                        const orphans = snap.docs.filter(d => { const p = d.ref.path.split('/'); return p[0] === 'site_projects' && p[1] && !activeIds.has(p[1]); });
-                        if (sub === 'media') { for (const mDoc of orphans) { const cSnap = await withTimeout(mDoc.ref.collection('chunks').get(), 15000); if (cSnap.docs.length) { await batchDeleteDocs(cSnap.docs); removedDocs += cSnap.docs.length; } } }
-                        if (orphans.length) { await batchDeleteDocs(orphans); removedDocs += orphans.length; }
-                    }
+                    const [projSnap, pagesGroup, mediaGroup, backupsGroup, feedbackGroup] = await Promise.all([
+                        withTimeout(db.collection('site_projects').get(), 15000),
+                        withTimeout(db.collectionGroup('pages').get(), 20000),
+                        withTimeout(db.collectionGroup('media').get(), 20000),
+                        withTimeout(db.collectionGroup('backups').get(), 15000),
+                        withTimeout(db.collectionGroup('feedback').get(), 15000)
+                    ]);
+
+                    const activeProjMap = new Map();
+                    projSnap.docs.forEach(d => activeProjMap.set(d.id, d.data() || {}));
+
+                    const previewItems = [];
+                    const orphanDocsToDelete = [];
+                    const orphanMediaDocs = [];
+                    let totalBytes = 0;
+
+                    // 1. 檢查已刪除工程的殘留碎片
+                    const deadProjGroups = new Map();
+                    const collectDead = (docs, label) => {
+                        docs.forEach(d => {
+                            const p = d.ref.path.split('/');
+                            const code = p[1];
+                            if (p[0] === 'site_projects' && code && !activeProjMap.has(code)) {
+                                if (!deadProjGroups.has(code)) deadProjGroups.set(code, { code, pages: 0, media: 0, backups: 0, feedback: 0, bytes: 0 });
+                                const g = deadProjGroups.get(code);
+                                g[label]++;
+                                if (label === 'media') {
+                                    orphanMediaDocs.push(d);
+                                    g.bytes += (d.data()?.byteLen || 150000);
+                                } else {
+                                    orphanDocsToDelete.push(d);
+                                    g.bytes += 4000;
+                                }
+                            }
+                        });
+                    };
+                    collectDead(pagesGroup.docs, 'pages');
+                    collectDead(mediaGroup.docs, 'media');
+                    collectDead(backupsGroup.docs, 'backups');
+                    collectDead(feedbackGroup.docs, 'feedback');
+
+                    deadProjGroups.forEach(g => {
+                        totalBytes += g.bytes;
+                        const parts = [];
+                        if (g.pages) parts.push(`${g.pages} 頁標註`);
+                        if (g.media) parts.push(`${g.media} 張相片碎片`);
+                        if (g.backups) parts.push(`${g.backups} 份備份`);
+                        if (g.feedback) parts.push(`${g.feedback} 條留言`);
+                        previewItems.push({
+                            title: `🗂️ 已刪除工程殘留 (#${g.code})`,
+                            desc: `包含：${parts.join('、')}`,
+                            sizeLabel: `${Math.max(1, Math.round(g.bytes / 1024))} KB`
+                        });
+                    });
+
+                    // 2. 檢查現存工程內的無用孤兒相片
+                    const usedMediaByProj = new Map();
+                    pagesGroup.docs.forEach(pgDoc => {
+                        const p = pgDoc.ref.path.split('/');
+                        const code = p[1];
+                        if (!activeProjMap.has(code)) return;
+                        if (!usedMediaByProj.has(code)) usedMediaByProj.set(code, new Set());
+                        const usedSet = usedMediaByProj.get(code);
+                        const pg = pgDoc.data() || {};
+                        if (pg.photoId) usedSet.add(String(pg.photoId));
+                        usedSet.add('page_' + (pg.id || pgDoc.id));
+                        (pg.pins || []).forEach(pin => {
+                            if (pin.photoId) usedSet.add(String(pin.photoId));
+                            if (pin.id) usedSet.add(String(pin.id));
+                        });
+                    });
+
                     const safeCutoff = Date.now() - 5 * 60 * 1000;
-                    for (let i = 0; i < projSnap.docs.length; i++) {
-                        const pDoc = projSnap.docs[i]; processingText.value = `正在核對工程 (${i + 1}/${projSnap.docs.length})...`;
-                        const [pSnap, mSnap] = await Promise.all([withTimeout(pDoc.ref.collection('pages').get(), 15000), withTimeout(pDoc.ref.collection('media').get(), 15000)]);
-                        const usedIds = new Set();
-                        pSnap.docs.forEach(pgDoc => { const pg = pgDoc.data() || {}; if (pg.photoId) usedIds.add(String(pg.photoId)); usedIds.add('page_' + (pg.id || pgDoc.id)); (pg.pins || []).forEach(pin => { if (pin.photoId) usedIds.add(String(pin.photoId)); if (pin.id) usedIds.add(String(pin.id)); }); });
-                        for (const mDoc of mSnap.docs) { const mData = mDoc.data() || {}; if (!usedIds.has(String(mDoc.id)) && (!mData.updatedAt || mData.updatedAt < safeCutoff)) { const cSnap = await withTimeout(mDoc.ref.collection('chunks').get(), 15000); if (cSnap.docs.length) await batchDeleteDocs(cSnap.docs); await mDoc.ref.delete(); removedOrphanMedia++; } }
-                    }
+                    mediaGroup.docs.forEach(mDoc => {
+                        const p = mDoc.ref.path.split('/');
+                        const code = p[1];
+                        if (!activeProjMap.has(code)) return;
+                        const usedSet = usedMediaByProj.get(code) || new Set();
+                        const mData = mDoc.data() || {};
+                        if (!usedSet.has(String(mDoc.id)) && (!mData.updatedAt || mData.updatedAt < safeCutoff)) {
+                            const bLen = mData.byteLen || 150000;
+                            totalBytes += bLen;
+                            orphanMediaDocs.push(mDoc);
+                            const pName = activeProjMap.get(code)?.name || `#${code}`;
+                            const dt = mData.updatedAt ? new Date(mData.updatedAt).toLocaleDateString() : '舊相片';
+                            previewItems.push({
+                                title: `🖼️ 無用舊底圖 (${pName})`,
+                                desc: `建立於 ${dt} · 任何現存頁面均未引用`,
+                                sizeLabel: `${Math.max(1, Math.round(bLen / 1024))} KB`
+                            });
+                        }
+                    });
+
+                    // 3. 檢查本機無效快取
                     const lKeys = await localforage.keys();
-                    for (const k of lKeys) { if (k.startsWith('synced_media_')) { const cPart = k.split('_')[2]; if (cPart && !activeIds.has(cPart) && !(await localforage.getItem('proj_' + cPart))) await localforage.removeItem(k); } }
-                    const total = removedDocs + removedOrphanMedia;
-                    showToast(total > 0 ? `🧹 已徹底清理 ${removedDocs} 筆殘留及 ${removedOrphanMedia} 張孤兒相` : '✨ 雲端與本機非常乾淨');
-                } catch (e) { alert('清理失敗：' + e.message); } finally { isProcessing.value = false; }
+                    const deadLocalKeys = [];
+                    for (const k of lKeys) {
+                        if (k.startsWith('synced_media_')) {
+                            const cPart = k.split('_')[2];
+                            if (cPart && !activeProjMap.has(cPart) && !(await localforage.getItem('proj_' + cPart))) {
+                                deadLocalKeys.push(k);
+                            }
+                        }
+                    }
+                    if (deadLocalKeys.length) {
+                        previewItems.push({
+                            title: `📱 本機過期索引快取`,
+                            desc: `共 ${deadLocalKeys.length} 筆已失效紀錄`,
+                            sizeLabel: `${deadLocalKeys.length} 筆`
+                        });
+                    }
+
+                    isProcessing.value = false;
+
+                    if (!previewItems.length) {
+                        showToast('✨ 雲端與本機非常乾淨，無任何垃圾碎片！');
+                        return;
+                    }
+
+                    showGarbagePreviewModal(previewItems, totalBytes, async () => {
+                        isProcessing.value = true;
+                        processingText.value = `正在徹底清除 ${previewItems.length} 項垃圾...`;
+                        try {
+                            for (let i = 0; i < orphanMediaDocs.length; i++) {
+                                processingText.value = `正在清除相片碎片 (${i + 1}/${orphanMediaDocs.length})...`;
+                                const mDoc = orphanMediaDocs[i];
+                                const cSnap = await withTimeout(mDoc.ref.collection('chunks').get(), 15000);
+                                if (cSnap.docs.length) await batchDeleteDocs(cSnap.docs);
+                                await mDoc.ref.delete();
+                            }
+                            if (orphanDocsToDelete.length) await batchDeleteDocs(orphanDocsToDelete);
+                            for (const k of deadLocalKeys) await localforage.removeItem(k);
+                            showToast(`🧹 已徹底清理 ${previewItems.length} 項垃圾，釋放約 ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
+                        } catch (err) {
+                            alert('清理過程發生異常：' + err.message);
+                        } finally {
+                            isProcessing.value = false;
+                        }
+                    });
+                } catch (e) {
+                    isProcessing.value = false;
+                    alert('掃描失敗：' + e.message);
+                }
             };
 
             const openBackupList = async () => { showManageModal.value = false; isProcessing.value = true; processingText.value = '正在搜尋備份...'; try { const snaps = await withTimeout(db.collection('site_projects').doc(manageProj.value.code).collection('backups').get(), 15000); backupList.value = snaps.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); showBackupListModal.value = true; } catch (e) { alert('讀取失敗：' + e.message); } finally { isProcessing.value = false; } };
@@ -1652,22 +2006,27 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 } catch (e) { alert('轉檔失敗：' + e.message); } finally { isProcessing.value = false; }
             };
 
-            const openCloudBrowser = async () => { if (!db || !navigator.onLine) return alert('請檢查網路連線'); isProcessing.value = true; processingText.value = '正在讀取雲端目錄...'; try { const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(30).get(), 10000); cloudProjectList.value = snaps.docs.map(d => ({ code: d.id, ...d.data() })).filter(d => d.name || d.updatedAt); showCloudBrowser.value = true; } catch (e) { alert('讀取目錄失敗：' + e.message); } finally { isProcessing.value = false; } };
+            const openCloudBrowser = async () => { if (!db || !navigator.onLine) return alert('請檢查網路連線'); isProcessing.value = true; processingText.value = '正在讀取待認領雲端工程...'; try { const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(40).get(), 10000); cloudProjectList.value = snaps.docs.map(d => ({ code: d.id, ...d.data() })).filter(d => d.name || d.updatedAt); showCloudBrowser.value = true; } catch (e) { alert('讀取目錄失敗：' + e.message); } finally { isProcessing.value = false; } };
             const downloadFromCloudBrowser = async (code) => {
-                showCloudBrowser.value = false;
+                code = String(code);
+                if (currentUser.value?.uid && db && navigator.onLine) {
+                    db.collection('site_projects').doc(code).set({ ownerId: currentUser.value.uid }, { merge: true }).catch(() => {});
+                }
                 await loadProject(code, true);
-                if (currentUser.value?.uid && !project.ownerId) { project.ownerId = currentUser.value.uid; hasUnsavedCloudChanges.value = true; await saveAll(); }
-                showToast('✅ 已認領並載入工程');
+                if (currentUser.value?.uid) {
+                    project.ownerId = currentUser.value.uid;
+                    await saveAll();
+                }
+                await loadProjectList();
+                showToast('✅ 已認領並歸戶至目錄');
             };
             const loadProjectList = async () => { const keys = await localforage.keys(), q = (await localforage.getItem('pending_upload_queue')) || [], list = []; for (const k of keys) { if (k.startsWith('proj_')) { const d = await localforage.getItem(k); if (d?.code) { const pgs = d.pages || []; list.push({ code: d.code, name: d.name, date: d.date, pageCount: pgs.length || 1, pinCount: pgs.reduce((s, p) => s + (p.pins?.length || 0), 0), updatedAt: d.updatedAt || 0, lastModifiedBy: d.lastModifiedBy || '', pendingUpload: !!d.pendingUpload || q.includes(String(d.code)) }); } } } projectList.value = list.sort((a, b) => b.updatedAt - a.updatedAt); };
 
-            // 🚪 退出畫布自動背後同步上傳（免人手按上傳先敢走）
             const backToProjects = async () => {
                 resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A';
                 if (unsubPages) { unsubPages(); unsubPages = null; }
                 if (unsubFeedback) { unsubFeedback(); unsubFeedback = null; }
                 const needSync = (hasUnsavedCloudChanges.value || dirtyPageIds.size > 0) && project.code && db;
-                const syncCode = String(project.code || '');
                 await saveAll();
                 dirtyPageIds.clear(); hasUnsavedCloudChanges.value = false; feedbackList.value = [];
                 await loadProjectList();
@@ -1715,7 +2074,14 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const renderAnnotatedCanvas = (canvasObj, includeStamp = true, itemDate = '', itemAuthor = '') => new Promise(async (resolve) => {
                 const img = new Image(); img.src = canvasObj.photo; await new Promise(r => { img.onload = r; img.onerror = r; });
                 const c = document.createElement('canvas'), w = canvasObj.w || 1200, h = canvasObj.h || 900; c.width = w; c.height = h; const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-                const markerImages = {}; for (const m of (canvasObj.markers || [])) { if (m.type === 'image' && m.data.b64) { const im = new Image(); im.src = m.data.b64; await new Promise(r => { im.onload = r; im.onerror = r; }); markerImages[m.id] = im; } }
+                const markerImages = {}, customCadImages = {};
+                for (const m of (canvasObj.markers || [])) {
+                    if (m.type === 'image' && m.data.b64) { const im = new Image(); im.src = m.data.b64; await new Promise(r => { im.onload = r; im.onerror = r; }); markerImages[m.id] = im; }
+                    else if (m.type === 'cad' && m.data?.cadType) {
+                        const def = getCadDef(m.data.cadType);
+                        if (def?.imgB64 && !customCadImages[def.id]) { const im = new Image(); im.src = def.imgB64; await new Promise(r => { im.onload = r; im.onerror = r; }); customCadImages[def.id] = im; }
+                    }
+                }
                 if (includeStamp) {
                     const wm = buildWatermarkBox(canvasObj, itemDate, itemAuthor, w);
                     if (wm) { ctx.save(); ctx.fillStyle = 'rgba(255, 255, 255, 0.56)'; drawRoundRect(ctx, wm.x, wm.y, wm.w, wm.h, 6); ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)'; ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = 'rgba(15, 23, 42, 0.85)'; ctx.fillText(wm.text, wm.x + wm.w / 2, wm.y + wm.h / 2); ctx.restore(); }
@@ -1730,7 +2096,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 (canvasObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 6; ctx.stroke(new Path2D(p.d)); });
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 (canvasObj.markers || []).forEach(m => {
-                    if (m.type === 'cad') drawCustomCadOnCanvas(ctx, m);
+                    if (m.type === 'cad') drawCustomCadOnCanvas(ctx, m, customCadImages);
                     else if (m.type === 'image') { if (markerImages[m.id]) { ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(((m.rot || 0) * Math.PI) / 180); ctx.drawImage(markerImages[m.id], -m.w / 2, -m.h / 2, m.w, m.h); ctx.restore(); } }
                     else { const lines = getMarkerLines(m), color = getStampColor(m); ctx.font = `900 ${28 * globalFontScale.value}px sans-serif`; const startY = m.y - ((lines.length - 1) * 34 * globalFontScale.value) / 2; lines.forEach((line, i) => { const y = startY + i * 34 * globalFontScale.value; ctx.lineWidth = 7 * globalFontScale.value; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); }); }
                 });
@@ -1774,9 +2140,11 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             return {
                 offlineReady, currentView, currentUser, loginWithGoogle, logoutGoogle,
                 TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_PALETTE,
-                stampFilter, customStamps, STAMP_GROUPS, filteredStampGroups, promptCustomStamp,
+                stampCategories, stampItems, stampFilter, showStampManagerModal, managerCatFilter, managerFilteredItems, pinnedStampList,
+                newCatName, newStampText, newStampCatId, newStampColor, getCategoryById, openStampManager, onSelectNewStampCat, addStampCategory, addStampItem, toggleStampPin, setStampItemColor, editStampItemText, deleteStampItem, restoreDefaultStamps, syncStampLibraryCloud,
+                STAMP_GROUPS, filteredStampGroups, promptCustomStamp,
                 CAD_CATEGORIES, cadCategory, selectedCadType, filteredCadList, getCadDef, getCadTransform, setMarkerScale, rotateMarker, flipMarker, setCadMarkerColor,
-                showCadManager, cadMgrFilter, newCadCat, newCadShape, newCadLabel, allCadManageList, filteredCadManageList,
+                showCadManager, cadMgrFilter, newCadCat, newCadShape, newCadLabel, newCadImgB64, previewNewCadShapes, getCadPreviewViewBox, handleNewCadImage, allCadManageList, filteredCadManageList,
                 openCadManager, addCustomCadBlock, deleteCustomCadBlock, togglePinCad, toggleHideCad,
                 defaultTextColor, setMarkerTextColor, getArrowMarkerId, getFsArrowMarkerId,
                 allProjectOptions, otherProjectOptions, showMergeProjectsModal, mergeProjCodeA, mergeProjCodeB, mergeProjNewName, openMergeProjectsModal, updateMergeDefaultName, executeMergeProjects,
@@ -1794,7 +2162,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 showMergeModal, mergeableGroups, mergePageGroup, showPdfModal, showPhotoPoolModal, photoPoolList, openPhotoPool, selectFromPhotoPool, deleteFromPhotoPool,
                 projectList, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH,
                 showAddPageModal, showSpaceModal, spaceList, authorName, changeAuthorName, hasUnsavedCloudChanges, markProjectChanged,
-                showManageModal, manageProj, openManageMenu, renameProject, duplicateProject, showCloudBrowser, cloudProjectList, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
+                showManageModal, manageProj, openManageMenu, renameProject, duplicateProject, showCloudBrowser, cloudProjectList, unclaimedCloudProjects, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
                 showBackupListModal, backupList, openBackupList, restoreBackup, drawColor, wallStyle, cloudStatusText, cloudStatusClass, showCloudDetail, toastMsg, copyShareLink,
                 drawMode, drawingPane, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
                 showBranchPrompt, branchOwner, branchInputValue, confirmBranch, cancelBranch, svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
