@@ -1032,28 +1032,189 @@ const localHiddenCodes = ref([]);
 
             const makeEmptyPage = (ov = {}) => {
                 const pg = {
-                    id: 'pg_' + Date.now() + '_' + Math.floor(Math.random() * 99999), space: '', date: ov.date || getTodayStr(), author: authorName.value || '',
+                    id: 'pg_' + Date.now() + '_' + Math.floor(Math.random() * 99999), space: '', docType: '', date: ov.date || getTodayStr(), author: authorName.value || '',
                     photo: null, photoId: '', w: 1200, h: 900, isSketch: false, hasGrid: false, markers: [], lines: [], walls: [], paths: [], pins: [], deletedPinIds: [], historyStack: [], redoStack: [], updatedAt: Date.now(), ...ov
                 };
                 if (pg.isSketch && !pg.photo) { const size = getAdaptiveCanvasSize(); pg.w = ov.w || size.w; pg.h = ov.h || size.h; pg.photo = renderSketchDataUrl(pg.w, pg.h, !!pg.hasGrid); }
                 return pg;
             };
 
-            const initSketchOnCurrent = () => { if (!targetCanvas.value) return; targetPaneResetZoom(); const size = getAdaptiveCanvasSize(); Object.assign(targetCanvas.value, { photo: renderSketchDataUrl(size.w, size.h, true), w: size.w, h: size.h, isSketch: true, hasGrid: true }); touchDirty(); drawMode.value = 'browse'; saveAll(); };
-            const addNewSketchPage = (hasGrid) => { showAddPageModal.value = false; resetZoom(); const size = getAdaptiveCanvasSize(); const newPg = makeEmptyPage({ photo: renderSketchDataUrl(size.w, size.h, hasGrid), w: size.w, h: size.h, isSketch: true, hasGrid }); pages.value.push(newPg); activePageIndex.value = pages.value.length - 1; dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; drawMode.value = 'browse'; saveAll(); };
+            const getDocTypeLabel = (dt) => ({ plan: '📐平面圖', detail: '📏詳圖', photo: '📷拍攝' }[dt] || '');
+            const isDrawingDocType = (dt) => dt === 'plan' || dt === 'detail';
+
+            const insertPageSmart = (newPg, explicitAfterIdx = null) => {
+                let insertIdx = pages.value.length;
+                if (explicitAfterIdx !== null && explicitAfterIdx >= 0 && explicitAfterIdx < pages.value.length) {
+                    insertIdx = explicitAfterIdx + 1;
+                } else if (newPg.space) {
+                    let lastSameGroup = -1, lastSameSpace = -1;
+                    pages.value.forEach((p, i) => {
+                        if (p.space === newPg.space) {
+                            lastSameSpace = i;
+                            if (newPg.docType && p.docType === newPg.docType) lastSameGroup = i;
+                        }
+                    });
+                    if (lastSameGroup !== -1) insertIdx = lastSameGroup + 1;
+                    else if (lastSameSpace !== -1) insertIdx = lastSameSpace + 1;
+                    else if (pages.value.length > 0) insertIdx = Math.min(pages.value.length, activePageIndex.value + 1);
+                } else if (pages.value.length > 0) {
+                    insertIdx = Math.min(pages.value.length, activePageIndex.value + 1);
+                }
+                pages.value.splice(insertIdx, 0, newPg);
+                project.pageOrderUpdatedAt = Date.now();
+                return insertIdx;
+            };
+
+            const overviewTypeFilter = ref('all');
+            const overviewSpaceFilter = ref('all');
+            const drawingPageCount = computed(() => pages.value.filter(p => isDrawingDocType(p.docType)).length);
+            const photoPageCount = computed(() => pages.value.filter(p => p.docType === 'photo').length);
+            const overviewSpacesAvailable = computed(() => {
+                const set = new Set();
+                pages.value.forEach(p => { if (p.space) set.add(p.space); });
+                return Array.from(set);
+            });
+            const filteredOverviewPages = computed(() => {
+                return pages.value
+                    .map((pg, idx) => ({ pg, idx }))
+                    .filter(({ pg }) => {
+                        if (overviewTypeFilter.value === 'drawing' && !isDrawingDocType(pg.docType)) return false;
+                        if (overviewTypeFilter.value === 'photo' && pg.docType !== 'photo') return false;
+                        if (overviewSpaceFilter.value !== 'all') {
+                            if (overviewSpaceFilter.value === '__NONE__' && pg.space) return false;
+                            if (overviewSpaceFilter.value !== '__NONE__' && pg.space !== overviewSpaceFilter.value) return false;
+                        }
+                        return true;
+                    });
+            });
+
+            const movingPageId = ref('');
+            const movingPageLabel = computed(() => {
+                const idx = pages.value.findIndex(p => String(p.id) === String(movingPageId.value));
+                if (idx === -1) return '';
+                const pg = pages.value[idx];
+                return `P${idx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`;
+            });
+            const startMovePage = (pgId) => {
+                movingPageId.value = String(movingPageId.value) === String(pgId) ? '' : String(pgId);
+            };
+            const insertMovingPageAfter = async (targetPgId) => {
+                const fromIdx = pages.value.findIndex(p => String(p.id) === String(movingPageId.value));
+                if (fromIdx === -1) { movingPageId.value = ''; return; }
+                const [moved] = pages.value.splice(fromIdx, 1);
+                let toIdx = 0;
+                if (targetPgId !== '__START__') {
+                    const targetIdx = pages.value.findIndex(p => String(p.id) === String(targetPgId));
+                    toIdx = targetIdx !== -1 ? targetIdx + 1 : pages.value.length;
+                }
+                pages.value.splice(toIdx, 0, moved);
+                activePageIndex.value = toIdx;
+                movingPageId.value = '';
+                project.pageOrderUpdatedAt = Date.now();
+                hasUnsavedCloudChanges.value = true;
+                await saveAll();
+                showToast(`✅ 已調位至 P${toIdx + 1}`);
+            };
+
+            const showAutoSortModal = ref(false);
+            const autoSortPages = async (mode = 'bySpace') => {
+                showAutoSortModal.value = false;
+                if (pages.value.length <= 1) return;
+                const docRank = (dt) => ({ plan: 1, detail: 2, photo: 3 }[dt] || 4);
+                const spaceRank = (sp) => {
+                    if (!sp) return 999;
+                    if (sp === '總圖') return 0;
+                    const idx = spaceList.value.indexOf(sp);
+                    return idx === -1 ? 500 : idx + 1;
+                };
+                const indexed = pages.value.map((pg, origIdx) => ({ pg, origIdx }));
+                indexed.sort((a, b) => {
+                    if (mode === 'byType') {
+                        const dDiff = docRank(a.pg.docType) - docRank(b.pg.docType);
+                        if (dDiff !== 0) return dDiff;
+                        const sDiff = spaceRank(a.pg.space) - spaceRank(b.pg.space);
+                        if (sDiff !== 0) return sDiff;
+                    } else {
+                        const sDiff = spaceRank(a.pg.space) - spaceRank(b.pg.space);
+                        if (sDiff !== 0) return sDiff;
+                        const dDiff = docRank(a.pg.docType) - docRank(b.pg.docType);
+                        if (dDiff !== 0) return dDiff;
+                    }
+                    return a.origIdx - b.origIdx;
+                });
+                pages.value = indexed.map(x => x.pg);
+                activePageIndex.value = 0;
+                project.pageOrderUpdatedAt = Date.now();
+                hasUnsavedCloudChanges.value = true;
+                await saveAll();
+                showToast(mode === 'byType' ? '✅ 已按「工程圖 → 拍攝」自動整理' : '✅ 已按「空間分類」自動歸隊');
+            };
+
+            const editingMetaPage = ref(null);
+            const openPageMetaModal = (pg = null) => {
+                editingMetaPage.value = pg;
+                showSpaceModal.value = true;
+            };
+            const setPageDocType = (dt) => {
+                if (editingMetaPage.value) {
+                    editingMetaPage.value.docType = dt;
+                    editingMetaPage.value.updatedAt = Date.now();
+                    dirtyPageIds.add(editingMetaPage.value.id);
+                    hasUnsavedCloudChanges.value = true;
+                    saveAll();
+                    return;
+                }
+                checkBranchNeed(() => {
+                    if (targetPage.value) targetPage.value.docType = dt;
+                    touchDirty(); saveAll();
+                });
+            };
+            const batchSetDocType = async (dt) => {
+                if (!selectedPageIds.value.length) return;
+                const set = new Set(selectedPageIds.value.map(String));
+                pages.value.forEach(pg => {
+                    if (set.has(String(pg.id))) {
+                        pg.docType = dt;
+                        pg.updatedAt = Date.now();
+                        dirtyPageIds.add(pg.id);
+                    }
+                });
+                hasUnsavedCloudChanges.value = true;
+                await saveAll();
+                showToast(`✅ 已為 ${set.size} 頁設定為「${getDocTypeLabel(dt) || '清除分類'}」`);
+            };
+            const batchSetSpace = async (sp) => {
+                if (!selectedPageIds.value.length) return;
+                const set = new Set(selectedPageIds.value.map(String));
+                pages.value.forEach(pg => {
+                    if (set.has(String(pg.id))) {
+                        pg.space = sp;
+                        pg.updatedAt = Date.now();
+                        dirtyPageIds.add(pg.id);
+                    }
+                });
+                hasUnsavedCloudChanges.value = true;
+                await saveAll();
+                showToast(`✅ 已為 ${set.size} 頁標記空間「${sp}」`);
+            };
+
+            const initSketchOnCurrent = () => { if (!targetCanvas.value) return; targetPaneResetZoom(); const size = getAdaptiveCanvasSize(); Object.assign(targetCanvas.value, { photo: renderSketchDataUrl(size.w, size.h, true), w: size.w, h: size.h, isSketch: true, hasGrid: true, docType: targetCanvas.value.docType || 'plan' }); touchDirty(); drawMode.value = 'browse'; saveAll(); };
+            const addNewSketchPage = (hasGrid) => { showAddPageModal.value = false; resetZoom(); const size = getAdaptiveCanvasSize(); const cur = targetPage.value; const newPg = makeEmptyPage({ space: cur?.space || '', docType: 'plan', photo: renderSketchDataUrl(size.w, size.h, hasGrid), w: size.w, h: size.h, isSketch: true, hasGrid }); const insertAt = insertPageSmart(newPg); activePageIndex.value = insertAt; dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; drawMode.value = 'browse'; saveAll(); };
             const duplicateCurrentPage = (keepAnnotations = false) => {
                 showAddPageModal.value = false; const src = targetPage.value; if (!src?.photo) return;
                 resetZoom(); const sharedPhotoId = src.photoId || ('page_' + src.id); src.photoId = sharedPhotoId; const c = JSON.parse(JSON.stringify(src));
                 const newPg = makeEmptyPage({
-                    space: src.space || '', photo: src.photo, photoId: sharedPhotoId, w: src.w || 1200, h: src.h || 900, isSketch: !!src.isSketch, hasGrid: !!src.hasGrid,
+                    space: src.space || '', docType: src.docType || '', photo: src.photo, photoId: sharedPhotoId, w: src.w || 1200, h: src.h || 900, isSketch: !!src.isSketch, hasGrid: !!src.hasGrid,
                     markers: keepAnnotations ? (c.markers || []) : [], lines: keepAnnotations ? (c.lines || []) : [], walls: keepAnnotations ? (c.walls || []) : [], paths: keepAnnotations ? (c.paths || []) : [], pins: []
                 });
-                pages.value.push(newPg);
-                if (splitMode.value && activePane.value === 'B') pageIndexB.value = pages.value.length - 1;
-                else activePageIndex.value = pages.value.length - 1;
+                const srcIdx = pages.value.indexOf(src);
+                const insertAt = insertPageSmart(newPg, srcIdx >= 0 ? srcIdx : null);
+                if (splitMode.value && activePane.value === 'B') pageIndexB.value = insertAt;
+                else activePageIndex.value = insertAt;
                 dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; drawMode.value = 'browse'; saveAll();
-                showToast(keepAnnotations ? `📑 已複製整頁為 P${pages.value.length}` : `📄 已複製純淨底圖為 P${pages.value.length}`);
+                showToast(keepAnnotations ? `📑 已複製整頁為 P${insertAt + 1}` : `📄 已複製純淨底圖為 P${insertAt + 1}`);
             };
+
             const toggleSketchGrid = () => { if (!targetCanvas.value) return; checkBranchNeed(() => { targetCanvas.value.hasGrid = !targetCanvas.value.hasGrid; targetCanvas.value.photo = renderSketchDataUrl(targetCanvas.value.w || 1200, targetCanvas.value.h || 1500, targetCanvas.value.hasGrid); touchDirty(); saveAll(); }); };
             const targetPaneResetZoom = () => { if (splitMode.value && activePane.value === 'B') resetZoomB(); else resetZoom(); };
 
@@ -1131,22 +1292,41 @@ const localHiddenCodes = ref([]);
                     photoPoolList.value = list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); showPhotoPoolModal.value = true;
                 } finally { isProcessing.value = false; }
             };
+
+            
             const selectFromPhotoPool = (item) => {
                 showPhotoPoolModal.value = false; targetPaneResetZoom();
                 if (photoPoolTarget.value === 'newPage') {
-                    const newPg = makeEmptyPage({ photo: item.photo, photoId: item.id, w: item.w || 1200, h: item.h || 900 });
-                    pages.value.push(newPg); activePageIndex.value = pages.value.length - 1; dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; showToast(`✅ 已建立 P${pages.value.length}`); drawMode.value = 'browse'; saveAll();
+                    const cur = targetPage.value;
+                    const newPg = makeEmptyPage({ space: cur?.space || '', docType: cur?.docType || 'photo', photo: item.photo, photoId: item.id, w: item.w || 1200, h: item.h || 900 });
+                    const insertAt = insertPageSmart(newPg); activePageIndex.value = insertAt; dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true; showToast(`✅ 已建立 P${insertAt + 1}`); drawMode.value = 'browse'; saveAll();
                 } else if (targetCanvas.value) {
                     checkBranchNeed(() => { Object.assign(targetCanvas.value, { photo: item.photo, photoId: item.id, w: item.w || 1200, h: item.h || 900, isSketch: false }); touchDirty(); drawMode.value = 'browse'; saveAll(); });
                 }
             };
+
+
+            
             const deleteFromPhotoPool = async (item) => {
                 if (!confirm('確定要從底圖庫移除這張照片嗎？')) return;
                 const fp = photoFingerprint(item.photo); photoPoolList.value = photoPoolList.value.filter(x => photoFingerprint(x.photo) !== fp); photoPool.value = photoPool.value.filter(x => photoFingerprint(x.photo) !== fp); await saveAll();
                 if (db && project.code && item.id) { const mRef = db.collection('site_projects').doc(String(project.code)).collection('media').doc(String(item.id)); mRef.collection('chunks').get().then(s => s.forEach(c => c.ref.delete())).catch(() => {}); mRef.delete().catch(() => {}); }
             };
 
-            const setPageSpace = (sp) => { checkBranchNeed(() => { if (targetCanvas.value) targetCanvas.value.space = sp; touchDirty(); showSpaceModal.value = false; saveAll(); }); };
+           const setPageSpace = (sp) => {
+                if (editingMetaPage.value) {
+                    editingMetaPage.value.space = sp;
+                    editingMetaPage.value.updatedAt = Date.now();
+                    dirtyPageIds.add(editingMetaPage.value.id);
+                    hasUnsavedCloudChanges.value = true;
+                    showSpaceModal.value = false;
+                    editingMetaPage.value = null;
+                    saveAll();
+                    return;
+                }
+                checkBranchNeed(() => { if (targetCanvas.value) targetCanvas.value.space = sp; touchDirty(); showSpaceModal.value = false; saveAll(); });
+            };
+            
             const addCustomSpace = () => { const s = prompt('輸入空間名稱（例如：閣樓）')?.trim(); if (s) { if (!spaceList.value.includes(s)) spaceList.value.push(s); setPageSpace(s); } };
 
             const onEraseTap = (targetType, item, e, pane = activePane.value) => {
@@ -1563,11 +1743,15 @@ const localHiddenCodes = ref([]);
                 reader.onload = (e) => { const img = new Image(); img.src = e.target.result; img.onload = () => { const c = document.createElement('canvas'), MAX = 1280; let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height; if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; } } c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h); res({ b64: c.toDataURL('image/jpeg', 0.72), w, h }); }; };
             });
 
-            const handleImageUpload = async (e, asNewPage = false) => {
+            const handleImageUpload = async (e, asNewPage = false, presetDocType = '') => {
                 const rawFiles = Array.from(e.target.files || []); if (!rawFiles.length) return;
                 showAddPageModal.value = false; targetPaneResetZoom();
                 const files = targetPin.value ? [rawFiles[0]] : rawFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
                 const isBatch = files.length > 1; if (isBatch) { isProcessing.value = true; processingText.value = `準備匯入 ${files.length} 張圖紙...`; }
+                const curPg = targetPage.value;
+                const inheritSpace = curPg?.space || '';
+                const resolvedDocType = presetDocType || curPg?.docType || 'photo';
+                let insertCursor = curPg ? pages.value.indexOf(curPg) : pages.value.length - 1;
                 let firstAddedIdx = -1;
                 try {
                     for (let i = 0; i < files.length; i++) {
@@ -1575,18 +1759,26 @@ const localHiddenCodes = ref([]);
                         const res = await compressImage(files[i]); const photoId = `img_${Date.now()}_${i}_${Math.floor(Math.random() * 999)}`;
                         photoPool.value.push({ id: photoId, photo: res.b64, w: res.w, h: res.h, author: authorName.value || '', updatedAt: Date.now() });
                         if (i === 0 && !asNewPage && targetCanvas.value && !targetCanvas.value.photo) {
-                            checkBranchNeed(() => { Object.assign(targetCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false }); touchDirty(); firstAddedIdx = (splitMode.value && activePane.value === 'B') ? pageIndexB.value : activePageIndex.value; });
+                            checkBranchNeed(() => {
+                                Object.assign(targetCanvas.value, { photo: res.b64, photoId, w: res.w, h: res.h, isSketch: false, docType: targetCanvas.value.docType || resolvedDocType });
+                                touchDirty();
+                                firstAddedIdx = (splitMode.value && activePane.value === 'B') ? pageIndexB.value : activePageIndex.value;
+                            });
                             if (showBranchPrompt.value) await new Promise(r => { const timer = setInterval(() => { if (!showBranchPrompt.value) { clearInterval(timer); r(); } }, 200); });
                         } else {
-                            const newPg = makeEmptyPage({ photo: res.b64, photoId, w: res.w, h: res.h });
-                            pages.value.push(newPg); dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
-                            if (firstAddedIdx === -1) firstAddedIdx = pages.value.length - 1;
+                            const newPg = makeEmptyPage({ space: inheritSpace, docType: resolvedDocType, photo: res.b64, photoId, w: res.w, h: res.h });
+                            const placedIdx = insertPageSmart(newPg, insertCursor >= 0 ? insertCursor : null);
+                            insertCursor = placedIdx;
+                            dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
+                            if (firstAddedIdx === -1) firstAddedIdx = placedIdx;
                         }
                     }
                     if (firstAddedIdx !== -1 && !targetPin.value) { if (splitMode.value && activePane.value === 'B') pageIndexB.value = firstAddedIdx; else activePageIndex.value = firstAddedIdx; }
                     drawMode.value = 'browse'; await saveAll(); if (isBatch) showToast(`✅ 已匯入 ${files.length} 張圖紙`);
                 } finally { isProcessing.value = false; e.target.value = ''; }
             };
+
+            
 
             const processPastedBlob = async (blob, forceNewPage) => {
                 showAddPageModal.value = false; isProcessing.value = true; processingText.value = '正在處理貼上圖片...';
@@ -2370,7 +2562,10 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
                 onEraseTap, resizeImageMarker, onMarkerPointerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
                 deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, onMarkerTextInput, handleKeypad, applyTag, applyStamp, getStampColor, getMarkerLines, getTagFields, exportPdfReport,
                 globalFontScale, toggleFontScale,
-                activeLine, onLinePointerStart, setActiveLineColor, deleteActiveLine, getMarkerFontPx, stepMarkerFontScale, openMarkerEditor
+                activeLine, onLinePointerStart, setActiveLineColor, deleteActiveLine, getMarkerFontPx, stepMarkerFontScale, openMarkerEditor,
+                getDocTypeLabel, overviewTypeFilter, overviewSpaceFilter, drawingPageCount, photoPageCount, overviewSpacesAvailable, filteredOverviewPages,
+                movingPageId, movingPageLabel, startMovePage, insertMovingPageAfter, showAutoSortModal, autoSortPages,
+                editingMetaPage, openPageMetaModal, setPageDocType, batchSetDocType, batchSetSpace
             };
             };
         }
