@@ -817,7 +817,25 @@
                                 pins: (r.pins || []).map(pin => ({ ...pin, photo: (pin.photoId && mediaMap.get(pin.photoId)) || mediaMap.get(String(pin.id)) || pin.photo || null }))
                             };
                         });
-                        pages.value = loaded.sort((a, b) => (orderList.indexOf(a.id) === -1 ? 9999 : orderList.indexOf(a.id)) - (orderList.indexOf(b.id) === -1 ? 9999 : orderList.indexOf(b.id)));
+                        const spaceOrder = ['總圖'];
+                        orderList.forEach(id => {
+                            const found = loaded.find(p => String(p.id) === String(id));
+                            if (found?.space && !spaceOrder.includes(found.space)) spaceOrder.push(found.space);
+                        });
+                        loaded.forEach(p => { if (p.space && !spaceOrder.includes(p.space)) spaceOrder.push(p.space); });
+                        const getSpaceRank = (sp) => {
+                            if (!sp) return 999;
+                            const i = spaceOrder.indexOf(sp);
+                            return i === -1 ? 500 : i;
+                        };
+                        pages.value = loaded.sort((a, b) => {
+                            const sDiff = getSpaceRank(a.space) - getSpaceRank(b.space);
+                            if (sDiff !== 0) return sDiff;
+                            const dDiff = (DOC_TYPE_RANK[a.docType] || 6) - (DOC_TYPE_RANK[b.docType] || 6);
+                            if (dDiff !== 0) return dDiff;
+                            const iA = orderList.indexOf(a.id), iB = orderList.indexOf(b.id);
+                            return (iA === -1 ? 9999 : iA) - (iB === -1 ? 9999 : iB);
+                        });
                         activePageIndex.value = 0; activePin.value = null;
                     } catch (e) {
                         alert('載入失敗：' + e.message);
