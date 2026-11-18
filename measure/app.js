@@ -1203,7 +1203,13 @@ const localHiddenCodes = ref([]);
                 return pg;
             };
 
-            const getDocTypeLabel = (dt) => ({ plan: '📐平面圖', detail: '📏詳圖', photo: '📷拍攝' }[dt] || '');
+            const getDocTypeLabel = (t) => ({
+                        plan: '📐平面圖',
+                        '3d': '🧊立體圖',
+                        dim: '📏尺吋圖',
+                        detail: '📑詳圖',
+                        photo: '📷拍攝'
+                    }[t] || '');
             const isDrawingDocType = (dt) => dt === 'plan' || dt === 'detail';
 
             const insertPageSmart = (newPg, explicitAfterIdx = null) => {
