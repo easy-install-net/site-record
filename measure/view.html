@@ -36,14 +36,12 @@
 
         <!-- 頂部導航欄 -->
         <header class="shrink-0 min-h-[44px] py-1 w-full bg-white border-b border-zinc-200 px-2 flex justify-between items-center gap-1.5 z-30">
-
             <div class="flex items-center gap-1.5 min-w-0 flex-1">
                 <span class="bg-amber-100 text-amber-900 border border-amber-300 text-xs font-mono font-black px-1.5 py-0.5 rounded shrink-0">#{{ project.code || '------' }}</span>
                 <span class="font-black text-sm text-zinc-900 truncate">{{ project.name || '工程圖紙檢視' }}</span>
                 <span v-if="isFilteredShare && pages.length" class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-black px-1.5 py-0.5 rounded shrink-0">精選{{ pages.length }}頁</span>
             </div>
 
-            
             <div class="flex items-center gap-1.5 shrink-0">
                 <button v-if="activeCanvas?.photo" @click="downloadAnnotatedImage" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">⬇️存圖</button>
                 <button v-if="activeCanvas?.photo" @click="submitFeedback" :disabled="isSubmitting"
@@ -141,7 +139,7 @@
 
                 <!-- 正上方可浮動拖拉工具膠囊 -->
                 <div :style="{ transform: `translate(calc(-50% + ${capsuleOffset.x}px), ${capsuleOffset.y}px)` }"
-                     class="fixed top-[88px] sm:top-[52px] left-1/2 z-30 flex flex-col items-center gap-1.5 max-w-[98vw]" @touchstart.stop @mousedown.stop>
+                     class="fixed top-[104px] sm:top-[56px] left-1/2 z-30 flex flex-col items-center gap-1.5 max-w-[98vw]" @touchstart.stop @mousedown.stop>
 
                     <!-- 主工具膠囊 -->
                     <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-xl flex items-center gap-0.5 sm:gap-1 overflow-x-auto no-scrollbar max-w-full">
@@ -614,11 +612,11 @@
                     r.onload = (e) => {
                         const img = new Image(); img.src = e.target.result;
                         img.onload = () => {
-                            const c = document.createElement('canvas'), MAX = 720;
+                            const c = document.createElement('canvas'), MAX = 1600;
                             let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
                             if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; } }
                             c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
-                            res({ b64: c.toDataURL('image/jpeg', 0.62), w, h });
+                            res({ b64: c.toDataURL('image/jpeg', 0.85), w, h });
                         };
                     };
                 });
@@ -633,7 +631,7 @@
                     fbMarkers.value.push(fm);
                     fbHistory.value.push({ type: 'marker', id });
                     mode.value = 'move';
-                    showToast('✅ 已貼上附圖，可直接拖拉調整位置');
+                    showToast('✅ 已貼上高清附圖，可直接拖拉調整位置');
                 };
 
                 const handleAttachPhoto = async (e) => {
@@ -719,7 +717,7 @@
                             ctx.fillStyle = fm.color; ctx.fillText(fm.text, fm.x, fm.y);
                         }
                     }
-                    const url = URL.createObjectURL(await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9)));
+                    const url = URL.createObjectURL(await new Promise(r => c.toBlob(r, 'image/jpeg', 0.96)));
                     const a = document.createElement('a'); a.href = url; a.download = `批註_${project.name || project.code}_P${activePageIndex.value + 1}.jpg`;
                     document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000);
                 };
@@ -746,7 +744,7 @@
                         project.code = code; project.name = pd.name || ''; project.date = pd.date || '';
                         const mediaMap = new Map();
                         await Promise.all(mediaSnap.docs.map(async (m) => { const p = await resolveMediaDoc(m); if (p) mediaMap.set(String(m.id), p); }));
-                       const urlParams = new URLSearchParams(window.location.search);
+                        const urlParams = new URLSearchParams(window.location.search);
                         const pagesParam = urlParams.get('pages');
                         const allowedIds = pagesParam ? new Set(pagesParam.split(',').map(s => s.trim()).filter(Boolean)) : null;
                         isFilteredShare.value = !!(allowedIds && allowedIds.size > 0);
@@ -756,8 +754,6 @@
                             ? allValidDocs.filter(d => allowedIds.has(String(d.id)))
                             : allValidDocs;
                         const loaded = targetDocs.map(doc => {
-
-                        
                             const r = doc.data();
                             return {
                                 id: doc.id, ...r,
