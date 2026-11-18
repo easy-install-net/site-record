@@ -170,8 +170,14 @@ const syncUserOwnedProjects = async () => {
                             if (fullData) {
                                 fullData.ownerId = uid;
                                 fullData.pendingUpload = false;
+                                if (pd.name) fullData.name = pd.name;
                                 await localforage.setItem('proj_' + code, fullData);
                             }
+                        } else if (localProj && pd.name && !localProj.pendingUpload && localProj.name !== pd.name) {
+                            localProj.name = pd.name;
+                            if (pd.date) localProj.date = pd.date;
+                            if (pd.lastModifiedBy) localProj.lastModifiedBy = pd.lastModifiedBy;
+                            await localforage.setItem('proj_' + code, localProj);
                         }
                     }
                     await loadProjectList();
@@ -524,8 +530,76 @@ const syncUserOwnedProjects = async () => {
                 ctx.restore();
             };
             const projectList = ref([]), allProjectOptions = ref([]);
-            const project = reactive({ code: '', name: '', date: '', ownerId: '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '' });
+            const project = reactive({ code: '', name: '', nameUpdatedAt: 0, date: '', ownerId: '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '', notes: [], deletedNoteIds: [] });
             const pages = ref([]), photoPool = ref([]);
+
+            const onProjectNameInput = () => {
+                project.nameUpdatedAt = Date.now();
+                markProjectChanged();
+            };
+
+            // 📝 工程記事列表 / 現場備忘錄
+            const showNotesModal = ref(false), noteFilter = ref('all'), newNoteText = ref(''), newNoteSpace = ref('');
+            const activeNotesCount = computed(() => (project.notes || []).filter(n => !n.done).length);
+            const filteredNotes = computed(() => {
+                const list = project.notes || [];
+                if (noteFilter.value === 'todo') return list.filter(n => !n.done);
+                if (noteFilter.value === 'done') return list.filter(n => n.done);
+                return list;
+            });
+            const mergeNotesSmart = (localNotes = [], cloudNotes = [], deletedSet = new Set()) => {
+                const map = new Map();
+                [...cloudNotes, ...localNotes].forEach(n => {
+                    if (!n?.id || deletedSet.has(String(n.id))) return;
+                    const id = String(n.id);
+                    const ex = map.get(id);
+                    if (!ex || (n.updatedAt || 0) >= (ex.updatedAt || 0)) map.set(id, { ...n, id });
+                });
+                return Array.from(map.values()).sort((a, b) => (a.done === b.done ? (b.createdAt || 0) - (a.createdAt || 0) : (a.done ? 1 : -1)));
+            };
+            const addProjectNote = async () => {
+                const txt = String(newNoteText.value || '').trim();
+                if (!txt) return;
+                project.notes ||= [];
+                const now = Date.now();
+                project.notes.unshift({ id: 'note_' + now + '_' + Math.floor(Math.random() * 999), text: txt, space: newNoteSpace.value || '', done: false, author: authorName.value || '', createdAt: now, updatedAt: now });
+                newNoteText.value = '';
+                markProjectChanged();
+                await saveAll();
+            };
+            const toggleProjectNote = async (note) => {
+                note.done = !note.done;
+                note.updatedAt = Date.now();
+                markProjectChanged();
+                await saveAll();
+            };
+            const editProjectNote = async (note) => {
+                const next = prompt('修改記事內容：', note.text)?.trim();
+                if (next && next !== note.text) {
+                    note.text = next;
+                    note.updatedAt = Date.now();
+                    markProjectChanged();
+                    await saveAll();
+                }
+            };
+            const deleteProjectNote = async (noteId) => {
+                const idStr = String(noteId);
+                project.deletedNoteIds ||= [];
+                if (!project.deletedNoteIds.includes(idStr)) project.deletedNoteIds.push(idStr);
+                project.notes = (project.notes || []).filter(n => String(n.id) !== idStr);
+                markProjectChanged();
+                await saveAll();
+            };
+            const clearDoneNotes = async () => {
+                const doneList = (project.notes || []).filter(n => n.done);
+                if (!doneList.length) return;
+                project.deletedNoteIds ||= [];
+                doneList.forEach(n => { if (!project.deletedNoteIds.includes(String(n.id))) project.deletedNoteIds.push(String(n.id)); });
+                project.notes = (project.notes || []).filter(n => !n.done);
+                markProjectChanged();
+                await saveAll();
+                showToast('🧹 已清除已完成記事');
+            };
 
             const splitMode = ref(false), activePane = ref('A');
             const activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
@@ -1929,7 +2003,7 @@ const localHiddenCodes = ref([]);
                 if (currentUser.value?.uid && !project.ownerId) project.ownerId = currentUser.value.uid;
                 const cleanPages = JSON.parse(JSON.stringify(pages.value || [])).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
                 const hasPending = hasUnsavedCloudChanges.value || dirtyPageIds.size > 0;
-                await localforage.setItem('proj_' + code, { code, name: String(project.name || ''), date: String(project.date || ''), ownerId: String(project.ownerId || ''), pages: cleanPages, photoPool: JSON.parse(JSON.stringify(photoPool.value || [])), deletedPageIds: JSON.parse(JSON.stringify(project.deletedPageIds || [])), deletedPinIds: JSON.parse(JSON.stringify(project.deletedPinIds || [])), pageOrderUpdatedAt: Number(project.pageOrderUpdatedAt || 0), updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0), lastModifiedBy: String(project.lastModifiedBy || authorName.value || ''), pendingUpload: hasPending });
+                await localforage.setItem('proj_' + code, { code, name: String(project.name || ''), nameUpdatedAt: Number(project.nameUpdatedAt || 0), date: String(project.date || ''), ownerId: String(project.ownerId || ''), pages: cleanPages, photoPool: JSON.parse(JSON.stringify(photoPool.value || [])), deletedPageIds: JSON.parse(JSON.stringify(project.deletedPageIds || [])), deletedPinIds: JSON.parse(JSON.stringify(project.deletedPinIds || [])), notes: JSON.parse(JSON.stringify(project.notes || [])), deletedNoteIds: JSON.parse(JSON.stringify(project.deletedNoteIds || [])), pageOrderUpdatedAt: Number(project.pageOrderUpdatedAt || 0), updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0), lastModifiedBy: String(project.lastModifiedBy || authorName.value || ''), pendingUpload: hasPending });
                 await updateQueue(code, hasPending);
             };
 
@@ -1956,9 +2030,19 @@ const localHiddenCodes = ref([]);
                     const projRef = db.collection('site_projects').doc(code);
                     const [projDoc, pagesSnap, mediaMap] = await Promise.all([withRetry(() => withTimeout(projRef.get())), withRetry(() => withTimeout(projRef.collection('pages').get())), loadMediaMapFromRef(projRef)]);
                     if (!projDoc.exists) { cloudSyncState.value = hasUnsavedCloudChanges.value ? 'queued' : 'ready'; return; }
-                    const pd = projDoc.data(); if (pd.name) project.name = pd.name; if (pd.date) project.date = pd.date; if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy; if (pd.ownerId) project.ownerId = pd.ownerId;
+                    const pd = projDoc.data();
+                    const cloudNameTs = Number(pd.nameUpdatedAt || pd.updatedAt || 0);
+                    const localNameTs = Number(project.nameUpdatedAt || 0);
+                    if (pd.name && (!hasUnsavedCloudChanges.value || cloudNameTs > localNameTs || !project.name)) {
+                        project.name = pd.name;
+                        project.nameUpdatedAt = cloudNameTs;
+                    }
+                    if (pd.date) project.date = pd.date; if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy; if (pd.ownerId) project.ownerId = pd.ownerId;
                     const deletedSet = new Set([...(project.deletedPageIds || []), ...(pd.deletedPageIds || [])]); project.deletedPageIds = [...deletedSet];
                     const deletedPins = new Set([...(project.deletedPinIds || []).map(String), ...((pd.deletedPinIds || []).map(String))]); project.deletedPinIds = [...deletedPins];
+                    const deletedNotes = new Set([...(project.deletedNoteIds || []).map(String), ...((pd.deletedNoteIds || []).map(String))]); project.deletedNoteIds = [...deletedNotes];
+                    project.notes = mergeNotesSmart(project.notes || [], pd.notes || [], deletedNotes);
+                    
                     const cloudPages = pagesSnap.docs.map(doc => { const r = doc.data(); return makeEmptyPage({ id: doc.id, ...r, date: r.date || pd.date || getTodayStr(), photo: (r.photoId && mediaMap.get(r.photoId)?.photo) || mediaMap.get('page_' + (r.id || doc.id))?.photo || r.photo || null, pins: (r.pins || []).map(pin => ({ ...pin, photo: (pin.photoId && mediaMap.get(pin.photoId)?.photo) || mediaMap.get(String(pin.id))?.photo || pin.photo || null })) }); });
                     const localOrderNewer = (project.pageOrderUpdatedAt || 0) > (pd.pageOrderUpdatedAt || 0); if (!localOrderNewer && pd.pageOrderUpdatedAt) project.pageOrderUpdatedAt = pd.pageOrderUpdatedAt;
                     const orderList = localOrderNewer ? [...pages.value.map(p => p.id), ...(pd.pageIds || [])] : [...(pd.pageIds || []), ...pages.value.map(p => p.id)];
@@ -2008,7 +2092,7 @@ const localHiddenCodes = ref([]);
                 const projRef = db.collection('site_projects').doc(code), now = Date.now(), lastSync = projObj.lastSyncAt || 0, rawPages = projObj.pages || [];
                 const targetList = isCurrentOpen ? rawPages.filter(pg => dirtyPageIds.has(pg.id) || (pg.updatedAt || 0) > lastSync) : rawPages;
                 const dirtyPages = JSON.parse(JSON.stringify(targetList)).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
-                const projPatch = { code, name: projObj.name || '', date: projObj.date || getTodayStr(), pageIds: rawPages.map(p => p.id), pageOrderUpdatedAt: projObj.pageOrderUpdatedAt || now, deletedPageIds: projObj.deletedPageIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPageIds) : [], deletedPinIds: projObj.deletedPinIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPinIds) : [], updatedAt: now };
+                const projPatch = { code, name: projObj.name || '', nameUpdatedAt: projObj.nameUpdatedAt || now, date: projObj.date || getTodayStr(), pageIds: rawPages.map(p => p.id), pageOrderUpdatedAt: projObj.pageOrderUpdatedAt || now, deletedPageIds: projObj.deletedPageIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPageIds) : [], deletedPinIds: projObj.deletedPinIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPinIds) : [], notes: JSON.parse(JSON.stringify(projObj.notes || [])), deletedNoteIds: projObj.deletedNoteIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedNoteIds) : [], updatedAt: now };
                 const ownerUid = projObj.ownerId || currentUser.value?.uid;
                 if (ownerUid) projPatch.ownerId = ownerUid;
                 if (dirtyPages.length > 0 && authorName.value) projPatch.lastModifiedBy = authorName.value;
@@ -2032,8 +2116,8 @@ const localHiddenCodes = ref([]);
                 if (!navigator.onLine) { await saveAll(); cloudSyncState.value = 'offline'; if (throwErr) throw new Error('目前無網絡'); return; }
                 isPushing = true; cloudSyncState.value = 'syncing';
                 try {
-                    const now = await pushProjectPayload({ code, name: project.name, date: project.date, ownerId: project.ownerId, pages: pages.value, deletedPageIds: project.deletedPageIds, deletedPinIds: project.deletedPinIds, pageOrderUpdatedAt: project.pageOrderUpdatedAt, lastSyncAt: project.lastSyncAt }, true, onProgress);
-                    dirtyPageIds.clear(); project.lastSyncAt = now; cloudSyncState.value = 'ready'; hasUnsavedCloudChanges.value = false; await saveAll();
+                    const now = await pushProjectPayload({ code, name: project.name, nameUpdatedAt: project.nameUpdatedAt, date: project.date, ownerId: project.ownerId, pages: pages.value, deletedPageIds: project.deletedPageIds, deletedPinIds: project.deletedPinIds, notes: project.notes, deletedNoteIds: project.deletedNoteIds, pageOrderUpdatedAt: project.pageOrderUpdatedAt, lastSyncAt: project.lastSyncAt }, true, onProgress);
+                  dirtyPageIds.clear(); project.lastSyncAt = now; cloudSyncState.value = 'ready'; hasUnsavedCloudChanges.value = false; await saveAll();
                 } catch (e) { await saveAll(); cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; if (throwErr) throw e; } finally { setTimeout(() => { isPushing = false; }, 1000); }
             };
 
@@ -2095,15 +2179,16 @@ const forceSyncToCloud = async () => {
             };
             const createNewProject = async () => {
                 await checkAuthorName(); resetZoom(); const today = getTodayStr(), firstPg = makeEmptyPage({ date: today });
-                Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', date: today, ownerId: currentUser.value?.uid || '', deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
+               Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', nameUpdatedAt: Date.now(), date: today, ownerId: currentUser.value?.uid || '', deletedPageIds: [], deletedPinIds: [], notes: [], deletedNoteIds: [], pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
                 pages.value = [firstPg]; photoPool.value = []; feedbackList.value = []; activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; splitMode.value = false; activePane.value = 'A'; dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id); hasUnsavedCloudChanges.value = true;
                 cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; currentView.value = 'proj'; await saveAll(); startRealtimeListener(project.code);
             };
             const copyCode = (code) => { navigator.clipboard?.writeText(code); showToast('已複製編號'); showManageModal.value = false; };
             const loadProject = async (code, openAsPreview = true) => {
-                resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; code = String(code); project.code = code; project.deletedPageIds = []; project.deletedPinIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; feedbackList.value = []; dirtyPageIds.clear();
+                resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; code = String(code); project.code = code; project.nameUpdatedAt = 0; project.deletedPageIds = []; project.deletedPinIds = []; project.notes = []; project.deletedNoteIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; feedbackList.value = []; dirtyPageIds.clear();
                 const d = await localforage.getItem('proj_' + code);
-                if (d) { Object.assign(project, { name: d.name || '', date: d.date || '', ownerId: d.ownerId || currentUser.value?.uid || '', deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' }); if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg)); if (d.photoPool) photoPool.value = d.photoPool; hasUnsavedCloudChanges.value = !!d.pendingUpload; } else hasUnsavedCloudChanges.value = false;
+                if (d) { Object.assign(project, { name: d.name || '', nameUpdatedAt: d.nameUpdatedAt || 0, date: d.date || '', ownerId: d.ownerId || currentUser.value?.uid || '', deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], notes: d.notes || [], deletedNoteIds: d.deletedNoteIds || [], pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' }); if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg)); if (d.photoPool) photoPool.value = d.photoPool; hasUnsavedCloudChanges.value = !!d.pendingUpload; } else hasUnsavedCloudChanges.value = false;
+                
                 activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; currentView.value = openAsPreview ? 'preview' : 'proj';
                 await pullAndMergeFromCloud(code, false); if (!pages.value.length) pages.value = [makeEmptyPage()]; drawMode.value = 'browse'; startRealtimeListener(code);
             };
@@ -2156,7 +2241,7 @@ const openProjectMap = async (proj) => {
             const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
             const renameProject = async () => {
                 const newName = prompt('請輸入新的地址 / 名稱：', manageProj.value.name);
-                if (newName !== null) { const trimmed = newName.trim(), code = String(manageProj.value.code), d = await localforage.getItem('proj_' + code); if (d) { d.name = trimmed; d.pendingUpload = true; await localforage.setItem('proj_' + code, d); await updateQueue(code, true); } manageProj.value.name = trimmed; if (db && navigator.onLine) db.collection('site_projects').doc(code).set({ name: trimmed, updatedAt: Date.now() }, { merge: true }).catch(() => {}); await loadProjectList(); showToast('✅ 已更新地址'); }
+                if (newName !== null) { const now = Date.now(), trimmed = newName.trim(), code = String(manageProj.value.code), d = await localforage.getItem('proj_' + code); if (d) { d.name = trimmed; d.nameUpdatedAt = now; d.pendingUpload = false; await localforage.setItem('proj_' + code, d); } manageProj.value.name = trimmed; if (String(project.code) === code) { project.name = trimmed; project.nameUpdatedAt = now; } if (db && navigator.onLine) await db.collection('site_projects').doc(code).set({ name: trimmed, nameUpdatedAt: now, updatedAt: now }, { merge: true }).catch(() => {}); await loadProjectList(); showToast('✅ 已更新地址'); }
             };
             const duplicateProject = async () => { const d = await localforage.getItem('proj_' + manageProj.value.code); if (!d) return; const newCode = Math.floor(100000 + Math.random() * 900000).toString(); d.code = newCode; d.name = (d.name || '工程') + ' (副本)'; d.ownerId = currentUser.value?.uid || ''; d.lastSyncAt = 0; d.pendingUpload = true; await localforage.setItem('proj_' + newCode, d); await updateQueue(newCode, true); showManageModal.value = false; await loadProjectList(); showToast('✅ 已複製為新檔'); };
             const batchDeleteDocs = async (docs) => { for (let i = 0; i < docs.length; i += 400) { const b = db.batch(); docs.slice(i, i + 400).forEach(d => b.delete(d.ref)); await b.commit(); } };
@@ -2683,7 +2768,8 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
                 editingMetaPage, openPageMetaModal, setPageDocType, batchSetDocType, batchSetSpace,
                 quickNavTypeFilter, quickNavSpaceFilter, filteredQuickNavPages,
                 fsStripRef, jumpFullScreen, openFullScreenSpaceModal,
-                fsEditingMarker, fsQuickInputRef, onFsMarkerTap, openFsMarkerQuickEdit, setFsMarkerColor, stepFsMarkerFont, closeFsMarkerQuickEdit
+                fsEditingMarker, fsQuickInputRef, onFsMarkerTap, openFsMarkerQuickEdit, setFsMarkerColor, stepFsMarkerFont, closeFsMarkerQuickEdit,
+                onProjectNameInput, showNotesModal, noteFilter, newNoteText, newNoteSpace, activeNotesCount, filteredNotes, addProjectNote, toggleProjectNote, editProjectNote, deleteProjectNote, clearDoneNotes
             };
             };
         }
