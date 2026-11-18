@@ -78,7 +78,7 @@
             </div>
 
             <div v-else class="flex-1 min-h-0 w-full relative overflow-hidden">
-                <!-- 左上浮動：頁碼切換 + 總圖快捷 -->
+                <!-- 左上浮動：頁碼切換 + 空間分群目錄 -->
                 <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
                     <div v-if="!activePin" class="bg-white/95 border border-zinc-300 rounded-md flex items-center px-1 py-1 shadow-sm">
                         <button @click="prevPage" :class="{ 'opacity-30': activePageIndex === 0 }" class="px-2 py-0.5 text-zinc-700 font-black text-xs">◀</button>
@@ -94,19 +94,51 @@
                         <span class="text-red-900 font-black text-xs">📍 細節釘 #{{ activePinIndex + 1 }}</span>
                     </div>
 
-                    <!-- 快速跳頁縮圖目錄 -->
-                    <div v-if="showQuickNav && !activePin" class="w-72 max-w-[85vw] max-h-[55vh] bg-white/95 backdrop-blur-md border border-zinc-300 rounded-xl p-2 shadow-2xl overflow-y-auto touch-scrollable z-40">
-                        <div class="flex justify-between items-center px-1 pb-1.5 mb-1.5 border-b border-zinc-200">
-                            <span class="text-[11px] font-black text-zinc-800">📑 選擇圖紙頁數 ({{ pages.length }}頁)</span>
-                            <button @click="showQuickNav = false" class="text-xs font-bold text-zinc-400 px-1.5">✕</button>
+                    <!-- 空間分群縮圖目錄（先見到每間房一堆，點入去展開該房圖紙） -->
+                    <div v-if="showQuickNav && !activePin" class="w-80 max-w-[90vw] max-h-[62vh] bg-white/95 backdrop-blur-md border border-zinc-300 rounded-xl p-2 shadow-2xl overflow-y-auto touch-scrollable z-40">
+                        <div class="flex justify-between items-center px-1 pb-1.5 mb-1.5 border-b border-zinc-200 gap-1">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <button v-if="navSpaceFilter !== 'all'" @click="navSpaceFilter = 'all'" class="bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-[11px] font-black shrink-0">‹ 空間疊</button>
+                                <span class="text-[11px] font-black text-zinc-800 truncate">
+                                    {{ navSpaceFilter !== 'all' ? (navSpaceFilter === '__NONE__' ? '📂 未分類空間' : '🏠 ' + navSpaceFilter) + ` (${navFilteredPages.length}頁)` : `🗂️ 按空間分類 (${pages.length}頁)` }}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button v-if="navSpaceFilter === 'all'" @click="navStackMode = !navStackMode" class="bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded text-[10px] font-bold">
+                                    {{ navStackMode ? '⊞ 攤開' : '🗂️ 疊起' }}
+                                </button>
+                                <button @click="showQuickNav = false" class="text-xs font-bold text-zinc-400 px-1.5">✕</button>
+                            </div>
                         </div>
-                        <div class="grid grid-cols-3 gap-1.5">
-                            <button v-for="(pg, idx) in pages" :key="pg.id" @click="switchPage(idx)"
+
+                        <!-- A. 空間資料夾疊起視圖（每一堆＝一個空間） -->
+                        <div v-if="navStackMode && navSpaceFilter === 'all'" class="grid grid-cols-2 gap-2.5 pt-1">
+                            <div v-for="st in navSpaceStacks" :key="'vst-'+st.key" @click="navSpaceFilter = st.key" class="relative pt-1.5 pl-1.5 cursor-pointer active:scale-[0.98] transition-all">
+                                <div v-if="st.items.length >= 3" class="absolute inset-0 right-1.5 bottom-1.5 bg-zinc-200 border border-zinc-300 rounded-lg"></div>
+                                <div v-if="st.items.length >= 2" class="absolute inset-0 top-0.5 left-0.5 right-0.5 bottom-0.5 bg-zinc-100 border border-zinc-300 rounded-lg"></div>
+                                <div :class="st.key === '總圖' ? 'border-purple-400 bg-purple-50/40' : 'border-zinc-300 bg-white'" class="relative border rounded-lg overflow-hidden shadow-sm flex flex-col">
+                                    <div :class="st.key === '總圖' ? 'bg-purple-100/80 border-purple-200' : 'bg-zinc-50 border-zinc-200'" class="px-2 py-1 border-b flex items-center justify-between gap-1">
+                                        <span :class="st.key === '總圖' ? 'text-purple-900' : 'text-zinc-900'" class="text-[11px] font-black truncate">{{ st.key === '總圖' ? '🗺️ 總圖' : (st.key === '__NONE__' ? '📂 未分類' : '🏠 ' + st.label) }}</span>
+                                        <span :class="st.key === '總圖' ? 'bg-purple-700 text-white' : 'bg-zinc-900 text-white'" class="text-[10px] font-black px-1.5 rounded-full shrink-0">{{ st.items.length }}</span>
+                                    </div>
+                                    <div class="h-16 bg-white flex items-center justify-center overflow-hidden relative">
+                                        <img v-if="st.items[0]?.pg?.photo" :src="st.items[0].pg.photo" class="w-full h-full object-contain">
+                                        <span v-else class="text-[10px] text-zinc-400 font-bold">空白</span>
+                                        <span v-if="getDocTypeLabel(st.items[0]?.pg?.docType)" class="absolute bottom-0.5 left-0.5 bg-black/65 text-white text-[9px] font-bold px-1 rounded">{{ getDocTypeLabel(st.items[0].pg.docType) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- B. 單一空間展開 / 攤開全頁縮圖 -->
+                        <div v-else class="grid grid-cols-3 gap-1.5">
+                            <button v-for="{ pg, idx } in navFilteredPages" :key="pg.id" @click="switchPage(idx)"
                                     :class="idx === activePageIndex ? 'ring-2 ring-blue-600 bg-blue-50 border-blue-500' : 'bg-zinc-50 border-zinc-200'"
                                     class="border rounded-lg p-1 flex flex-col items-center text-left overflow-hidden">
-                                <div class="w-full h-12 bg-white rounded overflow-hidden flex items-center justify-center border border-zinc-200">
+                                <div class="w-full h-12 bg-white rounded overflow-hidden flex items-center justify-center border border-zinc-200 relative">
                                     <img v-if="pg.photo" :src="pg.photo" class="w-full h-full object-cover">
                                     <span v-else class="text-[10px] text-zinc-400 font-bold">空白</span>
+                                    <span v-if="getDocTypeLabel(pg.docType)" class="absolute bottom-0.5 right-0.5 bg-black/65 text-white text-[8px] font-bold px-1 rounded">{{ getDocTypeLabel(pg.docType) }}</span>
                                 </div>
                                 <div class="w-full mt-1 flex items-center justify-between gap-0.5">
                                     <span class="text-[11px] font-black text-zinc-900 shrink-0">P{{ idx + 1 }}</span>
@@ -118,6 +150,7 @@
 
                     <div v-else class="flex items-center gap-1 flex-wrap">
                         <span v-if="activeCanvas.space" class="bg-white/95 border border-zinc-300 text-zinc-800 px-2 py-0.5 rounded-md text-[11px] font-black shadow-sm">🏠 {{ activeCanvas.space }}</span>
+                        <span v-if="!activePin && getDocTypeLabel(activePage?.docType)" class="bg-sky-50 border border-sky-200 text-sky-800 px-2 py-0.5 rounded-md text-[11px] font-black shadow-sm">{{ getDocTypeLabel(activePage.docType) }}</span>
                         <button v-if="!activePin && masterPages.length && activePage?.space !== '總圖'" @click="switchPage(masterPages[0].idx)" class="bg-purple-50 text-purple-800 border border-purple-300 px-2 py-0.5 rounded-md text-[11px] font-black shadow-sm">🗺️ 返總圖</button>
                     </div>
                 </div>
@@ -310,6 +343,9 @@
             avoid: { title: '避', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] }
         };
 
+        const DOC_TYPE_RANK = { plan: 1, photo: 2, '3d': 3, dim: 4, detail: 5 };
+        const getDocTypeLabel = (t) => ({ plan: '📐平面圖', photo: '📷拍攝', '3d': '🧊立體圖', dim: '📏尺吋圖', detail: '📑詳圖' }[t] || '');
+
         const buildWallSegments = (w) => {
             if (!w) return [];
             const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = Math.hypot(dx, dy); if (L < 4) return [];
@@ -341,7 +377,30 @@
                 const canvasW = computed(() => activeCanvas.value?.w || 1200);
                 const canvasH = computed(() => activeCanvas.value?.h || 900);
                 const masterPages = computed(() => pages.value.map((pg, idx) => ({ pg, idx })).filter(x => x.pg.space === '總圖'));
-                const showQuickNav = ref(false);
+
+                // 空間資料夾分疊導航
+                const showQuickNav = ref(false), navStackMode = ref(true), navSpaceFilter = ref('all');
+                const navSpaceStacks = computed(() => {
+                    const map = new Map();
+                    pages.value.forEach((pg, idx) => {
+                        const key = pg.space || '__NONE__';
+                        if (!map.has(key)) map.set(key, { key, label: pg.space || '未分類空間', items: [] });
+                        map.get(key).items.push({ pg, idx });
+                    });
+                    return Array.from(map.values())
+                        .map(st => {
+                            st.items.sort((a, b) => (DOC_TYPE_RANK[a.pg.docType] || 6) - (DOC_TYPE_RANK[b.pg.docType] || 6) || a.idx - b.idx);
+                            return st;
+                        })
+                        .sort((a, b) => (a.key === '總圖' ? -1 : b.key === '總圖' ? 1 : a.key === '__NONE__' ? 1 : b.key === '__NONE__' ? -1 : 0));
+                });
+                const navFilteredPages = computed(() => {
+                    const list = pages.value.map((pg, idx) => ({ pg, idx }));
+                    if (navSpaceFilter.value === 'all') return list;
+                    return list
+                        .filter(({ pg }) => navSpaceFilter.value === '__NONE__' ? !pg.space : pg.space === navSpaceFilter.value)
+                        .sort((a, b) => (DOC_TYPE_RANK[a.pg.docType] || 6) - (DOC_TYPE_RANK[b.pg.docType] || 6) || a.idx - b.idx);
+                });
 
                 // 正上方可浮動拖拉工具膠囊狀態
                 const capsuleOffset = reactive({ x: 0, y: 0 });
@@ -407,7 +466,7 @@
                 };
                 const getCoords = (e) => { const pt = e.touches?.[0] || e.changedTouches?.[0] || e; return clientToSvgPoint(pt.clientX, pt.clientY); };
 
-                // 批註狀態 (僅存於本機，提交時送入獨立 feedback 集合)
+                // 批註狀態
                 const mode = ref('browse'), fbColor = ref('#ef4444');
                 const fbPaths = ref([]), fbMarkers = ref([]), fbHistory = ref([]);
                 const currentFbPath = ref(''), editingFbMarker = ref(null), fbTextInputRef = ref(null);
@@ -640,7 +699,6 @@
                     e.target.value = '';
                 };
 
-                // 提交意見至獨立雲端意見箱 (絕不修改主圖資料)
                 const submitFeedback = async () => {
                     if (!hasDraft.value) { showToast('請先用「⭕畫圈」、「💬留言」或「📷影/貼圖」標記問題位'); return; }
                     let sender = localStorage.getItem('measure_viewer_name') || '';
@@ -672,7 +730,6 @@
                     }
                 };
 
-                // 唯讀輔助渲染函數
                 const getArrowId = (c) => 'v-arrow-' + String(c || '#ef4444').replace('#', 'hex_');
                 const getLineStroke = (l, a = 0.75) => (!l.type || l.type === 'measure') ? `rgba(255,0,68,${a})` : ({ red: '#ef4444', gray: '#9ca3af', white: '#ffffff' }[l.color] || l.color || '#ef4444');
                 const getWallSegments = (w) => buildWallSegments(w);
@@ -722,7 +779,6 @@
                     document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000);
                 };
 
-                // 唯讀載入雲端工程資料
                 const resolveMediaDoc = async (doc) => {
                     const d = doc.data(); if (!d) return null; if (d.photo) return d.photo;
                     if (d.chunked && d.totalChunks > 0) {
@@ -786,7 +842,8 @@
                 });
 
                 return {
-                    inputCode, isLoading, loadingText, toastMsg, project, pages, isFilteredShare, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH, masterPages, showQuickNav,
+                    inputCode, isLoading, loadingText, toastMsg, project, pages, isFilteredShare, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH, masterPages,
+                    showQuickNav, navStackMode, navSpaceFilter, navSpaceStacks, navFilteredPages, getDocTypeLabel,
                     capsuleOffset, capsuleCollapsed, startCapsuleDrag,
                     zoomScale, invZoom, svgViewBox, svgCanvas, stepZoom, resetZoom, onStageWheel,
                     mode, fbColor, fbPaths, fbMarkers, fbHistory, currentFbPath, editingFbMarker, fbTextInputRef, isSubmitting, showSubmitSuccess, hasDraft, draftCount,
