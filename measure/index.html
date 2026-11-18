@@ -76,9 +76,10 @@
                 </template>
                 <template v-else-if="currentView === 'preview'">
                     <button @click="enterEditMode(0)" class="bg-zinc-900 text-white px-2.5 py-1 rounded text-xs font-bold">✏️編輯</button>
-                    <button @click="copyShareLink" class="bg-indigo-50 border border-indigo-300 text-indigo-700 px-2 py-1 rounded text-xs font-bold">🔗發給師傅</button>
-                    <button v-if="pages.length" @click="showPdfModal = true" class="bg-white border border-zinc-300 text-zinc-700 px-2 py-1 rounded text-xs font-bold">PDF</button>
+                    <button @click="copyShareLink" :class="selectMode && selectedPageIds.length ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-indigo-50 border-indigo-300 text-indigo-700'" class="border px-2 py-1 rounded text-xs font-bold">{{ selectMode && selectedPageIds.length ? `🔗轉發(${selectedPageIds.length}頁)` : '🔗發給師傅' }}</button>
+                    <button v-if="pages.length" @click="showPdfModal = true" class="bg-white border border-zinc-300 text-zinc-700 px-2 py-1 rounded text-xs font-bold">{{ selectMode && selectedPageIds.length ? `PDF(${selectedPageIds.length})` : 'PDF' }}</button>
                 </template>
+
                 <template v-else>
                     <button @click="switchToPreview" class="bg-white border border-zinc-300 text-zinc-700 px-2 py-1 rounded text-xs font-bold">👁️預覽</button>
                     <button v-if="pages.length" @click="showPdfModal = true" class="bg-white border border-zinc-300 text-zinc-700 px-2 py-1 rounded text-xs font-bold">PDF</button>
@@ -137,8 +138,10 @@
                         <button @click="batchSetDocType('plan')" :disabled="!selectedPageIds.length" class="bg-sky-50 border border-sky-300 text-sky-800 px-2 py-1 rounded-md text-xs font-bold disabled:opacity-40">📐平面</button>
                         <button @click="batchSetDocType('detail')" :disabled="!selectedPageIds.length" class="bg-indigo-50 border border-indigo-300 text-indigo-800 px-2 py-1 rounded-md text-xs font-bold disabled:opacity-40">📏詳圖</button>
                         <button @click="batchSetDocType('photo')" :disabled="!selectedPageIds.length" class="bg-amber-50 border border-amber-300 text-amber-800 px-2 py-1 rounded-md text-xs font-bold disabled:opacity-40">📷拍攝</button>
+                        <button @click="copyShareLink" :disabled="!selectedPageIds.length" :class="selectedPageIds.length ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-zinc-200 text-zinc-400 border-zinc-200'" class="px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm">🔗 轉發已選 ({{ selectedPageIds.length }})</button>
                         <button @click="openTransferModal()" :disabled="!selectedPageIds.length" :class="selectedPageIds.length ? 'bg-blue-600 text-white border-blue-600' : 'bg-zinc-200 text-zinc-400 border-zinc-200'" class="px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm">↗️ 轉入他檔 ({{ selectedPageIds.length }})</button>
                         <button @click="toggleSelectMode" class="bg-zinc-100 text-zinc-700 px-2 py-1 rounded-md text-xs font-bold">✕完成</button>
+                        
                     </template>
                     <template v-else>
                         <button v-if="feedbackList.length" @click="showFeedbackModal = true" class="bg-rose-600 text-white px-2.5 py-1 rounded-md text-xs font-bold shadow-sm animate-pulse">💬 意見箱 ({{ feedbackList.length }})</button>
