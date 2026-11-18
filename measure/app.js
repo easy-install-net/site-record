@@ -685,13 +685,29 @@ const syncUserOwnedProjects = async () => {
                 if (svg && cObj?.photo) applyZoomAtClientPoint((pane === 'B' ? zoomScaleB.value : zoomScale.value) * (e.deltaY < 0 ? 1.2 : 0.82), e.clientX, e.clientY, getCoords(e, pane), pane);
             };
 
+            const quickNavTypeFilter = ref('all');
+            const quickNavSpaceFilter = ref('all');
+            const filteredQuickNavPages = computed(() => {
+                return pages.value
+                    .map((pg, idx) => ({ pg, idx }))
+                    .filter(({ pg }) => {
+                        if (quickNavTypeFilter.value === 'drawing' && !isDrawingDocType(pg.docType)) return false;
+                        if (quickNavTypeFilter.value === 'photo' && pg.docType !== 'photo') return false;
+                        if (quickNavSpaceFilter.value !== 'all' && pg.space !== quickNavSpaceFilter.value) return false;
+                        return true;
+                    });
+            });
+
             const fullScreenIndex = ref(-1);
+            const fsStripRef = ref(null);
             const fullScreenList = computed(() => {
                 const list = [];
                 pages.value.forEach((pg, pIdx) => {
                     const d = pg.date || project.date || getTodayStr(), a = pg.author || project.lastModifiedBy || '';
-                    if (pg.photo) list.push({ item: pg, label: `P${pIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`, date: d, author: a });
-                    (pg.pins || []).forEach((pin, pinIdx) => { if (pin.photo) list.push({ item: pin, label: `P${pIdx + 1} 📍釘#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}`, date: pin.date || d, author: pin.author || a }); });
+                    if (pg.photo) list.push({ item: pg, parentPg: pg, isPin: false, pIdx, shortLabel: `P${pIdx + 1}`, label: `P${pIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`, date: d, author: a });
+                    (pg.pins || []).forEach((pin, pinIdx) => {
+                        if (pin.photo) list.push({ item: pin, parentPg: pg, isPin: true, pIdx, shortLabel: `P${pIdx + 1}·釘${pinIdx + 1}`, label: `P${pIdx + 1} 📍釘#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}`, date: pin.date || d, author: pin.author || a });
+                    });
                 });
                 return list;
             });
@@ -701,9 +717,83 @@ const syncUserOwnedProjects = async () => {
             const fullScreenDate = computed(() => currentFullScreen.value?.date || getTodayStr());
             const fullScreenAuthor = computed(() => currentFullScreen.value?.author || '');
 
-            const openFullScreenPreview = (targetItem) => { const idx = fullScreenList.value.findIndex(x => String(x.item.id) === String(targetItem.id)); if (idx !== -1) fullScreenIndex.value = idx; };
-            const prevFullScreen = () => { if (fullScreenIndex.value > 0) fullScreenIndex.value--; };
-            const nextFullScreen = () => { if (fullScreenIndex.value < fullScreenList.value.length - 1) fullScreenIndex.value++; };
+            const scrollFsStripToActive = () => {
+                nextTick(() => {
+                    const el = fsStripRef.value?.querySelector(`[data-fs-idx="${fullScreenIndex.value}"]`);
+                    el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                });
+            };
+            const jumpFullScreen = (idx) => {
+                if (idx >= 0 && idx < fullScreenList.value.length) {
+                    fullScreenIndex.value = idx;
+                    scrollFsStripToActive();
+                }
+            };
+            const openFullScreenPreview = (targetItem) => { const idx = fullScreenList.value.findIndex(x => String(x.item.id) === String(targetItem.id)); if (idx !== -1) jumpFullScreen(idx); };
+            const prevFullScreen = () => { if (fullScreenIndex.value > 0) jumpFullScreen(fullScreenIndex.value - 1); };
+            const nextFullScreen = () => { if (fullScreenIndex.value < fullScreenList.value.length - 1) jumpFullScreen(fullScreenIndex.value + 1); };
+
+            const openFullScreenSpaceModal = () => {
+                const cur = currentFullScreen.value;
+                if (!cur?.parentPg) return;
+                openPageMetaModal(cur.parentPg);
+            };
+
+            const fsEditingMarker = ref(null);
+            const fsQuickInputRef = ref(null);
+            let lastFsTapTime = 0, lastFsTapId = null;
+            const openFsMarkerQuickEdit = (m) => {
+                if (!m || ['image', 'cad', 'page_link'].includes(m.type)) return;
+                fsEditingMarker.value = m;
+                nextTick(() => fsQuickInputRef.value?.focus());
+            };
+            const onFsMarkerTap = (m) => {
+                const now = Date.now();
+                if (lastFsTapId === m.id && now - lastFsTapTime < 380) {
+                    lastFsTapTime = 0; lastFsTapId = null;
+                    openFsMarkerQuickEdit(m);
+                } else {
+                    lastFsTapTime = now; lastFsTapId = m.id;
+                }
+            };
+            const setFsMarkerColor = (hex) => {
+                if (!fsEditingMarker.value) return;
+                fsEditingMarker.value.textColor = hex;
+                if (fsEditingMarker.value.lineId && fullScreenItem.value?.lines) {
+                    const ln = fullScreenItem.value.lines.find(l => l.id === fsEditingMarker.value.lineId);
+                    if (ln) ln.color = hex;
+                }
+                if (currentFullScreen.value?.parentPg) {
+                    currentFullScreen.value.parentPg.updatedAt = Date.now();
+                    dirtyPageIds.add(currentFullScreen.value.parentPg.id);
+                    hasUnsavedCloudChanges.value = true;
+                }
+                saveAll();
+            };
+            const stepFsMarkerFont = (delta) => {
+                if (!fsEditingMarker.value) return;
+                const cur = fsEditingMarker.value.fontScale || 1;
+                fsEditingMarker.value.fontScale = Math.max(0.5, Math.min(2.2, Math.round((cur + delta) * 100) / 100));
+                updateMarkerSize(fsEditingMarker.value);
+                if (currentFullScreen.value?.parentPg) {
+                    currentFullScreen.value.parentPg.updatedAt = Date.now();
+                    dirtyPageIds.add(currentFullScreen.value.parentPg.id);
+                    hasUnsavedCloudChanges.value = true;
+                }
+                saveAll();
+            };
+            const closeFsMarkerQuickEdit = () => {
+                if (fsEditingMarker.value) {
+                    updateMarkerSize(fsEditingMarker.value);
+                    if (currentFullScreen.value?.parentPg) {
+                        currentFullScreen.value.parentPg.updatedAt = Date.now();
+                        dirtyPageIds.add(currentFullScreen.value.parentPg.id);
+                        hasUnsavedCloudChanges.value = true;
+                    }
+                    saveAll();
+                }
+                fsEditingMarker.value = null;
+            };
 
             const editFromFullScreen = () => {
                 const target = fullScreenItem.value; if (!target) return;
@@ -2565,7 +2655,10 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
                 activeLine, onLinePointerStart, setActiveLineColor, deleteActiveLine, getMarkerFontPx, stepMarkerFontScale, openMarkerEditor,
                 getDocTypeLabel, overviewTypeFilter, overviewSpaceFilter, drawingPageCount, photoPageCount, overviewSpacesAvailable, filteredOverviewPages,
                 movingPageId, movingPageLabel, startMovePage, insertMovingPageAfter, showAutoSortModal, autoSortPages,
-                editingMetaPage, openPageMetaModal, setPageDocType, batchSetDocType, batchSetSpace
+                editingMetaPage, openPageMetaModal, setPageDocType, batchSetDocType, batchSetSpace,
+                quickNavTypeFilter, quickNavSpaceFilter, filteredQuickNavPages,
+                fsStripRef, jumpFullScreen, openFullScreenSpaceModal,
+                fsEditingMarker, fsQuickInputRef, onFsMarkerTap, openFsMarkerQuickEdit, setFsMarkerColor, stepFsMarkerFont, closeFsMarkerQuickEdit
             };
             };
         }
