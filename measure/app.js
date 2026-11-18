@@ -2684,8 +2684,30 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
                 await loadProjectList();
                 showToast('✅ 已認領並歸戶至目錄');
             };
-            const loadProjectList = async () => { const keys = await localforage.keys(), q = (await localforage.getItem('pending_upload_queue')) || [], list = []; for (const k of keys) { if (k.startsWith('proj_')) { const d = await localforage.getItem(k); if (d?.code) { const pgs = d.pages || []; list.push({ code: d.code, name: d.name, date: d.date, pageCount: pgs.length || 1, pinCount: pgs.reduce((s, p) => s + (p.pins?.length || 0), 0), updatedAt: d.updatedAt || 0, lastModifiedBy: d.lastModifiedBy || '', pendingUpload: !!d.pendingUpload || q.includes(String(d.code)) }); } } } projectList.value = list.sort((a, b) => b.updatedAt - a.updatedAt); };
-
+const loadProjectList = async () => {
+                const keys = await localforage.keys(), q = (await localforage.getItem('pending_upload_queue')) || [], list = [];
+                const prevMap = new Map((projectList.value || []).map(p => [String(p.code), p]));
+                const cloudMap = new Map((cloudProjectList.value || []).map(p => [String(p.code), p]));
+                for (const k of keys) {
+                    if (k.startsWith('proj_')) {
+                        const d = await localforage.getItem(k);
+                        if (d?.code) {
+                            const codeStr = String(d.code);
+                            const prev = prevMap.get(codeStr), cld = cloudMap.get(codeStr);
+                            const activeMatch = String(project.code || '') === codeStr ? project : null;
+                            const resolvedName = (d.name || activeMatch?.name || cld?.name || prev?.name || '').trim();
+                            const resolvedDate = (d.date || activeMatch?.date || cld?.date || prev?.date || d.pages?.[0]?.date || getTodayStr()).trim();
+                            if ((resolvedName && !d.name) || (resolvedDate && !d.date)) {
+                                d.name = resolvedName; d.date = resolvedDate;
+                                localforage.setItem(k, d).catch(() => {});
+                            }
+                            const pgs = d.pages || [];
+                            list.push({ code: d.code, name: resolvedName, date: resolvedDate, pageCount: pgs.length || 1, pinCount: pgs.reduce((s, p) => s + (p.pins?.length || 0), 0), updatedAt: d.updatedAt || 0, lastModifiedBy: d.lastModifiedBy || '', pendingUpload: !!d.pendingUpload || q.includes(codeStr) });
+                        }
+                    }
+                }
+                projectList.value = list.sort((a, b) => b.updatedAt - a.updatedAt);
+            };
             const backToProjects = async () => {
                 resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A';
                 if (unsubPages) { unsubPages(); unsubPages = null; }
