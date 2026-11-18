@@ -130,24 +130,54 @@
         <!-- 2. 全檔預覽總覽視圖 -->
         <main v-show="currentView === 'preview'" class="flex-1 min-h-0 w-full flex flex-col overflow-hidden bg-zinc-100">
             <div class="bg-white border-b border-zinc-200 px-3 py-2 flex items-center justify-between shrink-0 gap-1 flex-wrap">
-                <span class="text-xs font-black text-zinc-900">🖼️ 圖紙總覽 ({{ pages.length }}頁)</span>
+                <span class="text-xs font-black text-zinc-900">🖼️ 圖紙總覽 ({{ filteredOverviewPages.length }}/{{ pages.length }}頁)</span>
                 <div class="flex items-center gap-1.5 flex-wrap">
                     <template v-if="selectMode">
                         <button @click="selectAllPages" class="bg-white border border-zinc-300 text-zinc-800 px-2 py-1 rounded-md text-xs font-bold">{{ selectedPageIds.length === pages.length ? '取消全選' : '全選' }}</button>
+                        <button @click="batchSetDocType('plan')" :disabled="!selectedPageIds.length" class="bg-sky-50 border border-sky-300 text-sky-800 px-2 py-1 rounded-md text-xs font-bold disabled:opacity-40">📐平面</button>
+                        <button @click="batchSetDocType('detail')" :disabled="!selectedPageIds.length" class="bg-indigo-50 border border-indigo-300 text-indigo-800 px-2 py-1 rounded-md text-xs font-bold disabled:opacity-40">📏詳圖</button>
+                        <button @click="batchSetDocType('photo')" :disabled="!selectedPageIds.length" class="bg-amber-50 border border-amber-300 text-amber-800 px-2 py-1 rounded-md text-xs font-bold disabled:opacity-40">📷拍攝</button>
                         <button @click="openTransferModal()" :disabled="!selectedPageIds.length" :class="selectedPageIds.length ? 'bg-blue-600 text-white border-blue-600' : 'bg-zinc-200 text-zinc-400 border-zinc-200'" class="px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm">↗️ 轉入他檔 ({{ selectedPageIds.length }})</button>
                         <button @click="toggleSelectMode" class="bg-zinc-100 text-zinc-700 px-2 py-1 rounded-md text-xs font-bold">✕完成</button>
                     </template>
                     <template v-else>
                         <button v-if="feedbackList.length" @click="showFeedbackModal = true" class="bg-rose-600 text-white px-2.5 py-1 rounded-md text-xs font-bold shadow-sm animate-pulse">💬 意見箱 ({{ feedbackList.length }})</button>
                         <button v-if="mergeableGroups.length" @click="showMergeModal = true" class="bg-indigo-50 text-indigo-700 border border-indigo-300 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">🔗 同底合併 ({{ mergeableGroups.length }})</button>
-                        <button @click="toggleSelectMode" class="bg-blue-50 text-blue-700 border border-blue-300 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">☑️ 選圖轉檔</button>
+                        <button @click="showAutoSortModal = true" class="bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">🔄 自動整理</button>
+                        <button @click="toggleSelectMode" class="bg-blue-50 text-blue-700 border border-blue-300 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">☑️ 選圖/批量</button>
                     </template>
+                </div>
+            </div>
+
+            <!-- 整體「工程圖 / 拍攝」＋「空間」雙重篩選條 -->
+            <div class="bg-white border-b border-zinc-200 px-3 py-1.5 flex flex-col gap-1.5 shrink-0">
+                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    <button @click="overviewTypeFilter = 'all'" :class="overviewTypeFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-100 text-zinc-700 border-zinc-200'" class="px-2.5 py-1 rounded-full text-xs font-bold border shrink-0">全部 ({{ pages.length }})</button>
+                    <button @click="overviewTypeFilter = 'drawing'" :class="overviewTypeFilter === 'drawing' ? 'bg-sky-600 text-white border-sky-600' : 'bg-sky-50 text-sky-800 border-sky-200'" class="px-2.5 py-1 rounded-full text-xs font-bold border shrink-0">📐 工程圖 ({{ drawingPageCount }})</button>
+                    <button @click="overviewTypeFilter = 'photo'" :class="overviewTypeFilter === 'photo' ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-800 border-amber-200'" class="px-2.5 py-1 rounded-full text-xs font-bold border shrink-0">📷 拍攝 ({{ photoPageCount }})</button>
+                </div>
+                <div v-if="overviewSpacesAvailable.length" class="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                    <button @click="overviewSpaceFilter = 'all'" :class="overviewSpaceFilter === 'all' ? 'bg-purple-700 text-white' : 'bg-zinc-100 text-zinc-600'" class="px-2 py-0.5 rounded text-[11px] font-bold shrink-0">全部空間</button>
+                    <button v-for="sp in overviewSpacesAvailable" :key="sp" @click="overviewSpaceFilter = sp"
+                            :class="overviewSpaceFilter === sp ? 'bg-purple-700 text-white' : 'bg-purple-50 text-purple-800 border border-purple-200'"
+                            class="px-2 py-0.5 rounded text-[11px] font-bold shrink-0">{{ sp }}</button>
+                </div>
+            </div>
+
+            <!-- 免拖拉調位提示橫幅 -->
+            <div v-if="movingPageId" class="bg-blue-600 text-white px-3 py-2 flex items-center justify-between gap-2 shrink-0 shadow-md">
+                <span class="text-xs font-black truncate">🔄 正在調動 {{ movingPageLabel }}，請點目標卡片「📥插喺後面」</span>
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <button @click="insertMovingPageAfter('__START__')" class="bg-white text-blue-700 px-2 py-1 rounded text-xs font-black">📥插去最前</button>
+                    <button @click="movingPageId = ''" class="bg-blue-800 text-white px-2 py-1 rounded text-xs font-bold">✕取消</button>
                 </div>
             </div>
 
             <div class="flex-1 overflow-y-auto p-2 touch-scrollable">
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    <div v-for="(pg, idx) in pages" :key="pg.id" :data-page-idx="idx"
+                    <div v-for="{ pg, idx } in filteredOverviewPages" :key="pg.id" :data-page-idx="idx"
+
+                        
                          @click="selectMode ? togglePageSelection(pg.id) : null"
                          :class="[
                              draggingPageIdx === idx ? 'opacity-40 scale-95 ring-2 ring-blue-500' : '',
@@ -156,22 +186,32 @@
                              selectMode ? 'cursor-pointer' : ''
                          ]"
                          class="border rounded-lg overflow-hidden shadow-sm flex flex-col justify-between transition-all duration-150">
-                        <div class="bg-zinc-50 px-2 py-1.5 border-b border-zinc-200 flex flex-col gap-0.5">
+                        <div :class="String(movingPageId) === String(pg.id) ? 'bg-blue-100 border-blue-400' : 'bg-zinc-50 border-zinc-200'" class="px-2 py-1.5 border-b flex flex-col gap-1">
                             <div class="flex items-center justify-between gap-1">
                                 <div class="flex items-center gap-1 min-w-0">
                                     <input v-if="selectMode" type="checkbox" :checked="selectedPageIds.includes(String(pg.id))" @click.stop="togglePageSelection(pg.id)" class="w-4 h-4 accent-blue-600 shrink-0 cursor-pointer">
-                                    <span v-else @pointerdown.stop.prevent="startPageDrag(idx)" style="touch-action:none" class="cursor-grab active:cursor-grabbing bg-white text-zinc-900 border border-zinc-300 text-[11px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                    <span v-else @pointerdown.stop.prevent="startPageDrag(idx)" style="touch-action:none" class="cursor-grab active:cursor-grabbing bg-white text-zinc-900 border border-zinc-300 text-[11px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0">
                                         <span class="text-zinc-400">⠿</span>P{{ idx + 1 }}
                                     </span>
                                     <span v-if="selectMode" class="text-zinc-900 font-black text-[11px] shrink-0">P{{ idx + 1 }}</span>
-                                    <span :class="pg.space === '總圖' ? 'text-purple-700' : 'text-zinc-900'" class="font-bold text-xs truncate">{{ pg.space || '未標空間' }}</span>
+                                    <button @click.stop="openPageMetaModal(pg)" :class="pg.space === '總圖' ? 'text-purple-700 bg-purple-50 border-purple-200' : 'text-zinc-900 bg-white border-zinc-200'" class="font-bold text-[11px] truncate border px-1.5 py-0.5 rounded">{{ pg.space || '+空間' }}</button>
                                     <span v-if="pageFeedbackCount(pg.id)" @click.stop="showFeedbackModal = true" class="bg-rose-100 text-rose-700 border border-rose-300 text-[10px] font-black px-1 rounded cursor-pointer shrink-0">💬{{ pageFeedbackCount(pg.id) }}</span>
                                 </div>
-                                <button v-if="!selectMode" @click.stop="enterEditMode(idx)" class="bg-zinc-900 text-white px-2 py-0.5 rounded text-[11px] font-bold shrink-0">✏️改</button>
+                                <div class="flex items-center gap-1 shrink-0">
+                                    <template v-if="!selectMode">
+                                        <button v-if="!movingPageId" @click.stop="startMovePage(pg.id)" class="bg-white border border-zinc-300 text-zinc-700 px-1.5 py-0.5 rounded text-[11px] font-bold">調位</button>
+                                        <button v-else-if="String(movingPageId) !== String(pg.id)" @click.stop="insertMovingPageAfter(pg.id)" class="bg-blue-600 text-white px-2 py-0.5 rounded text-[11px] font-black shadow-sm">📥插喺後面</button>
+                                        <button @click.stop="enterEditMode(idx)" class="bg-zinc-900 text-white px-2 py-0.5 rounded text-[11px] font-bold">✏️改</button>
+                                    </template>
+                                </div>
                             </div>
-                            <div class="text-[10px] text-zinc-500 font-bold truncate">📅{{ pg.date || project.date }} ✍️{{ pg.author || project.lastModifiedBy || '未知' }}</div>
+                            <div class="flex items-center justify-between gap-1 text-[10px]">
+                                <button @click.stop="openPageMetaModal(pg)" :class="pg.docType === 'photo' ? 'bg-amber-50 text-amber-800 border-amber-200' : (pg.docType ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-zinc-100 text-zinc-500 border-zinc-200')" class="border px-1.5 py-0.2 rounded font-bold shrink-0">{{ getDocTypeLabel(pg.docType) || '+工程圖/拍攝' }}</button>
+                                <span class="text-zinc-500 font-bold truncate">📅{{ pg.date || project.date }} ✍️{{ pg.author || project.lastModifiedBy || '未知' }}</span>
+                            </div>
                         </div>
 
+                        
                         <div v-if="pg.photo" @click.stop="selectMode ? togglePageSelection(pg.id) : openFullScreenPreview(pg)" class="h-40 relative bg-zinc-100 cursor-pointer active:bg-zinc-200 overflow-hidden flex items-center justify-center">
                             <div class="absolute inset-1 overflow-hidden flex items-center justify-center">
                                 <svg :view-box.camel="`0 0 ${pg.w || 1200} ${pg.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="pointer-events-none">
@@ -372,7 +412,7 @@
                     <div v-if="!activeCanvas?.photo" class="flex-1 flex flex-col items-center justify-center gap-3 p-4">
                         <div v-if="activePin" class="text-zinc-800 font-black text-[15px] mb-1">📍 釘選 #{{ activePinIndex + 1 }} 詳情</div>
                         <div class="flex gap-2 w-64">
-                            <label class="flex-1 text-center bg-zinc-900 text-white py-3 rounded-xl text-[15px] font-bold cursor-pointer shadow-sm border border-zinc-800">📷 拍照<input type="file" accept="image/*" capture="environment" class="hidden" @change="e => handleImageUpload(e, false)"></label>
+                            <label class="flex-1 text-center bg-zinc-900 text-white py-3 rounded-xl text-[15px] font-bold cursor-pointer shadow-sm border border-zinc-800">📷 拍照<input type="file" accept="image/*" capture="environment" class="hidden" @change="e => handleImageUpload(e, false, 'photo')"></label>
                             <label class="flex-1 text-center bg-white text-zinc-900 py-3 rounded-xl text-[14px] font-bold cursor-pointer shadow-sm border border-zinc-300">📁 {{ activePin ? '揀相' : '多選圖' }}<input type="file" accept="image/*" :multiple="!activePin" class="hidden" @change="e => handleImageUpload(e, false)"></label>
                         </div>
                         <button @click="pasteFromClipboard(false)" class="w-64 bg-white border border-zinc-300 text-zinc-900 py-3 rounded-xl text-[14px] font-bold shadow-sm flex items-center justify-center gap-2"><span>📋</span> 貼上剪貼簿</button>
@@ -428,8 +468,9 @@
                                 </div>
                             </div>
 
-                            <div v-else class="flex items-center gap-1 flex-wrap">
-                                <button @click="showSpaceModal = true" :class="activeCanvas.space === '總圖' ? 'bg-purple-600 text-white border-purple-700' : 'bg-white/95 text-zinc-900 border-zinc-300'" class="border px-2 py-1 rounded-md text-[11px] font-black shadow-sm">🏠 {{ activeCanvas.space || '空間' }}</button>
+                           <div v-else class="flex items-center gap-1 flex-wrap">
+                                <button @click="openPageMetaModal(null)" :class="activeCanvas.space === '總圖' ? 'bg-purple-600 text-white border-purple-700' : 'bg-white/95 text-zinc-900 border-zinc-300'" class="border px-2 py-1 rounded-md text-[11px] font-black shadow-sm">🏠 {{ activeCanvas.space || '空間' }}</button>
+                                <button @click="openPageMetaModal(null)" :class="activePage?.docType === 'photo' ? 'bg-amber-50 text-amber-800 border-amber-300' : (activePage?.docType ? 'bg-sky-50 text-sky-800 border-sky-300' : 'bg-white/95 text-zinc-600 border-zinc-300')" class="border px-2 py-1 rounded-md text-[11px] font-black shadow-sm">{{ getDocTypeLabel(activePage?.docType) || '🏷️圖類' }}</button>
                                 <button v-if="!activePin && masterPages.length && (activePage?.space !== '總圖' || masterPages.length > 1)" @click="goToMasterPlan('A')" class="bg-purple-50 text-purple-800 border border-purple-300 px-2 py-1 rounded-md text-[11px] font-black shadow-sm">🗺️ 總圖</button>
                                 <button v-if="feedbackList.length" @click="showFeedbackModal = true" class="bg-rose-600 text-white border border-rose-700 px-2 py-1 rounded-md text-[11px] font-black shadow-sm">💬 意見({{ feedbackList.length }})</button>
                                 <button v-if="currentCanvasFeedbacks.length" @click="showFeedbackOverlay = !showFeedbackOverlay" :class="showFeedbackOverlay ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-white text-zinc-500 border-zinc-300'" class="border px-1.5 py-1 rounded-md text-[11px] font-bold shadow-sm">{{ showFeedbackOverlay ? '👁️疊層' : '🙈疊層' }}</button>
@@ -1294,7 +1335,7 @@
                 <div class="text-[15px] font-black text-center text-zinc-900 mb-1 border-b border-zinc-200 pb-2">新增工程頁面</div>
                 <button @click="pasteFromClipboard(true)" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[14px] font-bold shadow-sm flex items-center gap-2 justify-center"><span>📋</span> 貼上剪貼簿</button>
                 <div class="flex gap-2 w-full">
-                    <label class="flex-1 text-center bg-zinc-900 text-white py-2.5 rounded-md text-[14px] font-bold cursor-pointer shadow-sm border border-zinc-800 flex items-center justify-center gap-1.5"><span>📷</span> 拍照<input type="file" accept="image/*" capture="environment" class="hidden" @change="e => handleImageUpload(e, true)"></label>
+                    <label class="flex-1 text-center bg-zinc-900 text-white py-2.5 rounded-md text-[14px] font-bold cursor-pointer shadow-sm border border-zinc-800 flex items-center justify-center gap-1.5"><span>📷</span> 拍照<input type="file" accept="image/*" capture="environment" class="hidden" @change="e => handleImageUpload(e, true, 'photo')"></label>
                     <label class="flex-1 text-center bg-white text-zinc-900 py-2.5 rounded-md text-[14px] font-bold cursor-pointer shadow-sm border border-zinc-300 flex items-center justify-center gap-1.5"><span>📁</span> 多選圖<input type="file" accept="image/*" multiple class="hidden" @change="e => handleImageUpload(e, true)"></label>
                 </div>
                 <button @click="openPhotoPool('newPage')" class="w-full bg-white border border-zinc-300 text-zinc-900 py-2.5 rounded-md text-[14px] font-bold shadow-sm flex items-center gap-2 justify-center"><span>🖼️</span> 工程底圖庫</button>
