@@ -1079,14 +1079,36 @@ const localHiddenCodes = ref([]);
                 }
             };
 
+            const draggedLine = ref(null), dragLineHandle = ref('body'), lineOrigin = ref({ x1: 0, y1: 0, x2: 0, y2: 0 });
+            const onLineEndpointStart = (line, endKey, e, pane = activePane.value) => {
+                focusPane(pane);
+                if (e.touches?.length > 1 || isPinching || showBranchPrompt.value || drawMode.value !== 'move') return;
+                e.preventDefault(); e.stopPropagation();
+                checkBranchNeed(() => {
+                    const target = (targetCanvas.value.lines || []).find(l => l.id === line.id) || line;
+                    if (showBranchPrompt.value) return;
+                    activeMarker.value = null; activeLine.value = target;
+                    draggedLine.value = target; dragLineHandle.value = endKey;
+                    const p = getCoords(e, pane);
+                    dragOrigin.value = { x: p.x, y: p.y };
+                    lineOrigin.value = { x1: target.x1, y1: target.y1, x2: target.x2, y2: target.y2 };
+                });
+            };
             const onLinePointerStart = (line, e, pane = activePane.value) => {
                 focusPane(pane);
                 if (e.touches?.length > 1 || isPinching || showBranchPrompt.value) return;
                 if (drawMode.value === 'eraser') { onEraseTap('line', line, e, pane); return; }
                 if (drawMode.value === 'move') {
                     e.preventDefault(); e.stopPropagation();
-                    activeMarker.value = null;
-                    activeLine.value = line;
+                    checkBranchNeed(() => {
+                        const target = (targetCanvas.value.lines || []).find(l => l.id === line.id) || line;
+                        if (showBranchPrompt.value) return;
+                        activeMarker.value = null; activeLine.value = target;
+                        draggedLine.value = target; dragLineHandle.value = 'body';
+                        const p = getCoords(e, pane);
+                        dragOrigin.value = { x: p.x, y: p.y };
+                        lineOrigin.value = { x1: target.x1, y1: target.y1, x2: target.x2, y2: target.y2 };
+                    });
                 }
             };
 
@@ -1703,7 +1725,23 @@ const localHiddenCodes = ref([]);
             };
 
             const moveStroke = (e, pane = activePane.value) => {
-                if (draggedMarker.value) {
+                if (draggedLine.value) {
+                    e.preventDefault();
+                    const p = getCoords(e, pane), dx = p.x - dragOrigin.value.x, dy = p.y - dragOrigin.value.y;
+                    const maxW = targetCanvasW.value, maxH = targetCanvasH.value;
+                    if (dragLineHandle.value === 'p1') {
+                        draggedLine.value.x1 = Math.round(Math.max(0, Math.min(maxW, lineOrigin.value.x1 + dx)));
+                        draggedLine.value.y1 = Math.round(Math.max(0, Math.min(maxH, lineOrigin.value.y1 + dy)));
+                    } else if (dragLineHandle.value === 'p2') {
+                        draggedLine.value.x2 = Math.round(Math.max(0, Math.min(maxW, lineOrigin.value.x2 + dx)));
+                        draggedLine.value.y2 = Math.round(Math.max(0, Math.min(maxH, lineOrigin.value.y2 + dy)));
+                    } else {
+                        draggedLine.value.x1 = Math.round(Math.max(0, Math.min(maxW, lineOrigin.value.x1 + dx)));
+                        draggedLine.value.y1 = Math.round(Math.max(0, Math.min(maxH, lineOrigin.value.y1 + dy)));
+                        draggedLine.value.x2 = Math.round(Math.max(0, Math.min(maxW, lineOrigin.value.x2 + dx)));
+                        draggedLine.value.y2 = Math.round(Math.max(0, Math.min(maxH, lineOrigin.value.y2 + dy)));
+                    }
+                } else if (draggedMarker.value) {
                     e.preventDefault(); const p = getCoords(e, pane), dx = p.x - dragOrigin.value.x, dy = p.y - dragOrigin.value.y;
                     draggedMarker.value.x = Math.round(Math.max(0, Math.min(targetCanvasW.value, markerOrigin.value.x + dx)));
                     draggedMarker.value.y = Math.round(Math.max(0, Math.min(targetCanvasH.value, markerOrigin.value.y + dy)));
@@ -1717,12 +1755,22 @@ const localHiddenCodes = ref([]);
             };
 
             const endStroke = (e, pane = drawingPane.value) => {
+                if (draggedLine.value) {
+                    const l = draggedLine.value, o = lineOrigin.value;
+                    const moved = Math.hypot(l.x1 - o.x1, l.y1 - o.y1) > 2 || Math.hypot(l.x2 - o.x2, l.y2 - o.y2) > 2;
+                    draggedLine.value = null;
+                    if (moved) { touchDirty(); saveAll(); }
+                    return;
+                }
                 if (draggedMarker.value) {
                     const moved = Math.hypot(draggedMarker.value.x - markerOrigin.value.x, draggedMarker.value.y - markerOrigin.value.y) > 2;
                     draggedMarker.value = null;
                     if (moved) { touchDirty(); saveAll(); }
                     return;
                 }
+
+                
+                
                 if (!isDrawing.value) return;
                 isDrawing.value = false; const endPos = getCoords(e, drawingPane.value);
 
