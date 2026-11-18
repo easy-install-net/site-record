@@ -36,10 +36,14 @@
 
         <!-- 頂部導航欄 -->
         <header class="shrink-0 min-h-[44px] py-1 w-full bg-white border-b border-zinc-200 px-2 flex justify-between items-center gap-1.5 z-30">
+
             <div class="flex items-center gap-1.5 min-w-0 flex-1">
                 <span class="bg-amber-100 text-amber-900 border border-amber-300 text-xs font-mono font-black px-1.5 py-0.5 rounded shrink-0">#{{ project.code || '------' }}</span>
                 <span class="font-black text-sm text-zinc-900 truncate">{{ project.name || '工程圖紙檢視' }}</span>
+                <span v-if="isFilteredShare && pages.length" class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-black px-1.5 py-0.5 rounded shrink-0">精選{{ pages.length }}頁</span>
             </div>
+
+            
             <div class="flex items-center gap-1.5 shrink-0">
                 <button v-if="activeCanvas?.photo" @click="downloadAnnotatedImage" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">⬇️存圖</button>
                 <button v-if="activeCanvas?.photo" @click="submitFeedback" :disabled="isSubmitting"
@@ -333,7 +337,7 @@
                 const toastMsg = ref(''), showToast = (m) => { toastMsg.value = m; setTimeout(() => { if (toastMsg.value === m) toastMsg.value = ''; }, 3000); };
 
                 const project = reactive({ code: '', name: '', date: '' });
-                const pages = ref([]), activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
+                const pages = ref([]), isFilteredShare = ref(false), activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
                 const activePage = computed(() => pages.value[activePageIndex.value] || null);
                 const activeCanvas = computed(() => activePin.value || activePage.value);
                 const canvasW = computed(() => activeCanvas.value?.w || 1200);
@@ -742,8 +746,18 @@
                         project.code = code; project.name = pd.name || ''; project.date = pd.date || '';
                         const mediaMap = new Map();
                         await Promise.all(mediaSnap.docs.map(async (m) => { const p = await resolveMediaDoc(m); if (p) mediaMap.set(String(m.id), p); }));
+                       const urlParams = new URLSearchParams(window.location.search);
+                        const pagesParam = urlParams.get('pages');
+                        const allowedIds = pagesParam ? new Set(pagesParam.split(',').map(s => s.trim()).filter(Boolean)) : null;
+                        isFilteredShare.value = !!(allowedIds && allowedIds.size > 0);
                         const orderList = pd.pageIds || [], deletedSet = new Set(pd.deletedPageIds || []);
-                        const loaded = pagesSnap.docs.filter(d => !deletedSet.has(d.id)).map(doc => {
+                        const allValidDocs = pagesSnap.docs.filter(d => !deletedSet.has(d.id));
+                        const targetDocs = (allowedIds && allowedIds.size > 0 && allValidDocs.some(d => allowedIds.has(String(d.id))))
+                            ? allValidDocs.filter(d => allowedIds.has(String(d.id)))
+                            : allValidDocs;
+                        const loaded = targetDocs.map(doc => {
+
+                        
                             const r = doc.data();
                             return {
                                 id: doc.id, ...r,
@@ -776,7 +790,7 @@
                 });
 
                 return {
-                    inputCode, isLoading, loadingText, toastMsg, project, pages, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH, masterPages, showQuickNav,
+                    inputCode, isLoading, loadingText, toastMsg, project, pages, isFilteredShare, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH, masterPages, showQuickNav,
                     capsuleOffset, capsuleCollapsed, startCapsuleDrag,
                     zoomScale, invZoom, svgViewBox, svgCanvas, stepZoom, resetZoom, onStageWheel,
                     mode, fbColor, fbPaths, fbMarkers, fbHistory, currentFbPath, editingFbMarker, fbTextInputRef, isSubmitting, showSubmitSuccess, hasDraft, draftCount,
