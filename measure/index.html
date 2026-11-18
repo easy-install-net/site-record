@@ -154,20 +154,29 @@
             <div v-if="selectMode" class="bg-blue-50/90 border-b border-blue-200 px-2.5 py-1 flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
                 <button @click="selectAllPages" class="bg-white border border-zinc-300 text-zinc-800 px-2 py-0.5 rounded text-[11px] font-bold shrink-0">{{ selectedPageIds.length === pages.length ? '取消全選' : '全選' }}</button>
                 <button @click="batchSetDocType('plan')" :disabled="!selectedPageIds.length" class="bg-sky-50 border border-sky-300 text-sky-800 px-2 py-0.5 rounded text-[11px] font-bold disabled:opacity-40 shrink-0">📐平面</button>
+                <button @click="batchSetDocType('photo')" :disabled="!selectedPageIds.length" class="bg-amber-50 border border-amber-300 text-amber-800 px-2 py-0.5 rounded text-[11px] font-bold disabled:opacity-40 shrink-0">📷拍攝</button>
                 <button @click="batchSetDocType('3d')" :disabled="!selectedPageIds.length" class="bg-cyan-50 border border-cyan-300 text-cyan-800 px-2 py-0.5 rounded text-[11px] font-bold disabled:opacity-40 shrink-0">🧊立體</button>
                 <button @click="batchSetDocType('dim')" :disabled="!selectedPageIds.length" class="bg-teal-50 border border-teal-300 text-teal-800 px-2 py-0.5 rounded text-[11px] font-bold disabled:opacity-40 shrink-0">📏尺吋</button>
                 <button @click="batchSetDocType('detail')" :disabled="!selectedPageIds.length" class="bg-indigo-50 border border-indigo-300 text-indigo-800 px-2 py-0.5 rounded text-[11px] font-bold disabled:opacity-40 shrink-0">📑詳圖</button>
-                <button @click="batchSetDocType('photo')" :disabled="!selectedPageIds.length" class="bg-amber-50 border border-amber-300 text-amber-800 px-2 py-0.5 rounded text-[11px] font-bold disabled:opacity-40 shrink-0">📷拍攝</button>
                 <button @click="copyShareLink" :disabled="!selectedPageIds.length" :class="selectedPageIds.length ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-zinc-200 text-zinc-400 border-zinc-200'" class="px-2 py-0.5 rounded text-[11px] font-bold border shrink-0">🔗轉發({{ selectedPageIds.length }})</button>
                 <button @click="openTransferModal()" :disabled="!selectedPageIds.length" :class="selectedPageIds.length ? 'bg-blue-600 text-white border-blue-600' : 'bg-zinc-200 text-zinc-400 border-zinc-200'" class="px-2 py-0.5 rounded text-[11px] font-bold border shrink-0">↗️轉檔({{ selectedPageIds.length }})</button>
             </div>
 
-            <!-- 第二行：超薄空間篩選條 -->
-            <div v-if="overviewSpacesAvailable.length" class="bg-white border-b border-zinc-200 px-2.5 py-0.5 flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
-                <button @click="overviewSpaceFilter = 'all'" :class="overviewSpaceFilter === 'all' ? 'bg-purple-700 text-white' : 'bg-zinc-100 text-zinc-600'" class="px-2 py-0.5 rounded text-[11px] font-bold shrink-0">全部空間</button>
-                <button v-for="sp in overviewSpacesAvailable" :key="sp" @click="overviewSpaceFilter = sp"
-                        :class="overviewSpaceFilter === sp ? 'bg-purple-700 text-white' : 'bg-purple-50 text-purple-800 border border-purple-200'"
-                        class="px-2 py-0.5 rounded text-[11px] font-bold shrink-0">{{ sp }}</button>
+            <!-- 第二行：空間導航 + 疊起/攤開切換 -->
+            <div class="bg-white border-b border-zinc-200 px-2.5 py-1 flex items-center justify-between gap-1.5 shrink-0">
+                <div class="flex items-center gap-1 overflow-x-auto no-scrollbar min-w-0">
+                    <button @click="overviewSpaceFilter = 'all'" :class="overviewSpaceFilter === 'all' ? 'bg-purple-700 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded text-[11px] font-bold shrink-0">
+                        {{ overviewSpaceFilter === 'all' ? '🗂️ 全部空間' : '‹ 返回空間疊' }}
+                    </button>
+                    <button v-for="sp in overviewSpacesAvailable" :key="sp" @click="overviewSpaceFilter = sp"
+                            :class="overviewSpaceFilter === sp ? 'bg-purple-700 text-white' : 'bg-purple-50 text-purple-800 border border-purple-200'"
+                            class="px-2 py-0.5 rounded text-[11px] font-bold shrink-0">{{ sp }}</button>
+                </div>
+                <button v-if="overviewSpaceFilter === 'all'" @click="overviewStackMode = !overviewStackMode"
+                        :class="overviewStackMode ? 'bg-purple-50 text-purple-800 border-purple-300' : 'bg-zinc-900 text-white border-zinc-900'"
+                        class="px-2 py-0.5 rounded text-[11px] font-bold border shrink-0">
+                    {{ overviewStackMode ? '⊞ 攤開全頁' : '🗂️ 空間疊起' }}
+                </button>
             </div>
 
             <!-- 免拖拉調位提示橫幅 -->
@@ -180,8 +189,51 @@
             </div>
 
             <!-- 極簡卡片網格 -->
-            <div class="flex-1 overflow-y-auto p-2 touch-scrollable">
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            <div class="flex-1 overflow-y-auto p-2.5 touch-scrollable">
+                <!-- A. 空間資料夾疊起模式（每一堆＝一個空間） -->
+                <div v-if="overviewStackMode && overviewSpaceFilter === 'all' && !movingPageId" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 pt-1">
+                    <div v-for="stack in overviewSpaceStacks" :key="stack.key" class="relative pt-2 pl-2">
+                        <!-- 後層疊紙效果 -->
+                        <div v-if="stack.items.length >= 3" class="absolute inset-0 right-2 bottom-2 bg-zinc-200 border border-zinc-300 rounded-xl"></div>
+                        <div v-if="stack.items.length >= 2" class="absolute inset-0 top-1 left-1 right-1 bottom-1 bg-zinc-100 border border-zinc-300 rounded-xl shadow-xs"></div>
+
+                        <!-- 頂層空間資料夾主卡 -->
+                        <div @click="selectMode ? toggleSpaceStackSelection(stack) : (overviewSpaceFilter = stack.key)"
+                             :class="[
+                                 selectMode && stack.items.every(x => selectedPageIds.includes(String(x.pg.id))) ? 'ring-2 ring-blue-600 border-blue-500 bg-blue-50/40' : (stack.key === '總圖' ? 'border-purple-400 bg-purple-50/30' : 'border-zinc-300 bg-white')
+                             ]"
+                             class="relative border rounded-xl overflow-hidden shadow-md flex flex-col cursor-pointer active:scale-[0.98] transition-all">
+                            <div :class="stack.key === '總圖' ? 'bg-purple-100/80 border-purple-200' : 'bg-zinc-50 border-zinc-200'" class="px-2.5 py-1.5 border-b flex items-center justify-between gap-1">
+                                <div class="flex items-center gap-1.5 min-w-0">
+                                    <input v-if="selectMode" type="checkbox" :checked="stack.items.every(x => selectedPageIds.includes(String(x.pg.id)))" @click.stop="toggleSpaceStackSelection(stack)" class="w-4 h-4 accent-blue-600 shrink-0">
+                                    <span :class="stack.key === '總圖' ? 'text-purple-900' : 'text-zinc-900'" class="font-black text-xs truncate">{{ stack.key === '總圖' ? '🗺️ 總圖' : (stack.key === '__NONE__' ? '📂 未分類空間' : '🏠 ' + stack.label) }}</span>
+                                </div>
+                                <span :class="stack.key === '總圖' ? 'bg-purple-700 text-white' : 'bg-zinc-900 text-white'" class="text-[11px] font-black px-2 py-0.5 rounded-full shrink-0">{{ stack.items.length }} 張</span>
+                            </div>
+
+                            <!-- 封面縮圖 + 底部小圖預覽條 -->
+                            <div class="h-36 sm:h-40 relative bg-zinc-100 overflow-hidden flex items-center justify-center">
+                                <img v-if="stack.items[0]?.pg?.photo" :src="stack.items[0].pg.photo" class="w-full h-full object-contain bg-white">
+                                <span v-else class="text-zinc-400 text-xs font-bold">空白</span>
+                                <span class="absolute top-1.5 left-1.5 bg-black/65 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                                    {{ getDocTypeLabel(stack.items[0]?.pg?.docType) || '封面' }}
+                                </span>
+                            </div>
+
+                            <!-- 內含圖紙微型預覽列（最多顯示前 4 張縮圖） -->
+                            <div class="px-2 py-1.5 bg-white border-t border-zinc-200 flex items-center justify-between gap-1">
+                                <div class="flex items-center gap-1 overflow-hidden">
+                                    <img v-for="sub in stack.items.slice(0, 4)" :key="'sub-'+sub.pg.id" v-if="sub.pg.photo" :src="sub.pg.photo" class="w-7 h-6 object-cover rounded border border-zinc-300 bg-zinc-50 shrink-0">
+                                    <span v-if="stack.items.length > 4" class="text-[10px] font-black text-zinc-500 pl-0.5">+{{ stack.items.length - 4 }}</span>
+                                </div>
+                                <span class="text-[11px] font-black text-purple-700 shrink-0">展開 ›</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- B. 單一空間展開 / 攤開全頁網格 -->
+                <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                     <div v-for="{ pg, idx } in filteredOverviewPages" :key="pg.id" :data-page-idx="idx"
                          @click="selectMode ? togglePageSelection(pg.id) : null"
                          :class="[
