@@ -512,15 +512,22 @@
                                 </g>
                                 <g v-if="currentWall && drawingPane === 'A'"><line v-for="(seg, sIdx) in getWallSegments(currentWall)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="currentWall.color || '#111827'" :stroke-width="(seg.isHatch ? 2.5 : 3.5) * invZoom" stroke-linecap="round" /></g>
 
-                                <g v-for="l in (activeCanvas.lines || [])" :key="l.id" :class="(drawMode === 'eraser' || drawMode === 'move') ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onLinePointerStart(l, e, 'A')" @mousedown="e => onLinePointerStart(l, e, 'A')">
-                                    <line v-if="drawMode === 'eraser' || drawMode === 'move'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="24 * invZoom" stroke-linecap="round" />
+                                <g v-for="l in (activeCanvas.lines || [])" :key="l.id" :class="(drawMode === 'eraser' || drawMode === 'move') ? 'cursor-move pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onLinePointerStart(l, e, 'A')" @mousedown="e => onLinePointerStart(l, e, 'A')">
+                                    <line v-if="drawMode === 'eraser' || drawMode === 'move'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="28 * invZoom" stroke-linecap="round" />
                                     <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
                                           :stroke="getLineStroke(l, 0.75)"
                                           :stroke-width="((!l.type || l.type === 'measure') ? 5 : 4) * invZoom"
                                           :stroke-dasharray="(!l.type || l.type === 'measure') ? `${14 * invZoom} ${10 * invZoom}` : null"
                                           stroke-linecap="round"
                                           :marker-end="l.type === 'arrow-single' ? `url(#${getArrowMarkerId(l.color, 'A')})` : null" />
+                                    <template v-if="drawMode === 'move' && activeLine?.id === l.id">
+                                        <circle :cx="l.x1" :cy="l.y1" :r="10 * invZoom" fill="#2563eb" stroke="#ffffff" :stroke-width="2.5 * invZoom" class="cursor-pointer" @touchstart.stop="e => onLineEndpointStart(l, 'p1', e, 'A')" @mousedown.stop="e => onLineEndpointStart(l, 'p1', e, 'A')" />
+                                        <circle :cx="l.x2" :cy="l.y2" :r="10 * invZoom" fill="#2563eb" stroke="#ffffff" :stroke-width="2.5 * invZoom" class="cursor-pointer" @touchstart.stop="e => onLineEndpointStart(l, 'p2', e, 'A')" @mousedown.stop="e => onLineEndpointStart(l, 'p2', e, 'A')" />
+                                    </template>
                                 </g>
+
+
+                                
                                 <line v-if="currentLine && drawingPane === 'A'" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
                                       :stroke="drawMode === 'line' ? '#ff0044' : drawColor"
                                       :stroke-width="4 * invZoom"
