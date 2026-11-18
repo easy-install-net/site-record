@@ -222,8 +222,10 @@
 
                             <!-- 內含圖紙微型預覽列（最多顯示前 4 張縮圖） -->
                             <div class="px-2 py-1.5 bg-white border-t border-zinc-200 flex items-center justify-between gap-1">
-                                <div class="flex items-center gap-1 overflow-hidden">
-                                    <img v-for="sub in stack.items.slice(0, 4)" :key="'sub-'+sub.pg.id" v-if="sub.pg.photo" :src="sub.pg.photo" class="w-7 h-6 object-cover rounded border border-zinc-300 bg-zinc-50 shrink-0">
+                               <div class="flex items-center gap-1 overflow-hidden">
+                                    <template v-for="sub in stack.items.slice(0, 4)" :key="'sub-'+(sub?.pg?.id || Math.random())">
+                                        <img v-if="sub?.pg?.photo" :src="sub.pg.photo" class="w-7 h-6 object-cover rounded border border-zinc-300 bg-zinc-50 shrink-0">
+                                    </template>
                                     <span v-if="stack.items.length > 4" class="text-[10px] font-black text-zinc-500 pl-0.5">+{{ stack.items.length - 4 }}</span>
                                 </div>
                                 <span class="text-[11px] font-black text-purple-700 shrink-0">展開 ›</span>
