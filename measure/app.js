@@ -2441,7 +2441,17 @@ const cleanCloudGarbage = async () => {
 
             const toggleSelectMode = () => { selectMode.value = !selectMode.value; selectedPageIds.value = []; };
             const togglePageSelection = (pgId) => { const idStr = String(pgId), idx = selectedPageIds.value.indexOf(idStr); if (idx === -1) selectedPageIds.value.push(idStr); else selectedPageIds.value.splice(idx, 1); };
-            const selectAllPages = () => { if (selectedPageIds.value.length === pages.value.length) selectedPageIds.value = []; else selectedPageIds.value = pages.value.map(p => String(p.id)); };
+            const selectAllPages = () => {
+                const targetList = filteredOverviewPages.value.map(x => String(x.pg.id));
+                const allSelected = targetList.length > 0 && targetList.every(id => selectedPageIds.value.includes(id));
+                if (allSelected) {
+                    selectedPageIds.value = selectedPageIds.value.filter(id => !targetList.includes(id));
+                } else {
+                    selectedPageIds.value = Array.from(new Set([...selectedPageIds.value, ...targetList]));
+                }
+            };
+            
+            
             const openTransferModal = async (singlePageId = null) => {
                 if (singlePageId) selectedPageIds.value = [String(singlePageId)];
                 if (!selectedPageIds.value.length) { showToast('請先點選要轉檔的圖紙'); return; }
@@ -2523,8 +2533,17 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
 
             const fallbackCopyTextToClipboard = (text) => { const textArea = document.createElement("textarea"); textArea.value = text; textArea.style.position = "fixed"; textArea.style.top = "0"; textArea.style.left = "0"; document.body.appendChild(textArea); textArea.focus(); textArea.select(); try { document.execCommand('copy'); showToast('🔗 已複製 WhatsApp 專屬連結'); } catch (_) { window.prompt("請手動複製以下連結：", text); } document.body.removeChild(textArea); };
             const copyShareLink = () => {
-                const code = String(project.code || '').trim(); if (!code) return; let baseUrl = window.location.href.split('index.html')[0]; if (!baseUrl.endsWith('/')) baseUrl += '/'; const link = baseUrl + 'view.html?code=' + code; const msg = `📋 工程度尺圖\n📍 地址：${project.name || '未標題'}\n👉 點擊檢視及標註意見：\n${link}`;
-                if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(msg).then(() => showToast('🔗 已複製 WhatsApp 專屬連結')).catch(() => fallbackCopyTextToClipboard(msg));
+                const code = String(project.code || '').trim(); if (!code) return;
+                let baseUrl = window.location.href.split('index.html')[0];
+                if (!baseUrl.endsWith('/')) baseUrl += '/';
+                const hasPicked = selectMode.value && selectedPageIds.value.length > 0;
+                const pickedPages = hasPicked ? pages.value.filter(p => selectedPageIds.value.includes(String(p.id))) : [];
+                const pageParam = pickedPages.length ? `&pages=${encodeURIComponent(pickedPages.map(p => p.id).join(','))}` : '';
+                const link = `${baseUrl}view.html?code=${code}${pageParam}`;
+                const spacesNote = [...new Set(pickedPages.map(p => p.space).filter(Boolean))].join('、');
+                const scopeNote = pickedPages.length ? `\n📑 指定圖紙：共 ${pickedPages.length} 頁${spacesNote ? ' (' + spacesNote + ')' : ''}` : '';
+                const msg = `📋 工程度尺圖\n📍 地址：${project.name || '未標題'}${scopeNote}\n👉 點擊檢視及標註意見：\n${link}`;
+                if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(msg).then(() => showToast(pickedPages.length ? `🔗 已複製精選 ${pickedPages.length} 頁連結` : '🔗 已複製 WhatsApp 專屬連結')).catch(() => fallbackCopyTextToClipboard(msg));
                 else fallbackCopyTextToClipboard(msg);
             };
 
@@ -2594,7 +2613,13 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
                     try {
                         const { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
                         const PAGE_W = 1240, PAGE_H = 1754, validPages = [];
-                        pages.value.forEach((pg, pIdx) => { const pgDate = pg.date || project.date || getTodayStr(), pgAuthor = pg.author || project.lastModifiedBy || '未知'; if (pg.photo) validPages.push({ ...pg, date: pgDate, author: pgAuthor, pdfLabel: `P${pIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}` }); (pg.pins || []).forEach((pin, pinIdx) => { if (pin.photo) validPages.push({ ...pin, date: pgDate, author: pgAuthor, pdfLabel: `P${pIdx + 1} 📍釘選#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}` }); }); });
+                        const hasPicked = selectMode.value && selectedPageIds.value.length > 0;
+                        pages.value.forEach((pg, pIdx) => {
+                            if (hasPicked && !selectedPageIds.value.includes(String(pg.id))) return;
+                            const pgDate = pg.date || project.date || getTodayStr(), pgAuthor = pg.author || project.lastModifiedBy || '未知';
+                            if (pg.photo) validPages.push({ ...pg, date: pgDate, author: pgAuthor, pdfLabel: `P${pIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}` });
+                            (pg.pins || []).forEach((pin, pinIdx) => { if (pin.photo) validPages.push({ ...pin, date: pgDate, author: pgAuthor, pdfLabel: `P${pIdx + 1} 📍釘選#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}` }); });
+                        });
                         if (!validPages.length) return alert('沒有可輸出的圖紙！');
                         const uniqueDates = [...new Set(validPages.map(p => p.date).filter(Boolean))]; const headerDate = uniqueDates.length > 1 ? `${uniqueDates[0]} ~ ${uniqueDates[uniqueDates.length - 1]}` : (uniqueDates[0] || getTodayStr()); const fileDateTag = sanitizeFilename(uniqueDates[uniqueDates.length - 1] || getTodayStr());
                         if (perPage > 1) {
