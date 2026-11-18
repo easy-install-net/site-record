@@ -219,7 +219,7 @@ const syncUserOwnedProjects = async () => {
             const saveStampStore = async () => {
                 stampUpdatedAt.value = Date.now();
                 await localforage.setItem('dynamic_stamp_store_v11', {
-                    seedVersion: 'v11.1',
+                    seedVersion: 'v',
                     categories: JSON.parse(JSON.stringify(stampCategories.value || [])),
                     items: JSON.parse(JSON.stringify(stampItems.value || [])),
                     updatedAt: stampUpdatedAt.value
