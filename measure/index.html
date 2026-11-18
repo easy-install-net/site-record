@@ -1423,8 +1423,41 @@
             </div>
         </div>
 
-        <div v-if="showSpaceModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showSpaceModal = false">
-            <div class="bg-white border border-zinc-200 w-full max-w-xs rounded-xl p-4 text-zinc-900 shadow-xl"><div class="text-[15px] font-black text-zinc-900 mb-3 border-b border-zinc-200 pb-2">🏠 標記本頁空間</div><div class="flex flex-wrap gap-1.5 mb-4"><button v-for="sp in spaceList" :key="sp" @click="setPageSpace(sp)" :class="activeCanvas?.space === sp ? (sp === '總圖' ? 'bg-purple-600 text-white border-purple-700' : 'bg-zinc-900 text-white border-zinc-900') : (sp === '總圖' ? 'bg-purple-50 text-purple-800 border-purple-300' : 'bg-white text-zinc-700 border-zinc-300')" class="px-2.5 py-1.5 rounded-md text-[13px] font-bold border">{{ sp }}</button><button @click="addCustomSpace" class="bg-blue-50 text-blue-700 border-blue-300 border px-2.5 py-1.5 rounded-md text-[13px] font-bold">+自訂</button></div><div class="flex gap-2 border-t border-zinc-200 pt-3"><button v-if="activeCanvas?.space" @click="setPageSpace('')" class="flex-1 bg-white text-red-600 border border-zinc-300 py-2 rounded-md text-xs font-bold shadow-sm">清除</button><button @click="showSpaceModal = false" class="flex-1 bg-zinc-900 text-white py-2 rounded-md text-xs font-bold shadow-sm">關閉</button></div></div>
+        <div v-if="showSpaceModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showSpaceModal = false; editingMetaPage = null">
+            <div class="bg-white border border-zinc-200 w-full max-w-xs rounded-xl p-4 text-zinc-900 shadow-xl">
+                <div class="text-[15px] font-black text-zinc-900 mb-2.5 border-b border-zinc-200 pb-2">🏷️ 設定圖類與空間</div>
+                <div class="text-xs font-black text-zinc-500 mb-1.5">1️⃣ 圖紙類別</div>
+                <div class="grid grid-cols-3 gap-1.5 mb-3.5">
+                    <button @click="setPageDocType('plan')" :class="(editingMetaPage || activePage)?.docType === 'plan' ? 'bg-sky-600 text-white border-sky-600' : 'bg-sky-50 text-sky-900 border-sky-200'" class="py-2 rounded-md text-xs font-black border">📐 平面圖</button>
+                    <button @click="setPageDocType('detail')" :class="(editingMetaPage || activePage)?.docType === 'detail' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-indigo-50 text-indigo-900 border-indigo-200'" class="py-2 rounded-md text-xs font-black border">📏 詳圖</button>
+                    <button @click="setPageDocType('photo')" :class="(editingMetaPage || activePage)?.docType === 'photo' ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-900 border-amber-200'" class="py-2 rounded-md text-xs font-black border">📷 拍攝</button>
+                </div>
+                <div class="text-xs font-black text-zinc-500 mb-1.5">2️⃣ 所屬空間</div>
+                <div class="flex flex-wrap gap-1.5 mb-4">
+                    <button v-for="sp in spaceList" :key="sp" @click="setPageSpace(sp)" :class="(editingMetaPage || activeCanvas)?.space === sp ? (sp === '總圖' ? 'bg-purple-600 text-white border-purple-700' : 'bg-zinc-900 text-white border-zinc-900') : (sp === '總圖' ? 'bg-purple-50 text-purple-800 border-purple-300' : 'bg-white text-zinc-700 border-zinc-300')" class="px-2.5 py-1.5 rounded-md text-[13px] font-bold border">{{ sp }}</button>
+                    <button @click="addCustomSpace" class="bg-blue-50 text-blue-700 border-blue-300 border px-2.5 py-1.5 rounded-md text-[13px] font-bold">+自訂</button>
+                </div>
+                <div class="flex gap-2 border-t border-zinc-200 pt-3">
+                    <button v-if="(editingMetaPage || activeCanvas)?.space" @click="setPageSpace('')" class="flex-1 bg-white text-red-600 border border-zinc-300 py-2 rounded-md text-xs font-bold shadow-sm">清除空間</button>
+                    <button @click="showSpaceModal = false; editingMetaPage = null" class="flex-1 bg-zinc-900 text-white py-2 rounded-md text-xs font-bold shadow-sm">完成</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🔄 一鍵自動整理選單 -->
+        <div v-if="showAutoSortModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showAutoSortModal = false">
+            <div class="bg-white border border-zinc-200 w-full max-w-xs rounded-xl p-4 flex flex-col gap-2.5 shadow-xl">
+                <div class="text-[15px] font-black text-center text-zinc-900 border-b border-zinc-200 pb-2">🔄 一鍵自動分類整理</div>
+                <button @click="autoSortPages('bySpace')" class="w-full bg-emerald-600 text-white py-3 px-3 rounded-lg text-left shadow-sm">
+                    <div class="text-xs font-black">🏠 按空間自動歸隊（推薦）</div>
+                    <div class="text-[11px] opacity-90 mt-0.5">總圖 → 各空間（平面圖 → 詳圖 → 拍攝）</div>
+                </button>
+                <button @click="autoSortPages('byType')" class="w-full bg-sky-50 border border-sky-300 text-sky-900 py-3 px-3 rounded-lg text-left">
+                    <div class="text-xs font-black">📐 工程圖與拍攝分開排列</div>
+                    <div class="text-[11px] text-sky-700 mt-0.5">所有平面圖／詳圖排前面 → 現場拍攝排後面</div>
+                </button>
+                <button @click="showAutoSortModal = false" class="w-full text-zinc-500 py-1.5 text-xs font-bold">取消</button>
+            </div>
         </div>
 
         <div v-if="isProcessing" class="fixed inset-0 z-[100] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center text-zinc-900 font-bold px-6 text-center">
