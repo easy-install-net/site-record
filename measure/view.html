@@ -81,14 +81,10 @@
                 <!-- 左上浮動：頁碼切換 + 「分」「全」快捷按鈕 + 當前頁空間標籤 -->
                 <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
                     <div v-if="!activePin" class="flex items-center gap-1">
-                        <div class="bg-white/95 border border-zinc-300 rounded-md flex items-center px-0.5 py-0.5 shadow-sm">
-                            <button @click="prevPage" :class="{ 'opacity-30': activePageIndex === 0 }" class="px-1.5 py-0.5 text-zinc-700 font-black text-xs">◀</button>
-                            <button @click="showQuickNav = !showQuickNav" class="px-1.5 py-0.5 text-zinc-900 font-black text-xs flex items-center gap-0.5">
-                                <span>P{{ activePageIndex + 1 }}/{{ pages.length }}</span>
-                                <span class="text-[10px] text-blue-600">▾</span>
-                            </button>
-                            <button @click="nextPage" :class="{ 'opacity-30': activePageIndex === pages.length - 1 }" class="px-1.5 py-0.5 text-zinc-700 font-black text-xs">▶</button>
-                        </div>
+                        <button @click="showQuickNav = !showQuickNav" class="bg-white/95 border border-zinc-300 rounded-md px-2 py-1 text-zinc-900 font-black text-xs flex items-center gap-0.5 shadow-sm">
+                            <span>P{{ activePageIndex + 1 }}/{{ pages.length }}</span>
+                            <span class="text-[10px] text-blue-600">▾</span>
+                        </button>
 
                         <button @click="openNavMode('stack')"
                                 :class="showQuickNav && navStackMode ? 'bg-purple-700 text-white border-purple-700' : 'bg-white/95 text-purple-800 border-purple-300'"
@@ -226,15 +222,15 @@
                     </div>
                 </div>
 
-              <!-- 左右兩側大揭頁箭嘴（桌面/平板單手快速翻頁） -->
+              <!-- 左右兩側小窄揭頁箭嘴 -->
                 <button v-if="!activePin && activePageIndex > 0" @click.stop="prevPage" @touchstart.stop @mousedown.stop
                         title="上一頁"
-                        class="fixed left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-14 sm:w-12 sm:h-16 rounded-2xl bg-white/60 hover:bg-white active:scale-95 border border-zinc-300 shadow-lg flex items-center justify-center text-zinc-800 text-lg sm:text-xl font-black backdrop-blur-xs transition-all">
+                        class="fixed left-1 top-1/2 -translate-y-1/2 z-20 w-6 h-11 sm:w-7 sm:h-12 rounded-xl bg-white/80 hover:bg-white active:scale-95 border border-zinc-300/90 shadow-md flex items-center justify-center text-zinc-800 text-xs sm:text-sm font-black transition-all">
                     ◀
                 </button>
                 <button v-if="!activePin && activePageIndex < pages.length - 1" @click.stop="nextPage" @touchstart.stop @mousedown.stop
                         title="下一頁"
-                        class="fixed right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-14 sm:w-12 sm:h-16 rounded-2xl bg-white/60 hover:bg-white active:scale-95 border border-zinc-300 shadow-lg flex items-center justify-center text-zinc-800 text-lg sm:text-xl font-black backdrop-blur-xs transition-all">
+                        class="fixed right-1 top-1/2 -translate-y-1/2 z-20 w-6 h-11 sm:w-7 sm:h-12 rounded-xl bg-white/80 hover:bg-white active:scale-95 border border-zinc-300/90 shadow-md flex items-center justify-center text-zinc-800 text-xs sm:text-sm font-black transition-all">
                     ▶
                 </button>
 
