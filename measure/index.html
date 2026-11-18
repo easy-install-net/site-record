@@ -1469,10 +1469,10 @@
                 <div class="text-xs font-black text-zinc-500 mb-1.5">1️⃣ 圖紙類別</div>
                 <div class="grid grid-cols-5 gap-1 mb-3.5">
                     <button @click="setPageDocType('plan')" :class="(editingMetaPage || activePage)?.docType === 'plan' ? 'bg-sky-600 text-white border-sky-600' : 'bg-sky-50 text-sky-900 border-sky-200'" class="py-2 px-0.5 rounded-md text-[11px] font-black border text-center whitespace-nowrap">📐平面圖</button>
+                    <button @click="setPageDocType('photo')" :class="(editingMetaPage || activePage)?.docType === 'photo' ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-900 border-amber-200'" class="py-2 px-0.5 rounded-md text-[11px] font-black border text-center whitespace-nowrap">📷拍攝</button>
                     <button @click="setPageDocType('3d')" :class="(editingMetaPage || activePage)?.docType === '3d' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-cyan-50 text-cyan-900 border-cyan-200'" class="py-2 px-0.5 rounded-md text-[11px] font-black border text-center whitespace-nowrap">🧊立體圖</button>
                     <button @click="setPageDocType('dim')" :class="(editingMetaPage || activePage)?.docType === 'dim' ? 'bg-teal-600 text-white border-teal-600' : 'bg-teal-50 text-teal-900 border-teal-200'" class="py-2 px-0.5 rounded-md text-[11px] font-black border text-center whitespace-nowrap">📏尺吋圖</button>
                     <button @click="setPageDocType('detail')" :class="(editingMetaPage || activePage)?.docType === 'detail' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-indigo-50 text-indigo-900 border-indigo-200'" class="py-2 px-0.5 rounded-md text-[11px] font-black border text-center whitespace-nowrap">📑詳圖</button>
-                    <button @click="setPageDocType('photo')" :class="(editingMetaPage || activePage)?.docType === 'photo' ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-900 border-amber-200'" class="py-2 px-0.5 rounded-md text-[11px] font-black border text-center whitespace-nowrap">📷拍攝</button>
                 </div>
                 <div class="text-xs font-black text-zinc-500 mb-1.5">2️⃣ 所屬空間</div>
                 <div class="flex flex-wrap gap-1.5 mb-4">
