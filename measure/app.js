@@ -641,11 +641,23 @@ const syncUserOwnedProjects = async () => {
             const resetZoom = () => { zoomScale.value = 1; vbX.value = 0; vbY.value = 0; };
             const resetZoomB = () => { zoomScaleB.value = 1; vbXB.value = 0; vbYB.value = 0; };
 
+            const getMarkerFontPx = (m) => Math.round(28 * globalFontScale.value * (m?.fontScale || 1) * 10) / 10;
+
             const toggleFontScale = () => {
-                globalFontScale.value = globalFontScale.value === 0.6 ? 0.8 : (globalFontScale.value === 0.8 ? 1.0 : 0.6);
+                globalFontScale.value = globalFontScale.value <= 0.5 ? 0.65 : (globalFontScale.value <= 0.65 ? 0.85 : 0.5);
                 (targetCanvas.value?.markers || []).forEach(m => updateMarkerSize(m));
                 saveAll();
-                showToast(`🔠 字體：${globalFontScale.value === 1.0 ? '大' : (globalFontScale.value === 0.8 ? '中' : '細')}`);
+                showToast(`🔠 整體字體：${globalFontScale.value >= 0.85 ? '大' : (globalFontScale.value >= 0.65 ? '中' : '細')}`);
+            };
+
+            const stepMarkerFontScale = (delta) => {
+                if (!activeMarker.value) return;
+                ensureMarkerBranched(() => {
+                    const cur = activeMarker.value.fontScale || 1;
+                    activeMarker.value.fontScale = Math.max(0.5, Math.min(2.2, Math.round((cur + delta) * 100) / 100));
+                    updateMarkerSize(activeMarker.value);
+                    touchDirty(); saveAll();
+                });
             };
 
             const applyZoomAtClientPoint = (nextScale, clientX, clientY, anchorSvg, pane = 'A') => {
@@ -887,16 +899,68 @@ const localHiddenCodes = ref([]);
             };
             const deleteEditingIndexMarker = () => { if (!editingIndexMarker.value) return; activeMarker.value = editingIndexMarker.value; showIndexModal.value = false; editingIndexMarker.value = null; deleteMarkerTop(); };
 
-            const setMarkerTextColor = (colorHex) => { defaultTextColor.value = colorHex; if (activeMarker.value) ensureMarkerBranched(() => { activeMarker.value.textColor = colorHex; touchDirty(); saveAll(); }); };
+            const activeLine = ref(null);
+
+            const setMarkerTextColor = (colorHex) => {
+                defaultTextColor.value = colorHex;
+                if (activeMarker.value) {
+                    ensureMarkerBranched(() => {
+                        activeMarker.value.textColor = colorHex;
+                        if (activeMarker.value.lineId) {
+                            const linkedLine = (targetCanvas.value?.lines || []).find(l => l.id === activeMarker.value.lineId);
+                            if (linkedLine) linkedLine.color = colorHex;
+                        }
+                        touchDirty(); saveAll();
+                    });
+                }
+            };
+
+            const onLinePointerStart = (line, e, pane = activePane.value) => {
+                focusPane(pane);
+                if (e.touches?.length > 1 || isPinching || showBranchPrompt.value) return;
+                if (drawMode.value === 'eraser') { onEraseTap('line', line, e, pane); return; }
+                if (drawMode.value === 'move') {
+                    e.preventDefault(); e.stopPropagation();
+                    activeMarker.value = null;
+                    activeLine.value = line;
+                }
+            };
+
+            const setActiveLineColor = (colorHex) => {
+                if (!activeLine.value) return;
+                checkBranchNeed(() => {
+                    const target = (targetCanvas.value?.lines || []).find(l => l.id === activeLine.value.id) || activeLine.value;
+                    target.color = colorHex;
+                    const linkedMarker = (targetCanvas.value?.markers || []).find(m => m.lineId === target.id);
+                    if (linkedMarker) linkedMarker.textColor = colorHex;
+                    touchDirty(); saveAll();
+                });
+            };
+
+            const deleteActiveLine = () => {
+                if (!activeLine.value) return;
+                checkBranchNeed(() => {
+                    const c = targetCanvas.value, lid = activeLine.value.id;
+                    if (c) {
+                        c.lines = (c.lines || []).filter(l => l.id !== lid);
+                        c.markers = (c.markers || []).filter(m => m.lineId !== lid);
+                    }
+                    activeLine.value = null;
+                    touchDirty(); saveAll();
+                });
+            };
 
             const getArrowMarkerId = (c, suffix = '') => 'arrow-end-' + suffix + String(c || '#ef4444').replace('#', 'hex_');
             const getFsArrowMarkerId = (c) => 'fs-arrow-' + String(c || '#ef4444').replace('#', 'hex_');
 
             const getLineStroke = (l, alpha = 0.75) => {
-                if (!l.type || l.type === 'measure') return `rgba(255, 0, 68, ${alpha})`;
                 const legacy = { red: '#ef4444', gray: '#9ca3af', white: '#ffffff' };
+                if (!l.type || l.type === 'measure') {
+                    return l.color ? (legacy[l.color] || l.color) : `rgba(255, 0, 68, ${alpha})`;
+                }
                 return legacy[l.color] || l.color || '#ef4444';
             };
+
             const getWallSegments = (w) => buildWallSegments(w);
 
             const enterEditMode = (idx = 0) => { resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; activePageIndex.value = idx; activePin.value = null; drawMode.value = 'browse'; currentView.value = 'proj'; };
@@ -1153,6 +1217,7 @@ const localHiddenCodes = ref([]);
                     checkBranchNeed(() => {
                         const target = (targetCanvas.value.markers || []).find(m => m.id === marker.id) || marker;
                         if (showBranchPrompt.value) return;
+                        activeLine.value = null;
                         draggedMarker.value = target; activeMarker.value = target;
                         const p = getCoords(e, pane);
                         dragOrigin.value = { x: p.x, y: p.y }; markerOrigin.value = { x: target.x, y: target.y };
@@ -1338,8 +1403,10 @@ const localHiddenCodes = ref([]);
                     checkBranchNeed(() => {
                         const c = targetCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                         const lineId = Date.now(), markerId = lineId + 1;
+                        
                         const lineType = drawMode.value === 'line' ? 'measure' : drawMode.value;
-                        c.lines.push({ ...lSnap, id: lineId, type: lineType, color: lineType === 'measure' ? null : drawColor.value });
+                        c.lines.push({ ...lSnap, id: lineId, type: lineType, color: lineType === 'measure' ? (defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null) : drawColor.value });
+                        
                         if (lineType !== 'measure') { c.historyStack.push({ type: 'line_marker', lineId, markerId: null }); touchDirty(); saveAll(); return; }
                         const newMarker = { id: markerId, lineId, x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2), w: 140, h: 56, type: 'general', textColor: defaultTextColor.value, data: makeBlankMarkerData() };
                         updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
@@ -1468,9 +1535,11 @@ const localHiddenCodes = ref([]);
 
             const updateMarkerSize = (m) => {
                 if (m.type === 'image' || m.type === 'cad') return;
-                const lines = getMarkerLines(m), maxLen = Math.max(0, ...lines.map(l => l.length));
-                m.w = Math.max(110, (maxLen * 30 + 34) * globalFontScale.value);
-                m.h = Math.max(50, (lines.length * 36 + 16) * globalFontScale.value);
+                const lines = getMarkerLines(m);
+                const fPx = getMarkerFontPx(m);
+                const maxW = Math.max(24, ...lines.map(l => measureStrWidth(l, fPx)));
+                m.w = Math.max(36, Math.round(maxW + 10));
+                m.h = Math.max(22, Math.round(lines.length * (fPx * 1.2) + 6));
             };
 
             const getStampColor = (m) => {
@@ -2228,7 +2297,7 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
                 (canvasObj.markers || []).forEach(m => {
                     if (m.type === 'cad') drawCustomCadOnCanvas(ctx, m, customCadImages);
                     else if (m.type === 'image') { if (markerImages[m.id]) { ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(((m.rot || 0) * Math.PI) / 180); ctx.drawImage(markerImages[m.id], -m.w / 2, -m.h / 2, m.w, m.h); ctx.restore(); } }
-                    else { const lines = getMarkerLines(m), color = getStampColor(m); ctx.font = `900 ${28 * globalFontScale.value}px sans-serif`; const startY = m.y - ((lines.length - 1) * 34 * globalFontScale.value) / 2; lines.forEach((line, i) => { const y = startY + i * 34 * globalFontScale.value; ctx.lineWidth = 7 * globalFontScale.value; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); }); }
+                    else { const lines = getMarkerLines(m), color = getStampColor(m), sc = globalFontScale.value * (m.fontScale || 1); ctx.font = `900 ${28 * sc}px sans-serif`; const startY = m.y - ((lines.length - 1) * 34 * sc) / 2; lines.forEach((line, i) => { const y = startY + i * 34 * sc; ctx.lineWidth = 7 * sc; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); }); }
                 });
                 (canvasObj.pins || []).forEach((pin, idx) => { const px = (pin.x / 100) * w, py = (pin.y / 100) * h; ctx.beginPath(); ctx.arc(px, py - 22, 20, 0, 2 * Math.PI); ctx.fillStyle = '#dc2626'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(idx + 1, px, py - 22); });
                 resolve(c);
@@ -2300,7 +2369,9 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
                 setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload, pasteFromClipboard,
                 onEraseTap, resizeImageMarker, onMarkerPointerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
                 deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, onMarkerTextInput, handleKeypad, applyTag, applyStamp, getStampColor, getMarkerLines, getTagFields, exportPdfReport,
-                globalFontScale, toggleFontScale
+                globalFontScale, toggleFontScale,
+                activeLine, onLinePointerStart, setActiveLineColor, deleteActiveLine, getMarkerFontPx, stepMarkerFontScale, openMarkerEditor
+            };
             };
         }
     }).mount('#app');
