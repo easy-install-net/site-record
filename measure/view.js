@@ -7,7 +7,6 @@ if (!window.Vue) {
     let db = null;
     try {
         if (window.firebase) {
-            // 修正 Firebase 衝突：確保未啟動過先啟動
             if (!firebase.apps.length) {
                 firebase.initializeApp({
                     apiKey: "AIzaSyCSRfZdAVh8ADPNtayW5lyDtmE0xDsJXNg",
@@ -26,6 +25,21 @@ if (!window.Vue) {
     const sanitizeFilename = (s) => String(s || '').trim().replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
     const getTodayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
+    const TAG_DEFS = {
+        door: { title: '門洞', fields: [{ key: 'w_in', label: '門闊' }, { key: 'h_in', label: '門高' }, { key: 't', label: '牆厚' }, { key: 't_frame', label: '門框厚' }, { key: 'h_top', label: '頂到天花' }, { key: 'w_side', label: '邊到牆' }] },
+        window: { title: '窗', fields: [{ key: 'w_in', label: '內闊' }, { key: 'h_in', label: '內高' }, { key: 'd_in', label: '內深' }, { key: 'h_bottom', label: '面到地' }, { key: 't_stone', label: '窗石厚' }, { key: 'd_stone', label: '窗石凸' }] },
+        beam: { title: '樑', fields: [{ key: 'w', label: '樑闊' }, { key: 'd', label: '樑深' }, { key: 'h_bottom', label: '底到地' }, { key: 'w_side', label: '樑邊到牆' }] },
+        column: { title: '柱', fields: [{ key: 'w', label: '柱闊' }, { key: 'd', label: '柱深' }, { key: 'h_top', label: '柱高' }, { key: 'd_out', label: '柱凸出' }] },
+        protrusion: { title: '凸', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
+        pipe: { title: '包喉', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
+        elec_box: { title: '電箱', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }, { key: 'h_bottom', label: '底到地' }] },
+        ac: { title: '冷氣', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }, { key: 'h_bottom', label: '底到地' }] },
+        fridge: { title: '雪柜', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
+        skirting: { title: '地腳線', fields: [{ key: 'h', label: '高' }, { key: 't', label: '厚' }] },
+        reserve: { title: '留位', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] },
+        avoid: { title: '避', fields: [{ key: 'w', label: '闊' }, { key: 'h', label: '高' }, { key: 'd', label: '深' }] }
+    };
+
     createApp({
         setup() {
             const inputCode = ref('');
@@ -37,7 +51,13 @@ if (!window.Vue) {
 
             const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
-            const getLineStroke = (l, alpha = 0.55) => !l.type || l.type === 'measure' ? `rgba(255, 0, 68, ${alpha})` : ({ gray: '#9ca3af', white: '#ffffff' }[l.color] || '#ef4444');
+            const getLineStroke = (l, alpha = 0.75) => {
+                const legacy = { red: '#ef4444', gray: '#9ca3af', white: '#ffffff' };
+                if (!l.type || l.type === 'measure') {
+                    return l.color ? (legacy[l.color] || l.color) : `rgba(255, 0, 68, ${alpha})`;
+                }
+                return legacy[l.color] || l.color || '#ef4444';
+            };
             const getWallSegments = (w) => {
                 if (!w) return [];
                 const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = Math.hypot(dx, dy); if (L < 4) return [];
@@ -61,27 +81,24 @@ if (!window.Vue) {
                 return segs;
             };
 
-            const getTagFields = (t) => ({
-                door: [{ key: 'w_in', label: '門闊' }, { key: 'h_in', label: '門高' }, { key: 't', label: '牆厚' }, { key: 't_frame', label: '門框厚' }, { key: 'h_top', label: '頂到天花' }, { key: 'w_side', label: '邊到牆' }],
-                window: [{ key: 'w_in', label: '內闊' }, { key: 'h_in', label: '內高' }, { key: 'd_in', label: '內深' }, { key: 'h_bottom', label: '面到地' }, { key: 't_stone', label: '窗石厚' }, { key: 'd_stone', label: '窗石凸' }],
-                beam: [{ key: 'w', label: '樑闊' }, { key: 'd', label: '樑深' }, { key: 'h_bottom', label: '底到地' }, { key: 'w_side', label: '樑邊到牆' }],
-                column: [{ key: 'w', label: '柱闊' }, { key: 'd', label: '柱深' }, { key: 'h_top', label: '柱高' }, { key: 'd_out', label: '柱凸出' }]
-            }[t] || []);
-
             const getMarkerLines = (m) => {
-                if (['window','door','beam','column'].includes(m.type)) { return [{ window: '窗', door: '門洞', beam: '樑', column: '柱' }[m.type], ...getTagFields(m.type).filter(f => m.data[f.key]).map(f => `${f.label}:${m.data[f.key]}`)]; }
-                if (m.type === 'stamp' || m.type === 'text') return [m.data.val || ''];
-                return [`${m.data.name ? m.data.name + ': ' : ''}${m.data.val || ''}`];
+                const def = TAG_DEFS[m.type];
+                if (def) return [def.title, ...def.fields.filter(f => m.data?.[f.key]).map(f => `${f.label}:${m.data[f.key]}`)];
+                if (['stamp', 'text', 'space_tag', 'page_link'].includes(m.type)) return [m.data?.val || ''];
+                return [`${m.data?.name ? m.data.name + ': ' : ''}${m.data?.val || ''}`];
             };
 
             const getStampColor = (m) => {
+                if (m.textColor) return m.textColor;
+                if (m.type === 'space_tag') return '#a855f7';
+                if (m.type === 'page_link') return '#38bdf8';
                 if (m.type !== 'stamp') return '#ffffff';
-                const v = m.data.val;
+                const v = m.data?.val;
                 if (['需清拆','牆身斜','牆體不平','空鼓','滲水','局部凸出'].includes(v)) return '#ef4444';
                 if (['開關','單蘇','孖蘇','燈曲','數據','燈線'].includes(v)) return '#eab308';
                 if (['留通道','開門方向','可保留','實地台'].includes(v)) return '#3b82f6';
                 if (['要收口','見光','開背板','生口位','避窗簾盒','留散熱','要分件'].includes(v)) return '#d97706';
-                return '#a855f7';
+                return '#ffffff';
             };
 
             const fetchMediaData = async (projCode, photoId) => {
