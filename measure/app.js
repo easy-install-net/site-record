@@ -1210,7 +1210,7 @@ const localHiddenCodes = ref([]);
                         detail: '📑詳圖',
                         photo: '📷拍攝'
                     }[t] || '');
-            const isDrawingDocType = (dt) => dt === 'plan' || dt === 'detail';
+           const isDrawingDocType = (dt) => ['plan', '3d', 'dim', 'detail'].includes(dt);
 
             const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                 let insertIdx = pages.value.length;
@@ -1237,7 +1237,7 @@ const localHiddenCodes = ref([]);
 
             const overviewTypeFilter = ref('all');
             const overviewSpaceFilter = ref('all');
-            const drawingPageCount = computed(() => pages.value.filter(p => isDrawingDocType(p.docType)).length);
+            const drawingPageCount = computed(() => pages.value.filter(p => ['plan', '3d', 'dim', 'detail'].includes(p.docType)).length);
             const photoPageCount = computed(() => pages.value.filter(p => p.docType === 'photo').length);
             const overviewSpacesAvailable = computed(() => {
                 const set = new Set();
@@ -1248,7 +1248,8 @@ const localHiddenCodes = ref([]);
                 return pages.value
                     .map((pg, idx) => ({ pg, idx }))
                     .filter(({ pg }) => {
-                        if (overviewTypeFilter.value === 'drawing' && !isDrawingDocType(pg.docType)) return false;
+                        // 當篩選「工程圖」時，包埋 4 種類別（平面、立體、尺吋、詳圖）
+                        if (overviewTypeFilter.value === 'drawing' && !['plan', '3d', 'dim', 'detail'].includes(pg.docType)) return false;
                         if (overviewTypeFilter.value === 'photo' && pg.docType !== 'photo') return false;
                         if (overviewSpaceFilter.value !== 'all') {
                             if (overviewSpaceFilter.value === '__NONE__' && pg.space) return false;
@@ -1290,7 +1291,7 @@ const localHiddenCodes = ref([]);
             const autoSortPages = async (mode = 'bySpace') => {
                 showAutoSortModal.value = false;
                 if (pages.value.length <= 1) return;
-                const docRank = (dt) => ({ plan: 1, detail: 2, photo: 3 }[dt] || 4);
+                const docRank = (dt) => ({ plan: 1, '3d': 2, dim: 3, detail: 4, photo: 5 }[dt] || 6);
                 const spaceRank = (sp) => {
                     if (!sp) return 999;
                     if (sp === '總圖') return 0;
