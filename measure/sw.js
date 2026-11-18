@@ -3,7 +3,7 @@ const CACHE_NAME = 'measure-pro-v11.2';
 const CORE_ASSETS = [
     './',
     './index.html',
-    './app.js?v=11.1',
+    './app.js?v=11.2',
     './data.js?v=11.1',
     './cad.js?v=11.1',
     './view.html',
