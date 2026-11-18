@@ -2771,7 +2771,6 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
                 fsEditingMarker, fsQuickInputRef, onFsMarkerTap, openFsMarkerQuickEdit, setFsMarkerColor, stepFsMarkerFont, closeFsMarkerQuickEdit,
                 onProjectNameInput, showNotesModal, noteFilter, newNoteText, newNoteSpace, activeNotesCount, filteredNotes, addProjectNote, toggleProjectNote, editProjectNote, deleteProjectNote, clearDoneNotes
             };
-            };
         }
     }).mount('#app');
 }
