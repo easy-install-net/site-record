@@ -794,12 +794,12 @@ const localHiddenCodes = ref([]);
                 if (!navigator.onLine) cloudSyncState.value = 'offline';
             };
 
-            const showBranchPrompt = ref(false), branchOwner = ref(''), branchInputValue = ref(''), pendingBranchAction = ref(null), branchTargetPage = ref(null);
+            const takenOverProjects = new Set();
+            const showBranchPrompt = ref(false), branchOwner = ref(''), pendingBranchAction = ref(null), branchTargetPage = ref(null);
             const triggerBranchPrompt = (pg, owner, actionCb) => {
                 isDrawing.value = false; currentLine.value = null; currentWall.value = null; currentPath.value = '';
                 if (draggedMarker.value) { draggedMarker.value.x = markerOrigin.value.x; draggedMarker.value.y = markerOrigin.value.y; draggedMarker.value = null; }
-                branchOwner.value = owner; branchInputValue.value = ''; branchTargetPage.value = pg; pendingBranchAction.value = actionCb; showBranchPrompt.value = true;
-                nextTick(() => document.querySelector('input[placeholder="Y"]')?.focus());
+                branchOwner.value = owner; branchTargetPage.value = pg; pendingBranchAction.value = actionCb; showBranchPrompt.value = true;
             };
             const doBranchCopy = (pg, me) => {
                 const c = JSON.parse(JSON.stringify(pg)), sharedPhotoId = pg.photoId || ('page_' + pg.id); pg.photoId = sharedPhotoId;
@@ -815,11 +815,32 @@ const localHiddenCodes = ref([]);
                 dirtyPageIds.add(newPg.id); hasUnsavedCloudChanges.value = true;
                 showToast(`📋 已複製為 P${pages.value.length} (保留 [${branchOwner.value}] 原圖)`);
             };
-            const confirmBranch = () => { if (branchInputValue.value.trim().toUpperCase() === 'Y') doBranchCopy(branchTargetPage.value, String(authorName.value || '').trim()); const cb = pendingBranchAction.value; showBranchPrompt.value = false; pendingBranchAction.value = null; branchTargetPage.value = null; if (cb) cb(); };
-            const cancelBranch = () => { const cb = pendingBranchAction.value; showBranchPrompt.value = false; pendingBranchAction.value = null; branchTargetPage.value = null; if (cb) cb(); };
+            const overwriteBranch = () => {
+                const me = String(authorName.value || '').trim();
+                if (project.code) takenOverProjects.add(String(project.code));
+                if (branchTargetPage.value && me) branchTargetPage.value.author = me;
+                const cb = pendingBranchAction.value;
+                showBranchPrompt.value = false; pendingBranchAction.value = null; branchTargetPage.value = null;
+                if (cb) cb();
+            };
+            
+            const duplicateBranch = () => {
+                const me = String(authorName.value || '').trim();
+                if (branchTargetPage.value) doBranchCopy(branchTargetPage.value, me);
+                const cb = pendingBranchAction.value;
+                showBranchPrompt.value = false; pendingBranchAction.value = null; branchTargetPage.value = null;
+                if (cb) cb();
+            };
+            const dismissBranch = () => {
+                showBranchPrompt.value = false; pendingBranchAction.value = null; branchTargetPage.value = null;
+            };
             const checkBranchNeed = (actionCb) => {
                 const pg = targetPage.value, me = String(authorName.value || '').trim();
                 if (!pg || !pg.photo || !me) return actionCb();
+                if (project.code && takenOverProjects.has(String(project.code))) {
+                    pg.author = me;
+                    return actionCb();
+                }
                 const owner = String(pg.author || '').trim();
                 if (!owner || owner === me) return actionCb();
                 triggerBranchPrompt(pg, owner, actionCb);
@@ -2274,7 +2295,7 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
                 showManageModal, manageProj, openManageMenu, openProjectMap,renameProject, duplicateProject, showCloudBrowser, cloudProjectList, unclaimedCloudProjects, openCloudBrowser, downloadFromCloudBrowser, cleanCloudGarbage,
                 showBackupListModal, backupList, openBackupList, restoreBackup, drawColor, wallStyle, cloudStatusText, cloudStatusClass, showCloudDetail, forceSyncToCloud,toastMsg, copyShareLink,
                 drawMode, drawingPane, showTopSheet, showTopTextBar, activeMarker, isProcessing, processingText, focusedInput, topTextInputRef,
-                showBranchPrompt, branchOwner, branchInputValue, confirmBranch, cancelBranch, svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
+                showBranchPrompt, branchOwner, overwriteBranch, duplicateBranch, dismissBranch, svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
                 createNewProject, loadProject, removeProjectLocalOnly, deleteProject, backToProjects, copyCode, saveAll, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, onPinTap, deleteActivePin,
                 setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload, pasteFromClipboard,
                 onEraseTap, resizeImageMarker, onMarkerPointerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
