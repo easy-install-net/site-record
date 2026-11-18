@@ -298,42 +298,63 @@
                     </div>
                 </div>
 
-                <!-- ✥ 移模式精準排位操控列 (左右/上下大細、反轉、1°微調、方向貼牆) -->
-                <div v-if="!capsuleCollapsed && drawMode === 'move' && activeMarker"
-                     class="bg-white/95 backdrop-blur-md border border-blue-400 rounded-xl p-1.5 shadow-xl flex flex-col gap-1 w-[94vw] max-w-md">
-                    <div class="flex flex-wrap items-center gap-1">
-                        <template v-if="['cad','image'].includes(activeMarker.type)">
-                            <button @click="flipMarker('x')" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-1.5 py-0.5 rounded text-xs font-bold">↔️反轉</button>
-                            <button @click="flipMarker('y')" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-1.5 py-0.5 rounded text-xs font-bold">↕️反轉</button>
-                            <button @click="rotateMarker(-90)" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-1.5 py-0.5 rounded text-xs font-bold">↺90°</button>
-                            <button @click="rotateMarker(90)" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-1.5 py-0.5 rounded text-xs font-bold">↻90°</button>
-                            <button @click="rotateMarker(-1)" class="bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 rounded text-xs font-bold">-1°</button>
-                            <button @click="rotateMarker(1)" class="bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 rounded text-xs font-bold">+1°</button>
-                        </template>
-                        <div class="flex items-center gap-0.5 ml-auto">
-                            <button @click="nudgeMarker(-2, 0)" class="bg-zinc-100 border border-zinc-300 px-1.5 py-0.5 rounded text-xs font-black">⬅️</button>
-                            <button @click="nudgeMarker(0, -2)" class="bg-zinc-100 border border-zinc-300 px-1.5 py-0.5 rounded text-xs font-black">⬆️</button>
-                            <button @click="nudgeMarker(0, 2)" class="bg-zinc-100 border border-zinc-300 px-1.5 py-0.5 rounded text-xs font-black">⬇️</button>
-                            <button @click="nudgeMarker(2, 0)" class="bg-zinc-100 border border-zinc-300 px-1.5 py-0.5 rounded text-xs font-black">➡️</button>
-                            <button @click="drawMode = 'cad'" class="bg-indigo-50 border border-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded text-xs font-bold ml-0.5">🏛️圖塊</button>
-                            <button @click="activeMarker = null" class="bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded text-xs font-bold ml-0.5">✕</button>
-                        </div>
+                <!-- ✥ 移模式精準排位與快捷編輯列 -->
+                <div v-if="!capsuleCollapsed && drawMode === 'move' && (activeMarker || activeLine)"
+                     class="bg-white/95 backdrop-blur-md border border-blue-400 rounded-xl p-1.5 shadow-xl flex flex-col gap-1.5 w-[94vw] max-w-md">
+                    <div v-if="activeLine && !activeMarker" class="flex flex-wrap items-center gap-1.5">
+                        <span class="text-xs font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">📏 標註線顏色</span>
+                        <button v-for="c in ['#ef4444','#eab308','#38bdf8','#34d399','#ffffff','#111827']" :key="c" @click="setActiveLineColor(c)"
+                                :style="{ backgroundColor: c }"
+                                :class="activeLine.color === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-80'"
+                                class="w-5 h-5 rounded-full border border-zinc-400 shrink-0"></button>
+                        <button @click="deleteActiveLine" class="bg-red-50 border border-red-200 text-red-600 px-2 py-0.5 rounded text-xs font-bold ml-auto">🗑️刪線</button>
+                        <button @click="activeLine = null" class="bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded text-xs font-bold">✕</button>
                     </div>
-                    <div v-if="['cad','image'].includes(activeMarker.type)" class="grid grid-cols-2 gap-1.5 pt-0.5 border-t border-zinc-100">
-                        <div class="flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded px-1.5 py-0.5">
-                            <span class="text-xs font-bold text-zinc-700 shrink-0">↔️闊</span>
-                            <input type="range" min="0.3" max="3.0" step="0.05" :value="activeMarker.scaleX || 1" @input="e => setMarkerScaleX(e.target.value)" class="flex-1 min-w-0 accent-blue-600">
-                            <span class="text-xs font-bold text-zinc-700 w-8 text-right shrink-0">{{ Math.round((activeMarker.scaleX || 1) * 100) }}%</span>
-                        </div>
-                        <div class="flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded px-1.5 py-0.5">
-                            <span class="text-xs font-bold text-zinc-700 shrink-0">↕️高</span>
-                            <input type="range" min="0.3" max="3.0" step="0.05" :value="activeMarker.scaleY || 1" @input="e => setMarkerScaleY(e.target.value)" class="flex-1 min-w-0 accent-blue-600">
-                            <span class="text-xs font-bold text-zinc-700 w-8 text-right shrink-0">{{ Math.round((activeMarker.scaleY || 1) * 100) }}%</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
+                    <template v-else-if="activeMarker">
+                        <div class="flex flex-wrap items-center gap-1">
+                            <template v-if="['cad','image'].includes(activeMarker.type)">
+                                <button @click="flipMarker('x')" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-1.5 py-0.5 rounded text-xs font-bold">↔️反轉</button>
+                                <button @click="flipMarker('y')" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-1.5 py-0.5 rounded text-xs font-bold">↕️反轉</button>
+                                <button @click="rotateMarker(-90)" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-1.5 py-0.5 rounded text-xs font-bold">↺90°</button>
+                                <button @click="rotateMarker(90)" class="bg-zinc-50 border border-zinc-300 text-zinc-900 px-1.5 py-0.5 rounded text-xs font-bold">↻90°</button>
+                                <button @click="rotateMarker(-1)" class="bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 rounded text-xs font-bold">-1°</button>
+                                <button @click="rotateMarker(1)" class="bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 rounded text-xs font-bold">+1°</button>
+                            </template>
+                            <template v-else>
+                                <button @click="openMarkerEditor(activeMarker, activePane)" class="bg-zinc-900 text-white px-2 py-0.5 rounded text-xs font-bold shadow-sm">✏️改字</button>
+                                <div class="flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded-full px-1.5 py-0.5">
+                                    <button v-for="c in ['#ffffff','#ef4444','#eab308','#38bdf8','#34d399']" :key="c" @click="setMarkerTextColor(c)"
+                                            :style="{ backgroundColor: c }"
+                                            :class="getStampColor(activeMarker) === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-75'"
+                                            class="w-4 h-4 rounded-full border border-zinc-400 shrink-0"></button>
+                                </div>
+                                <button @click="stepMarkerFontScale(-0.15)" class="bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 rounded text-xs font-black">A-</button>
+                                <button @click="stepMarkerFontScale(0.15)" class="bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 rounded text-xs font-black">A+</button>
+                            </template>
+                            <div class="flex items-center gap-0.5 ml-auto">
+                                <button @click="nudgeMarker(-2, 0)" class="bg-zinc-100 border border-zinc-300 px-1 py-0.5 rounded text-[11px]">⬅️</button>
+                                <button @click="nudgeMarker(0, -2)" class="bg-zinc-100 border border-zinc-300 px-1 py-0.5 rounded text-[11px]">⬆️</button>
+                                <button @click="nudgeMarker(0, 2)" class="bg-zinc-100 border border-zinc-300 px-1 py-0.5 rounded text-[11px]">⬇️</button>
+                                <button @click="nudgeMarker(2, 0)" class="bg-zinc-100 border border-zinc-300 px-1 py-0.5 rounded text-[11px]">➡️</button>
+                                <button @click="deleteMarkerTop" class="bg-red-50 border border-red-200 text-red-600 px-1.5 py-0.5 rounded text-xs font-bold ml-0.5">🗑️</button>
+                                <button @click="activeMarker = null" class="bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded text-xs font-bold">✕</button>
+                            </div>
+                        </div>
+                        <div v-if="['cad','image'].includes(activeMarker.type)" class="grid grid-cols-2 gap-1.5 pt-0.5 border-t border-zinc-100">
+                            <div class="flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded px-1.5 py-0.5">
+                                <span class="text-xs font-bold text-zinc-700 shrink-0">↔️闊</span>
+                                <input type="range" min="0.3" max="3.0" step="0.05" :value="activeMarker.scaleX || 1" @input="e => setMarkerScaleX(e.target.value)" class="flex-1 min-w-0 accent-blue-600">
+                                <span class="text-xs font-bold text-zinc-700 w-8 text-right shrink-0">{{ Math.round((activeMarker.scaleX || 1) * 100) }}%</span>
+                            </div>
+                            <div class="flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded px-1.5 py-0.5">
+                                <span class="text-xs font-bold text-zinc-700 shrink-0">↕️高</span>
+                                <input type="range" min="0.3" max="3.0" step="0.05" :value="activeMarker.scaleY || 1" @input="e => setMarkerScaleY(e.target.value)" class="flex-1 min-w-0 accent-blue-600">
+                                <span class="text-xs font-bold text-zinc-700 w-8 text-right shrink-0">{{ Math.round((activeMarker.scaleY || 1) * 100) }}%</span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
 
 
 
