@@ -1266,11 +1266,11 @@ const localHiddenCodes = ref([]);
                 pages.value.forEach(p => { if (p.space) set.add(p.space); });
                 return Array.from(set);
             });
+            const overviewStackMode = ref(true);
             const filteredOverviewPages = computed(() => {
-                return pages.value
+                const list = pages.value
                     .map((pg, idx) => ({ pg, idx }))
                     .filter(({ pg }) => {
-                        // 當篩選「工程圖」時，包埋 4 種類別（平面、立體、尺吋、詳圖）
                         if (overviewTypeFilter.value === 'drawing' && !['plan', '3d', 'dim', 'detail'].includes(pg.docType)) return false;
                         if (overviewTypeFilter.value === 'photo' && pg.docType !== 'photo') return false;
                         if (overviewSpaceFilter.value !== 'all') {
@@ -1279,7 +1279,39 @@ const localHiddenCodes = ref([]);
                         }
                         return true;
                     });
+                if (overviewSpaceFilter.value !== 'all') {
+                    return [...list].sort((a, b) => (DOC_TYPE_RANK[a.pg.docType] || 6) - (DOC_TYPE_RANK[b.pg.docType] || 6) || a.idx - b.idx);
+                }
+                return list;
             });
+
+            const overviewSpaceStacks = computed(() => {
+                const map = new Map();
+                filteredOverviewPages.value.forEach(({ pg, idx }) => {
+                    const key = pg.space || '__NONE__';
+                    if (!map.has(key)) map.set(key, { key, label: pg.space || '未分類空間', items: [] });
+                    map.get(key).items.push({ pg, idx });
+                });
+                const spaceRank = (k) => {
+                    if (k === '總圖') return 0;
+                    if (k === '__NONE__') return 999;
+                    const idx = spaceList.value.indexOf(k);
+                    return idx === -1 ? 500 : idx + 1;
+                };
+                return Array.from(map.values())
+                    .map(st => {
+                        st.items.sort((a, b) => (DOC_TYPE_RANK[a.pg.docType] || 6) - (DOC_TYPE_RANK[b.pg.docType] || 6) || a.idx - b.idx);
+                        return st;
+                    })
+                    .sort((a, b) => spaceRank(a.key) - spaceRank(b.key));
+            });
+
+            const toggleSpaceStackSelection = (stack) => {
+                const ids = stack.items.map(x => String(x.pg.id));
+                const allSelected = ids.every(id => selectedPageIds.value.includes(id));
+                if (allSelected) selectedPageIds.value = selectedPageIds.value.filter(id => !ids.includes(id));
+                else selectedPageIds.value = Array.from(new Set([...selectedPageIds.value, ...ids]));
+            };
 
             const movingPageId = ref('');
             const movingPageLabel = computed(() => {
@@ -1310,10 +1342,11 @@ const localHiddenCodes = ref([]);
             };
 
             const showAutoSortModal = ref(false);
+            const DOC_TYPE_RANK = { plan: 1, photo: 2, '3d': 3, dim: 4, detail: 5 };
             const autoSortPages = async (mode = 'bySpace') => {
                 showAutoSortModal.value = false;
                 if (pages.value.length <= 1) return;
-                const docRank = (dt) => ({ plan: 1, '3d': 2, dim: 3, detail: 4, photo: 5 }[dt] || 6);
+                const docRank = (dt) => DOC_TYPE_RANK[dt] || 6;
                 const spaceRank = (sp) => {
                     if (!sp) return 999;
                     if (sp === '總圖') return 0;
@@ -1340,7 +1373,7 @@ const localHiddenCodes = ref([]);
                 project.pageOrderUpdatedAt = Date.now();
                 hasUnsavedCloudChanges.value = true;
                 await saveAll();
-                showToast(mode === 'byType' ? '✅ 已按「工程圖 → 拍攝」自動整理' : '✅ 已按「空間分類」自動歸隊');
+                showToast(mode === 'byType' ? '✅ 已按「平面 → 拍攝 → 立體 → 尺吋 → 詳圖」排列' : '✅ 已按「空間分類」自動歸隊');
             };
 
             const editingMetaPage = ref(null);
@@ -2818,7 +2851,7 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
                 deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, onMarkerTextInput, handleKeypad, applyTag, applyStamp, getStampColor, getMarkerLines, getTagFields, exportPdfReport,
                 globalFontScale, toggleFontScale,
                 activeLine, onLinePointerStart, setActiveLineColor, deleteActiveLine, getMarkerFontPx, stepMarkerFontScale, openMarkerEditor,
-                getDocTypeLabel, overviewTypeFilter, overviewSpaceFilter, drawingPageCount, photoPageCount, overviewSpacesAvailable, filteredOverviewPages,
+                getDocTypeLabel, overviewTypeFilter, overviewSpaceFilter, drawingPageCount, photoPageCount, overviewSpacesAvailable, filteredOverviewPages, overviewStackMode, overviewSpaceStacks, toggleSpaceStackSelection,
                 movingPageId, movingPageLabel, startMovePage, insertMovingPageAfter, showAutoSortModal, autoSortPages,
                 editingMetaPage, openPageMetaModal, setPageDocType, batchSetDocType, batchSetSpace,
                 quickNavTypeFilter, quickNavSpaceFilter, filteredQuickNavPages,
