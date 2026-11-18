@@ -78,15 +78,25 @@
             </div>
 
             <div v-else class="flex-1 min-h-0 w-full relative overflow-hidden">
-                <!-- 左上浮動：頁碼切換 + 空間分群目錄 -->
+                <!-- 左上浮動：頁碼切換 + 「分」「全」快捷按鈕 + 空間分群目錄 -->
                 <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
-                    <div v-if="!activePin" class="bg-white/95 border border-zinc-300 rounded-md flex items-center px-1 py-1 shadow-sm">
-                        <button @click="prevPage" :class="{ 'opacity-30': activePageIndex === 0 }" class="px-2 py-0.5 text-zinc-700 font-black text-xs">◀</button>
-                        <button @click="showQuickNav = !showQuickNav" class="px-2 py-0.5 text-zinc-900 font-black text-xs flex items-center gap-1">
-                            <span>P{{ activePageIndex + 1 }}/{{ pages.length }}</span>
-                            <span class="text-[10px] text-blue-600">▾</span>
-                        </button>
-                        <button @click="nextPage" :class="{ 'opacity-30': activePageIndex === pages.length - 1 }" class="px-2 py-0.5 text-zinc-700 font-black text-xs">▶</button>
+                    <div v-if="!activePin" class="flex items-center gap-1 flex-wrap">
+                        <div class="bg-white/95 border border-zinc-300 rounded-md flex items-center px-1 py-1 shadow-sm">
+                            <button @click="prevPage" :class="{ 'opacity-30': activePageIndex === 0 }" class="px-2 py-0.5 text-zinc-700 font-black text-xs">◀</button>
+                            <button @click="showQuickNav = !showQuickNav" class="px-2 py-0.5 text-zinc-900 font-black text-xs flex items-center gap-1">
+                                <span>P{{ activePageIndex + 1 }}/{{ pages.length }}</span>
+                                <span class="text-[10px] text-blue-600">▾</span>
+                            </button>
+                            <button @click="nextPage" :class="{ 'opacity-30': activePageIndex === pages.length - 1 }" class="px-2 py-0.5 text-zinc-700 font-black text-xs">▶</button>
+                        </div>
+
+                        <!-- 直接一撳切換「分」(空間疊) / 「全」(攤開全頁) -->
+                        <button @click="openNavMode('stack')"
+                                :class="showQuickNav && navStackMode ? 'bg-purple-700 text-white border-purple-700' : 'bg-white/95 text-purple-800 border-purple-300'"
+                                class="px-2.5 py-1.5 rounded-md text-xs font-black border shadow-sm">分</button>
+                        <button @click="openNavMode('all')"
+                                :class="showQuickNav && !navStackMode ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white/95 text-zinc-800 border-zinc-300'"
+                                class="px-2.5 py-1.5 rounded-md text-xs font-black border shadow-sm">全</button>
                     </div>
                     <div v-else class="bg-red-50 border border-red-300 rounded-md flex items-center px-2.5 py-1 shadow-sm">
                         <button @click="exitPinSubPage" class="text-red-700 text-xs font-black">‹ 返回 P{{ activePageIndex + 1 }}</button>
@@ -95,20 +105,15 @@
                     </div>
 
                     <!-- 空間分群縮圖目錄（先見到每間房一堆，點入去展開該房圖紙） -->
-                    <div v-if="showQuickNav && !activePin" class="w-80 max-w-[90vw] max-h-[62vh] bg-white/95 backdrop-blur-md border border-zinc-300 rounded-xl p-2 shadow-2xl overflow-y-auto touch-scrollable z-40">
+                    <div v-if="showQuickNav && !activePin" class="w-80 max-w-[90vw] max-h-[66vh] bg-white/95 backdrop-blur-md border border-zinc-300 rounded-xl p-2 shadow-2xl overflow-y-auto touch-scrollable z-40">
                         <div class="flex justify-between items-center px-1 pb-1.5 mb-1.5 border-b border-zinc-200 gap-1">
                             <div class="flex items-center gap-1.5 min-w-0">
                                 <button v-if="navSpaceFilter !== 'all'" @click="navSpaceFilter = 'all'" class="bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-[11px] font-black shrink-0">‹ 空間疊</button>
                                 <span class="text-[11px] font-black text-zinc-800 truncate">
-                                    {{ navSpaceFilter !== 'all' ? (navSpaceFilter === '__NONE__' ? '📂 未分類空間' : '🏠 ' + navSpaceFilter) + ` (${navFilteredPages.length}頁)` : `🗂️ 按空間分類 (${pages.length}頁)` }}
+                                    {{ navSpaceFilter !== 'all' ? (navSpaceFilter === '__NONE__' ? '📂 未分類空間' : '🏠 ' + navSpaceFilter) + ` (${navFilteredPages.length}頁)` : (navStackMode ? `🗂️ 按空間分類 (${pages.length}頁)` : `📑 全部圖紙 (${pages.length}頁)`) }}
                                 </span>
                             </div>
-                            <div class="flex items-center gap-1 shrink-0">
-                                <button v-if="navSpaceFilter === 'all'" @click="navStackMode = !navStackMode" class="bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded text-[10px] font-bold">
-                                    {{ navStackMode ? '⊞ 攤開' : '🗂️ 疊起' }}
-                                </button>
-                                <button @click="showQuickNav = false" class="text-xs font-bold text-zinc-400 px-1.5">✕</button>
-                            </div>
+                            <button @click="showQuickNav = false" class="text-xs font-bold text-zinc-400 hover:text-zinc-700 px-1.5 shrink-0">✕</button>
                         </div>
 
                         <!-- A. 空間資料夾疊起視圖（每一堆＝一個空間） -->
@@ -132,7 +137,7 @@
 
                         <!-- B. 單一空間展開 / 攤開全頁縮圖 -->
                         <div v-else class="grid grid-cols-3 gap-1.5">
-                            <button v-for="{ pg, idx } in navFilteredPages" :key="pg.id" @click="switchPage(idx)"
+                            <button v-for="{ pg, idx } in navFilteredPages" :key="pg.id" @click="switchPage(idx, true)"
                                     :class="idx === activePageIndex ? 'ring-2 ring-blue-600 bg-blue-50 border-blue-500' : 'bg-zinc-50 border-zinc-200'"
                                     class="border rounded-lg p-1 flex flex-col items-center text-left overflow-hidden">
                                 <div class="w-full h-12 bg-white rounded overflow-hidden flex items-center justify-center border border-zinc-200 relative">
@@ -170,9 +175,9 @@
                     </div>
                 </div>
 
-                <!-- 正上方可浮動拖拉工具膠囊 -->
+                <!-- 正上方可浮動拖拉工具膠囊（已向下調低，避免遮擋圖紙頂部標題） -->
                 <div :style="{ transform: `translate(calc(-50% + ${capsuleOffset.x}px), ${capsuleOffset.y}px)` }"
-                     class="fixed top-[104px] sm:top-[56px] left-1/2 z-30 flex flex-col items-center gap-1.5 max-w-[98vw]" @touchstart.stop @mousedown.stop>
+                     class="fixed top-[120px] sm:top-[84px] left-1/2 z-30 flex flex-col items-center gap-1.5 max-w-[98vw]" @touchstart.stop @mousedown.stop>
 
                     <!-- 主工具膠囊 -->
                     <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-xl flex items-center gap-0.5 sm:gap-1 overflow-x-auto no-scrollbar max-w-full">
@@ -378,8 +383,18 @@
                 const canvasH = computed(() => activeCanvas.value?.h || 900);
                 const masterPages = computed(() => pages.value.map((pg, idx) => ({ pg, idx })).filter(x => x.pg.space === '總圖'));
 
-                // 空間資料夾分疊導航
+                // 空間資料夾分疊導航（「分」/「全」快捷切換）
                 const showQuickNav = ref(false), navStackMode = ref(true), navSpaceFilter = ref('all');
+                const openNavMode = (modeType) => {
+                    const wantStack = modeType === 'stack';
+                    if (showQuickNav.value && navStackMode.value === wantStack && navSpaceFilter.value === 'all') {
+                        showQuickNav.value = false;
+                        return;
+                    }
+                    navStackMode.value = wantStack;
+                    navSpaceFilter.value = 'all';
+                    showQuickNav.value = true;
+                };
                 const navSpaceStacks = computed(() => {
                     const map = new Map();
                     pages.value.forEach((pg, idx) => {
@@ -410,7 +425,7 @@
                     const onMove = (ev) => {
                         const maxX = Math.max(60, window.innerWidth / 2 - 50);
                         capsuleOffset.x = Math.max(-maxX, Math.min(maxX, ox + (ev.clientX - sx)));
-                        capsuleOffset.y = Math.max(-6, Math.min(window.innerHeight - 130, oy + (ev.clientY - sy)));
+                        capsuleOffset.y = Math.max(-36, Math.min(window.innerHeight - 150, oy + (ev.clientY - sy)));
                     };
                     const onUp = () => {
                         window.removeEventListener('pointermove', onMove);
@@ -482,9 +497,11 @@
                     else if (last.type === 'marker') fbMarkers.value = fbMarkers.value.filter(x => x.id !== last.id);
                 };
 
-                const switchPage = (idx) => {
+                const switchPage = (idx, keepNavOpen = false) => {
                     if (hasDraft.value && !confirm('切換頁面會清空本頁未提交的標記，確定切換嗎？')) return;
-                    clearDraft(); resetZoom(); showQuickNav.value = false; activePin.value = null; activePageIndex.value = idx; mode.value = 'browse';
+                    clearDraft(); resetZoom();
+                    if (!keepNavOpen) showQuickNav.value = false;
+                    activePin.value = null; activePageIndex.value = idx; mode.value = 'browse';
                 };
                 const prevPage = () => { if (activePageIndex.value > 0) switchPage(activePageIndex.value - 1); };
                 const nextPage = () => { if (activePageIndex.value < pages.value.length - 1) switchPage(activePageIndex.value + 1); };
@@ -522,7 +539,6 @@
                 };
 
                 const onStageTouchStart = (e) => {
-                    if (showQuickNav.value) showQuickNav.value = false;
                     if (editingFbMarker.value) return;
                     if (e.touches.length >= 2) {
                         e.preventDefault(); isPinching = true; isDrawing = false; isPanning = false; currentFbPath.value = '';
@@ -594,7 +610,6 @@
                 };
 
                 const onStageMouseDown = (e) => {
-                    if (showQuickNav.value) showQuickNav.value = false;
                     if (editingFbMarker.value || draggedFm) return;
                     if (mode.value === 'browse') {
                         isPanning = true; panStart = { x: e.clientX, y: e.clientY }; panVb = { x: vbX.value, y: vbY.value };
@@ -861,7 +876,7 @@
 
                 return {
                     inputCode, isLoading, loadingText, toastMsg, project, pages, isFilteredShare, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH, masterPages,
-                    showQuickNav, navStackMode, navSpaceFilter, navSpaceStacks, navFilteredPages, getDocTypeLabel,
+                    showQuickNav, navStackMode, navSpaceFilter, openNavMode, navSpaceStacks, navFilteredPages, getDocTypeLabel,
                     capsuleOffset, capsuleCollapsed, startCapsuleDrag,
                     zoomScale, invZoom, svgViewBox, svgCanvas, stepZoom, resetZoom, onStageWheel,
                     mode, fbColor, fbPaths, fbMarkers, fbHistory, currentFbPath, editingFbMarker, fbTextInputRef, isSubmitting, showSubmitSuccess, hasDraft, draftCount,
