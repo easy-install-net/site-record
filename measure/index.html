@@ -1492,11 +1492,11 @@
                 <div class="text-[15px] font-black text-center text-zinc-900 border-b border-zinc-200 pb-2">🔄 一鍵自動分類整理</div>
                 <button @click="autoSortPages('bySpace')" class="w-full bg-emerald-600 text-white py-3 px-3 rounded-lg text-left shadow-sm">
                     <div class="text-xs font-black">🏠 按空間自動歸隊（推薦）</div>
-                    <div class="text-[11px] opacity-90 mt-0.5">總圖 → 各空間（平面圖 → 詳圖 → 拍攝）</div>
+                    <div class="text-[11px] opacity-90 mt-0.5">總圖 → 各空間（平面 → 拍攝 → 立體 → 尺吋 → 詳圖）</div>
                 </button>
                 <button @click="autoSortPages('byType')" class="w-full bg-sky-50 border border-sky-300 text-sky-900 py-3 px-3 rounded-lg text-left">
-                    <div class="text-xs font-black">📐 工程圖與拍攝分開排列</div>
-                    <div class="text-[11px] text-sky-700 mt-0.5">所有平面圖／詳圖排前面 → 現場拍攝排後面</div>
+                    <div class="text-xs font-black">📐 按圖紙類別統一排列</div>
+                    <div class="text-[11px] text-sky-700 mt-0.5">全部平面 → 拍攝 → 立體 → 尺吋 → 詳圖</div>
                 </button>
                 <button @click="showAutoSortModal = false" class="w-full text-zinc-500 py-1.5 text-xs font-bold">取消</button>
             </div>
