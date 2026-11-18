@@ -236,7 +236,7 @@
 
                 <!-- B. 單一空間展開 / 攤開全頁網格 -->
                 <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                    <div v-for="{ pg, idx } in filteredOverviewPages" :key="pg.id" :data-page-idx="idx"
+                    <div v-for="{ pg, idx } in filteredOverviewPages.filter(x => x && x.pg)" :key="pg.id" :data-page-idx="idx"
                          @click="selectMode ? togglePageSelection(pg.id) : null"
                          :class="[
                              draggingPageIdx === idx ? 'opacity-40 scale-95 ring-2 ring-blue-500' : '',
