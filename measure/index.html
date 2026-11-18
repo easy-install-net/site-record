@@ -50,7 +50,7 @@
 </head>
 <body class="antialiased">
     <div id="boot-screen" style="position:fixed;inset:0;z-index:200;background:#ffffff;color:#111827;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
-        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v11.2...</div>
+       <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v11.3...</div>
         <button id="boot-retry" onclick="location.reload()" style="display:none;margin-top:16px;background:#111827;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;">🔄 重新載入</button>
     </div>
 
@@ -263,10 +263,10 @@
 <!-- 3. 畫布編輯視圖 -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 w-full relative bg-zinc-200 overflow-hidden flex flex-col">
 
-            <!-- 中上方懸浮工具膠囊 -->
+          <!-- 中上方懸浮工具膠囊 -->
             <div v-if="activeCanvas?.photo || (splitMode && canvasB?.photo)"
                  :style="{ transform: `translate(calc(-50% + ${capsuleOffset.x}px), ${capsuleOffset.y}px)` }"
-                 class="fixed top-[48px] left-1/2 z-30 flex flex-col items-center gap-1 max-w-[98vw]" @touchstart.stop @mousedown.stop>
+                 class="fixed top-[120px] left-1/2 z-30 flex flex-col items-center gap-1 max-w-[98vw]" @touchstart.stop @mousedown.stop>
 
                 <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-xl flex items-center gap-0.5 sm:gap-1 overflow-x-auto no-scrollbar max-w-full">
                     <span @pointerdown.stop.prevent="startCapsuleDrag" style="touch-action:none" title="按住拖拉移動工具列" class="cursor-grab active:cursor-grabbing px-1.5 py-1 text-zinc-400 font-black text-sm select-none shrink-0">⠿</span>
@@ -367,12 +367,8 @@
                                 <button @click="stepMarkerFontScale(-0.15)" class="bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 rounded text-xs font-black">A-</button>
                                 <button @click="stepMarkerFontScale(0.15)" class="bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 rounded text-xs font-black">A+</button>
                             </template>
-                            <div class="flex items-center gap-0.5 ml-auto">
-                                <button @click="nudgeMarker(-2, 0)" class="bg-zinc-100 border border-zinc-300 px-1 py-0.5 rounded text-[11px]">⬅️</button>
-                                <button @click="nudgeMarker(0, -2)" class="bg-zinc-100 border border-zinc-300 px-1 py-0.5 rounded text-[11px]">⬆️</button>
-                                <button @click="nudgeMarker(0, 2)" class="bg-zinc-100 border border-zinc-300 px-1 py-0.5 rounded text-[11px]">⬇️</button>
-                                <button @click="nudgeMarker(2, 0)" class="bg-zinc-100 border border-zinc-300 px-1 py-0.5 rounded text-[11px]">➡️</button>
-                                <button @click="deleteMarkerTop" class="bg-red-50 border border-red-200 text-red-600 px-1.5 py-0.5 rounded text-xs font-bold ml-0.5">🗑️</button>
+                            <div class="flex items-center gap-1 ml-auto">
+                                <button @click="deleteMarkerTop" class="bg-red-50 border border-red-200 text-red-600 px-2 py-0.5 rounded text-xs font-bold">🗑️</button>
                                 <button @click="activeMarker = null" class="bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded text-xs font-bold">✕</button>
                             </div>
                         </div>
@@ -1223,10 +1219,12 @@
 
         <!-- 唯讀全螢幕大圖檢視器（乾淨頂欄 + ◀▶放縮圖列兩端 + 空間/圖類搬落大圖上方） -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-zinc-100 flex flex-col overflow-hidden">
-            <!-- 第一行：頁碼（左） ｜ 修改/複製/下載/關閉（右，已移除重複圖籤掣） -->
+            <!-- 第一行：頁碼 + 空間/圖類（左） ｜ 修改/複製/下載/關閉（右） -->
             <div class="h-10 bg-white border-b border-zinc-200 px-2.5 flex justify-between items-center gap-2 shrink-0 z-10">
                 <div class="flex items-center gap-1.5 min-w-0">
-                    <span class="text-[13px] font-black text-zinc-900 truncate">{{ currentFullScreen?.shortLabel }} ({{ fullScreenIndex + 1 }}/{{ fullScreenList.length }})</span>
+                    <span class="text-[13px] font-black text-zinc-900 shrink-0">{{ currentFullScreen?.shortLabel }} ({{ fullScreenIndex + 1 }}/{{ fullScreenList.length }})</span>
+                    <button @click.stop="openFullScreenSpaceModal" class="bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 px-2 py-0.5 rounded-full text-xs font-black truncate max-w-[110px]">🏠 {{ currentFullScreen?.parentPg?.space || '+空間' }}</button>
+                    <button @click.stop="openFullScreenSpaceModal" class="bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-300 px-2 py-0.5 rounded-full text-xs font-black shrink-0">{{ getDocTypeLabel(currentFullScreen?.parentPg?.docType) || '+圖類' }}</button>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
                     <button @click="editFromFullScreen" class="bg-blue-600 text-white px-2.5 py-1 rounded-md text-xs font-bold shadow-sm active:bg-blue-700">✏️修改</button>
@@ -1255,11 +1253,7 @@
 
             <!-- 大圖顯示區 -->
             <div class="flex-1 min-h-0 w-full relative bg-zinc-200 overflow-hidden">
-                <!-- 大圖上方懸浮分類列（空間 + 圖類） -->
-                <div class="absolute top-2.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-white/90 backdrop-blur-xs border border-zinc-300 px-2 py-1 rounded-full shadow-md">
-                    <button @click.stop="openFullScreenSpaceModal" class="bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 px-2.5 py-0.5 rounded-full text-xs font-black truncate max-w-[120px]">🏠 {{ currentFullScreen?.parentPg?.space || '+空間' }}</button>
-                    <button @click.stop="openFullScreenSpaceModal" class="bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-300 px-2.5 py-0.5 rounded-full text-xs font-black shrink-0">{{ getDocTypeLabel(currentFullScreen?.parentPg?.docType) || '+圖類' }}</button>
-                </div>
+            
 
                 <div class="absolute inset-1 overflow-hidden bg-white shadow-sm border border-zinc-300 rounded-lg">
                     <svg :view-box.camel="`0 0 ${fullScreenItem.w || 1200} ${fullScreenItem.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;">
