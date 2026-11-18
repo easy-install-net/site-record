@@ -80,23 +80,23 @@
             <div v-else class="flex-1 min-h-0 w-full relative overflow-hidden">
                 <!-- 左上浮動：頁碼切換 + 「分」「全」快捷按鈕 + 空間分群目錄 -->
                 <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
-                    <div v-if="!activePin" class="flex items-center gap-1 flex-wrap">
-                        <div class="bg-white/95 border border-zinc-300 rounded-md flex items-center px-1 py-1 shadow-sm">
-                            <button @click="prevPage" :class="{ 'opacity-30': activePageIndex === 0 }" class="px-2 py-0.5 text-zinc-700 font-black text-xs">◀</button>
-                            <button @click="showQuickNav = !showQuickNav" class="px-2 py-0.5 text-zinc-900 font-black text-xs flex items-center gap-1">
+                    <div v-if="!activePin" class="flex items-center gap-1">
+                        <div class="bg-white/95 border border-zinc-300 rounded-md flex items-center px-0.5 py-0.5 shadow-sm">
+                            <button @click="prevPage" :class="{ 'opacity-30': activePageIndex === 0 }" class="px-1.5 py-0.5 text-zinc-700 font-black text-xs">◀</button>
+                            <button @click="showQuickNav = !showQuickNav" class="px-1.5 py-0.5 text-zinc-900 font-black text-xs flex items-center gap-0.5">
                                 <span>P{{ activePageIndex + 1 }}/{{ pages.length }}</span>
                                 <span class="text-[10px] text-blue-600">▾</span>
                             </button>
-                            <button @click="nextPage" :class="{ 'opacity-30': activePageIndex === pages.length - 1 }" class="px-2 py-0.5 text-zinc-700 font-black text-xs">▶</button>
+                            <button @click="nextPage" :class="{ 'opacity-30': activePageIndex === pages.length - 1 }" class="px-1.5 py-0.5 text-zinc-700 font-black text-xs">▶</button>
                         </div>
 
                         <!-- 直接一撳切換「分」(空間疊) / 「全」(攤開全頁) -->
                         <button @click="openNavMode('stack')"
                                 :class="showQuickNav && navStackMode ? 'bg-purple-700 text-white border-purple-700' : 'bg-white/95 text-purple-800 border-purple-300'"
-                                class="px-2.5 py-1.5 rounded-md text-xs font-black border shadow-sm">分</button>
+                                class="px-2 py-1 rounded-md text-xs font-black border shadow-sm">分</button>
                         <button @click="openNavMode('all')"
                                 :class="showQuickNav && !navStackMode ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white/95 text-zinc-800 border-zinc-300'"
-                                class="px-2.5 py-1.5 rounded-md text-xs font-black border shadow-sm">全</button>
+                                class="px-2 py-1 rounded-md text-xs font-black border shadow-sm">全</button>
                     </div>
                     <div v-else class="bg-red-50 border border-red-300 rounded-md flex items-center px-2.5 py-1 shadow-sm">
                         <button @click="exitPinSubPage" class="text-red-700 text-xs font-black">‹ 返回 P{{ activePageIndex + 1 }}</button>
@@ -160,54 +160,57 @@
                     </div>
                 </div>
 
-                <!-- 右上浮動：畫布縮放 + 當前模式提示 -->
+                <!-- 右上浮動：僅保留畫布縮放掣（已刪除黑底說明條） -->
                 <div class="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end" @touchstart.stop @mousedown.stop>
                     <div class="flex items-center bg-white/95 border border-zinc-300 rounded-md shadow-sm overflow-hidden">
                         <button @click="stepZoom(-0.5)" :disabled="zoomScale <= 1" :class="zoomScale <= 1 ? 'opacity-30' : ''" class="px-2 py-1 text-xs font-black text-zinc-900 border-r border-zinc-200">➖</button>
                         <button @click="resetZoom" :class="zoomScale > 1 ? 'bg-blue-600 text-white' : 'text-zinc-700'" class="px-1.5 py-1 text-[11px] font-black min-w-[40px] text-center">{{ Math.round(zoomScale * 100) }}%</button>
                         <button @click="stepZoom(0.5)" :disabled="zoomScale >= 5" :class="zoomScale >= 5 ? 'opacity-30' : ''" class="px-2 py-1 text-xs font-black text-zinc-900 border-l border-zinc-200">➕</button>
                     </div>
-                    <div class="pointer-events-none">
-                        <div v-if="mode === 'browse'" class="bg-zinc-900/90 text-white px-2 py-0.5 rounded-md text-[11px] font-bold shadow-sm">👆 睇圖 (點藍牌跳頁 / 點紅釘睇相)</div>
-                        <div v-else-if="mode === 'circle'" class="bg-red-600 text-white px-2 py-0.5 rounded-md text-[11px] font-bold shadow-sm">⭕ 手指或滑鼠直接圈出問題位</div>
-                        <div v-else-if="mode === 'text'" class="bg-blue-600 text-white px-2 py-0.5 rounded-md text-[11px] font-bold shadow-sm">💬 點一下圖紙位置寫留言</div>
-                        <div v-else-if="mode === 'move'" class="bg-amber-600 text-white px-2 py-0.5 rounded-md text-[11px] font-bold shadow-sm">✥ 拖拉你嘅留言或附圖擺位</div>
-                    </div>
                 </div>
 
-                <!-- 正上方可浮動拖拉工具膠囊（已向下調低，避免遮擋圖紙頂部標題） -->
+                <!-- 正上方可浮動拖拉工具箱（兩行設計＋明顯退回按鈕） -->
                 <div :style="{ transform: `translate(calc(-50% + ${capsuleOffset.x}px), ${capsuleOffset.y}px)` }"
-                     class="fixed top-[120px] sm:top-[84px] left-1/2 z-30 flex flex-col items-center gap-1.5 max-w-[98vw]" @touchstart.stop @mousedown.stop>
+                     class="fixed top-[106px] sm:top-[82px] left-1/2 z-30 flex flex-col items-center max-w-[96vw]" @touchstart.stop @mousedown.stop>
 
-                    <!-- 主工具膠囊 -->
-                    <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-xl flex items-center gap-0.5 sm:gap-1 overflow-x-auto no-scrollbar max-w-full">
-                        <span @pointerdown.stop.prevent="startCapsuleDrag" style="touch-action:none" title="按住拖拉移動工具列" class="cursor-grab active:cursor-grabbing px-1.5 py-1 text-zinc-400 font-black text-sm select-none shrink-0">⠿</span>
-                        <template v-if="capsuleCollapsed">
-                            <button @click="capsuleCollapsed = false" class="bg-zinc-900 text-white px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">🛠️ 展開標註工具</button>
-                        </template>
-                        <template v-else>
-                            <button @click="mode = 'browse'" :class="mode === 'browse' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">👆 睇</button>
-                            <button @click="mode = 'circle'" :class="mode === 'circle' ? 'bg-red-600 text-white' : 'text-red-600 hover:bg-red-50'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">⭕ 畫圈</button>
-                            <button @click="mode = 'text'" :class="mode === 'text' ? 'bg-blue-600 text-white' : 'text-blue-700 hover:bg-blue-50'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">💬 留言</button>
-                            <label class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0 text-emerald-700 hover:bg-emerald-50 cursor-pointer flex items-center gap-0.5">
+                    <div v-if="capsuleCollapsed" class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-xl flex items-center gap-1">
+                        <span @pointerdown.stop.prevent="startCapsuleDrag" style="touch-action:none" title="按住拖拉移動工具列" class="cursor-grab active:cursor-grabbing px-1.5 py-1 text-zinc-400 font-black text-sm select-none">⠿</span>
+                        <button @click="capsuleCollapsed = false" class="bg-zinc-900 text-white px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">🛠️ 展開標註工具</button>
+                    </div>
+
+                    <div v-else class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-2xl p-1.5 shadow-xl flex flex-col gap-1.5">
+                        <!-- 第一行：拖拉把手 + 5 大標註模式 -->
+                        <div class="flex items-center justify-center gap-1">
+                            <span @pointerdown.stop.prevent="startCapsuleDrag" style="touch-action:none" title="按住拖拉移動工具列" class="cursor-grab active:cursor-grabbing px-1 py-1 text-zinc-400 font-black text-sm select-none shrink-0">⠿</span>
+                            <button @click="mode = 'browse'" :class="mode === 'browse' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">👆 睇</button>
+                            <button @click="mode = 'circle'" :class="mode === 'circle' ? 'bg-red-600 text-white' : 'text-red-600 hover:bg-red-50'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">⭕ 畫圈</button>
+                            <button @click="mode = 'text'" :class="mode === 'text' ? 'bg-blue-600 text-white' : 'text-blue-700 hover:bg-blue-50'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">💬 留言</button>
+                            <label class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap text-emerald-700 hover:bg-emerald-50 cursor-pointer flex items-center gap-0.5">
                                 📷 影/貼圖
                                 <input type="file" accept="image/*" class="hidden" @change="handleAttachPhoto">
                             </label>
-                            <button @click="mode = 'move'" :class="mode === 'move' ? 'bg-amber-600 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✥ 移</button>
-                            <div class="w-px h-4 bg-zinc-300 mx-0.5 shrink-0"></div>
-                            <button @click="undoDraft" :disabled="!fbHistory.length" :class="fbHistory.length ? 'text-zinc-900 hover:bg-zinc-100' : 'text-zinc-300'" class="px-2 py-1 rounded-full text-sm font-black shrink-0">↶</button>
-                            <button v-if="hasDraft" @click="clearDraft" class="px-2 py-1 rounded-full text-xs font-bold text-red-600 hover:bg-red-50 shrink-0">🗑️清空</button>
-                            <button @click="capsuleCollapsed = true" title="縮細工具列" class="px-1.5 py-1 text-zinc-400 hover:text-zinc-700 text-xs font-bold shrink-0">▴</button>
-                        </template>
-                    </div>
+                            <button @click="mode = 'move'" :class="mode === 'move' ? 'bg-amber-600 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">✥ 移</button>
+                        </div>
 
-                    <!-- 顏色子列 (畫圈或留言時顯示) -->
-                    <div v-if="!capsuleCollapsed && (mode === 'circle' || mode === 'text')" class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full px-3 py-1 shadow-lg flex items-center gap-2">
-                        <span class="text-[11px] font-bold text-zinc-600">標記顏色：</span>
-                        <button v-for="c in ['#ef4444','#eab308','#2563eb']" :key="c" @click="fbColor = c"
-                                :style="{ backgroundColor: c }"
-                                :class="fbColor === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-70'"
-                                class="w-4 h-4 rounded-full border border-zinc-400 transition-transform"></button>
+                        <!-- 第二行：明顯退回按鈕 + 清空 + 顏色選擇 + 收起 -->
+                        <div class="flex items-center justify-between gap-2 pt-1 border-t border-zinc-200 px-1">
+                            <div class="flex items-center gap-1.5">
+                                <button @click="undoDraft" :disabled="!fbHistory.length"
+                                        :class="fbHistory.length ? 'bg-zinc-900 text-white border-zinc-900 shadow-xs active:scale-95' : 'bg-zinc-100 text-zinc-400 border-zinc-200'"
+                                        class="px-3 py-1 rounded-full text-xs font-black border flex items-center gap-1 transition-all">
+                                    <span>↶</span><span>退回</span>
+                                </button>
+                                <button v-if="hasDraft" @click="clearDraft" class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">🗑️ 清空</button>
+                            </div>
+
+                            <div class="flex items-center gap-1.5">
+                                <button v-for="c in ['#ef4444','#eab308','#2563eb']" :key="c" @click="fbColor = c"
+                                        :style="{ backgroundColor: c }"
+                                        :class="fbColor === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-70'"
+                                        class="w-4 h-4 rounded-full border border-zinc-400 transition-transform"></button>
+                                <button @click="capsuleCollapsed = true" title="縮細工具列" class="ml-1 px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500 hover:text-zinc-800 text-xs font-bold">▴</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -417,7 +420,7 @@
                         .sort((a, b) => (DOC_TYPE_RANK[a.pg.docType] || 6) - (DOC_TYPE_RANK[b.pg.docType] || 6) || a.idx - b.idx);
                 });
 
-                // 正上方可浮動拖拉工具膠囊狀態
+                // 正上方可浮動拖拉工具箱狀態
                 const capsuleOffset = reactive({ x: 0, y: 0 });
                 const capsuleCollapsed = ref(false);
                 const startCapsuleDrag = (e) => {
@@ -425,7 +428,7 @@
                     const onMove = (ev) => {
                         const maxX = Math.max(60, window.innerWidth / 2 - 50);
                         capsuleOffset.x = Math.max(-maxX, Math.min(maxX, ox + (ev.clientX - sx)));
-                        capsuleOffset.y = Math.max(-36, Math.min(window.innerHeight - 150, oy + (ev.clientY - sy)));
+                        capsuleOffset.y = Math.max(-36, Math.min(window.innerHeight - 170, oy + (ev.clientY - sy)));
                     };
                     const onUp = () => {
                         window.removeEventListener('pointermove', onMove);
