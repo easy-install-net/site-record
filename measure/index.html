@@ -195,7 +195,7 @@
                                             </template>
                                         </g>
                                         <g v-else-if="m.type !== 'image'" :transform="`translate(${m.x}, ${m.y})`">
-                                            <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text" :style="{ fontSize: `${28 * globalFontScale}px` }">
+                                            <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text" :style="{ fontSize: `${getMarkerFontPx(m)}px` }">
                                                 <tspan v-for="(line, lIdx) in getMarkerLines(m)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
                                             </text>
                                         </g>
@@ -474,8 +474,8 @@
                                 </g>
                                 <g v-if="currentWall && drawingPane === 'A'"><line v-for="(seg, sIdx) in getWallSegments(currentWall)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="currentWall.color || '#111827'" :stroke-width="(seg.isHatch ? 2.5 : 3.5) * invZoom" stroke-linecap="round" /></g>
 
-                                <g v-for="l in (activeCanvas.lines || [])" :key="l.id" :class="drawMode === 'eraser' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onEraseTap('line', l, e, 'A')" @mousedown="e => onEraseTap('line', l, e, 'A')">
-                                    <line v-if="drawMode === 'eraser'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="34 * invZoom" stroke-linecap="round" />
+                              <g v-for="l in (activeCanvas.lines || [])" :key="l.id" :class="(drawMode === 'eraser' || drawMode === 'move') ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onLinePointerStart(l, e, 'A')" @mousedown="e => onLinePointerStart(l, e, 'A')">
+                                    <line v-if="drawMode === 'eraser' || drawMode === 'move'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="24 * invZoom" stroke-linecap="round" />
                                     <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
                                           :stroke="getLineStroke(l, 0.75)"
                                           :stroke-width="((!l.type || l.type === 'measure') ? 5 : 4) * invZoom"
@@ -513,10 +513,9 @@
                                             <path v-else-if="s.t === 'path'" :d="s.d" :stroke="m.color || '#111827'" :stroke-width="s.sw || 2.5" :stroke-dasharray="s.dash ? s.dash.join(' ') : null" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                                         </template>
                                     </g>
-
                                     <g v-else :transform="`translate(${m.x}, ${m.y})`">
-                                        <rect v-if="drawMode === 'move'" :x="-m.w/2 - 8" :y="-m.h/2 - 8" :width="m.w + 16" :height="m.h + 16" rx="8" fill="rgba(37,99,235,0.10)" stroke="#2563eb" :stroke-width="3 * invZoom" stroke-dasharray="6 4" />
-                                        <rect v-else-if="m.type === 'page_link'" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="14" fill="rgba(14,165,233,0.18)" stroke="#38bdf8" :stroke-width="2.5 * invZoom" />
+                                        <rect v-if="drawMode === 'move'" :x="-m.w/2 - 2" :y="-m.h/2 - 2" :width="m.w + 4" :height="m.h + 4" rx="4" :fill="activeMarker?.id === m.id ? 'rgba(37,99,235,0.18)' : 'rgba(37,99,235,0.05)'" stroke="#2563eb" :stroke-width="(activeMarker?.id === m.id ? 2.5 : 1.2) * invZoomB" :stroke-dasharray="activeMarker?.id === m.id ? null : '4 3'" />
+                                         <rect v-else-if="m.type === 'page_link'" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="14" fill="rgba(14,165,233,0.18)" stroke="#38bdf8" :stroke-width="2.5 * invZoom" />
                                         <template v-if="m.type === 'image'">
                                             <g :transform="m.rot ? `rotate(${m.rot})` : null">
                                                 <rect :x="-m.w/2 - 2" :y="-m.h/2 - 2" :width="m.w + 4" :height="m.h + 4" fill="none" :stroke="activeMarker?.id === m.id ? '#2563eb' : '#facc15'" :stroke-width="4 * invZoom" stroke-dasharray="4" />
@@ -527,7 +526,7 @@
                                         <template v-else>
                                             <rect :x="-m.w/2 - 8" :y="-m.h/2 - 8" :width="m.w + 16" :height="m.h + 16" fill="transparent" />
                                             <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
-                                                <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'" :style="{ fontSize: `${28 * globalFontScale}px` }">{{ line }}</tspan>
+                                                <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'" :style="{ fontSize: `${getMarkerFontPx(m)}px` }">{{ line }}</tspan>
                                             </text>
                                         </template>
                                     </g>
@@ -645,8 +644,8 @@
                                 </g>
                                 <g v-if="currentWall && drawingPane === 'B'"><line v-for="(seg, sIdx) in getWallSegments(currentWall)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="currentWall.color || '#111827'" :stroke-width="(seg.isHatch ? 2.5 : 3.5) * invZoomB" stroke-linecap="round" /></g>
 
-                                <g v-for="l in (canvasB.lines || [])" :key="l.id" :class="drawMode === 'eraser' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onEraseTap('line', l, e, 'B')" @mousedown="e => onEraseTap('line', l, e, 'B')">
-                                    <line v-if="drawMode === 'eraser'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="34 * invZoomB" stroke-linecap="round" />
+                                <g v-for="l in (canvasB.lines || [])" :key="l.id" :class="(drawMode === 'eraser' || drawMode === 'move') ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onLinePointerStart(l, e, 'B')" @mousedown="e => onLinePointerStart(l, e, 'B')">
+                                    <line v-if="drawMode === 'eraser' || drawMode === 'move'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="24 * invZoomB" stroke-linecap="round" />
                                     <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
                                           :stroke="getLineStroke(l, 0.75)"
                                           :stroke-width="((!l.type || l.type === 'measure') ? 5 : 4) * invZoomB"
@@ -685,9 +684,9 @@
                                         </template>
                                     </g>
 
-                                    <g v-else :transform="`translate(${m.x}, ${m.y})`">
-                                        <rect v-if="drawMode === 'move'" :x="-m.w/2 - 8" :y="-m.h/2 - 8" :width="m.w + 16" :height="m.h + 16" rx="8" fill="rgba(37,99,235,0.10)" stroke="#2563eb" :stroke-width="3 * invZoomB" stroke-dasharray="6 4" />
-                                        <rect v-else-if="m.type === 'page_link'" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="14" fill="rgba(14,165,233,0.18)" stroke="#38bdf8" :stroke-width="2.5 * invZoomB" />
+                                 <g v-else :transform="`translate(${m.x}, ${m.y})`">
+                                     <rect v-if="drawMode === 'move'" :x="-m.w/2 - 2" :y="-m.h/2 - 2" :width="m.w + 4" :height="m.h + 4" rx="4" :fill="activeMarker?.id === m.id ? 'rgba(37,99,235,0.18)' : 'rgba(37,99,235,0.05)'" stroke="#2563eb" :stroke-width="(activeMarker?.id === m.id ? 2.5 : 1.2) * invZoom" :stroke-dasharray="activeMarker?.id === m.id ? null : '4 3'" />
+                                     <rect v-else-if="m.type === 'page_link'" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="14" fill="rgba(14,165,233,0.18)" stroke="#38bdf8" :stroke-width="2.5 * invZoomB" />
                                         <template v-if="m.type === 'image'">
                                             <g :transform="m.rot ? `rotate(${m.rot})` : null">
                                                 <rect :x="-m.w/2 - 2" :y="-m.h/2 - 2" :width="m.w + 4" :height="m.h + 4" fill="none" :stroke="activeMarker?.id === m.id ? '#2563eb' : '#facc15'" :stroke-width="4 * invZoomB" stroke-dasharray="4" />
@@ -698,7 +697,7 @@
                                         <template v-else>
                                             <rect :x="-m.w/2 - 8" :y="-m.h/2 - 8" :width="m.w + 16" :height="m.h + 16" fill="transparent" />
                                             <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
-                                                <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'" :style="{ fontSize: `${28 * globalFontScale}px` }">{{ line }}</tspan>
+                                                <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'" :style="{ fontSize: `${getMarkerFontPx(m)}px` }">{{ line }}</tspan>
                                             </text>
                                         </template>
                                     </g>
@@ -1185,7 +1184,7 @@
                 <span class="text-[11px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded shrink-0">備註</span>
                 <input ref="topTextInputRef" type="text" v-model="activeMarker.data.val" @input="onMarkerTextInput" @keyup.enter="closeTopTextBar" class="flex-1 min-w-0 bg-white border border-zinc-300 p-1.5 px-2 text-[15px] font-bold rounded-md focus:outline-none focus:border-blue-500" placeholder="補加備註...">
                 <div class="flex items-center gap-1 shrink-0">
-                    <button v-for="c in ['#ffffff','#ef4444','#eab308']" :key="c" @click="setMarkerTextColor(c)"
+                    <button v-for="c in ['#ffffff','#ef4444','#eab308','#38bdf8','#34d399']" :key="c" @click="setMarkerTextColor(c)"
                             :style="{ backgroundColor: c }"
                             :class="(activeMarker.textColor || defaultTextColor) === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-70'"
                             class="w-4 h-4 rounded-full border border-zinc-400 shrink-0 transition-transform"></button>
@@ -1247,7 +1246,7 @@
                                 </template>
                             </g>
                             <g v-else-if="m.type !== 'image'" :transform="`translate(${m.x}, ${m.y})`">
-                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text" :style="{ fontSize: `${28 * globalFontScale}px` }">
+                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text" :style="{ fontSize: `${getMarkerFontPx(m)}px` }">
                                     <tspan v-for="(line, lIdx) in getMarkerLines(m)" :key="lIdx" x="0" :dy="lIdx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
                                 </text>
                             </g>
