@@ -227,10 +227,10 @@
         <!-- 3. 畫布編輯視圖 -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 w-full relative bg-zinc-200 overflow-hidden flex flex-col">
 
-            <!-- 中上方懸浮工具膠囊 -->
+           <!-- 中上方懸浮工具膠囊 -->
             <div v-if="activeCanvas?.photo || (splitMode && canvasB?.photo)"
                  :style="{ transform: `translate(calc(-50% + ${capsuleOffset.x}px), ${capsuleOffset.y}px)` }"
-                 class="fixed top-[82px] sm:top-[48px] left-1/2 z-30 flex flex-col items-center gap-1 max-w-[98vw]" @touchstart.stop @mousedown.stop>
+                 class="fixed top-[94px] sm:top-[86px] left-1/2 z-30 flex flex-col items-center gap-1 max-w-[98vw]" @touchstart.stop @mousedown.stop>
 
                 <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-xl flex items-center gap-0.5 sm:gap-1 overflow-x-auto no-scrollbar max-w-full">
                     <span @pointerdown.stop.prevent="startCapsuleDrag" style="touch-action:none" title="按住拖拉移動工具列" class="cursor-grab active:cursor-grabbing px-1.5 py-1 text-zinc-400 font-black text-sm select-none shrink-0">⠿</span>
@@ -1289,12 +1289,15 @@
             </div>
         </div>
 
-        <div v-if="showBranchPrompt" class="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-4">
+        <div v-if="showBranchPrompt" class="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-4" @touchstart.stop @mousedown.stop>
             <div class="bg-white border border-zinc-300 w-full max-w-sm rounded-xl p-5 flex flex-col shadow-2xl">
-                <h3 class="text-[16px] font-black text-zinc-900 mb-2">⚠️ 跨人編輯提示</h3>
-                <p class="text-[14px] text-zinc-600 font-bold mb-4 leading-relaxed">此頁原由 <span class="text-blue-600">[{{ branchOwner }}]</span> 修改。<br>輸入 <span class="text-zinc-900 font-black">"Y"</span> 複製為新頁獨立修改。<br>(直接按確定或取消則覆蓋原頁)</p>
-                <input type="text" v-model="branchInputValue" @keyup.enter="confirmBranch" class="w-full bg-zinc-50 border-2 border-zinc-300 rounded-md p-3 text-center text-xl font-bold text-zinc-900 mb-4 focus:outline-none focus:border-blue-500" placeholder="Y">
-                <div class="flex gap-2"><button @click="cancelBranch" class="flex-1 bg-white border border-zinc-300 text-zinc-600 font-bold py-2.5 rounded-md text-sm">取消 (覆蓋)</button><button @click="confirmBranch" class="flex-1 bg-zinc-900 text-white font-bold py-2.5 rounded-md text-sm shadow-sm">確定</button></div>
+                <h3 class="text-[16px] font-black text-zinc-900 mb-1.5">⚠️ 跨設備編輯提示</h3>
+                <p class="text-[13px] text-zinc-600 font-bold mb-4 leading-relaxed">此頁最後由 <span class="text-blue-600">[{{ branchOwner }}]</span> 修改。<br>按「直接覆蓋原頁」後，本工程後續修改將自動接管，不會再重複彈出。</p>
+                <div class="flex flex-col gap-2">
+                    <button @click="overwriteBranch" class="w-full bg-zinc-900 text-white font-bold py-3 rounded-lg text-sm shadow-sm">✅ 直接覆蓋原頁 (接管本工程)</button>
+                    <button @click="duplicateBranch" class="w-full bg-blue-50 border border-blue-300 text-blue-800 font-bold py-3 rounded-lg text-sm">📋 複製為新頁獨立修改</button>
+                    <button @click="dismissBranch" class="w-full text-zinc-400 font-bold py-1.5 text-xs mt-0.5">取消本次操作</button>
+                </div>
             </div>
         </div>
 
