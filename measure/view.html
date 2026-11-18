@@ -42,12 +42,12 @@
                 <span v-if="isFilteredShare && pages.length" class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-black px-1.5 py-0.5 rounded shrink-0">精選{{ pages.length }}頁</span>
             </div>
 
-            <div class="flex items-center gap-1.5 shrink-0">
-                <button v-if="activeCanvas?.photo" @click="downloadAnnotatedImage" class="bg-white border border-zinc-300 text-zinc-800 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm">⬇️存圖</button>
+           <div class="flex items-center gap-1 shrink-0">
+                <button v-if="activeCanvas?.photo" @click="downloadAnnotatedImage" class="bg-white border border-zinc-300 text-zinc-800 px-2 py-1 rounded-md text-xs font-bold shadow-sm whitespace-nowrap">⬇️存圖</button>
                 <button v-if="activeCanvas?.photo" @click="submitFeedback" :disabled="isSubmitting"
                         :class="hasDraft ? 'bg-blue-600 text-white border-blue-600 animate-pulse' : 'bg-zinc-900 text-white border-zinc-900'"
-                        class="px-3 py-1 rounded-md text-xs font-bold border shadow-sm">
-                    📤 提交意見{{ draftCount ? `(${draftCount})` : '' }}
+                        class="px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm whitespace-nowrap">
+                    📤提交{{ draftCount ? `(${draftCount})` : '' }}
                 </button>
             </div>
         </header>
