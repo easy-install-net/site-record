@@ -445,12 +445,13 @@
                 // 正下方可浮動拖拉工具箱狀態
                 const capsuleOffset = reactive({ x: 0, y: 0 });
                 const capsuleCollapsed = ref(false);
-                const startCapsuleDrag = (e) => {
+               const startCapsuleDrag = (e) => {
                     const sx = e.clientX, sy = e.clientY, ox = capsuleOffset.x, oy = capsuleOffset.y;
                     const onMove = (ev) => {
-                        const maxX = Math.max(60, window.innerWidth / 2 - 50);
-                        capsuleOffset.x = Math.max(-maxX, Math.min(maxX, ox + (ev.clientX - sx)));
-                        capsuleOffset.y = Math.max(-(window.innerHeight - 160), Math.min(10, oy + (ev.clientY - sy)));
+                        const maxX = Math.max(40, window.innerWidth - 160);
+                        const maxY = Math.max(120, window.innerHeight - 210);
+                        capsuleOffset.x = Math.max(0, Math.min(maxX, ox + (ev.clientX - sx)));
+                        capsuleOffset.y = Math.max(-68, Math.min(maxY, oy + (ev.clientY - sy)));
                     };
                     const onUp = () => {
                         window.removeEventListener('pointermove', onMove);
