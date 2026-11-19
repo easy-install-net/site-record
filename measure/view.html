@@ -106,9 +106,10 @@
                     </div>
                 </div>
 
-                <!-- 大畫面全寬目錄面板（與底部工具箱徹底分開，零重疊、文字完整不溢出） -->
+              <!-- 大畫面全寬目錄面板（於工具箱正下方展開，零重疊、文字完整不溢出） -->
                 <div v-if="showQuickNav && !activePin" @touchstart.stop @mousedown.stop
-                     class="fixed top-[86px] left-1/2 -translate-x-1/2 w-[96vw] max-w-4xl max-h-[64vh] bg-white/98 backdrop-blur-md border border-zinc-300 rounded-2xl p-3 shadow-2xl flex flex-col z-40">
+                     class="fixed top-[208px] left-1/2 -translate-x-1/2 w-[96vw] max-w-4xl max-h-[calc(100dvh-222px)] bg-white/98 backdrop-blur-md border border-zinc-300 rounded-2xl p-3 shadow-2xl flex flex-col z-40">
+                    
                     <!-- 目錄頂部標題列 -->
                     <div class="flex justify-between items-center pb-2 mb-2 border-b border-zinc-200 gap-2 shrink-0">
                         <div class="flex items-center gap-2 min-w-0">
