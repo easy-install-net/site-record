@@ -764,14 +764,21 @@ const syncUserOwnedProjects = async () => {
             const quickNavTypeFilter = ref('all');
             const quickNavSpaceFilter = ref('all');
             const filteredQuickNavPages = computed(() => {
-                return pages.value
+                const list = pages.value
                     .map((pg, idx) => ({ pg, idx }))
                     .filter(({ pg }) => {
                         if (quickNavTypeFilter.value === 'drawing' && !isDrawingDocType(pg.docType)) return false;
                         if (quickNavTypeFilter.value === 'photo' && pg.docType !== 'photo') return false;
-                        if (quickNavSpaceFilter.value !== 'all' && pg.space !== quickNavSpaceFilter.value) return false;
+                        if (quickNavSpaceFilter.value !== 'all') {
+                            if (quickNavSpaceFilter.value === '__NONE__' && pg.space) return false;
+                            if (quickNavSpaceFilter.value !== '__NONE__' && pg.space !== quickNavSpaceFilter.value) return false;
+                        }
                         return true;
                     });
+                if (quickNavSpaceFilter.value !== 'all') {
+                    return [...list].sort((a, b) => (DOC_TYPE_RANK[a.pg.docType] || 6) - (DOC_TYPE_RANK[b.pg.docType] || 6) || a.idx - b.idx);
+                }
+                return list;
             });
 
             const fullScreenIndex = ref(-1);
@@ -1383,18 +1390,50 @@ const localHiddenCodes = ref([]);
                 editingMetaPage.value = pg;
                 showSpaceModal.value = true;
             };
+            const sortPagesKeepFocus = () => {
+                if (pages.value.length <= 1) return;
+                const curIdA = activePage.value?.id;
+                const curIdB = pageB.value?.id;
+                const docRank = (dt) => DOC_TYPE_RANK[dt] || 6;
+                const spaceRank = (sp) => {
+                    if (!sp) return 999;
+                    if (sp === '總圖') return 0;
+                    const idx = spaceList.value.indexOf(sp);
+                    return idx === -1 ? 500 : idx + 1;
+                };
+                const indexed = pages.value.map((pg, origIdx) => ({ pg, origIdx }));
+                indexed.sort((a, b) => {
+                    const sDiff = spaceRank(a.pg.space) - spaceRank(b.pg.space);
+                    if (sDiff !== 0) return sDiff;
+                    const dDiff = docRank(a.pg.docType) - docRank(b.pg.docType);
+                    if (dDiff !== 0) return dDiff;
+                    return a.origIdx - b.origIdx;
+                });
+                pages.value = indexed.map(x => x.pg);
+                if (curIdA) {
+                    const nextA = pages.value.findIndex(p => String(p.id) === String(curIdA));
+                    if (nextA !== -1) activePageIndex.value = nextA;
+                }
+                if (curIdB) {
+                    const nextB = pages.value.findIndex(p => String(p.id) === String(curIdB));
+                    if (nextB !== -1) pageIndexB.value = nextB;
+                }
+                project.pageOrderUpdatedAt = Date.now();
+            };
+
             const setPageDocType = (dt) => {
                 if (editingMetaPage.value) {
                     editingMetaPage.value.docType = dt;
                     editingMetaPage.value.updatedAt = Date.now();
                     dirtyPageIds.add(editingMetaPage.value.id);
                     hasUnsavedCloudChanges.value = true;
+                    sortPagesKeepFocus();
                     saveAll();
                     return;
                 }
                 checkBranchNeed(() => {
                     if (targetPage.value) targetPage.value.docType = dt;
-                    touchDirty(); saveAll();
+                    touchDirty(); sortPagesKeepFocus(); saveAll();
                 });
             };
             const batchSetDocType = async (dt) => {
@@ -1549,12 +1588,12 @@ const localHiddenCodes = ref([]);
                     hasUnsavedCloudChanges.value = true;
                     showSpaceModal.value = false;
                     editingMetaPage.value = null;
+                    sortPagesKeepFocus();
                     saveAll();
                     return;
                 }
-                checkBranchNeed(() => { if (targetCanvas.value) targetCanvas.value.space = sp; touchDirty(); showSpaceModal.value = false; saveAll(); });
+                checkBranchNeed(() => { if (targetCanvas.value) targetCanvas.value.space = sp; touchDirty(); showSpaceModal.value = false; sortPagesKeepFocus(); saveAll(); });
             };
-            
             const addCustomSpace = () => { const s = prompt('輸入空間名稱（例如：閣樓）')?.trim(); if (s) { if (!spaceList.value.includes(s)) spaceList.value.push(s); setPageSpace(s); } };
 
             const onEraseTap = (targetType, item, e, pane = activePane.value) => {
