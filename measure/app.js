@@ -3009,7 +3009,7 @@ const loadProjectList = async () => {
                 deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, onMarkerTextInput, handleKeypad, applyTag, applyStamp, getStampColor, getMarkerLines, getTagFields, exportPdfReport,
                 globalFontScale, toggleFontScale,
                 activeLine, onLinePointerStart, setActiveLineColor, deleteActiveLine, getMarkerFontPx, stepMarkerFontScale, openMarkerEditor,
-                getDocTypeLabel, overviewTypeFilter, overviewSpaceFilter, drawingPageCount, photoPageCount, overviewSpacesAvailable, filteredOverviewPages, overviewStackMode, overviewSpaceStacks, toggleSpaceStackSelection,
+                getDocTypeLabel, overviewTypeFilter, overviewSpaceFilter, showPreviewMoreMenu, showDocTypeFilterBar, drawingPageCount, photoPageCount, overviewSpacesAvailable, filteredOverviewPages, overviewStackMode, overviewSpaceStacks, toggleSpaceStackSelection,
                 movingPageId, movingPageLabel, startMovePage, insertMovingPageAfter, showAutoSortModal, autoSortPages,
                 editingMetaPage, openPageMetaModal, setPageDocType, batchSetDocType, batchSetSpace,
                 quickNavTypeFilter, quickNavSpaceFilter, filteredQuickNavPages,
