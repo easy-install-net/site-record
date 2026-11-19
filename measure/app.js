@@ -686,10 +686,12 @@ const syncUserOwnedProjects = async () => {
             const startCapsuleDrag = (e) => {
                 const sx = e.clientX, sy = e.clientY, ox = capsuleOffset.x, oy = capsuleOffset.y;
                 const onMove = (ev) => {
-                    const maxX = Math.max(60, window.innerWidth / 2 - 50);
-                    capsuleOffset.x = Math.max(-maxX, Math.min(maxX, ox + (ev.clientX - sx)));
-                    capsuleOffset.y = Math.max(-6, Math.min(window.innerHeight - 130, oy + (ev.clientY - sy)));
+                    const maxX = Math.max(40, window.innerWidth - 160);
+                    const maxY = Math.max(120, window.innerHeight - 190);
+                    capsuleOffset.x = Math.max(0, Math.min(maxX, ox + (ev.clientX - sx)));
+                    capsuleOffset.y = Math.max(-68, Math.min(maxY, oy + (ev.clientY - sy)));
                 };
+                
                 const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); };
                 window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
             };
