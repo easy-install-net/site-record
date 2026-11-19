@@ -1359,6 +1359,8 @@ const localHiddenCodes = ref([]);
 
             const overviewTypeFilter = ref('all');
             const overviewSpaceFilter = ref('all');
+            const showPreviewMoreMenu = ref(false);
+            const showDocTypeFilterBar = ref(false);
             const drawingPageCount = computed(() => pages.value.filter(p => ['plan', '3d', 'dim', 'detail'].includes(p.docType)).length);
             const photoPageCount = computed(() => pages.value.filter(p => p.docType === 'photo').length);
             const overviewSpacesAvailable = computed(() => {
@@ -1371,8 +1373,10 @@ const localHiddenCodes = ref([]);
                 const list = pages.value
                     .map((pg, idx) => ({ pg, idx }))
                     .filter(({ pg }) => {
-                        if (overviewTypeFilter.value === 'drawing' && !['plan', '3d', 'dim', 'detail'].includes(pg.docType)) return false;
-                        if (overviewTypeFilter.value === 'photo' && pg.docType !== 'photo') return false;
+                        if (overviewTypeFilter.value !== 'all') {
+                            if (overviewTypeFilter.value === 'drawing' && !['plan', '3d', 'dim', 'detail'].includes(pg.docType)) return false;
+                            else if (overviewTypeFilter.value !== 'drawing' && pg.docType !== overviewTypeFilter.value) return false;
+                        }
                         if (overviewSpaceFilter.value !== 'all') {
                             if (overviewSpaceFilter.value === '__NONE__' && pg.space) return false;
                             if (overviewSpaceFilter.value !== '__NONE__' && pg.space !== overviewSpaceFilter.value) return false;
