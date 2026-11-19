@@ -782,10 +782,91 @@ const syncUserOwnedProjects = async () => {
             });
 
             const fullScreenIndex = ref(-1);
+            const fsSpaceFilter = ref('all');
             const fsStripRef = ref(null);
+            const fsSvgRef = ref(null);
+            const fsZoom = ref(1), fsVbX = ref(0), fsVbY = ref(0);
+            const fsSvgViewBox = computed(() => {
+                const pw = fullScreenItem.value?.w || 1200, ph = fullScreenItem.value?.h || 900;
+                const vw = Math.round((pw / fsZoom.value) * 10) / 10, vh = Math.round((ph / fsZoom.value) * 10) / 10;
+                const vx = Math.max(0, Math.min(pw - vw, fsVbX.value)), vy = Math.max(0, Math.min(ph - vh, fsVbY.value));
+                return `${vx} ${vy} ${vw} ${vh}`;
+            });
+            const resetFsZoom = () => { fsZoom.value = 1; fsVbX.value = 0; fsVbY.value = 0; };
+            const applyFsZoomAt = (nextScale, clientX, clientY, anchorSvg) => {
+                const svg = fsSvgRef.value, pw = fullScreenItem.value?.w || 1200, ph = fullScreenItem.value?.h || 900;
+                const clamped = Math.max(1, Math.min(5, Math.round(nextScale * 100) / 100));
+                if (clamped <= 1) { resetFsZoom(); return; }
+                const vw = pw / clamped, vh = ph / clamped;
+                if (svg && anchorSvg) {
+                    const r = svg.getBoundingClientRect(), baseFit = Math.min(r.width / pw, r.height / ph);
+                    const eff = baseFit * clamped, offX = r.left + (r.width - pw * baseFit) / 2, offY = r.top + (r.height - ph * baseFit) / 2;
+                    fsZoom.value = clamped;
+                    fsVbX.value = Math.max(0, Math.min(pw - vw, anchorSvg.x - (clientX - offX) / eff));
+                    fsVbY.value = Math.max(0, Math.min(ph - vh, anchorSvg.y - (clientY - offY) / eff));
+                } else {
+                    const cx = fsVbX.value + (pw / fsZoom.value) / 2, cy = fsVbY.value + (ph / fsZoom.value) / 2;
+                    fsZoom.value = clamped;
+                    fsVbX.value = Math.max(0, Math.min(pw - vw, cx - vw / 2));
+                    fsVbY.value = Math.max(0, Math.min(ph - vh, cy - vh / 2));
+                }
+            };
+            const fsClientToSvg = (clientX, clientY) => {
+                const svg = fsSvgRef.value, pw = fullScreenItem.value?.w || 1200, ph = fullScreenItem.value?.h || 900;
+                if (!svg) return { x: pw / 2, y: ph / 2 };
+                try {
+                    const ctm = svg.getScreenCTM();
+                    if (ctm) { const p = svg.createSVGPoint(); p.x = clientX; p.y = clientY; const loc = p.matrixTransform(ctm.inverse()); return { x: Math.max(0, Math.min(pw, loc.x)), y: Math.max(0, Math.min(ph, loc.y)) }; }
+                } catch (_) {}
+                return { x: pw / 2, y: ph / 2 };
+            };
+            let fsPinch = false, fsPinchDist = 0, fsPinchScale = 1, fsPinchAnchor = null, fsPan = false, fsPanStart = { x: 0, y: 0 }, fsPanVb = { x: 0, y: 0 };
+            const onFsWheel = (e) => applyFsZoomAt(fsZoom.value * (e.deltaY < 0 ? 1.2 : 0.82), e.clientX, e.clientY, fsClientToSvg(e.clientX, e.clientY));
+            const onFsTouchStart = (e) => {
+                if (e.touches.length >= 2) {
+                    fsPinch = true; fsPan = false;
+                    const t1 = e.touches[0], t2 = e.touches[1];
+                    fsPinchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1;
+                    fsPinchScale = fsZoom.value;
+                    fsPinchAnchor = fsClientToSvg((t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2);
+                } else if (e.touches.length === 1 && fsZoom.value > 1) {
+                    fsPan = true; fsPanStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; fsPanVb = { x: fsVbX.value, y: fsVbY.value };
+                }
+            };
+            const onFsTouchMove = (e) => {
+                if (e.touches.length >= 2 && fsPinch) {
+                    const t1 = e.touches[0], t2 = e.touches[1], cur = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1;
+                    applyFsZoomAt(fsPinchScale * (cur / fsPinchDist), (t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2, fsPinchAnchor);
+                } else if (e.touches.length === 1 && fsPan && fsZoom.value > 1 && fsSvgRef.value) {
+                    const pw = fullScreenItem.value?.w || 1200, ph = fullScreenItem.value?.h || 900, vw = pw / fsZoom.value, vh = ph / fsZoom.value;
+                    const r = fsSvgRef.value.getBoundingClientRect(), fit = Math.min(r.width / vw, r.height / vh) || 1;
+                    fsVbX.value = Math.max(0, Math.min(pw - vw, fsPanVb.x - (e.touches[0].clientX - fsPanStart.x) / fit));
+                    fsVbY.value = Math.max(0, Math.min(ph - vh, fsPanVb.y - (e.touches[0].clientY - fsPanStart.y) / fit));
+                }
+            };
+            const onFsTouchEnd = () => { fsPinch = false; fsPan = false; };
+            const onFsMouseDown = (e) => { if (fsZoom.value > 1) { fsPan = true; fsPanStart = { x: e.clientX, y: e.clientY }; fsPanVb = { x: fsVbX.value, y: fsVbY.value }; } };
+            const onFsMouseMove = (e) => {
+                if (!fsPan || fsZoom.value <= 1 || !fsSvgRef.value) return;
+                const pw = fullScreenItem.value?.w || 1200, ph = fullScreenItem.value?.h || 900, vw = pw / fsZoom.value, vh = ph / fsZoom.value;
+                const r = fsSvgRef.value.getBoundingClientRect(), fit = Math.min(r.width / vw, r.height / vh) || 1;
+                fsVbX.value = Math.max(0, Math.min(pw - vw, fsPanVb.x - (e.clientX - fsPanStart.x) / fit));
+                fsVbY.value = Math.max(0, Math.min(ph - vh, fsPanVb.y - (e.clientY - fsPanStart.y) / fit));
+            };
+            const onFsMouseUp = () => { fsPan = false; };
+
             const fullScreenList = computed(() => {
+                const spaceRank = (sp) => { if (!sp) return 999; if (sp === '總圖') return 0; const i = spaceList.value.indexOf(sp); return i === -1 ? 500 : i + 1; };
+                const sortedPages = pages.value.map((pg, pIdx) => ({ pg, pIdx })).sort((a, b) => {
+                    const sDiff = spaceRank(a.pg.space) - spaceRank(b.pg.space);
+                    if (sDiff !== 0) return sDiff;
+                    const dDiff = (DOC_TYPE_RANK[a.pg.docType] || 6) - (DOC_TYPE_RANK[b.pg.docType] || 6);
+                    if (dDiff !== 0) return dDiff;
+                    return a.pIdx - b.pIdx;
+                });
                 const list = [];
-                pages.value.forEach((pg, pIdx) => {
+                sortedPages.forEach(({ pg, pIdx }) => {
+                    if (fsSpaceFilter.value !== 'all' && pg.space !== fsSpaceFilter.value) return;
                     const d = pg.date || project.date || getTodayStr(), a = pg.author || project.lastModifiedBy || '';
                     if (pg.photo) list.push({ item: pg, parentPg: pg, isPin: false, pIdx, shortLabel: `P${pIdx + 1}`, label: `P${pIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`, date: d, author: a });
                     (pg.pins || []).forEach((pin, pinIdx) => {
@@ -808,11 +889,21 @@ const syncUserOwnedProjects = async () => {
             };
             const jumpFullScreen = (idx) => {
                 if (idx >= 0 && idx < fullScreenList.value.length) {
+                    resetFsZoom();
                     fullScreenIndex.value = idx;
                     scrollFsStripToActive();
                 }
             };
-            const openFullScreenPreview = (targetItem) => { const idx = fullScreenList.value.findIndex(x => String(x.item.id) === String(targetItem.id)); if (idx !== -1) jumpFullScreen(idx); };
+            const setFsSpaceFilter = (sp) => {
+                fsSpaceFilter.value = sp;
+                resetFsZoom();
+                if (fullScreenList.value.length > 0) jumpFullScreen(0);
+            };
+            const openFullScreenPreview = (targetItem) => {
+                fsSpaceFilter.value = 'all';
+                const idx = fullScreenList.value.findIndex(x => String(x.item.id) === String(targetItem.id));
+                if (idx !== -1) jumpFullScreen(idx);
+            };
             const prevFullScreen = () => { if (fullScreenIndex.value > 0) jumpFullScreen(fullScreenIndex.value - 1); };
             const nextFullScreen = () => { if (fullScreenIndex.value < fullScreenList.value.length - 1) jumpFullScreen(fullScreenIndex.value + 1); };
 
