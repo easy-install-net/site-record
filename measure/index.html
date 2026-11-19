@@ -467,19 +467,29 @@
 
                     <div v-else class="flex-1 min-h-0 w-full relative overflow-hidden">
                         <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
-                            <div v-if="!activePin" class="bg-white/95 border border-zinc-300 rounded-lg flex items-center px-1 py-1 shadow-sm">
-                                <span v-if="splitMode" class="bg-blue-600 text-white text-[10px] font-black px-1 py-0.5 rounded mr-1">左</span>
-                                <button @click="prevPage('A')" class="px-2.5 py-1 text-zinc-800 active:bg-zinc-200 rounded font-black text-sm" :class="{ 'opacity-30': activePageIndex === 0 }">◀</button>
-                                <button @click="showQuickPageNav = !showQuickPageNav" class="px-2 py-1 text-zinc-900 hover:bg-zinc-100 rounded font-black text-xs flex items-center gap-0.5">
-                                    <span>P{{ activePageIndex + 1 }}/{{ pages.length }}</span>
-                                    <span class="text-[10px] text-blue-600">▾</span>
-                                </button>
-                                <button @click="nextPage('A')" class="px-2.5 py-1 text-zinc-800 active:bg-zinc-200 rounded font-black text-sm" :class="{ 'opacity-30': activePageIndex === pages.length - 1 }">▶</button>
-                                <div class="w-px h-4 bg-zinc-300 mx-1"></div>
-                                <button @click="showAddPageModal = true" class="px-2 py-1 text-blue-600 font-bold text-xs">+加頁</button>
-                                <template v-if="pages.length > 1 && !splitMode">
-                                    <div class="w-px h-4 bg-zinc-300 mx-1"></div><button @click="deleteCurrentPage" class="px-1.5 py-1 text-red-600 font-bold text-xs">刪頁</button>
-                                </template>
+                            <div v-if="!activePin" class="flex items-center gap-1 flex-wrap">
+                                <div class="bg-white/95 border border-zinc-300 rounded-lg flex items-center px-1 py-0.5 shadow-sm">
+                                    <span v-if="splitMode" class="bg-blue-600 text-white text-[10px] font-black px-1 py-0.5 rounded mr-1">左</span>
+                                    <button v-if="splitMode" @click="prevPage('A')" class="px-1.5 py-1 text-zinc-800 rounded font-black text-xs" :class="{ 'opacity-30': activePageIndex === 0 }">◀</button>
+                                    <button @click="showQuickPageNav = !showQuickPageNav" class="px-2 py-1 text-zinc-900 hover:bg-zinc-100 rounded font-black text-xs flex items-center gap-0.5">
+                                        <span>P{{ activePageIndex + 1 }}/{{ pages.length }}</span>
+                                        <span class="text-[10px] text-blue-600">▾</span>
+                                    </button>
+                                    <button v-if="splitMode" @click="nextPage('A')" class="px-1.5 py-1 text-zinc-800 rounded font-black text-xs" :class="{ 'opacity-30': activePageIndex === pages.length - 1 }">▶</button>
+                                    <div class="w-px h-4 bg-zinc-300 mx-0.5"></div>
+                                    <button @click="showAddPageModal = true" class="px-1.5 py-1 text-blue-600 font-bold text-xs">+加頁</button>
+                                    <template v-if="pages.length > 1 && !splitMode">
+                                        <div class="w-px h-4 bg-zinc-300 mx-0.5"></div><button @click="deleteCurrentPage" class="px-1.5 py-1 text-red-600 font-bold text-xs">刪頁</button>
+                                    </template>
+                                </div>
+
+                                <!-- 直接一撳切換「分」(空間疊) / 「全」(攤開全頁) -->
+                                <button v-if="!splitMode" @click="showQuickPageNav && overviewStackMode && quickNavSpaceFilter === 'all' ? (showQuickPageNav = false) : (overviewStackMode = true, quickNavSpaceFilter = 'all', showQuickPageNav = true)"
+                                        :class="showQuickPageNav && overviewStackMode && quickNavSpaceFilter === 'all' ? 'bg-purple-700 text-white border-purple-700' : 'bg-white/95 text-purple-800 border-purple-300'"
+                                        class="px-2.5 py-1.5 rounded-lg text-xs font-black border shadow-sm">分</button>
+                                <button v-if="!splitMode" @click="showQuickPageNav && !overviewStackMode ? (showQuickPageNav = false) : (overviewStackMode = false, quickNavSpaceFilter = 'all', showQuickPageNav = true)"
+                                        :class="showQuickPageNav && !overviewStackMode ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white/95 text-zinc-800 border-zinc-300'"
+                                        class="px-2.5 py-1.5 rounded-lg text-xs font-black border shadow-sm">全</button>
                             </div>
                             <div v-else class="bg-red-50 border border-red-300 rounded-md flex items-center px-2 py-1 shadow-sm">
                                 <button @click="exitPinSubPage('A')" class="text-red-700 text-[11px] font-bold pr-2">‹ 返回 P{{ activePageIndex + 1 }}</button>
@@ -487,34 +497,69 @@
                                 <div class="w-px h-3.5 bg-red-300 mx-1"></div><button @click="deleteActivePin('A')" class="bg-white border border-red-300 text-red-700 px-2 py-0.5 rounded text-[11px] font-bold shadow-sm">🗑️刪釘</button>
                             </div>
 
-                            <div v-if="showQuickPageNav && !activePin" class="w-80 max-w-[90vw] max-h-[62vh] bg-white/95 backdrop-blur-md border border-zinc-300 rounded-xl p-2 shadow-2xl overflow-y-auto touch-scrollable z-40">
-                                <div class="flex justify-between items-center px-1 pb-1.5 mb-1.5 border-b border-zinc-200">
-                                    <span class="text-[11px] font-black text-zinc-800">📑 點圖跳頁 ({{ filteredQuickNavPages.length }}/{{ pages.length }}頁)</span>
-                                    <button @click="showQuickPageNav = false" class="text-xs font-bold text-zinc-400 px-1.5">✕</button>
+                            <!-- 全寬大畫面目錄彈窗（置於工具列正下方，零重疊、文字完整不溢出） -->
+                            <div v-if="showQuickPageNav && !activePin"
+                                 class="fixed top-[178px] left-1/2 -translate-x-1/2 w-[96vw] max-w-4xl max-h-[calc(100dvh-192px)] bg-white/98 backdrop-blur-md border border-zinc-300 rounded-2xl p-3 shadow-2xl flex flex-col z-40">
+                                <div class="flex justify-between items-center pb-2 mb-2 border-b border-zinc-200 gap-2 shrink-0">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <button v-if="quickNavSpaceFilter !== 'all'" @click="quickNavSpaceFilter = 'all'" class="bg-purple-100 text-purple-800 px-2.5 py-1 rounded-lg text-xs font-black shrink-0">‹ 返回空間疊</button>
+                                        <span class="text-xs sm:text-sm font-black text-zinc-900 truncate">
+                                            {{ quickNavSpaceFilter !== 'all' ? (quickNavSpaceFilter === '__NONE__' ? '📂 未分類空間' : '🏠 ' + quickNavSpaceFilter) + ` (${filteredQuickNavPages.length}頁)` : (overviewStackMode ? `🗂️ 按空間分類 (${pages.length}頁)` : `📑 全部圖紙 (${filteredQuickNavPages.length}/${pages.length}頁)`) }}
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 shrink-0">
+                                        <button v-if="quickNavSpaceFilter === 'all'" @click="overviewStackMode = !overviewStackMode" class="bg-zinc-100 hover:bg-zinc-200 text-zinc-800 px-2.5 py-1 rounded-lg text-xs font-bold">
+                                            {{ overviewStackMode ? '⊞ 攤開全頁' : '🗂️ 空間疊起' }}
+                                        </button>
+                                        <button @click="showQuickPageNav = false" class="bg-zinc-100 hover:bg-zinc-200 text-zinc-600 px-2.5 py-1 rounded-lg text-xs font-black">✕ 收起</button>
+                                    </div>
                                 </div>
-                                <div class="flex items-center gap-1 mb-1.5 overflow-x-auto no-scrollbar">
-                                    <button @click="quickNavTypeFilter = 'all'" :class="quickNavTypeFilter === 'all' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded text-[11px] font-bold shrink-0">全部</button>
-                                    <button @click="quickNavTypeFilter = 'drawing'" :class="quickNavTypeFilter === 'drawing' ? 'bg-sky-600 text-white' : 'bg-sky-50 text-sky-800'" class="px-2 py-0.5 rounded text-[11px] font-bold shrink-0">📐工程圖</button>
-                                    <button @click="quickNavTypeFilter = 'photo'" :class="quickNavTypeFilter === 'photo' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-800'" class="px-2 py-0.5 rounded text-[11px] font-bold shrink-0">📷拍攝</button>
+
+                                <div v-if="!overviewStackMode || quickNavSpaceFilter !== 'all'" class="flex items-center gap-1.5 mb-2 overflow-x-auto no-scrollbar shrink-0">
+                                    <button @click="quickNavTypeFilter = 'all'" :class="quickNavTypeFilter === 'all' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2.5 py-1 rounded-lg text-xs font-bold shrink-0">全部</button>
+                                    <button @click="quickNavTypeFilter = 'drawing'" :class="quickNavTypeFilter === 'drawing' ? 'bg-sky-600 text-white' : 'bg-sky-50 text-sky-800'" class="px-2.5 py-1 rounded-lg text-xs font-bold shrink-0">📐工程圖</button>
+                                    <button @click="quickNavTypeFilter = 'photo'" :class="quickNavTypeFilter === 'photo' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-800'" class="px-2.5 py-1 rounded-lg text-xs font-bold shrink-0">📷拍攝</button>
                                 </div>
-                                <div v-if="overviewSpacesAvailable.length" class="flex items-center gap-1 mb-2 overflow-x-auto no-scrollbar">
-                                    <button @click="quickNavSpaceFilter = 'all'" :class="quickNavSpaceFilter === 'all' ? 'bg-purple-700 text-white' : 'bg-zinc-100 text-zinc-600'" class="px-2 py-0.5 rounded text-[10px] font-bold shrink-0">全部空間</button>
-                                    <button v-for="sp in overviewSpacesAvailable" :key="sp" @click="quickNavSpaceFilter = sp" :class="quickNavSpaceFilter === sp ? 'bg-purple-700 text-white' : 'bg-purple-50 text-purple-800'" class="px-2 py-0.5 rounded text-[10px] font-bold shrink-0">{{ sp }}</button>
-                                </div>
-                                <div class="grid grid-cols-3 gap-1.5">
-                                    <button v-for="{ pg, idx } in filteredQuickNavPages" :key="pg.id" @click="jumpToPage(idx)"
-                                            :class="idx === activePageIndex ? 'ring-2 ring-blue-600 bg-blue-50 border-blue-500' : (pg.space === '總圖' ? 'bg-purple-50 border-purple-300' : 'bg-zinc-50 border-zinc-200 hover:bg-zinc-100')"
-                                            class="border rounded-lg p-1 flex flex-col items-center text-left overflow-hidden transition-all">
-                                        <div class="w-full h-12 bg-white rounded overflow-hidden flex items-center justify-center border border-zinc-200 relative">
-                                            <img v-if="pg.photo" :src="pg.photo" class="w-full h-full object-cover">
-                                            <span v-else class="text-[10px] text-zinc-400 font-bold">空白</span>
-                                            <span v-if="pageFeedbackCount(pg.id)" class="absolute top-0.5 right-0.5 bg-rose-600 text-white text-[9px] font-black px-1 rounded">💬{{ pageFeedbackCount(pg.id) }}</span>
+
+                                <div class="flex-1 overflow-y-auto touch-scrollable pr-0.5">
+                                    <!-- A. 空間資料夾疊起視圖 -->
+                                    <div v-if="overviewStackMode && quickNavSpaceFilter === 'all'" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
+                                        <div v-for="st in overviewSpaceStacks" :key="'qst-'+st.key" @click="quickNavSpaceFilter = st.key" class="relative pt-1.5 pl-1.5 cursor-pointer active:scale-[0.98] transition-all">
+                                            <div v-if="st.items.length >= 3" class="absolute inset-0 right-1.5 bottom-1.5 bg-zinc-200 border border-zinc-300 rounded-xl"></div>
+                                            <div v-if="st.items.length >= 2" class="absolute inset-0 top-0.5 left-0.5 right-0.5 bottom-0.5 bg-zinc-100 border border-zinc-300 rounded-xl"></div>
+                                            <div :class="st.key === '總圖' ? 'border-purple-400 bg-purple-50/40' : 'border-zinc-300 bg-white'" class="relative border rounded-xl overflow-hidden shadow-sm flex flex-col">
+                                                <div :class="st.key === '總圖' ? 'bg-purple-100/80 border-purple-200' : 'bg-zinc-50 border-zinc-200'" class="px-2.5 py-1.5 border-b flex items-center justify-between gap-1">
+                                                    <span :class="st.key === '總圖' ? 'text-purple-900' : 'text-zinc-900'" class="text-xs font-black truncate">{{ st.key === '總圖' ? '🗺️ 總圖' : (st.key === '__NONE__' ? '📂 未分類' : '🏠 ' + st.label) }}</span>
+                                                    <span :class="st.key === '總圖' ? 'bg-purple-700 text-white' : 'bg-zinc-900 text-white'" class="text-[11px] font-black px-2 py-0.5 rounded-full shrink-0">{{ st.items.length }}</span>
+                                                </div>
+                                                <div class="h-24 sm:h-28 bg-white flex items-center justify-center overflow-hidden relative">
+                                                    <img v-if="st.items[0]?.pg?.photo" :src="st.items[0].pg.photo" class="w-full h-full object-contain">
+                                                    <span v-else class="text-xs text-zinc-400 font-bold">空白</span>
+                                                    <span v-if="getDocTypeLabel(st.items[0]?.pg?.docType)" class="absolute bottom-1 left-1 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">{{ getDocTypeLabel(st.items[0].pg.docType) }}</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div class="w-full mt-1 flex items-center justify-between gap-0.5">
-                                            <span :class="idx === activePageIndex ? 'text-blue-700 font-black' : 'text-zinc-900 font-bold'" class="text-[11px] shrink-0">P{{ idx + 1 }}</span>
-                                            <span :class="pg.space === '總圖' ? 'text-purple-700 font-bold' : 'text-zinc-500'" class="text-[10px] truncate">{{ pg.space || '' }}</span>
-                                        </div>
-                                    </button>
+                                    </div>
+
+                                    <!-- B. 單一空間展開 / 攤開全頁縮圖（完整顯示文字不溢出） -->
+                                    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                                        <button v-for="{ pg, idx } in filteredQuickNavPages" :key="pg.id" @click="jumpToPage(idx)"
+                                                :class="idx === activePageIndex ? 'ring-2 ring-blue-600 bg-blue-50/70 border-blue-500' : (pg.space === '總圖' ? 'bg-purple-50/50 border-purple-300' : 'bg-white border-zinc-300 hover:border-zinc-400')"
+                                                class="border rounded-xl p-1.5 flex flex-col text-left overflow-hidden shadow-xs transition-all">
+                                            <div class="w-full flex items-center justify-between gap-1 pb-1">
+                                                <span :class="idx === activePageIndex ? 'text-blue-700 font-black' : 'text-zinc-900 font-black'" class="text-xs shrink-0">P{{ idx + 1 }}</span>
+                                                <span v-if="getDocTypeLabel(pg.docType)" class="bg-sky-50 text-sky-900 border border-sky-200 text-[10px] font-bold px-1.5 py-0.2 rounded truncate">{{ getDocTypeLabel(pg.docType) }}</span>
+                                            </div>
+                                            <div class="w-full h-24 sm:h-28 bg-zinc-50 rounded-lg overflow-hidden flex items-center justify-center border border-zinc-200 relative">
+                                                <img v-if="pg.photo" :src="pg.photo" class="w-full h-full object-contain bg-white">
+                                                <span v-else class="text-xs text-zinc-400 font-bold">空白</span>
+                                                <span v-if="pageFeedbackCount(pg.id)" class="absolute top-1 right-1 bg-rose-600 text-white text-[10px] font-black px-1.5 rounded">💬{{ pageFeedbackCount(pg.id) }}</span>
+                                            </div>
+                                            <div class="w-full pt-1 text-[11px] font-bold truncate" :class="pg.space === '總圖' ? 'text-purple-700' : 'text-zinc-600'">
+                                                {{ pg.space ? '🏠 ' + pg.space : '未標空間' }}
+                                            </div>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
