@@ -3009,7 +3009,9 @@ const loadProjectList = async () => {
                 movingPageId, movingPageLabel, startMovePage, insertMovingPageAfter, showAutoSortModal, autoSortPages,
                 editingMetaPage, openPageMetaModal, setPageDocType, batchSetDocType, batchSetSpace,
                 quickNavTypeFilter, quickNavSpaceFilter, filteredQuickNavPages,
-                fsStripRef, jumpFullScreen, openFullScreenSpaceModal,
+                fsStripRef, fsSvgRef, fsSpaceFilter, setFsSpaceFilter, fsZoom, fsSvgViewBox, resetFsZoom,
+                onFsWheel, onFsTouchStart, onFsTouchMove, onFsTouchEnd, onFsMouseDown, onFsMouseMove, onFsMouseUp,
+                jumpFullScreen, openFullScreenSpaceModal,
                 fsEditingMarker, fsQuickInputRef, onFsMarkerTap, openFsMarkerQuickEdit, setFsMarkerColor, stepFsMarkerFont, closeFsMarkerQuickEdit,
                 onProjectNameInput, showNotesModal, noteFilter, newNoteText, newNoteSpace, activeNotesCount, filteredNotes, addProjectNote, toggleProjectNote, editProjectNote, deleteProjectNote, clearDoneNotes
             };
