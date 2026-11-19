@@ -64,6 +64,9 @@
                 <template v-else>
                     <button @click="backToProjects" class="bg-zinc-100 hover:bg-zinc-200 text-zinc-800 px-2 py-0.5 rounded text-xs font-bold shrink-0">‹ 目錄</button>
                     <input v-model="project.name" @input="onProjectNameInput" @blur="saveAll" @keyup.enter="$event.target.blur()" placeholder="輸入工程地址..." class="bg-transparent focus:bg-zinc-50 border border-transparent focus:border-blue-500 text-zinc-900 text-sm font-bold min-w-[60px] flex-1 px-1.5 py-0.5 rounded focus:outline-none truncate">
+                    <span v-if="currentView === 'proj' && (activeCanvas?.space || activePage?.docType)" @click="openPageMetaModal(null)" class="text-xs font-bold text-zinc-600 shrink-0 truncate max-w-[140px] cursor-pointer">
+                        · {{ [activeCanvas?.space, getDocTypeLabel(activePage?.docType)].filter(Boolean).join(' · ') }}
+                    </span>
                 </template>
                 <span @click="showCloudDetail" class="text-[10px] font-bold text-zinc-500 shrink-0 cursor-pointer">{{ cloudStatusText }}</span>
                 <button v-if="currentUser" @click="forceSyncToCloud" class="bg-blue-600 text-white px-2 py-0.5 rounded text-[11px] font-bold shrink-0 shadow-sm">🔄同步</button>
