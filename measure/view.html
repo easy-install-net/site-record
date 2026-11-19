@@ -179,9 +179,10 @@
                 </div>
 
                 <!-- 正下方可浮動拖拉工具箱（置於底部中央，與上方目錄完全分開零重疊） -->
-                <div :style="{ transform: `translate(calc(-50% + ${capsuleOffset.x}px), ${capsuleOffset.y}px)` }"
-                     class="fixed bottom-3 left-1/2 z-30 flex flex-col items-center max-w-[96vw]" @touchstart.stop @mousedown.stop>
-
+                <!-- 左上標籤正下方可浮動拖拉工具箱 -->
+                <div :style="{ transform: `translate(${capsuleOffset.x}px, ${capsuleOffset.y}px)` }"
+                     class="fixed top-[116px] left-2 z-30 flex flex-col items-start max-w-[96vw]" @touchstart.stop @mousedown.stop>
+                    
                     <div v-if="capsuleCollapsed" class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-xl flex items-center gap-1">
                         <span @pointerdown.stop.prevent="startCapsuleDrag" style="touch-action:none" title="按住拖拉移動工具列" class="cursor-grab active:cursor-grabbing px-1.5 py-1 text-zinc-400 font-black text-sm select-none">⠿</span>
                         <button @click="capsuleCollapsed = false" class="bg-zinc-900 text-white px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">🛠️ 展開標註工具</button>
