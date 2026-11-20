@@ -400,6 +400,28 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const filteredCadList = computed(() => allCadManageList.value.filter(x => !x.hidden && x.cat === cadCategory.value));
 
             const getCadDef = (type) => CAD_DEFS[type] || customCadBlocks.value.find(x => x.id === type) || null;
+            const cadSvgCache = new Map();
+            const getCadSvgImage = (m) => {
+                const cadType = m?.data?.cadType;
+                if (!cadType) return '';
+                const def = getCadDef(cadType);
+                if (!def) return '';
+                if (def.imgB64) return def.imgB64;
+                const color = m.color || '#111827';
+                const key = `${cadType}_${color}`;
+                if (cadSvgCache.has(key)) return cadSvgCache.get(key);
+                const c = document.createElement('canvas');
+                c.width = 200; c.height = 200;
+                const ctx = c.getContext('2d');
+                if (CAD_DEFS[cadType]) {
+                    drawCadOnCanvas(ctx, { x: 100, y: 100, color, rot: 0, scale: 1, flipX: 1, flipY: 1, data: { cadType } });
+                } else if (def.shapes) {
+                    drawCustomCadOnCanvas(ctx, { x: 100, y: 100, color, rot: 0, scale: 1, flipX: 1, flipY: 1, data: { cadType } });
+                }
+                const url = c.toDataURL('image/png');
+                cadSvgCache.set(key, url);
+                return url;
+            };
             const getCadTransform = (m) => {
                 const sx = (m.scale || 1) * (m.scaleX || 1) * (m.flipX || 1);
                 const sy = (m.scale || 1) * (m.scaleY || 1) * (m.flipY || 1);
@@ -2037,7 +2059,10 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     panStartVb = pane === 'B' ? { x: vbXB.value, y: vbYB.value } : { x: vbX.value, y: vbY.value };
                     return;
                 }
-                if (!draggedMarker.value && !['browse', 'eraser', 'move'].includes(drawMode.value)) beginStroke(e, pane);
+                if (!draggedMarker.value && !['browse', 'eraser', 'move'].includes(drawMode.value)) {
+                    e.preventDefault();
+                    beginStroke(e, pane);
+                }
             };
             const onStageMouseMove = (e, pane = 'A') => {
                 if (showBranchPrompt.value) return;
@@ -3143,7 +3168,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 stampCategories, stampItems, stampFilter, showStampManagerModal, managerCatFilter, managerFilteredItems, pinnedStampList,
                 newCatName, newStampText, newStampCatId, newStampColor, getCategoryById, openStampManager, onSelectNewStampCat, addStampCategory, addStampItem, toggleStampPin, editStampItemText, deleteStampItem, restoreDefaultStamps, syncStampLibraryCloud,
                 STAMP_GROUPS, filteredStampGroups, promptCustomStamp,
-                CAD_CATEGORIES, cadCategory, selectedCadType, filteredCadList, getCadDef, getCadTransform, setMarkerScale, setMarkerScaleX, setMarkerScaleY, rotateMarker, flipMarker,
+               CAD_CATEGORIES, cadCategory, selectedCadType, filteredCadList, getCadDef, getCadSvgImage, getCadTransform, setMarkerScale, setMarkerScaleX, setMarkerScaleY, rotateMarker, flipMarker,
                 showCadManager, cadMgrFilter, newCadCat, newCadShape, newCadLabel, newCadImgB64, handleNewCadImage, allCadManageList, filteredCadManageList,
                 openCadManager, addCustomCadBlock, deleteCustomCadBlock, togglePinCad, toggleHideCad,
                 defaultTextColor, setMarkerTextColor, getArrowMarkerId, getFsArrowMarkerId,
