@@ -2155,22 +2155,15 @@ const getPageSpaces = (pg) => {
             };
 
             const endStroke = (e, pane = drawingPane.value) => {
-               else {
-                        ctx.save(); ctx.setLineDash([14, 10]); ctx.strokeStyle = getLineStroke(l, 0.7); ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore();
-                        if (Array.isArray(l.chainSegs) && l.chainSegs.length >= 2) {
-                            ctx.save(); ctx.strokeStyle = getLineStroke(l, 0.95); ctx.lineWidth = 3.5;
-                            getChainTicks(l).forEach(tk => { ctx.beginPath(); ctx.moveTo(tk.x1, tk.y1); ctx.lineTo(tk.x2, tk.y2); ctx.stroke(); });
-                            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 18px sans-serif'; ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
-                            getChainSegLabels(l).forEach(sl => { ctx.strokeText(sl.val, sl.x, sl.y - 12); ctx.fillStyle = '#fde047'; ctx.fillText(sl.val, sl.x, sl.y - 12); });
-                            ctx.restore();
-                        }
-                    }
-                if (draggedMarker.value) {
-                    const moved = Math.hypot(draggedMarker.value.x - markerOrigin.value.x, draggedMarker.value.y - markerOrigin.value.y) > 2;
-                    draggedMarker.value = null;
+                if (draggedLine.value) {
+                    const wasTick = dragLineHandle.value === 'tick';
+                    const l = draggedLine.value, o = lineOrigin.value;
+                    const moved = wasTick || Math.hypot(l.x1 - o.x1, l.y1 - o.y1) > 2 || Math.hypot(l.x2 - o.x2, l.y2 - o.y2) > 2;
+                    draggedLine.value = null; dragTickIdx.value = -1;
                     if (moved) { touchDirty(); saveAll(); }
                     return;
                 }
+                if (draggedMarker.value) {
 
                 if (!isDrawing.value) return;
                 isDrawing.value = false; const endPos = getCoords(e, drawingPane.value);
@@ -3269,8 +3262,20 @@ const getPageSpaces = (pg) => {
                 (canvasObj.walls || []).forEach(wObj => { ctx.strokeStyle = wObj.color || '#111827'; buildWallSegments(wObj).forEach(seg => { ctx.lineWidth = seg.isHatch ? 2.5 : 3.5; ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke(); }); });
                 (canvasObj.lines || []).forEach(l => {
                     if (l.type === 'arrow-single') { const hex = getLineStroke(l); ctx.strokeStyle = hex; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(Math.atan2(l.y2 - l.y1, l.x2 - l.x1)); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-9, 4.5); ctx.lineTo(-9, -4.5); ctx.closePath(); ctx.fill(); ctx.restore(); }
-                    else if (l.type === 'straight') { ctx.strokeStyle = getLineStroke(l); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }
-                    else { ctx.save(); ctx.setLineDash([14, 10]); ctx.strokeStyle = getLineStroke(l, 0.7); ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore(); }
+                  else if (l.type === 'straight') { ctx.strokeStyle = getLineStroke(l); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }
+                    else {
+                        ctx.save(); ctx.setLineDash([14, 10]); ctx.strokeStyle = getLineStroke(l, 0.7); ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore();
+                        if (Array.isArray(l.chainSegs) && l.chainSegs.length >= 2) {
+                            ctx.save(); ctx.strokeStyle = getLineStroke(l, 0.95); ctx.lineWidth = 3.5;
+                            getChainTicks(l).forEach(tk => { ctx.beginPath(); ctx.moveTo(tk.x1, tk.y1); ctx.lineTo(tk.x2, tk.y2); ctx.stroke(); });
+                            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 18px sans-serif'; ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
+                            getChainSegLabels(l).forEach(sl => { ctx.strokeText(sl.val, sl.x, sl.y - 12); ctx.fillStyle = '#fde047'; ctx.fillText(sl.val, sl.x, sl.y - 12); });
+                            ctx.restore();
+                        }
+                    }  
+
+
+                    
                 });
                 (canvasObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 6; ctx.stroke(new Path2D(p.d)); });
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
