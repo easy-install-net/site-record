@@ -1239,87 +1239,138 @@
             </div>
         </div>
 
-        <!-- 一體化面板 (度尺/標籤 + 74個專業印章) -->
+<!-- 一體化面板 (度尺/標籤 + 工廠開料定案 + 工藝印章) -->
         <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/20 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
-        <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-zinc-900 border-b border-x border-zinc-300 rounded-b-xl z-50 flex flex-col shadow-xl overflow-hidden max-h-[92dvh]" @touchstart.stop @mousedown.stop>
+        <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-zinc-900 border-b border-x border-zinc-300 rounded-b-xl z-50 flex flex-col shadow-xl overflow-hidden max-h-[94dvh]" @touchstart.stop @mousedown.stop>
 
+            <!-- 頂部分頁列：度尺/標籤(預設) | 實做定案 | 工藝印章 -->
             <div class="px-2 pt-1.5 bg-zinc-100 flex justify-between items-end border-b border-zinc-200 gap-1">
                 <div class="flex gap-1">
-                    <button @click="switchMarkerType('general', 'val')" :class="activeMarker.type !== 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'" class="px-2.5 py-1.5 text-[13px] relative z-10 border translate-y-[1px]">📏 度尺/標籤</button>
-                    <button @click="switchMarkerType('stamp', 'val')" :class="activeMarker.type === 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'" class="px-2.5 py-1.5 text-[13px] relative z-10 border translate-y-[1px]">🏷️ 工藝印章</button>
+                    <button @click="if(activeMarker.type==='stamp') switchMarkerType('general','val'); sheetTab='dim'"
+                            :class="activeMarker.type !== 'stamp' && sheetTab !== 'prod' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'"
+                            class="px-2 py-1.5 text-[12px] relative z-10 border translate-y-[1px]">📏 度尺/標籤</button>
+                    <button @click="if(activeMarker.type==='stamp') switchMarkerType('general','val'); sheetTab='prod'"
+                            :class="activeMarker.type !== 'stamp' && sheetTab === 'prod' ? 'bg-white text-red-700 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-600 rounded-t-lg font-bold border-transparent'"
+                            class="px-2 py-1.5 text-[12px] relative z-10 border translate-y-[1px]">🏭 實做定案</button>
+                    <button @click="switchMarkerType('stamp', 'val'); sheetTab='stamp'"
+                            :class="activeMarker.type === 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'"
+                            class="px-2 py-1.5 text-[12px] relative z-10 border translate-y-[1px]">🏷️ 工藝印章</button>
                 </div>
-                <div class="flex items-center gap-1.5 pb-1.5 shrink-0">
+                <div class="flex items-center gap-1 pb-1.5 shrink-0">
                     <div class="flex items-center gap-1 bg-white border border-zinc-300 rounded-full px-1.5 py-1 shadow-sm">
                         <button v-for="c in ['#ffffff','#ef4444','#eab308']" :key="c" @click="setMarkerTextColor(c)"
                                 :style="{ backgroundColor: c }"
                                 :class="(activeMarker.textColor || defaultTextColor) === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-70'"
-                                class="w-4 h-4 rounded-full border border-zinc-400 shrink-0 transition-transform"></button>
+                                class="w-3.5 h-3.5 rounded-full border border-zinc-400 shrink-0 transition-transform"></button>
                     </div>
-                    <button @click="deleteMarkerTop" class="bg-white text-red-600 border border-zinc-300 font-bold px-2 py-1 rounded text-xs shadow-sm">刪除</button>
-                    <button @click="closeTopSheet" class="bg-zinc-900 text-white font-bold px-2.5 py-1 rounded text-xs shadow-sm">完成</button>
+                    <button @click="deleteMarkerTop" class="bg-white text-red-600 border border-zinc-300 font-bold px-1.5 py-1 rounded text-xs shadow-sm">刪除</button>
+                    <button @click="closeTopSheet" class="bg-zinc-900 text-white font-bold px-2 py-1 rounded text-xs shadow-sm">完成</button>
                 </div>
             </div>
 
+            <!-- 數值輸入主區（度尺/標籤 或 實做定案 共用統一鍵盤） -->
             <div v-if="activeMarker.type !== 'stamp'" class="flex flex-col flex-1 min-h-0">
-                <!-- 頂部標籤與數值輸入框 -->
+                <!-- 輸入框 -->
                 <div class="p-1.5 bg-white border-b border-zinc-200 shrink-0 flex items-center justify-center gap-1.5">
-                    <input type="text" v-model="activeMarker.data.name" @input="onMarkerTextInput" @focus="focusedInput = 'name'" class="w-[6em] border border-zinc-300 p-1.5 text-[15px] font-black bg-zinc-50 rounded-md text-center focus:outline-none focus:border-blue-500" placeholder="標籤/實做">
+                    <input type="text" v-model="activeMarker.data.name" @input="onMarkerTextInput" @focus="focusedInput = 'name'"
+                           :class="sheetTab === 'prod' ? 'border-red-400 bg-red-50 text-red-700' : 'border-zinc-300 bg-zinc-50 text-zinc-900'"
+                           class="w-[6.5em] border p-1.5 text-[14px] font-black rounded-md text-center focus:outline-none" placeholder="標籤">
                     <span class="font-black text-base text-zinc-400">:</span>
-                    <input type="text" readonly :value="activeMarker.data[focusedInput === 'name' ? 'val' : focusedInput]" @click="focusedInput = (focusedInput === 'name' ? 'val' : focusedInput)" class="flex-1 min-w-0 border-2 border-blue-500 bg-blue-50 p-1.5 px-2.5 text-[16px] font-black rounded-md cursor-pointer text-zinc-900" placeholder="點擊下方數字...">
+                    <input type="text" readonly :value="activeMarker.data[focusedInput === 'name' ? 'val' : focusedInput]" @click="focusedInput = (focusedInput === 'name' ? 'val' : focusedInput)"
+                           :class="sheetTab === 'prod' ? 'border-red-500 bg-red-50/40' : 'border-blue-500 bg-blue-50'"
+                           class="flex-1 min-w-0 border-2 p-1.5 px-2.5 text-[16px] font-black rounded-md cursor-pointer text-zinc-900" placeholder="點擊下方數字...">
                 </div>
 
-                <!-- 統一 4 欄等寬標籤區（現場度尺 vs 工廠實做定案） -->
-                <div class="p-1.5 overflow-y-auto bg-white flex-1 touch-scrollable max-h-[210px] flex flex-col gap-1.5">
-                    <div v-if="TAG_DEFS[activeMarker.type]" :class="getTagFields(activeMarker.type).length === 2 ? 'grid-cols-2' : 'grid-cols-3'" class="grid gap-1.5">
-                        <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
-                            <label class="text-xs font-black text-zinc-700 bg-zinc-100 border border-zinc-200 border-b-0 px-1 py-0.5 text-center rounded-t-md">{{ field.label }}</label>
-                            <input type="text" readonly :value="activeMarker.data[field.key]" @click="focusedInput = field.key" :class="focusedInput === field.key ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 z-10 relative' : 'border-zinc-300 bg-white'" class="w-full border p-1.5 text-[15px] font-bold text-zinc-900 text-center rounded-b-md cursor-pointer outline-none shadow-sm">
-                        </div>
+                <!-- 分頁 B：🏭 工廠開料定案（統一 3 欄等寬 · 17 粒專業工廠術語） -->
+                <div v-if="sheetTab === 'prod'" class="p-1.5 bg-white flex flex-col gap-1 shrink-0">
+                    <div class="grid grid-cols-3 gap-1">
+                        <button v-for="w in ['包收口','內凹','扣板淨內計']" :key="w" @click="applyTag(w)"
+                                :class="activeMarker.data.name === w ? 'bg-red-600 text-white border-red-700' : 'bg-red-50/60 text-red-900 border-red-300'"
+                                class="h-8 border rounded-md text-[13px] font-black text-center shadow-2xs active:scale-95 px-1">{{ w }}</button>
                     </div>
-                    <template v-else>
-                        <!-- 1. 現場度尺（淡藍底 · 4 欄等寬） -->
-                        <div class="grid grid-cols-4 gap-1">
-                            <button v-for="w in ['闊','高','深','全闊']" :key="w" @click="applyTag(w)"
-                                    :class="activeMarker.data.name === w ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50/70 text-blue-950 border-blue-200'"
-                                    class="h-8 border rounded-md text-[13px] font-black text-center shadow-2xs active:scale-95 truncate">{{ w }}</button>
-                        </div>
-
-                        <!-- 2. 批核工廠實做定案（醒目紅框白底 · 4 欄等寬） -->
-                        <div class="grid grid-cols-4 gap-1">
-                            <button v-for="w in ['實做','高做','闊做','深做']" :key="w" @click="applyTag(w)"
-                                    :class="activeMarker.data.name === w ? 'bg-red-600 text-white border-red-700' : 'bg-white text-red-700 border-red-400 border-2'"
-                                    class="h-8 rounded-md text-[13px] font-black text-center shadow-2xs active:scale-95 truncate">{{ w }}</button>
-                        </div>
-
-                        <!-- 3. 進階實做定案 ＋ 一鍵跟原圖（4 欄等寬） -->
-                        <div class="grid grid-cols-4 gap-1">
-                            <button v-for="w in ['包柴做','見光做','淨內空']" :key="w" @click="applyTag(w)"
-                                    :class="activeMarker.data.name === w ? 'bg-red-600 text-white border-red-700' : 'bg-red-50/50 text-red-800 border-red-300'"
-                                    class="h-8 border rounded-md text-[12px] font-black text-center shadow-2xs active:scale-95 truncate">{{ w }}</button>
-                            <button @click="activeMarker.data.name = '✅跟原圖數做'; activeMarker.data.val = ''; onMarkerTextInput()"
-                                    :class="activeMarker.data.name === '✅跟原圖數做' ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-emerald-50 text-emerald-800 border-emerald-400'"
-                                    class="h-8 border rounded-md text-[11px] font-black text-center shadow-2xs active:scale-95 truncate">✅跟原圖</button>
-                        </div>
-
-                        <!-- 4. 預位與其他尺寸（統一 4 欄等寬） -->
-                        <div class="grid grid-cols-4 gap-1">
-                            <button v-for="w in ['全高','全深','中>地','中>邊','底地v','邊頂^','<邊左','邊右>']" :key="w" @click="applyTag(w)"
-                                    :class="activeMarker.data.name === w ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-800 border-zinc-300'"
-                                    class="h-8 border rounded-md text-[12px] font-bold text-center shadow-2xs active:scale-95 truncate">{{ w }}</button>
-                        </div>
-                    </template>
+                    <div class="grid grid-cols-3 gap-1">
+                        <button v-for="w in ['高造','闊造','深造']" :key="w" @click="applyTag(w)"
+                                :class="activeMarker.data.name === w ? 'bg-red-600 text-white border-red-700' : 'bg-white text-red-700 border-red-500 border-2'"
+                                class="h-8 rounded-md text-[14px] font-black text-center shadow-2xs active:scale-95 px-1">{{ w }}</button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1">
+                        <button v-for="w in ['連腳做','扣腳淨櫃做','掛牆無腳']" :key="w" @click="applyTag(w)"
+                                :class="activeMarker.data.name === w ? 'bg-red-600 text-white border-red-700' : 'bg-white text-zinc-900 border-zinc-300'"
+                                class="h-8 border rounded-md text-[12.5px] font-bold text-center shadow-2xs active:scale-95 px-1">{{ w }}</button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1">
+                        <button v-for="w in ['生裝見光板','留走線位','加柴底']" :key="w" @click="applyTag(w)"
+                                :class="activeMarker.data.name === w ? 'bg-red-600 text-white border-red-700' : 'bg-white text-zinc-900 border-zinc-300'"
+                                class="h-8 border rounded-md text-[12.5px] font-bold text-center shadow-2xs active:scale-95 px-1">{{ w }}</button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1">
+                        <button v-for="w in ['留散熱孔','開孔數','生口板']" :key="w" @click="applyTag(w)"
+                                :class="activeMarker.data.name === w ? 'bg-red-600 text-white border-red-700' : 'bg-white text-zinc-900 border-zinc-300'"
+                                class="h-8 border rounded-md text-[12.5px] font-bold text-center shadow-2xs active:scale-95 px-1">{{ w }}</button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1">
+                        <button v-for="w in ['有附圖','有CAD']" :key="w"
+                                @click="activeMarker.data.name = w; activeMarker.data.val = ''; onMarkerTextInput()"
+                                :class="activeMarker.data.name === w ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-emerald-50 text-emerald-900 border-emerald-400'"
+                                class="h-8 border rounded-md text-[13px] font-black text-center shadow-2xs active:scale-95 px-1">{{ w }}</button>
+                    </div>
                 </div>
 
-                <!-- 部位模板（統一 4 欄等寬，不再 6/7 欄參差） -->
-                <div class="p-1.5 border-t border-zinc-200 bg-zinc-50 shrink-0 grid grid-cols-4 gap-1 max-h-[76px] overflow-y-auto">
-                    <template v-for="(row, rIdx) in TEMPLATE_ROWS" :key="rIdx">
-                        <button v-for="t in row" :key="t.id" @click="switchMarkerType(t.id, t.f)"
-                                :class="activeMarker.type === t.id ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-800 border-zinc-300'"
-                                class="h-7 px-1 text-[12px] font-bold rounded border shadow-2xs text-center truncate">{{ t.l }}</button>
-                    </template>
-                </div>
+                <!-- 分頁 A：📏 現場度尺/標籤（6欄粗體總尺 + 預位 + 4欄全展開部位） -->
+                <template v-else>
+                    <div class="p-1.5 bg-white shrink-0 flex flex-col gap-1.5">
+                        <div v-if="TAG_DEFS[activeMarker.type]" :class="getTagFields(activeMarker.type).length === 2 ? 'grid-cols-2' : 'grid-cols-3'" class="grid gap-1.5">
+                            <div v-for="field in getTagFields(activeMarker.type)" :key="field.key" class="flex flex-col">
+                                <label class="text-xs font-black text-zinc-700 bg-zinc-100 border border-zinc-200 border-b-0 px-1 py-0.5 text-center rounded-t-md">{{ field.label }}</label>
+                                <input type="text" readonly :value="activeMarker.data[field.key]" @click="focusedInput = field.key" :class="focusedInput === field.key ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500 z-10 relative' : 'border-zinc-300 bg-white'" class="w-full border p-1.5 text-[15px] font-bold text-zinc-900 text-center rounded-b-md cursor-pointer outline-none shadow-sm">
+                            </div>
+                        </div>
+                        <template v-else>
+                            <!-- 方向／總尺（淡藍底 · 6欄粗體） -->
+                            <div class="flex items-center gap-1">
+                                <div class="grid grid-cols-3 gap-1 flex-1">
+                                    <button v-for="w in ['闊','高','深']" :key="w" @click="applyTag(w)"
+                                            :class="activeMarker.data.name === w ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 text-blue-950 border-blue-300'"
+                                            class="h-8 border rounded-md text-[14px] font-black text-center shadow-2xs active:scale-95">{{ w }}</button>
+                                </div>
+                                <span class="text-zinc-300 font-black text-sm select-none">/</span>
+                                <div class="grid grid-cols-3 gap-1 flex-[1.25]">
+                                    <button v-for="w in ['全闊','全高','全深']" :key="w" @click="applyTag(w)"
+                                            :class="activeMarker.data.name === w ? 'bg-blue-800 text-white border-blue-900' : 'bg-sky-100/80 text-sky-950 border-sky-400'"
+                                            class="h-8 border rounded-md text-[13px] font-black text-center shadow-2xs active:scale-95 px-0.5">{{ w }}</button>
+                                </div>
+                            </div>
 
-                <!-- 統一 4 欄計算機鍵盤（含右上退格、0在6旁、底部 -5 / -7 / -10 即時扣數） -->
+                            <!-- 預位／其他 -->
+                            <div class="flex flex-col gap-1">
+                                <div class="grid grid-cols-2 gap-1">
+                                    <button v-for="w in ['中>地','中>邊']" :key="w" @click="applyTag(w)"
+                                            :class="activeMarker.data.name === w ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-800 border-zinc-300'"
+                                            class="h-7 border rounded-md text-[12px] font-bold text-center shadow-2xs active:scale-95">{{ w }}</button>
+                                </div>
+                                <div class="grid grid-cols-4 gap-1">
+                                    <button v-for="w in ['底地v','邊頂^','<邊左','邊右>']" :key="w" @click="applyTag(w)"
+                                            :class="activeMarker.data.name === w ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-800 border-zinc-300'"
+                                            class="h-7 border rounded-md text-[12px] font-bold text-center shadow-2xs active:scale-95">{{ w }}</button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- 部位模板（灰底區 · 4 欄全展開，含包喉內計、床褥） -->
+                    <div class="p-1.5 border-t border-zinc-200 bg-zinc-50 shrink-0 grid grid-cols-4 gap-1">
+                        <button v-for="p in ['門洞','窗','樑','柱','包喉內計','電箱','冷氣','床褥','地腳線','留位','避','凸']" :key="p"
+                                @click="
+                                    const found = (TEMPLATE_ROWS || []).flat().find(t => t.l === p);
+                                    if (found && p !== '包喉內計') { switchMarkerType(found.id, found.f); }
+                                    else { if (activeMarker.type !== 'general') switchMarkerType('general', 'val'); applyTag(p); }
+                                "
+                                :class="(activeMarker.data.name === p || (TEMPLATE_ROWS || []).flat().some(t => t.l === p && activeMarker.type === t.id && p !== '包喉內計')) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-800 border-zinc-300'"
+                                class="h-7 px-1 text-[12px] font-bold rounded border shadow-2xs text-center truncate active:scale-95">{{ p }}</button>
+                    </div>
+                </template>
+
+                <!-- 統一 4 欄計算機鍵盤 -->
                 <div class="bg-zinc-100 p-1.5 border-t border-zinc-200 grid grid-cols-4 gap-1 shrink-0 pb-2">
                     <button v-for="k in ['7','8','9','DEL','4','5','6','0','1','2','3','ENTER','-5','-7','-10','.']" :key="k"
                             @click.stop="
@@ -1346,9 +1397,7 @@
                 </div>
             </div>
 
-
-            
-
+            <!-- 分頁 C：🏷️ 工藝印章 -->
             <div v-else class="flex flex-col flex-1 min-h-0 bg-white">
                 <div class="p-2 border-b border-zinc-200 bg-zinc-50 shrink-0 flex flex-col gap-1.5">
                     <div class="flex gap-1.5">
@@ -1487,6 +1536,9 @@
                     ▶
                 </button>
 
+
+
+        
                 <div class="absolute inset-1 overflow-hidden bg-white shadow-sm border border-zinc-300 rounded-lg canvas-touch-lock"
                      @wheel.prevent="onFsWheel" @touchstart="onFsTouchStart" @touchmove="onFsTouchMove" @touchend="onFsTouchEnd" @touchcancel="onFsTouchEnd"
                      @mousedown="onFsMouseDown" @mousemove="onFsMouseMove" @mouseup="onFsMouseUp">
