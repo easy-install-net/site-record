@@ -1314,7 +1314,18 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 }
             };
 
-            const draggedLine = ref(null), dragLineHandle = ref('body'), lineOrigin = ref({ x1: 0, y1: 0, x2: 0, y2: 0 });
+            const draggedLine = ref(null), dragLineHandle = ref('body'), dragTickIdx = ref(-1), lineOrigin = ref({ x1: 0, y1: 0, x2: 0, y2: 0 });
+            const onChainTickStart = (line, tickIdx, e, pane = activePane.value) => {
+                focusPane(pane);
+                if (e.touches?.length > 1 || isPinching || showBranchPrompt.value || drawMode.value !== 'move') return;
+                e.preventDefault(); e.stopPropagation();
+                checkBranchNeed(() => {
+                    const target = (targetCanvas.value.lines || []).find(l => l.id === line.id) || line;
+                    if (showBranchPrompt.value) return;
+                    activeMarker.value = null; activeLine.value = target;
+                    draggedLine.value = target; dragLineHandle.value = 'tick'; dragTickIdx.value = tickIdx;
+                });
+            };
             const onLineEndpointStart = (line, endKey, e, pane = activePane.value) => {
                 focusPane(pane);
                 if (e.touches?.length > 1 || isPinching || showBranchPrompt.value || drawMode.value !== 'move') return;
@@ -2104,7 +2115,17 @@ const getPageSpaces = (pg) => {
             const moveStroke = (e, pane = activePane.value) => {
                 if (draggedLine.value) {
                     e.preventDefault();
-                    const p = getCoords(e, pane), dx = p.x - dragOrigin.value.x, dy = p.y - dragOrigin.value.y;
+                    const p = getCoords(e, pane);
+                    if (dragLineHandle.value === 'tick' && Array.isArray(draggedLine.value.chainSegs)) {
+                        const l = draggedLine.value, idx = dragTickIdx.value;
+                        const vx = l.x2 - l.x1, vy = l.y2 - l.y1, lenSq = (vx * vx + vy * vy) || 1;
+                        let t = ((p.x - l.x1) * vx + (p.y - l.y1) * vy) / lenSq;
+                        const minT = idx > 0 ? l.chainSegs[idx - 1].t + 0.04 : 0.04;
+                        const maxT = idx < l.chainSegs.length - 2 ? l.chainSegs[idx + 1].t - 0.04 : 0.96;
+                        l.chainSegs[idx].t = Math.round(Math.max(minT, Math.min(maxT, t)) * 1000) / 1000;
+                        return;
+                    }
+                    const dx = p.x - dragOrigin.value.x, dy = p.y - dragOrigin.value.y;
                     const maxW = targetCanvasW.value, maxH = targetCanvasH.value;
                     if (dragLineHandle.value === 'p1') {
                         draggedLine.value.x1 = Math.round(Math.max(0, Math.min(maxW, lineOrigin.value.x1 + dx)));
@@ -2118,6 +2139,8 @@ const getPageSpaces = (pg) => {
                         draggedLine.value.x2 = Math.round(Math.max(0, Math.min(maxW, lineOrigin.value.x2 + dx)));
                         draggedLine.value.y2 = Math.round(Math.max(0, Math.min(maxH, lineOrigin.value.y2 + dy)));
                     }
+
+                
                 } else if (draggedMarker.value) {
                     e.preventDefault(); const p = getCoords(e, pane), dx = p.x - dragOrigin.value.x, dy = p.y - dragOrigin.value.y;
                     draggedMarker.value.x = Math.round(Math.max(0, Math.min(targetCanvasW.value, markerOrigin.value.x + dx)));
@@ -2132,13 +2155,16 @@ const getPageSpaces = (pg) => {
             };
 
             const endStroke = (e, pane = drawingPane.value) => {
-                if (draggedLine.value) {
-                    const l = draggedLine.value, o = lineOrigin.value;
-                    const moved = Math.hypot(l.x1 - o.x1, l.y1 - o.y1) > 2 || Math.hypot(l.x2 - o.x2, l.y2 - o.y2) > 2;
-                    draggedLine.value = null;
-                    if (moved) { touchDirty(); saveAll(); }
-                    return;
-                }
+               else {
+                        ctx.save(); ctx.setLineDash([14, 10]); ctx.strokeStyle = getLineStroke(l, 0.7); ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore();
+                        if (Array.isArray(l.chainSegs) && l.chainSegs.length >= 2) {
+                            ctx.save(); ctx.strokeStyle = getLineStroke(l, 0.95); ctx.lineWidth = 3.5;
+                            getChainTicks(l).forEach(tk => { ctx.beginPath(); ctx.moveTo(tk.x1, tk.y1); ctx.lineTo(tk.x2, tk.y2); ctx.stroke(); });
+                            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 18px sans-serif'; ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
+                            getChainSegLabels(l).forEach(sl => { ctx.strokeText(sl.val, sl.x, sl.y - 12); ctx.fillStyle = '#fde047'; ctx.fillText(sl.val, sl.x, sl.y - 12); });
+                            ctx.restore();
+                        }
+                    }
                 if (draggedMarker.value) {
                     const moved = Math.hypot(draggedMarker.value.x - markerOrigin.value.x, draggedMarker.value.y - markerOrigin.value.y) > 2;
                     draggedMarker.value = null;
@@ -3330,7 +3356,7 @@ const getPageSpaces = (pg) => {
                 onEraseTap, resizeImageMarker, onMarkerPointerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
                 deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, onMarkerTextInput, handleKeypad, applyTag, applyStamp, getStampColor, getMarkerLines, getTagFields, exportPdfReport,
                 globalFontScale, toggleFontScale,
-                activeLine, onLinePointerStart, onLineEndpointStart, setActiveLineColor, deleteActiveLine, getMarkerFontPx, stepMarkerFontScale, openMarkerEditor,
+                activeLine, onLinePointerStart, onLineEndpointStart, onChainTickStart, setActiveLineColor, deleteActiveLine, getMarkerFontPx, stepMarkerFontScale, openMarkerEditor,
                 getDocTypeLabel, overviewTypeFilter, overviewSpaceFilter, showPreviewMoreMenu, showDocTypeFilterBar, drawingPageCount, photoPageCount, overviewSpacesAvailable, filteredOverviewPages, overviewStackMode, overviewSpaceStacks, toggleSpaceStackSelection,
                 movingPageId, movingPageLabel, startMovePage, insertMovingPageAfter, showAutoSortModal, autoSortPages,
                 editingMetaPage, openPageMetaModal, setPageDocType, batchSetDocType, batchSetSpace,
