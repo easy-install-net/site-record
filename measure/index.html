@@ -164,9 +164,8 @@
                 <button v-for="sp in overviewSpacesAvailable" :key="sp" @click="overviewSpaceFilter = sp"
                         :class="overviewSpaceFilter === sp ? 'bg-purple-700 text-white border-purple-700' : 'bg-purple-50 text-purple-800 border-purple-200'"
                         class="px-2 py-0.5 rounded text-[11px] font-bold border">{{ sp }}</button>
-                <button @click="(() => { const n = prompt('新增空間名稱（例如：儲物室、露台、書房）：'); if (n && n.trim()) { const clean = n.trim(); if (!overviewSpacesAvailable.includes(clean)) overviewSpacesAvailable.push(clean); overviewSpaceFilter = clean; } })()"
-                        class="px-2 py-0.5 rounded text-[11px] font-black border border-dashed border-purple-400 bg-white text-purple-700 hover:bg-purple-50">+ 空間</button>
-            </div>
+               <button @click="addCustomSpace()"
+                        class="px-2 py-0.5 rounded text-[11px] font-black border border-dashed border-purple-400 bg-white text-purple-700 hover:bg-purple-50">+ 空間</button></div>
 
             <div v-if="showDocTypeFilterBar" class="bg-sky-50/70 border-b border-sky-200 px-2.5 py-1 flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
                 <button @click="overviewTypeFilter = 'all'; showDocTypeFilterBar = false" :class="overviewTypeFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0">全部({{ pages.length }})</button>
@@ -577,9 +576,8 @@
                                         <button v-for="sp in overviewSpacesAvailable" :key="'qn-sp-'+sp" @click="quickNavSpaceFilter = sp"
                                                 :class="quickNavSpaceFilter === sp ? 'bg-purple-700 text-white border-purple-700' : 'bg-purple-50 text-purple-800 border-purple-200'"
                                                 class="px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0">{{ sp }}</button>
-                                        <button @click="(() => { const n = prompt('新增空間名稱（例如：儲物室、露台、書房）：'); if (n && n.trim()) { const clean = n.trim(); if (!overviewSpacesAvailable.includes(clean)) overviewSpacesAvailable.push(clean); quickNavSpaceFilter = clean; } })()"
-                                                class="px-2 py-0.5 rounded-full text-[11px] font-black border border-dashed border-purple-400 bg-white text-purple-700 hover:bg-purple-50 shrink-0">+ 空間</button>
-                                    </div>
+                                        <button @click="addCustomSpace()"
+                                                class="px-2 py-0.5 rounded-full text-[11px] font-black border border-dashed border-purple-400 bg-white text-purple-700 hover:bg-purple-50 shrink-0">+ 空間</button>  </div>
                                     <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
                                         <button @click="quickNavTypeFilter = 'all'" :class="quickNavTypeFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-100 text-zinc-700 border-zinc-200'" class="px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0">全部圖類</button>
                                         <button @click="quickNavTypeFilter = 'plan'" :class="quickNavTypeFilter === 'plan' ? 'bg-sky-600 text-white border-sky-600' : 'bg-sky-50 text-sky-900 border-sky-200'" class="px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0">📐平面圖</button>
