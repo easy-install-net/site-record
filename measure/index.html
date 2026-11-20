@@ -671,7 +671,7 @@
                                     <line v-if="drawMode === 'eraser' || drawMode === 'move'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="28 * invZoom" stroke-linecap="round" />
                                     <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
                                           :stroke="getLineStroke(l, 0.75)"
-                                          :stroke-width="((!l.type || l.type === 'measure') ? 5 : 4) * invZoom"
+                                         :stroke-width="((!l.type || l.type === 'measure') ? 2.5 : 14) * invZoom"
                                           :stroke-dasharray="(!l.type || l.type === 'measure') ? `${14 * invZoom} ${10 * invZoom}` : null"
                                           stroke-linecap="round"
                                           :marker-end="l.type === 'arrow-single' ? `url(#${getArrowMarkerId(l.color, 'A')})` : null" />
@@ -691,15 +691,15 @@
 
                                 <line v-if="currentLine && drawingPane === 'A'" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
                                       :stroke="drawMode === 'line' ? '#ff0044' : drawColor"
-                                      :stroke-width="4 * invZoom"
+                                      :stroke-width="(drawMode === 'line' ? 2.5 : 14) * invZoom"
                                       :stroke-dasharray="drawMode === 'line' ? `${12 * invZoom} ${8 * invZoom}` : null"
                                       :marker-end="drawMode === 'arrow-single' ? `url(#${getArrowMarkerId(drawColor, 'A')})` : null" />
 
                                 <g v-for="p in (activeCanvas.paths || [])" :key="p.id" :class="drawMode === 'eraser' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onEraseTap('path', p, e, 'A')" @mousedown="e => onEraseTap('path', p, e, 'A')">
                                     <path v-if="drawMode === 'eraser'" :d="p.d" stroke="transparent" :stroke-width="34 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-                                    <path :d="p.d" :stroke="p.color || '#3b82f6'" :stroke-width="6 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path :d="p.d" :stroke="p.color || '#3b82f6'" :stroke-width="2.5 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                                 </g>
-                                <path v-if="currentPath && drawingPane === 'A'" :d="currentPath" :stroke="drawColor" :stroke-width="6 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                <path v-if="currentPath && drawingPane === 'A'" :d="currentPath" :stroke="drawColor" :stroke-width="2.5 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 
                                 <g v-for="m in (activeCanvas.markers || [])" :key="m.id"
                                    :class="(drawMode === 'eraser' || drawMode === 'browse' || drawMode === 'move') ? (drawMode === 'move' ? 'cursor-move pointer-events-auto' : 'cursor-pointer pointer-events-auto') : 'pointer-events-none'"
