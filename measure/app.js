@@ -3160,12 +3160,13 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                 jumpFullScreen, openFullScreenSpaceModal,
                 fsEditingMarker, fsQuickInputRef, onFsMarkerTap, openFsMarkerQuickEdit, setFsMarkerColor, stepFsMarkerFont, closeFsMarkerQuickEdit,
                onProjectNameInput, showNotesModal, noteFilter, newNoteText, newNoteSpace, activeNotesCount, filteredNotes, addProjectNote, toggleProjectNote, editProjectNote, deleteProjectNote, clearDoneNotes,
-                showChecklistCard, activeSmartTip, currentSpaceChecklist, isChecklistItemChecked, currentChecklistDoneCount, toggleChecklistItem,
-                sheetTab, chainPromptLine, chainSegments, splitChainLine, updateChainSegVal, getChainTicks, getChainSegLabels
+               showChecklistCard, activeSmartTip, currentSpaceChecklist, isChecklistItemChecked, currentChecklistDoneCount, toggleChecklistItem,
+                sheetTab, chainPromptLine, chainSegments, splitChainLine, updateChainSegVal, getChainTicks, getChainSegLabels,
+                prompt: (...args) => window.prompt(...args)
             };
-        
         }
     }).mount('#app');
+                
 }
 // === END OF app.js ===
         
