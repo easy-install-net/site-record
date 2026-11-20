@@ -937,12 +937,24 @@
                             <span>[ | 分段 ]</span>
                         </button>
                     </div>
-                    <div v-if="chainPromptLine && Array.isArray(chainPromptLine.chainSegs) && chainPromptLine.chainSegs.length >= 2" class="flex items-center gap-1 overflow-x-auto no-scrollbar pt-1 border-t border-zinc-100">
-                        <span class="text-[10px] font-black text-amber-800 shrink-0">📏分段:</span>
-                        <div v-for="(seg, sIdx) in chainPromptLine.chainSegs" :key="'cs-'+sIdx" class="flex items-center gap-0.5 shrink-0">
-                            <span v-if="sIdx > 0" class="text-zinc-300 font-bold">+</span>
-                            <input type="text" inputmode="decimal" :value="seg.val" @input="e => updateChainSegVal(sIdx, e.target.value)"
-                                   class="w-12 border border-amber-300 bg-amber-50/60 p-1 text-xs font-black rounded text-center text-amber-950 focus:outline-none focus:border-blue-500" :placeholder="`段${sIdx+1}`">
+                    <div v-if="chainPromptLine && Array.isArray(chainPromptLine.chainSegs) && chainPromptLine.chainSegs.length >= 2" class="flex flex-col gap-1 pt-1 border-t border-zinc-100">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-black text-amber-800">📏 分段小計: <span class="text-blue-700">{{ getChainTotalVal(chainPromptLine.chainSegs) || 0 }}</span></span>
+                            <button @click="clearChainLine" class="text-[10px] font-bold text-rose-600 underline">取消分段</button>
+                        </div>
+                        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                            <div v-for="(seg, sIdx) in chainPromptLine.chainSegs" :key="'cs-'+sIdx" class="flex items-center gap-0.5 shrink-0">
+                                <span v-if="sIdx > 0" class="text-zinc-400 font-black">+</span>
+                                <div class="relative">
+                                    <input type="text" inputmode="decimal" :value="seg.val" @input="e => updateChainSegVal(sIdx, e.target.value)"
+                                           class="w-14 pr-3.5 pl-1 border border-amber-300 bg-amber-50/60 p-1 text-xs font-black rounded text-center text-amber-950 focus:outline-none focus:border-blue-500" :placeholder="`段${sIdx+1}`">
+                                    <button @click="removeChainSeg(sIdx)" class="absolute right-0.5 top-0.5 text-[9px] text-zinc-400 hover:text-rose-600 font-black">✕</button>
+                                </div>
+                            </div>
+                            <span class="text-zinc-500 font-black text-xs mx-0.5">=</span>
+                            <input type="text" inputmode="decimal" :value="chainPromptLine.verifyTotal || ''" @input="e => updateChainVerifyTotal(e.target.value)"
+                                   placeholder="實度總尺" title="填寫現場實度大總尺作覆核"
+                                   class="w-16 border border-emerald-400 bg-emerald-50 p-1 text-xs font-black rounded text-center text-emerald-950 focus:outline-none focus:border-emerald-600 shrink-0">
                         </div>
                     </div>
                 </div>
