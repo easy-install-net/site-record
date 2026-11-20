@@ -4,7 +4,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
     else alert(msg);
 } else {
     const { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick } = Vue;
-    const { TAG_DEFS, TEMPLATE_ROWS, DIM_QUICK_ROWS, KEYPAD_KEYS, DEFAULT_SPACES, STAMP_PALETTE, DEFAULT_STAMP_SEED } = window.MEASURE_DATA;
+    const { TAG_DEFS, TEMPLATE_ROWS, DIM_QUICK_ROWS, KEYPAD_KEYS, DEFAULT_SPACES, STAMP_PALETTE, DEFAULT_STAMP_SEED, SPACE_CHECKLISTS, SMART_TIPS } = window.MEASURE_DATA;
     const { CAD_CATEGORIES, CAD_DEFS, CAD_LIST, drawOnCanvas: drawCadOnCanvas } = window.MEASURE_CAD;
 
     localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
@@ -153,7 +153,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 currentUser.value = null;
                 showToast('已登出 Google 帳號');
             };
-const syncUserOwnedProjects = async () => {
+
+            const syncUserOwnedProjects = async () => {
                 if (!db || !navigator.onLine || !currentUser.value) return;
                 const uid = currentUser.value.uid;
                 try {
@@ -184,10 +185,8 @@ const syncUserOwnedProjects = async () => {
                 } catch (_) {}
             };
 
-            
-
             // =========================================================================
-            // 🏷️ 目錄印章管理引擎 (7 大分類・74 個專業預設印章・加星置頂・改色・雲端同步)
+            // 🏷️ 目錄印章管理引擎
             // =========================================================================
             const stampCategories = ref([]);
             const stampItems = ref([]);
@@ -219,7 +218,7 @@ const syncUserOwnedProjects = async () => {
             const saveStampStore = async () => {
                 stampUpdatedAt.value = Date.now();
                 await localforage.setItem('dynamic_stamp_store_v11', {
-                    seedVersion: 'v',
+                    seedVersion: 'v11.1',
                     categories: JSON.parse(JSON.stringify(stampCategories.value || [])),
                     items: JSON.parse(JSON.stringify(stampItems.value || [])),
                     updatedAt: stampUpdatedAt.value
@@ -248,7 +247,6 @@ const syncUserOwnedProjects = async () => {
                     stampUpdatedAt.value = saved.updatedAt || Date.now();
                 } else {
                     const { cats, items } = buildSeedStampData();
-                    // 保留舊版中用戶自建的印章
                     const oldSaved = await localforage.getItem('dynamic_stamp_store_v1');
                     if (oldSaved?.items?.length) {
                         const customOld = oldSaved.items.filter(x => String(x.id).startsWith('st_custom_') || String(x.id).startsWith('st_legacy_') || x.pinned);
@@ -267,7 +265,6 @@ const syncUserOwnedProjects = async () => {
                 }
                 if (!newStampCatId.value && stampCategories.value.length) newStampCatId.value = stampCategories.value[0].id;
             };
-
             const openStampManager = () => {
                 managerCatFilter.value = 'all';
                 if (!newStampCatId.value && stampCategories.value.length) {
@@ -340,7 +337,7 @@ const syncUserOwnedProjects = async () => {
             };
 
             // =========================================================================
-            // 🏛️ AutoCAD 圖庫目錄管理引擎 (實時縮圖預覽・上傳/貼上圖案・自由增減)
+            // 🏛️ AutoCAD 圖庫目錄管理引擎
             // =========================================================================
             const showCadManager = ref(false), cadMgrFilter = ref('all');
             const newCadCat = ref('arch'), newCadShape = ref('box'), newCadLabel = ref(''), newCadImgB64 = ref('');
@@ -415,10 +412,7 @@ const syncUserOwnedProjects = async () => {
                 if (!silent) { isProcessing.value = true; processingText.value = '正在同步印章與圖庫...'; }
                 try {
                     const docRef = db.collection('user_libraries').doc(String(uid));
-                    const snap = await withTimeout(docRef.get(), 12000);
-                    if (snap.exists && silent) {
-                        // 上傳本機最新狀態覆蓋雲端
-                    }
+                    await withTimeout(docRef.get(), 12000);
                     await withTimeout(docRef.set({
                         stampCategories: JSON.parse(JSON.stringify(stampCategories.value)),
                         stampItems: JSON.parse(JSON.stringify(stampItems.value)),
@@ -459,7 +453,7 @@ const syncUserOwnedProjects = async () => {
                 if (CAD_DEFS[type]) return CAD_DEFS[type];
                 return customCadBlocks.value.find(x => x.id === type) || null;
             };
-           const getCadTransform = (m) => {
+            const getCadTransform = (m) => {
                 const sx = (m.scale || 1) * (m.scaleX || 1) * (m.flipX || 1);
                 const sy = (m.scale || 1) * (m.scaleY || 1) * (m.flipY || 1);
                 return `translate(${m.x}, ${m.y}) rotate(${m.rot || 0}) scale(${sx}, ${sy})`;
@@ -537,7 +531,6 @@ const syncUserOwnedProjects = async () => {
                 project.nameUpdatedAt = Date.now();
                 markProjectChanged();
             };
-
             // 📝 工程記事列表 / 現場備忘錄
             const showNotesModal = ref(false), noteFilter = ref('all'), newNoteText = ref(''), newNoteSpace = ref('');
             const activeNotesCount = computed(() => (project.notes || []).filter(n => !n.done).length);
@@ -621,6 +614,43 @@ const syncUserOwnedProjects = async () => {
             const targetCanvasW = computed(() => targetCanvas.value?.w || 1200);
             const targetCanvasH = computed(() => targetCanvas.value?.h || 900);
 
+            // 📋 隨身防漏度尺清單 ＋ 💡 現場智能防呆醒目提示引擎
+            const showChecklistCard = ref(false);
+            const activeSmartTip = ref('');
+            let smartTipTimer = null;
+            const triggerSmartTip = (msg) => {
+                if (!msg) return;
+                activeSmartTip.value = msg;
+                if (smartTipTimer) clearTimeout(smartTipTimer);
+                smartTipTimer = setTimeout(() => { if (activeSmartTip.value === msg) activeSmartTip.value = ''; }, 9000);
+            };
+            const currentSpaceChecklist = computed(() => {
+                const sp = String(activeCanvas.value?.space || '').trim();
+                if (!sp || !SPACE_CHECKLISTS) return null;
+                return SPACE_CHECKLISTS[sp] || null;
+            });
+            const isChecklistItemChecked = (itemText) => {
+                const list = activeCanvas.value?.checkedItems || [];
+                return list.includes(itemText);
+            };
+            const currentChecklistDoneCount = computed(() => {
+                if (!currentSpaceChecklist.value) return 0;
+                const doneSet = new Set(activeCanvas.value?.checkedItems || []);
+                return currentSpaceChecklist.value.dims.filter(d => doneSet.has(d)).length;
+            });
+            const toggleChecklistItem = (itemText) => {
+                checkBranchNeed(() => {
+                    const c = activeCanvas.value;
+                    if (!c) return;
+                    c.checkedItems ||= [];
+                    const idx = c.checkedItems.indexOf(itemText);
+                    if (idx === -1) c.checkedItems.push(itemText);
+                    else c.checkedItems.splice(idx, 1);
+                    touchDirty();
+                    saveAll();
+                });
+            };
+
             const focusPane = (pane) => { if (activePane.value !== pane) activePane.value = pane; };
             const toggleSplitMode = () => {
                 splitMode.value = !splitMode.value;
@@ -691,11 +721,9 @@ const syncUserOwnedProjects = async () => {
                     capsuleOffset.x = Math.max(0, Math.min(maxX, ox + (ev.clientX - sx)));
                     capsuleOffset.y = Math.max(-68, Math.min(maxY, oy + (ev.clientY - sy)));
                 };
-                
                 const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp); };
                 window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp);
             };
-
             const zoomScale = ref(1), vbX = ref(0), vbY = ref(0);
             const invZoom = computed(() => 1 / Math.pow(zoomScale.value, 0.65));
             const svgViewBox = computed(() => {
@@ -980,7 +1008,6 @@ const syncUserOwnedProjects = async () => {
                     if (pIdx !== -1) { activePageIndex.value = i; openPinSubPage(pg.pins[pIdx], pIdx, 'A'); drawMode.value = 'line'; currentView.value = 'proj'; return; }
                 }
             };
-
             const draggingPageIdx = ref(null), dragOverPageIdx = ref(null);
             const startPageDrag = (idx) => {
                 if (pages.value.length <= 1 || selectMode.value) return;
@@ -1016,7 +1043,7 @@ const syncUserOwnedProjects = async () => {
             const showManageModal = ref(false), manageProj = ref({}), showCloudBrowser = ref(false), cloudProjectList = ref([]), showBackupListModal = ref(false), backupList = ref([]);
             const showPhotoPoolModal = ref(false), photoPoolList = ref([]), photoPoolTarget = ref('newPage');
 
-const localHiddenCodes = ref([]);
+            const localHiddenCodes = ref([]);
             const unclaimedCloudProjects = computed(() => {
                 const localCodes = new Set(projectList.value.map(p => String(p.code)));
                 const hiddenSet = new Set(localHiddenCodes.value);
@@ -1039,7 +1066,7 @@ const localHiddenCodes = ref([]);
             const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
 
             const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
-            const cloudStatusText = computed(() => ({ syncing: '☁️同步中', offline: '📴離線', queued: '⏳待傳', ready: '☁️v11.3' }[cloudSyncState.value] || '☁️v11.3'));
+            const cloudStatusText = computed(() => ({ syncing: '☁️同步中', offline: '📴離線', queued: '⏳待傳', ready: '☁️v11.4' }[cloudSyncState.value] || '☁️v11.4'));
             const cloudStatusClass = computed(() =>
                 cloudSyncState.value === 'syncing' ? 'bg-amber-100 text-amber-900 border-amber-300' :
                 cloudSyncState.value === 'offline' ? 'bg-zinc-100 text-zinc-500 border-zinc-300' :
@@ -1049,7 +1076,7 @@ const localHiddenCodes = ref([]);
             const showCloudDetail = () => {
                 if (!navigator.onLine) showToast('📴 無網絡模式：照常度尺，有訊號自動上傳');
                 else if (cloudSyncState.value === 'queued') processPendingUploadQueue(false);
-                else showToast('v11.3 帳號自動同步');
+                else showToast('v11.4 帳號自動同步');
             };
 
             const photoFingerprint = (b64) => b64 ? b64.slice(0, 100) + '_' + b64.length : '';
@@ -1099,7 +1126,6 @@ const localHiddenCodes = ref([]);
                 showBranchPrompt.value = false; pendingBranchAction.value = null; branchTargetPage.value = null;
                 if (cb) cb();
             };
-            
             const duplicateBranch = () => {
                 const me = String(authorName.value || '').trim();
                 if (branchTargetPage.value) doBranchCopy(branchTargetPage.value, me);
@@ -1319,22 +1345,21 @@ const localHiddenCodes = ref([]);
             const makeEmptyPage = (ov = {}) => {
                 const pg = {
                     id: 'pg_' + Date.now() + '_' + Math.floor(Math.random() * 99999), space: '', docType: '', date: ov.date || getTodayStr(), author: authorName.value || '',
-                    photo: null, photoId: '', w: 1200, h: 900, isSketch: false, hasGrid: false, markers: [], lines: [], walls: [], paths: [], pins: [], deletedPinIds: [], historyStack: [], redoStack: [], updatedAt: Date.now(), ...ov
+                    photo: null, photoId: '', w: 1200, h: 900, isSketch: false, hasGrid: false, markers: [], lines: [], walls: [], paths: [], pins: [], checkedItems: [], deletedPinIds: [], historyStack: [], redoStack: [], updatedAt: Date.now(), ...ov
                 };
                 if (pg.isSketch && !pg.photo) { const size = getAdaptiveCanvasSize(); pg.w = ov.w || size.w; pg.h = ov.h || size.h; pg.photo = renderSketchDataUrl(pg.w, pg.h, !!pg.hasGrid); }
                 return pg;
             };
 
             const getDocTypeLabel = (t) => ({
-                        plan: '📐平面圖',
-                        '3d': '🧊立體圖',
-                        dim: '📏尺吋圖',
-                        detail: '📑詳圖',
-                        photo: '📷拍攝'
-                    }[t] || '');
-           const isDrawingDocType = (dt) => ['plan', '3d', 'dim', 'detail'].includes(dt);
-
-            const insertPageSmart = (newPg, explicitAfterIdx = null) => {
+                plan: '📐平面圖',
+                '3d': '🧊立體圖',
+                dim: '📏尺吋圖',
+                detail: '📑詳圖',
+                photo: '📷拍攝'
+            }[t] || '');
+            const isDrawingDocType = (dt) => ['plan', '3d', 'dim', 'detail'].includes(dt);
+const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                 let insertIdx = pages.value.length;
                 if (explicitAfterIdx !== null && explicitAfterIdx >= 0 && explicitAfterIdx < pages.value.length) {
                     insertIdx = explicitAfterIdx + 1;
@@ -1604,7 +1629,7 @@ const localHiddenCodes = ref([]);
             const openPinSubPage = (pin, idx, pane = 'A') => {
                 const isB = pane === 'B'; isB ? resetZoomB() : resetZoom(); showQuickPageNav.value = false; showQuickPageNavB.value = false;
                 const parentPg = isB ? pageB.value : activePage.value;
-                Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], walls: pin.walls || [], paths: pin.paths || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || parentPg?.space || '' });
+                Object.assign(pin, { markers: pin.markers || [], lines: pin.lines || [], walls: pin.walls || [], paths: pin.paths || [], checkedItems: pin.checkedItems || [], historyStack: [], redoStack: [], w: pin.w || 1200, h: pin.h || 900, space: pin.space || parentPg?.space || '' });
                 if (pin.isSketch && !pin.photo) { const size = getAdaptiveCanvasSize(); pin.photo = renderSketchDataUrl(size.w, size.h, !!pin.hasGrid); pin.w = size.w; pin.h = size.h; }
                 if (isB) { pinB.value = pin; pinIndexB.value = idx; } else { activePin.value = pin; activePinIndex.value = idx; }
                 drawMode.value = 'browse';
@@ -1655,7 +1680,6 @@ const localHiddenCodes = ref([]);
                 } finally { isProcessing.value = false; }
             };
 
-            
             const selectFromPhotoPool = (item) => {
                 showPhotoPoolModal.value = false; targetPaneResetZoom();
                 if (photoPoolTarget.value === 'newPage') {
@@ -1667,15 +1691,13 @@ const localHiddenCodes = ref([]);
                 }
             };
 
-
-            
             const deleteFromPhotoPool = async (item) => {
                 if (!confirm('確定要從底圖庫移除這張照片嗎？')) return;
                 const fp = photoFingerprint(item.photo); photoPoolList.value = photoPoolList.value.filter(x => photoFingerprint(x.photo) !== fp); photoPool.value = photoPool.value.filter(x => photoFingerprint(x.photo) !== fp); await saveAll();
                 if (db && project.code && item.id) { const mRef = db.collection('site_projects').doc(String(project.code)).collection('media').doc(String(item.id)); mRef.collection('chunks').get().then(s => s.forEach(c => c.ref.delete())).catch(() => {}); mRef.delete().catch(() => {}); }
             };
 
-           const setPageSpace = (sp) => {
+            const setPageSpace = (sp) => {
                 if (editingMetaPage.value) {
                     editingMetaPage.value.space = sp;
                     editingMetaPage.value.updatedAt = Date.now();
@@ -1938,8 +1960,6 @@ const localHiddenCodes = ref([]);
                     return;
                 }
 
-                
-                
                 if (!isDrawing.value) return;
                 isDrawing.value = false; const endPos = getCoords(e, drawingPane.value);
 
@@ -1951,7 +1971,7 @@ const localHiddenCodes = ref([]);
                     checkBranchNeed(() => {
                         const pg = targetPage.value; if (!pg) return;
                         const pw = pg.w || 1200, ph = pg.h || 900; pg.pins ||= []; pg.historyStack ||= []; pg.redoStack = [];
-                        const newPin = { id: 'pin_' + Date.now(), name: `位置 ${pg.pins.length + 1}`, x: parseFloat(((endPos.x / pw) * 100).toFixed(2)), y: parseFloat(((endPos.y / ph) * 100).toFixed(2)), photo: null, photoId: '', w: 1200, h: 900, space: pg.space || '', markers: [], lines: [], walls: [], paths: [], historyStack: [], redoStack: [], updatedAt: Date.now() };
+                        const newPin = { id: 'pin_' + Date.now(), name: `位置 ${pg.pins.length + 1}`, x: parseFloat(((endPos.x / pw) * 100).toFixed(2)), y: parseFloat(((endPos.y / ph) * 100).toFixed(2)), photo: null, photoId: '', w: 1200, h: 900, space: pg.space || '', markers: [], lines: [], walls: [], paths: [], checkedItems: [], historyStack: [], redoStack: [], updatedAt: Date.now() };
                         pg.pins.push(newPin); pg.historyStack.push({ type: 'pin', pinId: newPin.id });
                         touchDirty(); openPinSubPage(newPin, pg.pins.length - 1, activePane.value); saveAll();
                     });
@@ -1971,10 +1991,8 @@ const localHiddenCodes = ref([]);
                     checkBranchNeed(() => {
                         const c = targetCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                         const lineId = Date.now(), markerId = lineId + 1;
-                        
                         const lineType = drawMode.value === 'line' ? 'measure' : drawMode.value;
                         c.lines.push({ ...lSnap, id: lineId, type: lineType, color: lineType === 'measure' ? (defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null) : drawColor.value });
-                        
                         if (lineType !== 'measure') { c.historyStack.push({ type: 'line_marker', lineId, markerId: null }); touchDirty(); saveAll(); return; }
                         const newMarker = { id: markerId, lineId, x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2), w: 140, h: 56, type: 'general', textColor: defaultTextColor.value, data: makeBlankMarkerData() };
                         updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
@@ -1989,8 +2007,6 @@ const localHiddenCodes = ref([]);
             const ensureMarkerBranched = (cb) => { if (activeMarker.value) { checkBranchNeed(() => { activeMarker.value = (targetCanvas.value.markers || []).find(m => m.id === activeMarker.value.id) || activeMarker.value; if (cb) cb(); }); } else if (cb) cb(); };
             const onMarkerTextInput = () => ensureMarkerBranched(() => { updateMarkerSize(activeMarker.value); touchDirty(); });
 
-
-            
             const applyImageDimensions = (m) => {
                 if (m.type !== 'image') return;
                 if (!m.baseW) { m.baseW = m.w; m.baseH = m.h; }
@@ -2026,8 +2042,6 @@ const localHiddenCodes = ref([]);
             const flipMarker = (axis) => { if (!activeMarker.value) return; ensureMarkerBranched(() => { if (axis === 'x') activeMarker.value.flipX = (activeMarker.value.flipX || 1) * -1; else activeMarker.value.flipY = (activeMarker.value.flipY || 1) * -1; touchDirty(); saveAll(); }); };
             const setCadMarkerColor = (hex) => { drawColor.value = hex; if (!activeMarker.value || activeMarker.value.type !== 'cad') return; ensureMarkerBranched(() => { activeMarker.value.color = hex; touchDirty(); saveAll(); }); };
 
-            
-            
             const undoLastAction = () => {
                 checkBranchNeed(() => {
                     const c = targetCanvas.value; if (!c?.historyStack?.length) return; c.redoStack ||= [];
@@ -2066,9 +2080,36 @@ const localHiddenCodes = ref([]);
             };
 
             const deleteMarkerTop = () => ensureMarkerBranched(() => { const c = targetCanvas.value, m = activeMarker.value; if (!m || !c) return; if (m.lineId) c.lines = (c.lines || []).filter(l => l.id !== m.lineId); c.markers = (c.markers || []).filter(x => x.id !== m.id); if (c.historyStack) c.historyStack = c.historyStack.filter(h => h.markerId !== m.id); c.redoStack = []; touchDirty(); showTopSheet.value = false; showTopTextBar.value = false; activeMarker.value = null; saveAll(); });
-            const switchMarkerType = (t, fKey) => ensureMarkerBranched(() => { activeMarker.value.type = t; if (t === 'stamp') stampFilter.value = 'all'; else if (!activeMarker.value.textColor) activeMarker.value.textColor = defaultTextColor.value; focusedInput.value = fKey; updateMarkerSize(activeMarker.value); touchDirty(); });
+            const switchMarkerType = (t, fKey) => ensureMarkerBranched(() => {
+                activeMarker.value.type = t;
+                if (t === 'stamp') stampFilter.value = 'all';
+                else if (!activeMarker.value.textColor) activeMarker.value.textColor = defaultTextColor.value;
+                focusedInput.value = fKey;
+                updateMarkerSize(activeMarker.value);
+                touchDirty();
+                // 💡 選中特定結構標籤時，自動彈出連環關聯提點
+                if (SMART_TIPS?.byTag?.[t]) triggerSmartTip(SMART_TIPS.byTag[t]);
+            });
             const closeTopTextBar = () => { if (['stamp', 'text'].includes(activeMarker.value?.type) && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopTextBar.value = false; saveAll(); };
-            const closeTopSheet = () => { if (activeMarker.value?.type === 'stamp' && !String(activeMarker.value.data.val || '').trim()) { deleteMarkerTop(); return; } showTopSheet.value = false; saveAll(); };
+            const closeTopSheet = () => {
+                const m = activeMarker.value;
+                if (m?.type === 'stamp' && !String(m.data.val || '').trim()) { deleteMarkerTop(); return; }
+                // 💡 完成數字輸入時，自動檢查異常數值／超過 2150mm 入屋警告
+                if (m && SMART_TIPS?.checkValue) {
+                    const def = TAG_DEFS[m.type];
+                    if (def) {
+                        for (const f of def.fields) {
+                            const warn = SMART_TIPS.checkValue(m.data[f.key], `${def.title}${f.label}`);
+                            if (warn) { triggerSmartTip(warn); break; }
+                        }
+                    } else {
+                        const warn = SMART_TIPS.checkValue(m.data.val, m.data.name || '');
+                        if (warn) triggerSmartTip(warn);
+                    }
+                }
+                showTopSheet.value = false;
+                saveAll();
+            };
 
             const handleKeypad = (key) => {
                 if (!activeMarker.value || !focusedInput.value) return;
@@ -2166,8 +2207,6 @@ const localHiddenCodes = ref([]);
                 } finally { isProcessing.value = false; e.target.value = ''; }
             };
 
-            
-
             const processPastedBlob = async (blob, forceNewPage) => {
                 showAddPageModal.value = false; isProcessing.value = true; processingText.value = '正在處理貼上圖片...';
                 try {
@@ -2197,7 +2236,6 @@ const localHiddenCodes = ref([]);
             const handleGlobalPaste = async (e) => {
                 const items = e.clipboardData?.items;
                 if (!items) return;
-                // 若正在開啟 CAD 圖庫管理視窗，Ctrl+V 直接貼成新圖案預覽
                 if (showCadManager.value) {
                     for (let i = 0; i < items.length; i++) {
                         if (items[i].type.indexOf('image') !== -1) {
@@ -2239,9 +2277,10 @@ const localHiddenCodes = ref([]);
                     const lp = lMap.get(id), cp = cMap.get(id), pageDeletedPins = new Set([...globalDeletedPins, ...((lp?.deletedPinIds || []).map(String)), ...((cp?.deletedPinIds || []).map(String))]);
                     if (!lp || !cp) { const single = makeEmptyPage(lp || cp); single.pins = (single.pins || []).filter(x => !pageDeletedPins.has(String(x.id))); single.deletedPinIds = [...pageDeletedPins]; result.push(single); return; }
                     const base = (cp.updatedAt || 0) > (lp.updatedAt || 0) ? { ...cp } : { ...lp }; if (!base.photo) base.photo = lp.photo || cp.photo || null; if (!base.date) base.date = lp.date || cp.date || getTodayStr();
+                    const mergedChecked = Array.from(new Set([...(lp.checkedItems || []), ...(cp.checkedItems || [])]));
                     const lPins = new Map((lp.pins || []).map(x => [String(x.id), x])), cPins = new Map((cp.pins || []).map(x => [String(x.id), x])), mergedPins = [];
-                    new Set([...lPins.keys(), ...cPins.keys()]).forEach(pid => { if (pageDeletedPins.has(pid)) return; const lP = lPins.get(pid), cP = cPins.get(pid); if (!lP || !cP) mergedPins.push(lP || cP); else { const w = (cP.updatedAt || 0) > (lP.updatedAt || 0) ? { ...cP } : { ...lP }; if (!w.photo) w.photo = lP.photo || cP.photo || null; mergedPins.push(w); } });
-                    base.pins = mergedPins; base.deletedPinIds = [...pageDeletedPins]; result.push(makeEmptyPage(base));
+                    new Set([...lPins.keys(), ...cPins.keys()]).forEach(pid => { if (pageDeletedPins.has(pid)) return; const lP = lPins.get(pid), cP = cPins.get(pid); if (!lP || !cP) mergedPins.push(lP || cP); else { const w = (cP.updatedAt || 0) > (lP.updatedAt || 0) ? { ...cP } : { ...lP }; if (!w.photo) w.photo = lP.photo || cP.photo || null; w.checkedItems = Array.from(new Set([...(lP.checkedItems || []), ...(cP.checkedItems || [])])); mergedPins.push(w); } });
+                    base.pins = mergedPins; base.checkedItems = mergedChecked; base.deletedPinIds = [...pageDeletedPins]; result.push(makeEmptyPage(base));
                 });
                 return result.sort((a, b) => (orderList.indexOf(a.id) === -1 ? 9999 : orderList.indexOf(a.id)) - (orderList.indexOf(b.id) === -1 ? 9999 : orderList.indexOf(b.id)));
             };
@@ -2266,7 +2305,7 @@ const localHiddenCodes = ref([]);
                     const deletedPins = new Set([...(project.deletedPinIds || []).map(String), ...((pd.deletedPinIds || []).map(String))]); project.deletedPinIds = [...deletedPins];
                     const deletedNotes = new Set([...(project.deletedNoteIds || []).map(String), ...((pd.deletedNoteIds || []).map(String))]); project.deletedNoteIds = [...deletedNotes];
                     project.notes = mergeNotesSmart(project.notes || [], pd.notes || [], deletedNotes);
-                    
+
                     const cloudPages = pagesSnap.docs.map(doc => { const r = doc.data(); return makeEmptyPage({ id: doc.id, ...r, date: r.date || pd.date || getTodayStr(), photo: (r.photoId && mediaMap.get(r.photoId)?.photo) || mediaMap.get('page_' + (r.id || doc.id))?.photo || r.photo || null, pins: (r.pins || []).map(pin => ({ ...pin, photo: (pin.photoId && mediaMap.get(pin.photoId)?.photo) || mediaMap.get(String(pin.id))?.photo || pin.photo || null })) }); });
                     const localOrderNewer = (project.pageOrderUpdatedAt || 0) > (pd.pageOrderUpdatedAt || 0); if (!localOrderNewer && pd.pageOrderUpdatedAt) project.pageOrderUpdatedAt = pd.pageOrderUpdatedAt;
                     const orderList = localOrderNewer ? [...pages.value.map(p => p.id), ...(pd.pageIds || [])] : [...(pd.pageIds || []), ...pages.value.map(p => p.id)];
@@ -2341,7 +2380,7 @@ const localHiddenCodes = ref([]);
                 isPushing = true; cloudSyncState.value = 'syncing';
                 try {
                     const now = await pushProjectPayload({ code, name: project.name, nameUpdatedAt: project.nameUpdatedAt, date: project.date, ownerId: project.ownerId, pages: pages.value, deletedPageIds: project.deletedPageIds, deletedPinIds: project.deletedPinIds, notes: project.notes, deletedNoteIds: project.deletedNoteIds, pageOrderUpdatedAt: project.pageOrderUpdatedAt, lastSyncAt: project.lastSyncAt }, true, onProgress);
-                  dirtyPageIds.clear(); project.lastSyncAt = now; cloudSyncState.value = 'ready'; hasUnsavedCloudChanges.value = false; await saveAll();
+                    dirtyPageIds.clear(); project.lastSyncAt = now; cloudSyncState.value = 'ready'; hasUnsavedCloudChanges.value = false; await saveAll();
                 } catch (e) { await saveAll(); cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; if (throwErr) throw e; } finally { setTimeout(() => { isPushing = false; }, 1000); }
             };
 
@@ -2365,7 +2404,8 @@ const localHiddenCodes = ref([]);
                     if (currentView.value === 'dir') await loadProjectList();
                 } catch (_) {} finally { isAutoQueueing = false; }
             };
-const forceSyncToCloud = async () => {
+
+            const forceSyncToCloud = async () => {
                 if (!navigator.onLine) return showToast('📴 目前無網絡連線，無法同步');
                 if (!db) return showToast('雲端資料庫未就緒');
                 if (isProcessing.value || isPushing) return showToast('⏳ 系統正在同步中，請稍候');
@@ -2401,9 +2441,10 @@ const forceSyncToCloud = async () => {
                     isProcessing.value = false;
                 }
             };
+
             const createNewProject = async () => {
                 await checkAuthorName(); resetZoom(); const today = getTodayStr(), firstPg = makeEmptyPage({ date: today });
-               Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', nameUpdatedAt: Date.now(), date: today, ownerId: currentUser.value?.uid || '', deletedPageIds: [], deletedPinIds: [], notes: [], deletedNoteIds: [], pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
+                Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', nameUpdatedAt: Date.now(), date: today, ownerId: currentUser.value?.uid || '', deletedPageIds: [], deletedPinIds: [], notes: [], deletedNoteIds: [], pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
                 pages.value = [firstPg]; photoPool.value = []; feedbackList.value = []; activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; splitMode.value = false; activePane.value = 'A'; dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id); hasUnsavedCloudChanges.value = true;
                 cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; currentView.value = 'proj'; await saveAll(); startRealtimeListener(project.code);
             };
@@ -2412,11 +2453,11 @@ const forceSyncToCloud = async () => {
                 resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; code = String(code); project.code = code; project.nameUpdatedAt = 0; project.deletedPageIds = []; project.deletedPinIds = []; project.notes = []; project.deletedNoteIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; feedbackList.value = []; dirtyPageIds.clear();
                 const d = await localforage.getItem('proj_' + code);
                 if (d) { Object.assign(project, { name: d.name || '', nameUpdatedAt: d.nameUpdatedAt || 0, date: d.date || '', ownerId: d.ownerId || currentUser.value?.uid || '', deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], notes: d.notes || [], deletedNoteIds: d.deletedNoteIds || [], pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' }); if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg)); if (d.photoPool) photoPool.value = d.photoPool; hasUnsavedCloudChanges.value = !!d.pendingUpload; } else hasUnsavedCloudChanges.value = false;
-                
                 activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; currentView.value = openAsPreview ? 'preview' : 'proj';
                 await pullAndMergeFromCloud(code, false); if (!pages.value.length) pages.value = [makeEmptyPage()]; drawMode.value = 'browse'; startRealtimeListener(code);
             };
-const openProjectMap = async (proj) => {
+
+            const openProjectMap = async (proj) => {
                 if (!proj) return;
                 const launch = (url, label) => {
                     showToast(`🗺️ 正在開啟地圖：${label || ''}`);
@@ -2432,7 +2473,6 @@ const openProjectMap = async (proj) => {
                 const rawName = String(proj.name || '').trim();
                 if (/^https?:\/\//i.test(rawName)) { launch(rawName, '自訂連結'); return; }
 
-                // 自動清理：1.去日期字頭 -> 2.去圖紙備註 -> 3.去樓層/單位/室號 -> 4.鎖定香港
                 let cleanAddr = rawName
                     .replace(/^\d{6,8}[\s\-_]*/, '')
                     .replace(/[\s\-_]*(傢俬圖|平面圖|施工圖|度尺|報價|現場|工程|設計|修改|副本|\(.*?\)|（.*?）)+$/g, '')
@@ -2461,7 +2501,6 @@ const openProjectMap = async (proj) => {
                 }
             };
 
-            
             const openManageMenu = (proj) => { manageProj.value = proj; showManageModal.value = true; };
             const renameProject = async () => {
                 const newName = prompt('請輸入新的地址 / 名稱：', manageProj.value.name);
@@ -2486,13 +2525,12 @@ const openProjectMap = async (proj) => {
                 await loadProjectList();
                 showToast('📱 已從本機移除（雲端仍保留，不再背景同步）');
             };
-            
+
             const deleteProject = async (code) => {
                 if (prompt('⚠️ 輸入 "dd" 確認刪除此工程：')?.trim().toLowerCase() !== 'dd') return; isProcessing.value = true; processingText.value = '正在徹底刪除工程...';
                 try { await localforage.removeItem('proj_' + code); await clearLocalMediaCacheForCode(code); await updateQueue(code, false); if (db && navigator.onLine) { const ref = db.collection('site_projects').doc(String(code)); const delCol = async (sub) => { const snap = await ref.collection(sub).get(); if (sub === 'media') { for (const doc of snap.docs) await batchDeleteDocs((await doc.ref.collection('chunks').get()).docs); } await batchDeleteDocs(snap.docs); }; await Promise.all([delCol('pages'), delCol('media'), delCol('backups'), delCol('feedback')]); await ref.delete(); } showManageModal.value = false; await loadProjectList(); showToast('🗑️ 已徹底刪除'); } catch (e) { alert('清理異常：' + e.message); } finally { isProcessing.value = false; }
             };
 
-            // 🧹 垃圾庫清單預覽 ＆ 確認徹底清除
             const showGarbagePreviewModal = (items, totalBytes, onConfirm) => {
                 const old = document.getElementById('garbage-preview-modal');
                 if (old) old.remove();
@@ -2500,50 +2538,45 @@ const openProjectMap = async (proj) => {
                 const overlay = document.createElement('div');
                 overlay.id = 'garbage-preview-modal';
                 overlay.style.cssText = 'position:fixed;inset:0;z-index:110;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:16px;';
-              const rowsHtml = items.map((it, idx) => `
-        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-            ${it.thumbUrl ? `<img data-zoom-idx="${idx}" src="${it.thumbUrl}" title="點擊放大預覽" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #d1d5db;background:#fff;flex-shrink:0;cursor:zoom-in;">` : ''}
-            <div style="min-width:0;flex:1;">
-                <div style="font-size:12px;font-weight:900;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.title}</div>
-                <div style="font-size:11px;color:#6b7280;font-weight:700;margin-top:2px;">${it.desc}${it.thumbUrl ? ' · <span style="color:#2563eb;">撳圖放大</span>' : ''}</div>
-            </div>
-            <span style="font-size:11px;font-weight:900;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:2px 6px;border-radius:6px;white-space:nowrap;">${it.sizeLabel}</span>
-        </div>
-    `).join('');
-    overlay.innerHTML = `
-        <div style="background:#fff;border:1px solid #d1d5db;border-radius:14px;width:100%;max-width:420px;max-height:82vh;display:flex;flex-direction:column;padding:16px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.2);">
-            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5e7eb;padding-bottom:8px;margin-bottom:10px;">
-                <div style="font-size:15px;font-weight:900;color:#111827;">🧹 雲端垃圾庫清單 (${items.length} 項)</div>
-                <span style="font-size:11px;font-weight:900;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:99px;">可釋放約 ${mb} MB</span>
-            </div>
-            <div style="font-size:11px;color:#4b5563;font-weight:700;margin-bottom:8px;">以下均為已刪除工程的殘留碎片，或所有現存圖紙均無使用的廢棄舊相片：</div>
-            <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px;">${rowsHtml}</div>
-            <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;">
-                <button id="gp-cancel" style="flex:1;background:#fff;border:1px solid #d1d5db;color:#374151;padding:10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">取消 (保留不動)</button>
-                <button id="gp-confirm" style="flex:1;background:#dc2626;border:none;color:#fff;padding:10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">🗑️ 確認徹底清除</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-    overlay.querySelector('#gp-cancel').onclick = () => overlay.remove();
-    overlay.querySelector('#gp-confirm').onclick = async () => { overlay.remove(); await onConfirm(); };
-    overlay.querySelectorAll('img[data-zoom-idx]').forEach(img => {
-        img.onclick = () => {
-            const zoom = document.createElement('div');
-            zoom.style.cssText = 'position:fixed;inset:0;z-index:120;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;cursor:zoom-out;';
-            zoom.innerHTML = `<img src="${img.src}" style="max-width:95vw;max-height:82vh;border-radius:8px;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,0.5);"><div style="color:#fff;font-size:12px;font-weight:700;margin-top:10px;">點擊任意位置關閉預覽</div>`;
-            zoom.onclick = () => zoom.remove();
-            document.body.appendChild(zoom);
-        };
-    });
-};
+                const rowsHtml = items.map((it, idx) => `
+                    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                        ${it.thumbUrl ? `<img data-zoom-idx="${idx}" src="${it.thumbUrl}" title="點擊放大預覽" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #d1d5db;background:#fff;flex-shrink:0;cursor:zoom-in;">` : ''}
+                        <div style="min-width:0;flex:1;">
+                            <div style="font-size:12px;font-weight:900;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.title}</div>
+                            <div style="font-size:11px;color:#6b7280;font-weight:700;margin-top:2px;">${it.desc}${it.thumbUrl ? ' · <span style="color:#2563eb;">撳圖放大</span>' : ''}</div>
+                        </div>
+                        <span style="font-size:11px;font-weight:900;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:2px 6px;border-radius:6px;white-space:nowrap;">${it.sizeLabel}</span>
+                    </div>
+                `).join('');
+                overlay.innerHTML = `
+                    <div style="background:#fff;border:1px solid #d1d5db;border-radius:14px;width:100%;max-width:420px;max-height:82vh;display:flex;flex-direction:column;padding:16px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.2);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5e7eb;padding-bottom:8px;margin-bottom:10px;">
+                            <div style="font-size:15px;font-weight:900;color:#111827;">🧹 雲端垃圾庫清單 (${items.length} 項)</div>
+                            <span style="font-size:11px;font-weight:900;color:#1d4ed8;background:#eff6ff;padding:2px 8px;border-radius:99px;">可釋放約 ${mb} MB</span>
+                        </div>
+                        <div style="font-size:11px;color:#4b5563;font-weight:700;margin-bottom:8px;">以下均為已刪除工程的殘留碎片，或所有現存圖紙均無使用的廢棄舊相片：</div>
+                        <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px;">${rowsHtml}</div>
+                        <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;">
+                            <button id="gp-cancel" style="flex:1;background:#fff;border:1px solid #d1d5db;color:#374151;padding:10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">取消 (保留不動)</button>
+                            <button id="gp-confirm" style="flex:1;background:#dc2626;border:none;color:#fff;padding:10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">🗑️ 確認徹底清除</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+                overlay.querySelector('#gp-cancel').onclick = () => overlay.remove();
+                overlay.querySelector('#gp-confirm').onclick = async () => { overlay.remove(); await onConfirm(); };
+                overlay.querySelectorAll('img[data-zoom-idx]').forEach(img => {
+                    img.onclick = () => {
+                        const zoom = document.createElement('div');
+                        zoom.style.cssText = 'position:fixed;inset:0;z-index:120;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;cursor:zoom-out;';
+                        zoom.innerHTML = `<img src="${img.src}" style="max-width:95vw;max-height:82vh;border-radius:8px;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,0.5);"><div style="color:#fff;font-size:12px;font-weight:700;margin-top:10px;">點擊任意位置關閉預覽</div>`;
+                        zoom.onclick = () => zoom.remove();
+                        document.body.appendChild(zoom);
+                    };
+                });
+            };
 
-
-
-
-                
-
-const cleanCloudGarbage = async () => {
+            const cleanCloudGarbage = async () => {
                 if (!db || !navigator.onLine) return alert('請檢查網路連線');
                 isProcessing.value = true; processingText.value = '正在逐個工程掃描雲端垃圾清單...';
                 try {
@@ -2584,14 +2617,14 @@ const cleanCloudGarbage = async () => {
                                 const bLen = mData.byteLen || 150000;
                                 totalBytes += bLen;
                                 orphanMediaDocs.push(mDoc);
-                          const dt = mData.updatedAt ? new Date(mData.updatedAt).toLocaleDateString() : '舊相片';
-                    const thumbUrl = Object.values(mData).find(v => typeof v === 'string' && (v.startsWith('data:image') || v.startsWith('http'))) || '';
-                    previewItems.push({
-                        title: `🖼️ 無用舊底圖 (${pName})`,
-                        desc: `建立於 ${dt} · 現存頁面均未引用`,
-                        sizeLabel: `${Math.max(1, Math.round(bLen / 1024))} KB`,
-                        thumbUrl
-                    });
+                                const dt = mData.updatedAt ? new Date(mData.updatedAt).toLocaleDateString() : '舊相片';
+                                const thumbUrl = Object.values(mData).find(v => typeof v === 'string' && (v.startsWith('data:image') || v.startsWith('http'))) || '';
+                                previewItems.push({
+                                    title: `🖼️ 無用舊底圖 (${pName})`,
+                                    desc: `建立於 ${dt} · 現存頁面均未引用`,
+                                    sizeLabel: `${Math.max(1, Math.round(bLen / 1024))} KB`,
+                                    thumbUrl
+                                });
                             }
                         });
                     }
@@ -2759,8 +2792,7 @@ const cleanCloudGarbage = async () => {
                     selectedPageIds.value = Array.from(new Set([...selectedPageIds.value, ...targetList]));
                 }
             };
-            
-            
+
             const openTransferModal = async (singlePageId = null) => {
                 if (singlePageId) selectedPageIds.value = [String(singlePageId)];
                 if (!selectedPageIds.value.length) { showToast('請先點選要轉檔的圖紙'); return; }
@@ -2799,7 +2831,7 @@ const cleanCloudGarbage = async () => {
                 } catch (e) { alert('轉檔失敗：' + e.message); } finally { isProcessing.value = false; }
             };
 
-const openCloudBrowser = async () => { if (!db || !navigator.onLine) return alert('請檢查網路連線'); isProcessing.value = true; processingText.value = '正在讀取待認領雲端工程...'; try { localHiddenCodes.value = ((await localforage.getItem('local_hidden_projects')) || []).map(String); const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(40).get(), 10000); cloudProjectList.value = snaps.docs.map(d => ({ code: d.id, ...d.data() })).filter(d => d.name || d.updatedAt); showCloudBrowser.value = true; } catch (e) { alert('讀取目錄失敗：' + e.message); } finally { isProcessing.value = false; } };
+            const openCloudBrowser = async () => { if (!db || !navigator.onLine) return alert('請檢查網路連線'); isProcessing.value = true; processingText.value = '正在讀取待認領雲端工程...'; try { localHiddenCodes.value = ((await localforage.getItem('local_hidden_projects')) || []).map(String); const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(40).get(), 10000); cloudProjectList.value = snaps.docs.map(d => ({ code: d.id, ...d.data() })).filter(d => d.name || d.updatedAt); showCloudBrowser.value = true; } catch (e) { alert('讀取目錄失敗：' + e.message); } finally { isProcessing.value = false; } };
             const downloadFromCloudBrowser = async (code) => {
                 code = String(code);
                 const hidden = (await localforage.getItem('local_hidden_projects')) || [];
@@ -2810,8 +2842,6 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
                 if (currentUser.value?.uid && db && navigator.onLine) {
                     db.collection('site_projects').doc(code).set({ ownerId: currentUser.value.uid }, { merge: true }).catch(() => {});
                 }
-
-            
                 await loadProject(code, true);
                 if (currentUser.value?.uid) {
                     project.ownerId = currentUser.value.uid;
@@ -2820,7 +2850,7 @@ const openCloudBrowser = async () => { if (!db || !navigator.onLine) return aler
                 await loadProjectList();
                 showToast('✅ 已認領並歸戶至目錄');
             };
-const loadProjectList = async () => {
+            const loadProjectList = async () => {
                 const keys = await localforage.keys(), q = (await localforage.getItem('pending_upload_queue')) || [], list = [];
                 const prevMap = new Map((projectList.value || []).map(p => [String(p.code), p]));
                 const cloudMap = new Map((cloudProjectList.value || []).map(p => [String(p.code), p]));
@@ -2845,7 +2875,7 @@ const loadProjectList = async () => {
                 projectList.value = list.sort((a, b) => b.updatedAt - a.updatedAt);
             };
             const backToProjects = async () => {
-                resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A';
+                resetZoom(); showQuickPageNav.value = false; showChecklistCard.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A';
                 if (unsubPages) { unsubPages(); unsubPages = null; }
                 if (unsubFeedback) { unsubFeedback(); unsubFeedback = null; }
                 const needSync = (hasUnsavedCloudChanges.value || dirtyPageIds.size > 0) && project.code && db;
@@ -2878,8 +2908,31 @@ const loadProjectList = async () => {
                 else fallbackCopyTextToClipboard(msg);
             };
 
+            // 🛡️ 手機防誤觸返回退出保護（攔截邊緣左掃返回與誤關頁面）
+            const handlePopStateGuard = () => {
+                history.pushState({ fieldMeasureGuard: true }, '');
+                if (fullScreenIndex.value !== -1) { fullScreenIndex.value = -1; resetFsZoom(); return; }
+                if (showTopSheet.value) { closeTopSheet(); return; }
+                if (showTopTextBar.value) { closeTopTextBar(); return; }
+                if (showChecklistCard.value) { showChecklistCard.value = false; return; }
+                if (showQuickPageNav.value) { showQuickPageNav.value = false; return; }
+                if (currentView.value === 'proj' || currentView.value === 'preview') {
+                    backToProjects();
+                    showToast('🛡️ 已攔截誤掃返回，自動儲存並返回工程目錄');
+                }
+            };
+            const handleBeforeUnloadGuard = (e) => {
+                if (currentView.value !== 'dir' || hasUnsavedCloudChanges.value) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            };
+
             onMounted(async () => {
                 const bs = document.getElementById('boot-screen'); if (bs) bs.remove(); document.getElementById('app').style.display = 'flex';
+                history.pushState({ fieldMeasureGuard: true }, '');
+                window.addEventListener('popstate', handlePopStateGuard);
+                window.addEventListener('beforeunload', handleBeforeUnloadGuard);
                 await loadStampStore(); await loadCadStore(); await loadProjectList();
                 if (auth) {
                     auth.onAuthStateChanged(async (user) => {
@@ -2900,7 +2953,7 @@ const loadProjectList = async () => {
                 setInterval(() => { if (navigator.onLine) processPendingUploadQueue(true); }, 15000);
             });
 
-            onUnmounted(() => { window.removeEventListener('paste', handleGlobalPaste); window.removeEventListener('keydown', handleGlobalKeydown); window.removeEventListener('keyup', handleGlobalKeyup); });
+            onUnmounted(() => { window.removeEventListener('popstate', handlePopStateGuard); window.removeEventListener('beforeunload', handleBeforeUnloadGuard); window.removeEventListener('paste', handleGlobalPaste); window.removeEventListener('keydown', handleGlobalKeydown); window.removeEventListener('keyup', handleGlobalKeyup); });
 
             const renderAnnotatedCanvas = (canvasObj, includeStamp = true, itemDate = '', itemAuthor = '') => new Promise(async (resolve) => {
                 const img = new Image(); img.src = canvasObj.photo; await new Promise(r => { img.onload = r; img.onerror = r; });
@@ -3008,7 +3061,7 @@ const loadProjectList = async () => {
                 onEraseTap, resizeImageMarker, onMarkerPointerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
                 deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, onMarkerTextInput, handleKeypad, applyTag, applyStamp, getStampColor, getMarkerLines, getTagFields, exportPdfReport,
                 globalFontScale, toggleFontScale,
-                activeLine, onLinePointerStart, setActiveLineColor, deleteActiveLine, getMarkerFontPx, stepMarkerFontScale, openMarkerEditor,
+                activeLine, onLinePointerStart, onLineEndpointStart, setActiveLineColor, deleteActiveLine, getMarkerFontPx, stepMarkerFontScale, openMarkerEditor,
                 getDocTypeLabel, overviewTypeFilter, overviewSpaceFilter, showPreviewMoreMenu, showDocTypeFilterBar, drawingPageCount, photoPageCount, overviewSpacesAvailable, filteredOverviewPages, overviewStackMode, overviewSpaceStacks, toggleSpaceStackSelection,
                 movingPageId, movingPageLabel, startMovePage, insertMovingPageAfter, showAutoSortModal, autoSortPages,
                 editingMetaPage, openPageMetaModal, setPageDocType, batchSetDocType, batchSetSpace,
@@ -3017,9 +3070,11 @@ const loadProjectList = async () => {
                 onFsWheel, onFsTouchStart, onFsTouchMove, onFsTouchEnd, onFsMouseDown, onFsMouseMove, onFsMouseUp,
                 jumpFullScreen, openFullScreenSpaceModal,
                 fsEditingMarker, fsQuickInputRef, onFsMarkerTap, openFsMarkerQuickEdit, setFsMarkerColor, stepFsMarkerFont, closeFsMarkerQuickEdit,
-                onProjectNameInput, showNotesModal, noteFilter, newNoteText, newNoteSpace, activeNotesCount, filteredNotes, addProjectNote, toggleProjectNote, editProjectNote, deleteProjectNote, clearDoneNotes
+                onProjectNameInput, showNotesModal, noteFilter, newNoteText, newNoteSpace, activeNotesCount, filteredNotes, addProjectNote, toggleProjectNote, editProjectNote, deleteProjectNote, clearDoneNotes,
+                showChecklistCard, activeSmartTip, currentSpaceChecklist, isChecklistItemChecked, currentChecklistDoneCount, toggleChecklistItem
             };
         }
     }).mount('#app');
 }
 // === END OF app.js ===
+        
