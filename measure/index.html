@@ -653,9 +653,9 @@
                                  @wheel.prevent="e => onStageWheel(e, 'A')" @touchstart="e => onStageTouchStart(e, 'A')" @touchmove="e => onStageTouchMove(e, 'A')" @touchend="e => onStageTouchEnd(e, 'A')" @touchcancel="e => onStageTouchEnd(e, 'A')"
                                  @mousedown="e => onStageMouseDown(e, 'A')" @mousemove="e => onStageMouseMove(e, 'A')" @mouseup="e => onStageMouseUp(e, 'A')">
                                 <defs>
-                                    <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowMarkerId(c, 'A')" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                                        <path d="M 0 0.6 L 6 3 L 0 5.4 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
-                                    </marker>
+                                    <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowMarkerId(c, 'A')" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+    <path d="M 0 1 L 10 5 L 0 9 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
+</marker>
                                 </defs>
 
                                 <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="#ffffff" />
