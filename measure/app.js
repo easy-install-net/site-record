@@ -82,7 +82,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
     const buildWallSegments = (w) => {
         if (!w) return [];
         const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = Math.hypot(dx, dy); if (L < 4) return [];
-        // 智能判斷：如果是斜線牆就用 15 闊度，否則空心牆就收窄用 7 闊度
         const ux = dx / L, uy = dy / L, nx = -uy, ny = ux, hw = w.style === 'hatched' ? 15 : 7;
         const p1A = { x: w.x1 + nx * hw, y: w.y1 + ny * hw }, p2A = { x: w.x2 + nx * hw, y: w.y2 + ny * hw };
         const p1B = { x: w.x1 - nx * hw, y: w.y1 - ny * hw }, p2B = { x: w.x2 - nx * hw, y: w.y2 - ny * hw };
@@ -119,7 +118,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const currentView = ref('dir'), showWatermark = ref(true), globalFontScale = ref(0.6);
             const defaultTextColor = ref('#ffffff');
 
-            // 🔒 Google 帳號登入與名下工程自動同步
             const loginWithGoogle = async () => {
                 if (!auth) return alert('登入模組未就緒，請重新整理網頁');
                 if (!navigator.onLine) return alert('請先連接網絡再綁定 Google 帳號');
@@ -185,7 +183,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 } catch (_) {}
             };
 
-            // 🏷️ 目錄印章管理引擎
             const stampCategories = ref([]);
             const stampItems = ref([]);
             const stampUpdatedAt = ref(0);
@@ -318,7 +315,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 }
                 applyStamp(item);
             };
-// 🏛️ CAD 圖庫目錄管理引擎
+
             const showCadManager = ref(false), cadMgrFilter = ref('all');
             const newCadCat = ref('arch'), newCadShape = ref('box'), newCadLabel = ref(''), newCadImgB64 = ref('');
             const customCadBlocks = ref([]), pinnedCadIds = ref([]), hiddenCadIds = ref([]);
@@ -475,13 +472,12 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const projectList = ref([]), allProjectOptions = ref([]);
-            const project = reactive({ code: '', name: '', nameUpdatedAt: 0, date: '', ownerId: '', spaceOrder: [], deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '', notes: [], deletedNoteIds: [] });
+            const project = reactive({ code: '', name: '', nameUpdatedAt: 0, date: '', ownerId: '', spaceOrder: [], deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: 0, lastSyncAt: 0, lastModifiedBy: '', notes: [], deletedNoteIds: [], customNotes: '' });
             const pages = ref([]), photoPool = ref([]);
             const spaceList = ref([...DEFAULT_SPACES]);
 
             const onProjectNameInput = () => { project.nameUpdatedAt = Date.now(); markProjectChanged(); };
 
-            // 🏠 空間排前後次序引擎（拖拉調位 ＋ ◀ / ▶ 微調，全系統同步）
             const draggingSpace = ref(''), dragOverSpace = ref('');
             const getSpaceRank = (sp) => {
                 if (!sp || sp === '__NONE__' || sp === '未標空間') return 999;
@@ -526,7 +522,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 showToast(`✅ 已移動「${sp}」次序`);
             };
 
-            // 📝 工程記事列表 / 現場備忘錄
             const showNotesModal = ref(false), noteFilter = ref('all'), newNoteText = ref(''), newNoteSpace = ref('');
             const activeNotesCount = computed(() => (project.notes || []).filter(n => !n.done).length);
             const filteredNotes = computed(() => {
@@ -584,9 +579,39 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const targetCanvas = computed(() => (splitMode.value && activePane.value === 'B') ? canvasB.value : activeCanvas.value);
             const targetCanvasW = computed(() => targetCanvas.value?.w || 1200);
             const targetCanvasH = computed(() => targetCanvas.value?.h || 900);
-
-            // 📋 隨身防漏度尺清單 ＋ 💡 現場智能防呆提示
+            // 📋 隨身防漏度尺清單（支援拖拉移動、本單客製提醒、以及通用範本管理）
             const showChecklistCard = ref(false);
+            const showChecklistManageModal = ref(false);
+            const checklistOffset = reactive({ x: 0, y: 0 });
+            const customChecklists = ref({});
+            const currentChecklistDraft = reactive({ spaceKey: '', dims: [], notes: [] });
+
+            const loadChecklistStore = async () => {
+                const saved = await localforage.getItem('custom_space_checklists_v1');
+                if (saved && typeof saved === 'object') customChecklists.value = saved;
+            };
+            const saveChecklistStore = async () => {
+                await localforage.setItem('custom_space_checklists_v1', JSON.parse(JSON.stringify(customChecklists.value || {})));
+            };
+
+            const startChecklistDrag = (e) => {
+                const sx = e.clientX, sy = e.clientY, ox = checklistOffset.x, oy = checklistOffset.y;
+                const onMove = (ev) => {
+                    const maxX = Math.max(40, window.innerWidth - 160);
+                    const maxY = Math.max(120, window.innerHeight - 190);
+                    checklistOffset.x = Math.max(-window.innerWidth + 180, Math.min(20, ox + (ev.clientX - sx)));
+                    checklistOffset.y = Math.max(-68, Math.min(maxY, oy + (ev.clientY - sy)));
+                };
+                const onUp = () => {
+                    window.removeEventListener('pointermove', onMove);
+                    window.removeEventListener('pointerup', onUp);
+                    window.removeEventListener('pointercancel', onUp);
+                };
+                window.addEventListener('pointermove', onMove);
+                window.addEventListener('pointerup', onUp);
+                window.addEventListener('pointercancel', onUp);
+            };
+
             const activeSmartTip = ref('');
             let smartTipTimer = null;
             const triggerSmartTip = (msg) => {
@@ -597,14 +622,45 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
             const currentSpaceChecklist = computed(() => {
                 const sp = String(activeCanvas.value?.space || '').trim();
-                if (!sp || !SPACE_CHECKLISTS) return null;
-                return SPACE_CHECKLISTS[sp] || null;
+                if (!sp) return null;
+                if (customChecklists.value && customChecklists.value[sp]) return customChecklists.value[sp];
+                if (SPACE_CHECKLISTS && SPACE_CHECKLISTS[sp]) return SPACE_CHECKLISTS[sp];
+                return project.customNotes ? { dims: [], notes: [] } : null;
             });
+
+            const initChecklistDraft = () => {
+                const sp = String(activeCanvas.value?.space || '').trim() || '通用';
+                currentChecklistDraft.spaceKey = sp;
+                const src = (customChecklists.value && customChecklists.value[sp]) || (SPACE_CHECKLISTS && SPACE_CHECKLISTS[sp]) || { dims: [], notes: [] };
+                currentChecklistDraft.dims = [...(src.dims || [])];
+                currentChecklistDraft.notes = [...(src.notes || [])];
+            };
+            Vue.watch(showChecklistManageModal, (val) => { if (val) initChecklistDraft(); });
+
+            const openChecklistManager = () => {
+                initChecklistDraft();
+                showChecklistManageModal.value = true;
+            };
+            const addChecklistDim = () => { currentChecklistDraft.dims.push(''); };
+            const addChecklistNote = () => { currentChecklistDraft.notes.push(''); };
+            const saveChecklistManage = async () => {
+                const sp = currentChecklistDraft.spaceKey || String(activeCanvas.value?.space || '').trim() || '通用';
+                customChecklists.value[sp] = {
+                    dims: (currentChecklistDraft.dims || []).map(s => String(s || '').trim()).filter(Boolean),
+                    notes: (currentChecklistDraft.notes || []).map(s => String(s || '').trim()).filter(Boolean)
+                };
+                await saveChecklistStore();
+                markProjectChanged();
+                await saveAll();
+                showChecklistManageModal.value = false;
+                showToast(`✅ 已儲存「${sp}」防漏設定與客製提醒`);
+            };
+
             const isChecklistItemChecked = (itemText) => (activeCanvas.value?.checkedItems || []).includes(itemText);
             const currentChecklistDoneCount = computed(() => {
                 if (!currentSpaceChecklist.value) return 0;
                 const doneSet = new Set(activeCanvas.value?.checkedItems || []);
-                return currentSpaceChecklist.value.dims.filter(d => doneSet.has(d)).length;
+                return (currentSpaceChecklist.value.dims || []).filter(d => doneSet.has(d)).length;
             });
             const toggleChecklistItem = (itemText) => {
                 checkBranchNeed(() => {
@@ -1023,7 +1079,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const sheetTab = ref('dim');
             const isProcessing = ref(false), processingText = ref(''), focusedInput = ref('val'), topTextInputRef = ref(null), svgCanvas = ref(null), svgCanvasB = ref(null);
 
-            // 📏 連續分段拉尺（Chain Dimension）並打通主輸入框＋數字鍵盤
+            // 📏 連續分段拉尺（Chain Dimension：永遠順住加喺最尾，唔會推走舊數字）
             const chainPromptLine = ref(null), chainSegments = ref([]), focusedChainIdx = ref(-1);
             const getChainTotalVal = (segs) => {
                 const sum = (segs || []).reduce((acc, s) => acc + (parseFloat(s.val) || 0), 0);
@@ -1044,7 +1100,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 }
             };
             const splitChainLine = (targetLine = chainPromptLine.value) => {
-                const l = targetLine, c = targetCanvas.value;
+                const l = targetLine || chainPromptLine.value, c = targetCanvas.value;
                 if (!l || !c) return;
                 checkBranchNeed(() => {
                     const lineObj = (c.lines || []).find(x => x.id === l.id) || l;
@@ -1056,14 +1112,17 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     } else if (!Array.isArray(lineObj.chainSegs) || lineObj.chainSegs.length < 2) {
                         lineObj.chainSegs = [{ t: 0.5, val: initVal }, { t: 1.0, val: '' }];
                     } else {
-                        const prevT = lineObj.chainSegs[lineObj.chainSegs.length - 2]?.t || 0.5;
+                        // 永遠加喺最尾：保留原有最後一段的數字，只調整其分界點，然後 push 新一格到最尾
+                        const len = lineObj.chainSegs.length;
+                        const prevT = len >= 2 ? lineObj.chainSegs[len - 2].t : 0;
                         const midT = Math.round(((prevT + 1.0) / 2) * 1000) / 1000;
-                        lineObj.chainSegs.splice(lineObj.chainSegs.length - 1, 0, { t: midT, val: '' });
+                        lineObj.chainSegs[len - 1].t = midT;
+                        lineObj.chainSegs.push({ t: 1.0, val: '' });
                     }
                     chainPromptLine.value = lineObj;
                     chainSegments.value = lineObj.chainSegs;
                     const firstEmptyIdx = lineObj.chainSegs.findIndex(s => !String(s.val || '').trim());
-                    focusedChainIdx.value = firstEmptyIdx >= 0 ? firstEmptyIdx : 0;
+                    focusedChainIdx.value = firstEmptyIdx >= 0 ? firstEmptyIdx : (lineObj.chainSegs.length - 1);
                     if (existingM) {
                         activeMarker.value = existingM;
                         sheetTab.value = 'dim';
@@ -1131,7 +1190,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     return { idx, x: Math.round(l.x1 + dx * midT), y: Math.round(l.y1 + dy * midT), val: seg.val || `段${idx + 1}` };
                 });
             };
-        const activeLine = ref(null);
+            const activeLine = ref(null);
             const internalClipboard = ref(null);
 
             const cutSelectedObject = () => {
@@ -1175,8 +1234,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     }
                 });
             };
-
-            const smartPasteAction = async () => {
+        const smartPasteAction = async () => {
                 if (internalClipboard.value && targetCanvas.value) {
                     checkBranchNeed(() => {
                         const c = targetCanvas.value;
@@ -1838,14 +1896,15 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 });
             };
 
-            const onMarkerPointerStart = (marker, e, pane = activePane.value) => {
+            const onMarkerPointerStart = (marker, e, pane = activePane.value, chainSegIdx = -1) => {
                 focusPane(pane);
+                if (!marker) return;
                 if (e.touches?.length > 1 || isPinching || showBranchPrompt.value) return;
                 if (showQuickPageNav.value) showQuickPageNav.value = false;
                 if (showQuickPageNavB.value) showQuickPageNavB.value = false;
                 if (drawMode.value === 'eraser') { onEraseTap('marker', marker, e, pane); return; }
                 const pt = getClientPoint(e);
-                if (drawMode.value === 'move') {
+                if (drawMode.value === 'move' && chainSegIdx < 0) {
                     e.preventDefault(); e.stopPropagation();
                     checkBranchNeed(() => {
                         const target = (targetCanvas.value.markers || []).find(m => m.id === marker.id) || marker;
@@ -1857,13 +1916,19 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     });
                     return;
                 }
-                if (drawMode.value === 'browse') {
-                    pendingTapMarker = { marker, pane, clientX: pt.clientX, clientY: pt.clientY };
+                if (drawMode.value === 'browse' || chainSegIdx >= 0) {
+                    if (chainSegIdx >= 0) {
+                        e.preventDefault(); e.stopPropagation();
+                        openMarkerEditor(marker, pane, chainSegIdx);
+                    } else {
+                        pendingTapMarker = { marker, pane, chainSegIdx: -1, clientX: pt.clientX, clientY: pt.clientY };
+                    }
                 }
             };
 
-            const openMarkerEditor = (m, pane = activePane.value) => {
+            const openMarkerEditor = (m, pane = activePane.value, chainSegIdx = -1) => {
                 focusPane(pane);
+                if (!m) return;
                 if (m.type === 'page_link' && m.data?.targetPageId) { jumpToPageById(m.data.targetPageId, pane); return; }
                 activeMarker.value = m;
                 focusedChainIdx.value = -1;
@@ -1878,8 +1943,12 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         chainPromptLine.value = ln || null;
                         chainSegments.value = ln?.chainSegs || [];
                         if (Array.isArray(ln?.chainSegs) && ln.chainSegs.length >= 2) {
-                            const emptyIdx = ln.chainSegs.findIndex(s => !String(s.val || '').trim());
-                            focusedChainIdx.value = emptyIdx >= 0 ? emptyIdx : 0;
+                            if (chainSegIdx >= 0 && chainSegIdx < ln.chainSegs.length) {
+                                focusedChainIdx.value = chainSegIdx;
+                            } else {
+                                const emptyIdx = ln.chainSegs.findIndex(s => !String(s.val || '').trim());
+                                focusedChainIdx.value = emptyIdx >= 0 ? emptyIdx : 0;
+                            }
                         }
                     } else {
                         chainPromptLine.value = null;
@@ -1937,7 +2006,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     if (isPinching) { isPinching = false; pinchAnchorSvg = null; return; }
                     if (isPanningBrowse) {
                         isPanningBrowse = false;
-                        if (pendingTapMarker) { const { marker, pane: p } = pendingTapMarker; pendingTapMarker = null; openMarkerEditor(marker, p); }
+                        if (pendingTapMarker) { const { marker, pane: p, chainSegIdx } = pendingTapMarker; pendingTapMarker = null; openMarkerEditor(marker, p, chainSegIdx); }
                         return;
                     }
                 }
@@ -1979,7 +2048,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const onStageMouseUp = (e, pane = 'A') => {
                 if (isPanningBrowse) {
                     isPanningBrowse = false;
-                    if (pendingTapMarker) { const { marker, pane: p } = pendingTapMarker; pendingTapMarker = null; openMarkerEditor(marker, p); }
+                    if (pendingTapMarker) { const { marker, pane: p, chainSegIdx } = pendingTapMarker; pendingTapMarker = null; openMarkerEditor(marker, p, chainSegIdx); }
                     return;
                 }
                 if (!showBranchPrompt.value) endStroke(e, pane);
@@ -2222,7 +2291,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 }
             };
 
-            // ⌨️ 數字鍵盤（打通分段輸入：焦點在分段時直接輸入段1→段2→段3並自動計算總長）
             const handleKeypad = (key) => {
                 if (!activeMarker.value || !focusedInput.value) return;
                 ensureMarkerBranched(() => {
@@ -2433,7 +2501,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
             const handleGlobalKeyup = (e) => { if (e.code === 'Space') isSpaceDown = false; };
 
-        const saveAll = async () => {
+            const saveAll = async () => {
                 const code = String(project.code || '').trim(); if (!code) return;
                 if (currentUser.value?.uid && !project.ownerId) project.ownerId = currentUser.value.uid;
                 const cleanPages = JSON.parse(JSON.stringify(pages.value || [])).map(pg => { delete pg.historyStack; delete pg.redoStack; (pg.pins || []).forEach(p => { delete p.historyStack; delete p.redoStack; }); return pg; });
@@ -2447,6 +2515,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     deletedPinIds: JSON.parse(JSON.stringify(project.deletedPinIds || [])),
                     notes: JSON.parse(JSON.stringify(project.notes || [])),
                     deletedNoteIds: JSON.parse(JSON.stringify(project.deletedNoteIds || [])),
+                    customNotes: String(project.customNotes || ''),
                     pageOrderUpdatedAt: Number(project.pageOrderUpdatedAt || 0),
                     updatedAt: Date.now(), lastSyncAt: Number(project.lastSyncAt || 0),
                     lastModifiedBy: String(project.lastModifiedBy || authorName.value || ''),
@@ -2486,6 +2555,9 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         project.name = pd.name; project.nameUpdatedAt = cloudNameTs;
                     }
                     if (pd.date) project.date = pd.date; if (pd.lastModifiedBy) project.lastModifiedBy = pd.lastModifiedBy; if (pd.ownerId) project.ownerId = pd.ownerId;
+                    if (typeof pd.customNotes === 'string' && (!hasUnsavedCloudChanges.value || !project.customNotes)) {
+                        project.customNotes = pd.customNotes;
+                    }
                     if (Array.isArray(pd.spaceOrder) && pd.spaceOrder.length && (!hasUnsavedCloudChanges.value || !project.spaceOrder?.length)) {
                         project.spaceOrder = pd.spaceOrder;
                         pd.spaceOrder.forEach(sp => { if (!spaceList.value.includes(sp)) spaceList.value.push(sp); });
@@ -2553,6 +2625,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     deletedPinIds: projObj.deletedPinIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedPinIds) : [],
                     notes: JSON.parse(JSON.stringify(projObj.notes || [])),
                     deletedNoteIds: projObj.deletedNoteIds?.length ? firebase.firestore.FieldValue.arrayUnion(...projObj.deletedNoteIds) : [],
+                    customNotes: String(projObj.customNotes || ''),
                     updatedAt: now
                 };
                 const ownerUid = projObj.ownerId || currentUser.value?.uid;
@@ -2578,7 +2651,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (!navigator.onLine) { await saveAll(); cloudSyncState.value = 'offline'; if (throwErr) throw new Error('目前無網絡'); return; }
                 isPushing = true; cloudSyncState.value = 'syncing';
                 try {
-                    const now = await pushProjectPayload({ code, name: project.name, nameUpdatedAt: project.nameUpdatedAt, date: project.date, ownerId: project.ownerId, spaceOrder: project.spaceOrder, pages: pages.value, deletedPageIds: project.deletedPageIds, deletedPinIds: project.deletedPinIds, notes: project.notes, deletedNoteIds: project.deletedNoteIds, pageOrderUpdatedAt: project.pageOrderUpdatedAt, lastSyncAt: project.lastSyncAt }, true, onProgress);
+                    const now = await pushProjectPayload({ code, name: project.name, nameUpdatedAt: project.nameUpdatedAt, date: project.date, ownerId: project.ownerId, spaceOrder: project.spaceOrder, pages: pages.value, deletedPageIds: project.deletedPageIds, deletedPinIds: project.deletedPinIds, notes: project.notes, deletedNoteIds: project.deletedNoteIds, customNotes: project.customNotes, pageOrderUpdatedAt: project.pageOrderUpdatedAt, lastSyncAt: project.lastSyncAt }, true, onProgress);
                     dirtyPageIds.clear(); project.lastSyncAt = now; cloudSyncState.value = 'ready'; hasUnsavedCloudChanges.value = false; await saveAll();
                 } catch (e) { await saveAll(); cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; if (throwErr) throw e; } finally { setTimeout(() => { isPushing = false; }, 1000); }
             };
@@ -2636,15 +2709,15 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
 
             const createNewProject = async () => {
                 await checkAuthorName(); resetZoom(); const today = getTodayStr(), firstPg = makeEmptyPage({ date: today });
-                Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', nameUpdatedAt: Date.now(), date: today, ownerId: currentUser.value?.uid || '', spaceOrder: [], deletedPageIds: [], deletedPinIds: [], notes: [], deletedNoteIds: [], pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
+                Object.assign(project, { code: Math.floor(100000 + Math.random() * 900000).toString(), name: '', nameUpdatedAt: Date.now(), date: today, ownerId: currentUser.value?.uid || '', spaceOrder: [], deletedPageIds: [], deletedPinIds: [], notes: [], deletedNoteIds: [], customNotes: '', pageOrderUpdatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value });
                 pages.value = [firstPg]; photoPool.value = []; feedbackList.value = []; activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; splitMode.value = false; activePane.value = 'A'; dirtyPageIds.clear(); dirtyPageIds.add(firstPg.id); hasUnsavedCloudChanges.value = true;
                 cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; currentView.value = 'proj'; await saveAll(); startRealtimeListener(project.code);
             };
             const loadProject = async (code, openAsPreview = true) => {
-                resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; code = String(code); project.code = code; project.nameUpdatedAt = 0; project.spaceOrder = []; project.deletedPageIds = []; project.deletedPinIds = []; project.notes = []; project.deletedNoteIds = []; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; feedbackList.value = []; dirtyPageIds.clear();
+                resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; code = String(code); project.code = code; project.nameUpdatedAt = 0; project.spaceOrder = []; project.deletedPageIds = []; project.deletedPinIds = []; project.notes = []; project.deletedNoteIds = []; project.customNotes = ''; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; feedbackList.value = []; dirtyPageIds.clear();
                 const d = await localforage.getItem('proj_' + code);
                 if (d) {
-                    Object.assign(project, { name: d.name || '', nameUpdatedAt: d.nameUpdatedAt || 0, date: d.date || '', ownerId: d.ownerId || currentUser.value?.uid || '', spaceOrder: d.spaceOrder || [], deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], notes: d.notes || [], deletedNoteIds: d.deletedNoteIds || [], pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' });
+                    Object.assign(project, { name: d.name || '', nameUpdatedAt: d.nameUpdatedAt || 0, date: d.date || '', ownerId: d.ownerId || currentUser.value?.uid || '', spaceOrder: d.spaceOrder || [], deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], notes: d.notes || [], deletedNoteIds: d.deletedNoteIds || [], customNotes: d.customNotes || '', pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' });
                     (d.spaceOrder || []).forEach(sp => { if (!spaceList.value.includes(sp)) spaceList.value.push(sp); });
                     if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg));
                     if (d.photoPool) photoPool.value = d.photoPool;
@@ -2744,12 +2817,13 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                             });
                             if (!result) {
                                 const delSet = new Set(pd.deletedPageIds || []);
-                                result = { code, name: pd.name || '', date: pd.date || getTodayStr(), ownerId: pd.ownerId || '', spaceOrder: pd.spaceOrder || [], pages: cloudPages.filter(p => !delSet.has(p.id)).sort((a, b) => ((pd.pageIds || []).indexOf(a.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(a.id)) - ((pd.pageIds || []).indexOf(b.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(b.id))), photoPool: [], deletedPageIds: pd.deletedPageIds || [], deletedPinIds: pd.deletedPinIds || [], pageOrderUpdatedAt: pd.pageOrderUpdatedAt || 0, lastSyncAt: Date.now(), lastModifiedBy: pd.lastModifiedBy || '' };
+                                result = { code, name: pd.name || '', date: pd.date || getTodayStr(), ownerId: pd.ownerId || '', spaceOrder: pd.spaceOrder || [], customNotes: pd.customNotes || '', pages: cloudPages.filter(p => !delSet.has(p.id)).sort((a, b) => ((pd.pageIds || []).indexOf(a.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(a.id)) - ((pd.pageIds || []).indexOf(b.id) === -1 ? 9999 : (pd.pageIds || []).indexOf(b.id))), photoPool: [], deletedPageIds: pd.deletedPageIds || [], deletedPinIds: pd.deletedPinIds || [], pageOrderUpdatedAt: pd.pageOrderUpdatedAt || 0, lastSyncAt: Date.now(), lastModifiedBy: pd.lastModifiedBy || '' };
                             } else {
                                 const delSet = new Set([...(result.deletedPageIds || []), ...(pd.deletedPageIds || [])]);
                                 const orderList = [...(pd.pageIds || []), ...(result.pages || []).map(p => p.id)];
                                 result.pages = mergePagesSmart(result.pages || [], cloudPages, delSet, orderList);
                                 if (!result.name && pd.name) result.name = pd.name;
+                                if (!result.customNotes && pd.customNotes) result.customNotes = pd.customNotes;
                             }
                         }
                     } catch (_) {}
@@ -2810,7 +2884,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     const existingCodes = new Set(allProjectOptions.value.map(x => String(x.code)));
                     let newCode = ''; do { newCode = Math.floor(100000 + Math.random() * 900000).toString(); } while (existingCodes.has(newCode));
                     const finalName = mergeProjNewName.value.trim() || `${dataA.name || '工程A'} + ${dataB.name || '工程B'}`;
-                    const newProjObj = { code: newCode, name: finalName, date: getTodayStr(), ownerId: currentUser.value?.uid || '', spaceOrder: Array.from(new Set([...(dataA.spaceOrder || []), ...(dataB.spaceOrder || [])])), pages: mergedPages, photoPool: mergedPool, deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(), updatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true };
+                    const mergedCustomNotes = [dataA.customNotes, dataB.customNotes].filter(Boolean).join('\n');
+                    const newProjObj = { code: newCode, name: finalName, date: getTodayStr(), ownerId: currentUser.value?.uid || '', spaceOrder: Array.from(new Set([...(dataA.spaceOrder || []), ...(dataB.spaceOrder || [])])), customNotes: mergedCustomNotes, pages: mergedPages, photoPool: mergedPool, deletedPageIds: [], deletedPinIds: [], pageOrderUpdatedAt: Date.now(), updatedAt: Date.now(), lastSyncAt: 0, lastModifiedBy: authorName.value || '', pendingUpload: true };
                     await localforage.setItem('proj_' + newCode, newProjObj); await updateQueue(newCode, true);
                     if (db && navigator.onLine) { try { const syncTs = await pushProjectPayload(newProjObj, false, (st) => { processingText.value = st; }); if (syncTs) { newProjObj.lastSyncAt = syncTs; newProjObj.pendingUpload = false; await localforage.setItem('proj_' + newCode, newProjObj); } } catch (_) {} }
                     await loadProjectList(); showToast(`✅ 已合拼為「${finalName}」（共 ${mergedPages.length} 頁）`);
@@ -2934,6 +3009,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (fullScreenIndex.value !== -1) { fullScreenIndex.value = -1; resetFsZoom(); return; }
                 if (showTopSheet.value) { closeTopSheet(); return; }
                 if (showTopTextBar.value) { closeTopTextBar(); return; }
+                if (showChecklistManageModal.value) { showChecklistManageModal.value = false; return; }
                 if (showChecklistCard.value) { showChecklistCard.value = false; return; }
                 if (showQuickPageNav.value) { showQuickPageNav.value = false; return; }
                 if (currentView.value === 'proj' || currentView.value === 'preview') { backToProjects(); showToast('🛡️ 已攔截誤掃返回，自動儲存並返回工程目錄'); }
@@ -2945,7 +3021,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 history.pushState({ fieldMeasureGuard: true }, '');
                 window.addEventListener('popstate', handlePopStateGuard);
                 window.addEventListener('beforeunload', handleBeforeUnloadGuard);
-                await loadStampStore(); await loadCadStore(); await loadProjectList();
+                await loadStampStore(); await loadCadStore(); await loadChecklistStore(); await loadProjectList();
                 if (auth) {
                     auth.getRedirectResult().then(async (res) => {
                         if (res?.user) { currentUser.value = res.user; await syncUserOwnedProjects(); await syncUserLibrariesCloud(true); showToast(`✅ 已綁定 ${res.user.displayName || res.user.email}`); }
@@ -2986,27 +3062,30 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     if (wm) { ctx.save(); ctx.fillStyle = 'rgba(255, 255, 255, 0.56)'; drawRoundRect(ctx, wm.x, wm.y, wm.w, wm.h, 6); ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)'; ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = 'rgba(15, 23, 42, 0.85)'; ctx.fillText(wm.text, wm.x + wm.w / 2, wm.y + wm.h / 2); ctx.restore(); }
                 }
                 ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-                (canvasObj.walls || []).forEach(wObj => { ctx.strokeStyle = wObj.color || '#111827'; buildWallSegments(wObj).forEach(seg => { ctx.lineWidth = seg.isHatch ? 1.2 : 1.5; ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke(); }); });
+                (canvasObj.walls || []).forEach(wObj => { ctx.strokeStyle = wObj.color || '#111827'; buildWallSegments(wObj).forEach(seg => { ctx.lineWidth = seg.isHatch ? 4.5 : 2; ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke(); }); });
+                const chainLineIds = new Set();
                 (canvasObj.lines || []).forEach(l => {
-                    if (l.type === 'arrow-single') { const hex = getLineStroke(l); ctx.strokeStyle = hex; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(Math.atan2(l.y2 - l.y1, l.x2 - l.x1)); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-6, 3); ctx.lineTo(-6, -3); ctx.closePath(); ctx.fill(); ctx.restore(); }
-                    else if (l.type === 'straight') { ctx.strokeStyle = getLineStroke(l); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }
+                    if (l.type === 'arrow-single') { const hex = getLineStroke(l); ctx.strokeStyle = hex; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(Math.atan2(l.y2 - l.y1, l.x2 - l.x1)); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-6, 3); ctx.lineTo(-6, -3); ctx.closePath(); ctx.fill(); ctx.restore(); }
+                    else if (l.type === 'straight') { ctx.strokeStyle = getLineStroke(l); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }
                     else {
-                        ctx.save(); ctx.setLineDash([10, 8]); ctx.strokeStyle = getLineStroke(l, 0.75); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore();
+                        ctx.save(); ctx.setLineDash([10, 8]); ctx.strokeStyle = getLineStroke(l, 0.75); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore();
                         if (Array.isArray(l.chainSegs) && l.chainSegs.length >= 2) {
-                            ctx.save(); ctx.strokeStyle = getLineStroke(l, 0.95); ctx.lineWidth = 1.5;
+                            chainLineIds.add(l.id);
+                            ctx.save(); ctx.strokeStyle = getLineStroke(l, 0.95); ctx.lineWidth = 2;
                             getChainTicks(l).forEach(tk => { ctx.beginPath(); ctx.moveTo(tk.x1, tk.y1); ctx.lineTo(tk.x2, tk.y2); ctx.stroke(); });
-                            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 18px sans-serif'; ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
-                            getChainSegLabels(l).forEach(sl => { ctx.strokeText(sl.val, sl.x, sl.y - 12); ctx.fillStyle = '#fde047'; ctx.fillText(sl.val, sl.x, sl.y - 12); });
+                            const segFontPx = Math.round(18 * (globalFontScale.value || 1));
+                            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `900 ${segFontPx}px sans-serif`; ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
+                            getChainSegLabels(l).forEach(sl => { ctx.strokeText(sl.val, sl.x, sl.y - 20); ctx.fillStyle = '#fde047'; ctx.fillText(sl.val, sl.x, sl.y - 20); });
                             ctx.restore();
                         }
                     }
                 });
-                (canvasObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 1.5; ctx.stroke(new Path2D(p.d)); });
+                (canvasObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 2; ctx.stroke(new Path2D(p.d)); });
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 (canvasObj.markers || []).forEach(m => {
                     if (m.type === 'cad') drawCustomCadOnCanvas(ctx, m, customCadImages);
                     else if (m.type === 'image') { if (markerImages[m.id]) { ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(((m.rot || 0) * Math.PI) / 180); ctx.drawImage(markerImages[m.id], -m.w / 2, -m.h / 2, m.w, m.h); ctx.restore(); } }
-                    else { const lines = getMarkerLines(m), color = getStampColor(m), sc = globalFontScale.value * (m.fontScale || 1); ctx.font = `900 ${28 * sc}px sans-serif`; const startY = m.y - ((lines.length - 1) * 34 * sc) / 2; lines.forEach((line, i) => { const y = startY + i * 34 * sc; ctx.lineWidth = 7 * sc; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); }); }
+                    else { const lines = getMarkerLines(m), color = getStampColor(m), sc = globalFontScale.value * (m.fontScale || 1); const offsetY = (m.lineId && chainLineIds.has(m.lineId)) ? 22 : 0; ctx.font = `900 ${28 * sc}px sans-serif`; const startY = (m.y + offsetY) - ((lines.length - 1) * 34 * sc) / 2; lines.forEach((line, i) => { const y = startY + i * 34 * sc; ctx.lineWidth = 7 * sc; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); }); }
                 });
                 (canvasObj.pins || []).forEach((pin, idx) => { const px = (pin.x / 100) * w, py = (pin.y / 100) * h; ctx.beginPath(); ctx.arc(px, py - 22, 20, 0, 2 * Math.PI); ctx.fillStyle = '#dc2626'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(idx + 1, px, py - 22); });
                 resolve(c);
@@ -3100,7 +3179,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 onFsWheel, onFsTouchStart, onFsTouchMove, onFsTouchEnd, onFsMouseDown, onFsMouseMove, onFsMouseUp,
                 jumpFullScreen,
                 onProjectNameInput, showNotesModal, noteFilter, newNoteText, newNoteSpace, activeNotesCount, filteredNotes, addProjectNote, toggleProjectNote, deleteProjectNote,
-                showChecklistCard, activeSmartTip, currentSpaceChecklist, isChecklistItemChecked, currentChecklistDoneCount, toggleChecklistItem,
+                showChecklistCard, showChecklistManageModal, checklistOffset, customChecklists, currentChecklistDraft, startChecklistDrag, openChecklistManager, addChecklistDim, addChecklistNote, saveChecklistManage,
+                activeSmartTip, currentSpaceChecklist, isChecklistItemChecked, currentChecklistDoneCount, toggleChecklistItem,
                 sheetTab, chainPromptLine, chainSegments, focusedChainIdx, focusChainSeg, splitChainLine, getChainTotalVal, updateChainVerifyTotal, removeChainSeg, clearChainLine, getChainTicks, getChainSegLabels,
                 overviewGroupedPages, quickNavGroupedPages, hasPageSpace,
                 selectSheetTab, applyTagOnly, isPartTypeActive, selectPartPreset, toggleQuickNavMode,
@@ -3110,4 +3190,3 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
         }
     }).mount('#app');
 }
-// === END OF app.js ===
