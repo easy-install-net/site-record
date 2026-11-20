@@ -1393,7 +1393,7 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                 pages.value.forEach(p => { if (p.space) set.add(p.space); });
                 return Array.from(set);
             });
-            const overviewStackMode = ref(true);
+            const overviewStackMode = ref(false);
             const filteredOverviewPages = computed(() => {
                 const list = pages.value
                     .map((pg, idx) => ({ pg, idx }))
