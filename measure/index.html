@@ -1363,15 +1363,29 @@
 
             <!-- 數值輸入主區（度尺/標籤 或 實做定案 共用統一鍵盤） -->
             <div v-if="activeMarker.type !== 'stamp'" class="flex flex-col flex-1 min-h-0">
-                <!-- 輸入框 -->
-                <div class="p-1.5 bg-white border-b border-zinc-200 shrink-0 flex items-center justify-center gap-1.5">
-                    <input type="text" v-model="activeMarker.data.name" @input="onMarkerTextInput" @focus="focusedInput = 'name'"
-                           :class="sheetTab === 'prod' ? 'border-red-400 bg-red-50 text-red-700' : 'border-zinc-300 bg-zinc-50 text-zinc-900'"
-                           class="w-[6.5em] border p-1.5 text-[14px] font-black rounded-md text-center focus:outline-none" placeholder="標籤">
-                    <span class="font-black text-base text-zinc-400">:</span>
-                    <input type="text" readonly :value="activeMarker.data[focusedInput === 'name' ? 'val' : focusedInput]" @click="focusedInput = (focusedInput === 'name' ? 'val' : focusedInput)"
-                           :class="sheetTab === 'prod' ? 'border-red-500 bg-red-50/40' : 'border-blue-500 bg-blue-50'"
-                           class="flex-1 min-w-0 border-2 p-1.5 px-2.5 text-[16px] font-black rounded-md cursor-pointer text-zinc-900" placeholder="點擊下方數字...">
+                <!-- 輸入框（含連續分段拉尺 [ | 分段 ] 浮標與自動加總列） -->
+                <div class="p-1.5 bg-white border-b border-zinc-200 shrink-0 flex flex-col gap-1.5">
+                    <div class="flex items-center justify-center gap-1.5">
+                        <input type="text" v-model="activeMarker.data.name" @input="onMarkerTextInput" @focus="focusedInput = 'name'"
+                               :class="sheetTab === 'prod' ? 'border-red-400 bg-red-50 text-red-700' : 'border-zinc-300 bg-zinc-50 text-zinc-900'"
+                               class="w-[6em] border p-1.5 text-[14px] font-black rounded-md text-center focus:outline-none" placeholder="標籤">
+                        <span class="font-black text-base text-zinc-400">:</span>
+                        <input type="text" readonly :value="activeMarker.data[focusedInput === 'name' ? 'val' : focusedInput]" @click="focusedInput = (focusedInput === 'name' ? 'val' : focusedInput)"
+                               :class="sheetTab === 'prod' ? 'border-red-500 bg-red-50/40' : 'border-blue-500 bg-blue-50'"
+                               class="flex-1 min-w-0 border-2 p-1.5 px-2 text-[16px] font-black rounded-md cursor-pointer text-zinc-900" placeholder="點擊下方數字...">
+                        <button v-if="activeMarker.lineId" @click="splitChainLine()" class="px-2 py-1 bg-amber-50 border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-md text-[11px] font-black shrink-0 shadow-xs flex items-center gap-0.5">
+                            <span>[ | 分段 ]</span>
+                        </button>
+                    </div>
+                    <!-- 連續分段子數值快速輸入行 -->
+                    <div v-if="chainPromptLine && Array.isArray(chainPromptLine.chainSegs) && chainPromptLine.chainSegs.length >= 2" class="flex items-center gap-1 overflow-x-auto no-scrollbar pt-1 border-t border-zinc-100">
+                        <span class="text-[10px] font-black text-amber-800 shrink-0">📏分段:</span>
+                        <div v-for="(seg, sIdx) in chainPromptLine.chainSegs" :key="'cs-'+sIdx" class="flex items-center gap-0.5 shrink-0">
+                            <span v-if="sIdx > 0" class="text-zinc-300 font-bold">+</span>
+                            <input type="text" inputmode="decimal" :value="seg.val" @input="e => updateChainSegVal(sIdx, e.target.value)"
+                                   class="w-12 border border-amber-300 bg-amber-50/60 p-1 text-xs font-black rounded text-center text-amber-950 focus:outline-none focus:border-blue-500" :placeholder="`段${sIdx+1}`">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 分頁 B：🏭 工廠開料定案（統一 3 欄等寬 · 17 粒專業工廠術語） -->
