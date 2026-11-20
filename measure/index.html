@@ -307,9 +307,9 @@
                         <button @click="capsuleCollapsed = false" class="bg-zinc-900 text-white px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">🛠️ 展開工具</button>
                     </template>
                     <template v-else>
-                        <button @click="drawMode = 'browse'" :class="drawMode === 'browse' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">👆 睇</button>
-                        <button @click="drawMode = 'move'" :class="drawMode === 'move' ? 'bg-blue-600 text-white' : 'text-blue-700 hover:bg-blue-50'" class="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✥ 移</button>
-                        <button @click="drawMode = 'index'" :class="drawMode === 'index' ? 'bg-purple-600 text-white' : 'text-purple-700 hover:bg-purple-50'" class="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">📝 編</button>
+                     <button @click="drawMode = 'browse'" :class="drawMode === 'browse' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">👆 瀏覽</button>
+                        <button @click="drawMode = 'move'" :class="drawMode === 'move' ? 'bg-blue-600 text-white' : 'text-blue-700 hover:bg-blue-50'" class="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✥ 移動</button>
+                         <button @click="drawMode = 'index'" :class="drawMode === 'index' ? 'bg-purple-600 text-white' : 'text-purple-700 hover:bg-purple-50'" class="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">📝 編</button>
                         <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✨ 尺數+印</button>
                         <button @click="drawMode = 'freehand'" :class="['freehand','wall','straight','arrow-single','cad'].includes(drawMode) ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✏️ 畫</button>
                         <button v-if="!targetPin" @click="drawMode = 'pin'" :class="drawMode === 'pin' ? 'bg-red-600 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">📍 釘</button>
@@ -558,8 +558,11 @@
                         </div>
 
                         <!-- 畫布右上角 -->
+                        <!-- 畫布右上角 -->
                         <div class="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end" @touchstart.stop @mousedown.stop>
                             <div class="flex items-center gap-1 flex-wrap justify-end">
+                                <button @click="openPageMetaModal(null)" class="bg-purple-50/95 text-purple-900 border border-purple-300 px-2 py-1 rounded-md text-[11px] font-black shadow-sm">🏠{{ activeCanvas?.space || '空間' }}</button>
+                                <button v-if="!activePin && masterPages.length && (activePage?.space !== '總圖' || masterPages.length > 1)" @click="goToMasterPlan('A')" class="bg-purple-600 text-white border border-purple-700 px-2 py-1 rounded-md text-[11px] font-black shadow-sm">🗺️總圖</button>
                                 <button @click="showChecklistCard = !showChecklistCard"
                                         :class="showChecklistCard ? 'bg-emerald-700 text-white border-emerald-800' : 'bg-emerald-50/95 text-emerald-900 border-emerald-300'"
                                         class="border px-2 py-1 rounded-md text-[11px] font-black shadow-sm flex items-center gap-1">
