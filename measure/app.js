@@ -1220,24 +1220,11 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 }
                 touchDirty(); saveAll();
             };
-            const clearChainLine = () => {
+           const clearChainLine = () => {
                 const l = chainPromptLine.value;
                 if (!l) return;
                 delete l.chainSegs;
                 delete l.verifyTotal;
-                touchDirty(); saveAll();
-            };
-        
-            const updateChainSegVal = (segIdx, rawVal) => {
-                const l = chainPromptLine.value, c = targetCanvas.value;
-                if (!l || !c || !Array.isArray(l.chainSegs) || !l.chainSegs[segIdx]) return;
-                l.chainSegs[segIdx].val = rawVal;
-                const totalM = (c.markers || []).find(m => m.lineId === l.id);
-                if (totalM) {
-                    const tot = getChainTotalVal(l.chainSegs);
-                    if (tot) totalM.data.val = tot;
-                    updateMarkerSize(totalM);
-                }
                 touchDirty(); saveAll();
             };
             const getChainTicks = (l) => {
@@ -2166,8 +2153,15 @@ const getPageSpaces = (pg) => {
                     return;
                 }
                 if (draggedMarker.value) {
+                    const moved = Math.hypot(draggedMarker.value.x - markerOrigin.value.x, draggedMarker.value.y - markerOrigin.value.y) > 2;
+                    draggedMarker.value = null;
+                    if (moved) { touchDirty(); saveAll(); }
+                    return;
+                }
 
                 if (!isDrawing.value) return;
+
+                    
                 isDrawing.value = false; const endPos = getCoords(e, drawingPane.value);
 
                 if (drawMode.value === 'cad') { currentLine.value = null; currentWall.value = null; currentPath.value = ''; placeCadBlockAt(endPos.x, endPos.y); return; }
