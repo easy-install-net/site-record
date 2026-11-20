@@ -1385,7 +1385,7 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
             const overviewTypeFilter = ref('all');
             const overviewSpaceFilter = ref('all');
             const showPreviewMoreMenu = ref(false);
-            const showDocTypeFilterBar = ref(false);
+            const showDocTypeFilterBar = ref(true);
             const drawingPageCount = computed(() => pages.value.filter(p => ['plan', '3d', 'dim', 'detail'].includes(p.docType)).length);
             const photoPageCount = computed(() => pages.value.filter(p => p.docType === 'photo').length);
             const overviewSpacesAvailable = computed(() => {
