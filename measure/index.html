@@ -322,13 +322,7 @@
 
                                 <div v-if="overviewSpacesAvailable.length" @click.stop class="px-1.5 py-1 bg-zinc-50 border-t border-zinc-200 flex items-center gap-1 overflow-x-auto no-scrollbar">
                                     <button v-for="sp in overviewSpacesAvailable" :key="pg.id+'-sp-'+sp"
-                                            @click.stop="(() => {
-                                                if (!Array.isArray(pg.spaces)) pg.spaces = pg.space ? [pg.space] : [];
-                                                const i = pg.spaces.indexOf(sp);
-                                                if (i >= 0) pg.spaces.splice(i, 1); else pg.spaces.push(sp);
-                                                pg.space = pg.spaces[0] || '';
-                                                if (typeof saveProject === 'function') saveProject();
-                                            })()"
+                                            @click.stop="togglePageSpaceTag(pg, sp)"
                                             :class="((Array.isArray(pg.spaces) && pg.spaces.includes(sp)) || pg.space === sp) ? 'bg-purple-700 text-white border-purple-700' : 'bg-white text-zinc-500 border-zinc-200 hover:border-purple-300'"
                                             class="px-1.5 py-0.2 rounded text-[10px] font-bold border shrink-0 transition-colors">{{ sp }}</button>
                                 </div>
