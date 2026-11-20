@@ -3163,7 +3163,7 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                 showChecklistCard, activeSmartTip, currentSpaceChecklist, isChecklistItemChecked, currentChecklistDoneCount, toggleChecklistItem,
                 sheetTab, chainPromptLine, chainSegments, splitChainLine, updateChainSegVal, getChainTicks, getChainSegLabels
             };
-        };
+        
         }
     }).mount('#app');
 }
