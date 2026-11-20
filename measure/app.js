@@ -1201,6 +1201,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 }
                 touchDirty(); saveAll();
             };
+
+            
             const removeChainSeg = (segIdx) => {
                 const l = chainPromptLine.value, c = targetCanvas.value;
                 if (!l || !c || !Array.isArray(l.chainSegs)) return;
