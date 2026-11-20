@@ -469,14 +469,12 @@
                     <div v-else class="flex-1 min-h-0 w-full relative overflow-hidden">
                         <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
                             <div v-if="!activePin" class="flex items-center gap-1 flex-wrap">
-                                <button v-if="masterPages.length" @click="goToMasterPlan('A')"
-                                        :class="activePage?.space === '總圖' ? 'bg-purple-600 text-white border-purple-700' : 'bg-purple-50 text-purple-800 border-purple-300'"
-                                        class="border px-2 py-1 rounded-lg text-[11px] font-black shadow-sm">🏠 總圖</button>
-
                                 <div class="bg-white/95 border border-zinc-300 rounded-lg flex items-center px-1 py-0.5 shadow-sm">
                                     <span v-if="splitMode" class="bg-blue-600 text-white text-[10px] font-black px-1 py-0.5 rounded mr-1">左</span>
                                     <button v-if="splitMode" @click="prevPage('A')" class="px-1.5 py-0.5 text-zinc-800 rounded font-black text-xs" :class="{ 'opacity-30': activePageIndex === 0 }">◀</button>
-                                    <button @click="showQuickPageNav = !showQuickPageNav" class="px-1.5 py-0.5 text-zinc-900 hover:bg-zinc-100 rounded font-black text-xs flex items-center gap-0.5">
+                                    <button @click="showQuickPageNav = !showQuickPageNav" class="px-2 py-0.5 bg-purple-50/80 hover:bg-purple-100 text-zinc-900 rounded-md font-black text-xs flex items-center gap-1">
+                                        <span class="text-purple-800">📑 目錄</span>
+                                        <span class="text-zinc-300">·</span>
                                         <span>P{{ activePageIndex + 1 }}/{{ pages.length }}</span>
                                         <span class="text-[10px] text-blue-600">▾</span>
                                     </button>
@@ -487,7 +485,6 @@
                                         <div class="w-px h-3.5 bg-zinc-300 mx-0.5"></div><button @click="deleteCurrentPage" class="px-1.5 py-0.5 text-red-600 font-bold text-xs">刪頁</button>
                                     </template>
                                 </div>
-
                                 <button v-if="!splitMode" @click="showQuickPageNav && overviewStackMode && quickNavSpaceFilter === 'all' ? (showQuickPageNav = false) : (overviewStackMode = true, quickNavSpaceFilter = 'all', showQuickPageNav = true)"
                                         :class="showQuickPageNav && overviewStackMode && quickNavSpaceFilter === 'all' ? 'bg-purple-700 text-white border-purple-700' : 'bg-white/95 text-purple-800 border-purple-300'"
                                         class="px-2 py-1 rounded-lg text-xs font-black border shadow-sm">分</button>
@@ -778,10 +775,13 @@
                             <div v-if="!pinB" class="bg-white/95 border border-zinc-300 rounded-md flex items-center px-1 py-1 shadow-sm">
                                 <span class="bg-indigo-600 text-white text-[10px] font-black px-1 py-0.5 rounded mr-1">右</span>
                                 <button @click="prevPage('B')" class="px-1.5 py-0.5 text-zinc-600 font-black text-xs" :class="{ 'opacity-30': pageIndexB === 0 }">◀</button>
-                                <button @click="showQuickPageNavB = !showQuickPageNavB" class="px-1.5 py-0.5 text-zinc-900 hover:bg-zinc-100 rounded font-black text-xs flex items-center gap-0.5">
+                                <button @click="showQuickPageNavB = !showQuickPageNavB" class="px-2 py-0.5 bg-indigo-50/80 hover:bg-indigo-100 text-zinc-900 rounded-md font-black text-xs flex items-center gap-1">
+                                    <span class="text-indigo-800">📑 目錄</span>
+                                    <span class="text-zinc-300">·</span>
                                     <span>P{{ pageIndexB + 1 }}/{{ pages.length }}</span>
                                     <span class="text-[10px] text-blue-600">▾</span>
                                 </button>
+                                
                                 <button @click="nextPage('B')" class="px-1.5 py-0.5 text-zinc-600 font-black text-xs" :class="{ 'opacity-30': pageIndexB === pages.length - 1 }">▶</button>
                             </div>
                             <div v-else class="bg-red-50 border border-red-300 rounded-md flex items-center px-2 py-1 shadow-sm">
