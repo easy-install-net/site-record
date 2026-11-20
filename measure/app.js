@@ -124,26 +124,14 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const loginWithGoogle = async () => {
                 if (!auth) return alert('登入模組未就緒，請重新整理網頁');
                 if (!navigator.onLine) return alert('請先連接網絡再綁定 Google 帳號');
-                isProcessing.value = true; processingText.value = '正在連接 Google 帳號...';
+                isProcessing.value = true;
+                processingText.value = '正在跳轉至 Google 登入...';
                 try {
                     const provider = new firebase.auth.GoogleAuthProvider();
-                    const res = await auth.signInWithPopup(provider);
-                    if (res?.user) {
-                        currentUser.value = res.user;
-                        if (!authorName.value && res.user.displayName) {
-                            authorName.value = res.user.displayName;
-                            await localforage.setItem('measure_author_name', res.user.displayName);
-                        }
-                        await syncUserOwnedProjects();
-                        await syncUserLibrariesCloud(true);
-                        showToast(`✅ 已綁定 ${res.user.displayName || res.user.email}`);
-                    }
+                    await auth.signInWithRedirect(provider);
                 } catch (e) {
-                    if (e?.code !== 'auth/popup-closed-by-user') {
-                        alert('Google 登入失敗：' + (e.message || '請檢查瀏覽器彈窗設定'));
-                    }
-                } finally {
                     isProcessing.value = false;
+                    alert('Google 登入失敗：' + (e.message || '請稍後再試'));
                 }
             };
 
