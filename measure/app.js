@@ -1146,22 +1146,21 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 const sum = (segs || []).reduce((acc, s) => acc + (parseFloat(s.val) || 0), 0);
                 return sum > 0 ? String(Math.round(sum * 100) / 100) : '';
             };
-            const splitChainLine = (targetLine = chainPromptLine.value) => {
+           const splitChainLine = (targetLine = chainPromptLine.value) => {
                 const l = targetLine;
                 const c = targetCanvas.value;
                 if (!l || !c) return;
                 checkBranchNeed(() => {
                     const lineObj = (c.lines || []).find(x => x.id === l.id) || l;
-                    if (!Array.isArray(lineObj.chainSegs) || lineObj.chainSegs.length < 2) {
-                        const existingM = (c.markers || []).find(m => m.lineId === lineObj.id);
-                        const initVal = String(existingM?.data?.val || '').trim();
-                        lineObj.chainSegs = [
-                            { t: 0.5, val: initVal },
-                            { t: 1.0, val: '' }
-                        ];
-                        if (existingM) {
-                            existingM.data.name = existingM.data.name || '總長';
+                    const existingM = (c.markers || []).find(m => m.lineId === lineObj.id);
+                    const initVal = String(existingM?.data?.val || '').trim();
+                    if ((!Array.isArray(lineObj.chainSegs) || lineObj.chainSegs.length < 2) && initVal.includes('+')) {
+                        const parts = initVal.split('+').map(s => s.trim()).filter(Boolean);
+                        if (parts.length >= 2) {
+                            lineObj.chainSegs = parts.map((val, i) => ({ t: Math.round(((i + 1) / parts.length) * 1000) / 1000, val }));
                         }
+                    } else if (!Array.isArray(lineObj.chainSegs) || lineObj.chainSegs.length < 2) {
+                        lineObj.chainSegs = [{ t: 0.5, val: initVal }, { t: 1.0, val: '' }];
                     } else {
                         const prevT = lineObj.chainSegs[lineObj.chainSegs.length - 2]?.t || 0.5;
                         const midT = Math.round(((prevT + 1.0) / 2) * 1000) / 1000;
@@ -1169,15 +1168,63 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     }
                     chainPromptLine.value = lineObj;
                     chainSegments.value = lineObj.chainSegs;
-                    const totalM = (c.markers || []).find(m => m.lineId === lineObj.id);
-                    if (totalM) {
-                        activeMarker.value = totalM;
+                    if (existingM) {
+                        activeMarker.value = existingM;
                         sheetTab.value = 'dim';
                         focusedInput.value = 'val';
                         showTopSheet.value = true;
                     }
                     touchDirty(); saveAll();
                 });
+            };
+            const updateChainSegVal = (segIdx, rawVal) => {
+                const l = chainPromptLine.value, c = targetCanvas.value;
+                if (!l || !c || !Array.isArray(l.chainSegs) || !l.chainSegs[segIdx]) return;
+                l.chainSegs[segIdx].val = rawVal;
+                const totalM = (c.markers || []).find(m => m.lineId === l.id);
+                if (totalM && !l.verifyTotal) {
+                    totalM.data.val = l.chainSegs.map(s => (s.val || '').trim()).filter(Boolean).join('+');
+                    updateMarkerSize(totalM);
+                }
+                touchDirty(); saveAll();
+            };
+            const updateChainVerifyTotal = (rawVal) => {
+                const l = chainPromptLine.value, c = targetCanvas.value;
+                if (!l || !c) return;
+                l.verifyTotal = rawVal;
+                const totalM = (c.markers || []).find(m => m.lineId === l.id);
+                if (totalM) {
+                    const v = String(rawVal || '').trim();
+                    totalM.data.val = v || l.chainSegs.map(s => (s.val || '').trim()).filter(Boolean).join('+');
+                    if (v && !totalM.data.name) totalM.data.name = '總尺';
+                    updateMarkerSize(totalM);
+                }
+                touchDirty(); saveAll();
+            };
+            const removeChainSeg = (segIdx) => {
+                const l = chainPromptLine.value, c = targetCanvas.value;
+                if (!l || !c || !Array.isArray(l.chainSegs)) return;
+                l.chainSegs.splice(segIdx, 1);
+                if (l.chainSegs.length < 2) {
+                    delete l.chainSegs;
+                } else {
+                    const n = l.chainSegs.length;
+                    l.chainSegs.forEach((s, i) => { s.t = Math.round(((i + 1) / n) * 1000) / 1000; });
+                    const totalM = (c.markers || []).find(m => m.lineId === l.id);
+                    if (totalM && !l.verifyTotal) {
+                        totalM.data.val = l.chainSegs.map(s => (s.val || '').trim()).filter(Boolean).join('+');
+                        updateMarkerSize(totalM);
+                    }
+                }
+                touchDirty(); saveAll();
+            };
+            const clearChainLine = () => {
+                const l = chainPromptLine.value;
+                if (!l) return;
+                delete l.chainSegs;
+                delete l.verifyTotal;
+                touchDirty(); saveAll();
+            };
             };
             const updateChainSegVal = (segIdx, rawVal) => {
                 const l = chainPromptLine.value, c = targetCanvas.value;
@@ -2306,7 +2353,7 @@ const getPageSpaces = (pg) => {
                         const def = TAG_DEFS[activeMarker.value.type];
                         if (def) { const idx = def.fields.findIndex(x => x.key === fk); idx >= 0 && idx < def.fields.length - 1 ? (focusedInput.value = def.fields[idx + 1].key) : closeTopSheet(); }
                         else closeTopSheet();
-                    } else if (cur.length < 6) { activeMarker.value.data[fk] = cur + key; touchDirty(); }
+                   } else if (cur.length < 24) { activeMarker.value.data[fk] = cur + key; touchDirty(); }
                     updateMarkerSize(activeMarker.value);
                 });
             };
@@ -3294,7 +3341,7 @@ const getPageSpaces = (pg) => {
                 fsEditingMarker, fsQuickInputRef, onFsMarkerTap, openFsMarkerQuickEdit, setFsMarkerColor, stepFsMarkerFont, closeFsMarkerQuickEdit,
                onProjectNameInput, showNotesModal, noteFilter, newNoteText, newNoteSpace, activeNotesCount, filteredNotes, addProjectNote, toggleProjectNote, editProjectNote, deleteProjectNote, clearDoneNotes,
                showChecklistCard, activeSmartTip, currentSpaceChecklist, isChecklistItemChecked, currentChecklistDoneCount, toggleChecklistItem,
-               sheetTab, chainPromptLine, chainSegments, splitChainLine, updateChainSegVal, getChainTicks, getChainSegLabels,
+               sheetTab, chainPromptLine, chainSegments, splitChainLine, updateChainSegVal, getChainTotalVal, updateChainVerifyTotal, removeChainSeg, clearChainLine, getChainTicks, getChainSegLabels,
                overviewGroupedPages, quickNavGroupedPages, hasPageSpace, addCustomSpaceToPage,
                 selectSheetTab, applyTagOnly, isPartTypeActive, selectPartPreset, toggleQuickNavMode,
                 prompt: (...args) => window.prompt(...args)
