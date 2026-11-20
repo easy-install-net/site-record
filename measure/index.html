@@ -1021,12 +1021,13 @@
 
                 <!-- 統一 4 欄計算機鍵盤 -->
                 <div class="bg-zinc-100 p-1.5 border-t border-zinc-200 grid grid-cols-4 gap-1 shrink-0 pb-2">
-                    <button v-for="k in ['7','8','9','DEL','4','5','6','0','1','2','3','ENTER','-5','-7','-10','.']" :key="k"
+                    <button v-for="k in ['7','8','9','DEL','4','5','6','0','1','2','3','ENTER','-5','-10','+','.']" :key="k"
                             @click.stop="handleKeypad(k)"
                             :class="[
                                 k === 'DEL' ? 'bg-white border-red-300 text-red-600 text-base' :
                                 k === 'ENTER' ? 'bg-zinc-900 border-zinc-900 text-white text-sm' :
-                                (k === '-5' || k === '-7' || k === '-10') ? 'bg-amber-50 border-amber-300 text-amber-900 text-sm' :
+                                k === '+' ? 'bg-blue-50 border-blue-300 text-blue-800 text-base' :
+                                (k === '-5' || k === '-10') ? 'bg-amber-50 border-amber-300 text-amber-900 text-sm' :
                                 'bg-white border-zinc-300 text-zinc-900 text-base'
                             ]"
                             class="h-10 border rounded-md shadow-xs font-black active:scale-95 transition-transform flex items-center justify-center">
