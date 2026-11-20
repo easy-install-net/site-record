@@ -121,7 +121,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             // =========================================================================
             // 🔒 Google 帳號永久登入 ＆ 帳號工程/圖庫自動同步
             // =========================================================================
-            const loginWithGoogle = async () => {
+           const loginWithGoogle = async () => {
                 if (!auth) return alert('登入模組未就緒，請重新整理網頁');
                 if (!navigator.onLine) return alert('請先連接網絡再綁定 Google 帳號');
                 isProcessing.value = true;
@@ -148,7 +148,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     isProcessing.value = false;
                 }
             };
-
             const logoutGoogle = async () => {
                 if (!confirm('確定要登出 Google 帳號嗎？（本機已下載的工程仍會保留）')) return;
                 if (auth) await auth.signOut().catch(() => {});
