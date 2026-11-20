@@ -1807,6 +1807,17 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                 if (db && project.code && item.id) { const mRef = db.collection('site_projects').doc(String(project.code)).collection('media').doc(String(item.id)); mRef.collection('chunks').get().then(s => s.forEach(c => c.ref.delete())).catch(() => {}); mRef.delete().catch(() => {}); }
             };
 
+         const togglePageSpaceTag = (pg, sp) => {
+                if (!pg || !sp) return;
+                if (!Array.isArray(pg.spaces)) pg.spaces = pg.space ? [pg.space] : [];
+                const i = pg.spaces.indexOf(sp);
+                if (i >= 0) pg.spaces.splice(i, 1); else pg.spaces.push(sp);
+                pg.space = pg.spaces[0] || '';
+                pg.updatedAt = Date.now();
+                dirtyPageIds.add(pg.id);
+                hasUnsavedCloudChanges.value = true;
+                saveAll();
+            };
             const setPageSpace = (sp) => {
                 if (editingMetaPage.value) {
                     editingMetaPage.value.space = sp;
