@@ -869,7 +869,7 @@
 
                                 <g v-for="p in (canvasB.paths || [])" :key="p.id" :class="drawMode === 'eraser' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onEraseTap('path', p, e, 'B')" @mousedown="e => onEraseTap('path', p, e, 'B')">
                                     <path v-if="drawMode === 'eraser'" :d="p.d" stroke="transparent" :stroke-width="34 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-                                    <path :d="p.d" :stroke="p.color || '#3b82f6'" :stroke-width="6 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path :d="p.d" :stroke="p.color || '#3b82f6'" :stroke-width="2.5 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                                 </g>
                                 <path v-if="currentPath && drawingPane === 'B'" :d="currentPath" :stroke="drawColor" :stroke-width="6 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 
@@ -1190,7 +1190,7 @@
                                 <text v-for="sl in getChainSegLabels(l)" :key="'fssl-'+sl.idx" :x="sl.x" :y="sl.y - 12" text-anchor="middle" fill="#fde047" class="stamp-text" style="font-size:18px">{{ sl.val }}</text>
                             </template>
                         </g>
-                        <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" class="pointer-events-none" />
+                        <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="2.5" fill="none" stroke-linecap="round" class="pointer-events-none" />
                         <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" class="pointer-events-none">
                             <g v-if="m.type === 'cad' && getCadDef(m.data?.cadType)" :transform="getCadTransform(m)">
                                 <image v-if="getCadDef(m.data.cadType).imgB64" :href="getCadDef(m.data.cadType).imgB64" :x="-(getCadDef(m.data.cadType).w || 70)/2" :y="-(getCadDef(m.data.cadType).h || 70)/2" :width="getCadDef(m.data.cadType).w || 70" :height="getCadDef(m.data.cadType).h || 70" preserveAspectRatio="xMidYMid meet" />
