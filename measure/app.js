@@ -2051,6 +2051,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 isDrawing.value = false; const endPos = getCoords(e, drawingPane.value);
 
                 if (drawMode.value === 'cad') { currentLine.value = null; currentWall.value = null; currentPath.value = ''; placeCadBlockAt(endPos.x, endPos.y); return; }
+                if (drawMode.value === 'stamp') { currentLine.value = null; currentWall.value = null; currentPath.value = ''; createPointMarker(endPos.x, endPos.y, 'stamp'); return; }
 
                 if (!targetPin.value && drawMode.value === 'pin') {
                     currentLine.value = null; currentWall.value = null; currentPath.value = '';
