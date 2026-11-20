@@ -2435,6 +2435,7 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                     const orderList = localOrderNewer ? [...pages.value.map(p => p.id), ...(pd.pageIds || [])] : [...(pd.pageIds || []), ...pages.value.map(p => p.id)];
                     const merged = mergePagesSmart(pages.value, cloudPages, deletedSet, orderList);
                     if (merged.length) {
+                        if (merged.length > 16 && currentView.value === 'preview') overviewStackMode.value = true;
                         pages.value = merged;
                         if (activePageIndex.value >= pages.value.length) activePageIndex.value = pages.value.length - 1;
                         if (pageIndexB.value >= pages.value.length) pageIndexB.value = pages.value.length - 1;
@@ -2957,22 +2958,32 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
 
             const openCloudBrowser = async () => { if (!db || !navigator.onLine) return alert('請檢查網路連線'); isProcessing.value = true; processingText.value = '正在讀取待認領雲端工程...'; try { localHiddenCodes.value = ((await localforage.getItem('local_hidden_projects')) || []).map(String); const snaps = await withTimeout(db.collection('site_projects').orderBy('updatedAt', 'desc').limit(40).get(), 10000); cloudProjectList.value = snaps.docs.map(d => ({ code: d.id, ...d.data() })).filter(d => d.name || d.updatedAt); showCloudBrowser.value = true; } catch (e) { alert('讀取目錄失敗：' + e.message); } finally { isProcessing.value = false; } };
             const downloadFromCloudBrowser = async (code) => {
+                if (isProcessing.value) return;
                 code = String(code);
-                const hidden = (await localforage.getItem('local_hidden_projects')) || [];
-                if (hidden.includes(code)) {
-                    await localforage.setItem('local_hidden_projects', hidden.filter(c => c !== code));
-                    localHiddenCodes.value = localHiddenCodes.value.filter(c => c !== code);
+                showCloudBrowser.value = false;
+                isProcessing.value = true;
+                processingText.value = '正在從雲端載入工程圖紙...';
+                try {
+                    const hidden = (await localforage.getItem('local_hidden_projects')) || [];
+                    if (hidden.includes(code)) {
+                        await localforage.setItem('local_hidden_projects', hidden.filter(c => c !== code));
+                        localHiddenCodes.value = localHiddenCodes.value.filter(c => c !== code);
+                    }
+                    if (currentUser.value?.uid && db && navigator.onLine) {
+                        db.collection('site_projects').doc(code).set({ ownerId: currentUser.value.uid }, { merge: true }).catch(() => {});
+                    }
+                    await loadProject(code, true);
+                    if (currentUser.value?.uid) {
+                        project.ownerId = currentUser.value.uid;
+                        await saveAll();
+                    }
+                    await loadProjectList();
+                    showToast('✅ 已認領並歸戶至目錄');
+                } catch (e) {
+                    alert('載入失敗：' + (e.message || '請稍後再試'));
+                } finally {
+                    isProcessing.value = false;
                 }
-                if (currentUser.value?.uid && db && navigator.onLine) {
-                    db.collection('site_projects').doc(code).set({ ownerId: currentUser.value.uid }, { merge: true }).catch(() => {});
-                }
-                await loadProject(code, true);
-                if (currentUser.value?.uid) {
-                    project.ownerId = currentUser.value.uid;
-                    await saveAll();
-                }
-                await loadProjectList();
-                showToast('✅ 已認領並歸戶至目錄');
             };
             const loadProjectList = async () => {
                 const keys = await localforage.keys(), q = (await localforage.getItem('pending_upload_queue')) || [], list = [];
