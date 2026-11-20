@@ -1,11 +1,11 @@
-const CACHE_NAME = 'measure-pro-v11.2';
+const CACHE_NAME = 'measure-pro-v11.5';
 
 const CORE_ASSETS = [
     './',
     './index.html',
-    './app.js?v=11.2',
-    './data.js?v=11.1',
-    './cad.js?v=11.1',
+    './app.js?v=11.5',
+    './data.js?v=11.5',
+    './cad.js?v=11.5',
     './view.html',
     './view.js',
     './manifest.json'
@@ -35,6 +35,7 @@ self.addEventListener('fetch', (event) => {
     if (req.method !== 'GET') return;
 
     const url = new URL(req.url);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
     // 放行 Firebase 登入與雲端資料庫連線，避免干擾 Google 登入與即時同步
     if (
