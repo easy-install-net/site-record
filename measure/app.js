@@ -1225,7 +1225,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 delete l.verifyTotal;
                 touchDirty(); saveAll();
             };
-            };
+        
             const updateChainSegVal = (segIdx, rawVal) => {
                 const l = chainPromptLine.value, c = targetCanvas.value;
                 if (!l || !c || !Array.isArray(l.chainSegs) || !l.chainSegs[segIdx]) return;
