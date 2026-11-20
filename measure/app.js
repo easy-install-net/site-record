@@ -2246,17 +2246,58 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                 saveAll();
             };
 
+            const selectSheetTab = (tab) => {
+                if (!activeMarker.value) return;
+                if (tab === 'stamp') { switchMarkerType('stamp', 'val'); sheetTab.value = 'stamp'; return; }
+                if (activeMarker.value.type === 'stamp') switchMarkerType('general', 'val');
+                sheetTab.value = tab;
+            };
+            const applyTagOnly = (w) => {
+                if (!activeMarker.value) return;
+                ensureMarkerBranched(() => {
+                    activeMarker.value.data.name = w;
+                    activeMarker.value.data.val = '';
+                    updateMarkerSize(activeMarker.value);
+                    touchDirty();
+                });
+            };
+            const isPartTypeActive = (p) => p !== '包喉內計' && (TEMPLATE_ROWS || []).flat().some(t => t.l === p && activeMarker.value?.type === t.id);
+            const selectPartPreset = (p) => {
+                const found = (TEMPLATE_ROWS || []).flat().find(t => t.l === p);
+                if (found && p !== '包喉內計') { switchMarkerType(found.id, found.f); }
+                else { if (activeMarker.value?.type !== 'general') switchMarkerType('general', 'val'); applyTag(p); }
+            };
+            const toggleQuickNavMode = (mode) => {
+                if (mode === 'stack') {
+                    if (showQuickPageNav.value && overviewStackMode.value && quickNavSpaceFilter.value === 'all') showQuickPageNav.value = false;
+                    else { overviewStackMode.value = true; quickNavSpaceFilter.value = 'all'; showQuickPageNav.value = true; }
+                } else {
+                    if (showQuickPageNav.value && !overviewStackMode.value) showQuickPageNav.value = false;
+                    else { overviewStackMode.value = false; quickNavSpaceFilter.value = 'all'; showQuickPageNav.value = true; }
+                }
+            };
+
             const handleKeypad = (key) => {
                 if (!activeMarker.value || !focusedInput.value) return;
                 ensureMarkerBranched(() => {
                     if (focusedInput.value === 'name' || focusedInput.value === 'stamp') focusedInput.value = 'val';
-                    const cur = String(activeMarker.value.data[focusedInput.value] || '');
-                    if (key === 'DEL') { activeMarker.value.data[focusedInput.value] = cur.slice(0, -1); touchDirty(); }
+                    const fk = focusedInput.value;
+                    if (key === '-5' || key === '-7' || key === '-10') {
+                        const curNum = parseFloat(activeMarker.value.data[fk]);
+                        if (!isNaN(curNum)) {
+                            activeMarker.value.data[fk] = String(Math.round((curNum + Number(key)) * 100) / 100);
+                            updateMarkerSize(activeMarker.value);
+                            touchDirty();
+                        }
+                        return;
+                    }
+                    const cur = String(activeMarker.value.data[fk] || '');
+                    if (key === 'DEL') { activeMarker.value.data[fk] = cur.slice(0, -1); touchDirty(); }
                     else if (key === 'ENTER') {
                         const def = TAG_DEFS[activeMarker.value.type];
-                        if (def) { const idx = def.fields.findIndex(x => x.key === focusedInput.value); idx >= 0 && idx < def.fields.length - 1 ? (focusedInput.value = def.fields[idx + 1].key) : closeTopSheet(); }
+                        if (def) { const idx = def.fields.findIndex(x => x.key === fk); idx >= 0 && idx < def.fields.length - 1 ? (focusedInput.value = def.fields[idx + 1].key) : closeTopSheet(); }
                         else closeTopSheet();
-                    } else if (cur.length < 6) { activeMarker.value.data[focusedInput.value] = cur + key; touchDirty(); }
+                    } else if (cur.length < 6) { activeMarker.value.data[fk] = cur + key; touchDirty(); }
                     updateMarkerSize(activeMarker.value);
                 });
             };
@@ -3220,6 +3261,7 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                showChecklistCard, activeSmartTip, currentSpaceChecklist, isChecklistItemChecked, currentChecklistDoneCount, toggleChecklistItem,
                sheetTab, chainPromptLine, chainSegments, splitChainLine, updateChainSegVal, getChainTicks, getChainSegLabels,
                 overviewGroupedPages, quickNavGroupedPages,
+                selectSheetTab, applyTagOnly, isPartTypeActive, selectPartPreset, toggleQuickNavMode,
                 prompt: (...args) => window.prompt(...args)
             };
         }
