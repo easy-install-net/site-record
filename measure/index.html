@@ -98,7 +98,7 @@
 
         <div v-if="toastMsg" class="fixed top-11 left-1/2 -translate-x-1/2 z-[80] bg-zinc-900 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl border border-zinc-700 whitespace-nowrap">{{ toastMsg }}</div>
 
-        <!-- 1. 工程目錄視圖（窄屏上下分行 / 寬屏左右並排） -->
+        <!-- 1. 工程目錄視圖 -->
         <main v-show="currentView === 'dir'" class="flex-1 min-h-0 w-full p-3 overflow-y-auto touch-scrollable">
             <div class="bg-white border border-zinc-200 rounded-lg p-2.5 mb-3 flex items-center justify-between gap-2 shadow-sm">
                 <div class="flex items-center gap-2 min-w-0">
@@ -154,27 +154,25 @@
 
                 <button @click="overviewSpaceFilter = 'all'" :class="overviewSpaceFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-100 text-zinc-700 border-zinc-200'" class="px-2 py-0.5 rounded text-[11px] font-bold border">全部空間</button>
 
-                <!-- 空間膠囊（支援拖拉調位 ＋ 選中時 ◀ / ▶ 微調前後次序） -->
                 <div v-for="(sp, sIdx) in overviewSpacesAvailable" :key="'ov-sp-'+sp"
                      draggable="true"
                      @dragstart="onSpaceDragStart(sp)"
                      @dragover.prevent="dragOverSpace = sp"
-                     @drop.prevent="onSpaceDrop(sp, 'overview')"
+                     @drop.prevent="onSpaceDrop(sp)"
                      @dragend="draggingSpace = ''; dragOverSpace = ''"
                      :class="[
                          overviewSpaceFilter === sp ? 'bg-purple-700 text-white border-purple-700' : 'bg-purple-50 text-purple-800 border-purple-200',
                          dragOverSpace === sp && draggingSpace !== sp ? 'ring-2 ring-blue-500' : ''
                      ]"
                      class="inline-flex items-center rounded border overflow-hidden cursor-grab active:cursor-grabbing">
-                    <button v-if="overviewSpaceFilter === sp && sIdx > 0" @click.stop="moveSpaceOrder(sp, -1, 'overview')" title="往前移一格" class="px-1.5 py-0.5 bg-purple-800 hover:bg-purple-900 text-white text-[10px] font-black">◀</button>
+                    <button v-if="overviewSpaceFilter === sp && sIdx > 0" @click.stop="moveSpaceOrder(sp, -1)" title="往前移一格" class="px-1.5 py-0.5 bg-purple-800 hover:bg-purple-900 text-white text-[10px] font-black">◀</button>
                     <button @click="overviewSpaceFilter = sp" class="px-2 py-0.5 text-[11px] font-bold">{{ sp }}</button>
-                    <button v-if="overviewSpaceFilter === sp && sIdx < overviewSpacesAvailable.length - 1" @click.stop="moveSpaceOrder(sp, 1, 'overview')" title="往後移一格" class="px-1.5 py-0.5 bg-purple-800 hover:bg-purple-900 text-white text-[10px] font-black">▶</button>
+                    <button v-if="overviewSpaceFilter === sp && sIdx < overviewSpacesAvailable.length - 1" @click.stop="moveSpaceOrder(sp, 1)" title="往後移一格" class="px-1.5 py-0.5 bg-purple-800 hover:bg-purple-900 text-white text-[10px] font-black">▶</button>
                 </div>
 
                 <button @click="addCustomSpace()" class="px-2 py-0.5 rounded text-[11px] font-black border border-dashed border-purple-400 bg-white text-purple-700 hover:bg-purple-50">+ 空間</button>
             </div>
 
-            <!-- 圖類篩選列（預設打開） -->
             <div v-if="showDocTypeFilterBar" class="bg-sky-50/70 border-b border-sky-200 px-2.5 py-1 flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
                 <button @click="overviewTypeFilter = 'all'" :class="overviewTypeFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0">全部({{ pages.length }})</button>
                 <button @click="overviewTypeFilter = 'plan'" :class="overviewTypeFilter === 'plan' ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-sky-900 border-sky-200'" class="px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0">📐平面圖</button>
@@ -206,7 +204,6 @@
             </div>
 
             <div class="flex-1 overflow-y-auto p-2.5 touch-scrollable">
-                <!-- 空間疊起模式 -->
                 <div v-if="overviewStackMode && overviewSpaceFilter === 'all' && !movingPageId" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 pt-1">
                     <div v-for="stack in overviewSpaceStacks" :key="stack.key" class="relative pt-2 pl-2">
                         <div v-if="stack.items.length >= 3" class="absolute inset-0 right-2 bottom-2 bg-zinc-200 border border-zinc-300 rounded-xl"></div>
@@ -244,7 +241,6 @@
                     </div>
                 </div>
 
-                <!-- 攤開模式（點擊縮圖即開極簡單圖預視、點「✏️改」進入編輯） -->
                 <div v-else class="flex flex-col gap-3">
                     <div v-for="grp in overviewGroupedPages" :key="'ov-grp-'+grp.space" :class="grp.theme.box" class="border-2 rounded-xl overflow-hidden shadow-xs">
                         <div :class="grp.theme.bar" class="px-3 py-1.5 border-b flex items-center justify-between gap-2">
@@ -306,12 +302,12 @@
         <!-- 3. 畫布編輯視圖 -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 w-full relative bg-zinc-200 overflow-hidden flex flex-col">
 
-            <!-- 雙條純中文浮動工具膠囊（零英文字、無收起掣、無重複「編」） -->
+            <!-- 雙條純中文浮動工具膠囊 -->
             <div v-if="activeCanvas?.photo || (splitMode && canvasB?.photo)"
                  :style="{ transform: `translate(${capsuleOffset.x}px, ${capsuleOffset.y}px)` }"
                  class="fixed top-[92px] left-2 z-30 flex flex-col items-start gap-1 max-w-[96vw]" @touchstart.stop @mousedown.stop>
 
-                <!-- 第 1 條：操作與剪貼復原（⠿ ＋ 瀏覽 ＋ 移動 ＋ 貼上 ＋ ↶復原 ＋ ↷剪下） -->
+                <!-- 第 1 條：操作與剪貼復原 -->
                 <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-xl flex items-center gap-0.5 sm:gap-1 max-w-full">
                     <span @pointerdown.stop.prevent="startCapsuleDrag" style="touch-action:none" title="按住拖拉移動工具列" class="cursor-grab active:cursor-grabbing px-1.5 py-1 text-zinc-400 font-black text-sm select-none shrink-0">⠿</span>
                     <button @click="drawMode = 'browse'" :class="drawMode === 'browse' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">👆 瀏覽</button>
@@ -322,7 +318,7 @@
                     <button @click="cutSelectedObject" title="剪下選中物件" :class="(activeMarker || activeLine) ? 'text-amber-700 hover:bg-amber-50' : 'text-zinc-400 hover:bg-zinc-100'" class="px-2 py-1 rounded-full text-sm font-black shrink-0">↷</button>
                 </div>
 
-                <!-- 第 2 條：標註與繪圖（尺數+印 ＋ 畫 ＋ 釘 ＋ 擦） -->
+                <!-- 第 2 條：標註與繪圖 -->
                 <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-lg flex items-center gap-0.5 sm:gap-1 max-w-full">
                     <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✨ 尺數+印</button>
                     <button @click="drawMode = 'freehand'" :class="['freehand','wall','straight','arrow-single','cad'].includes(drawMode) ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✏️ 畫</button>
@@ -449,9 +445,7 @@
                     </div>
 
                     <div v-else class="flex-1 min-h-0 w-full flex flex-col overflow-hidden">
-                        <!-- 流式頂部控制列（徹底消滅窄屏左右重疊，並顯示兩字「分類」「全部」） -->
                         <div class="bg-white/95 border-b border-zinc-200 px-2 py-1.5 flex flex-wrap items-center justify-between gap-1.5 shrink-0 z-20" @touchstart.stop @mousedown.stop>
-                            <!-- 左組：目錄 · P1/38 ▾ | +加頁 | 刪頁 | 分類 | 全部 -->
                             <div v-if="!activePin" class="flex items-center gap-1 flex-wrap">
                                 <div class="bg-zinc-50 border border-zinc-300 rounded-lg flex items-center px-1 py-0.5 shadow-2xs">
                                     <span v-if="splitMode" class="bg-blue-600 text-white text-[10px] font-black px-1 py-0.5 rounded mr-1">左</span>
@@ -483,7 +477,6 @@
                                 <div class="w-px h-3.5 bg-red-300 mx-1"></div><button @click="deleteActivePin('A')" class="bg-white border border-red-300 text-red-700 px-2 py-0.5 rounded text-[11px] font-bold shadow-2xs">🗑️刪釘</button>
                             </div>
 
-                            <!-- 右組：功能與縮放 -->
                             <div class="flex items-center gap-1 flex-wrap justify-end ml-auto">
                                 <button v-if="!activePin && masterPages.length && (activePage?.space !== '總圖' || masterPages.length > 1)" @click="goToMasterPlan('A')" class="bg-purple-600 text-white border border-purple-700 px-2 py-1 rounded-md text-[11px] font-black shadow-2xs">🗺️總圖</button>
                                 <button @click="showChecklistCard = !showChecklistCard"
@@ -535,16 +528,16 @@
                                          draggable="true"
                                          @dragstart="onSpaceDragStart(sp)"
                                          @dragover.prevent="dragOverSpace = sp"
-                                         @drop.prevent="onSpaceDrop(sp, 'overview')"
+                                         @drop.prevent="onSpaceDrop(sp)"
                                          @dragend="draggingSpace = ''; dragOverSpace = ''"
                                          :class="[
                                              quickNavSpaceFilter === sp ? 'bg-purple-700 text-white border-purple-700' : 'bg-purple-50 text-purple-800 border-purple-200',
                                              dragOverSpace === sp && draggingSpace !== sp ? 'ring-2 ring-blue-500' : ''
                                          ]"
                                          class="inline-flex items-center rounded-full border overflow-hidden shrink-0 cursor-grab">
-                                        <button v-if="quickNavSpaceFilter === sp && sIdx > 0" @click.stop="moveSpaceOrder(sp, -1, 'overview')" class="px-1.5 py-0.5 bg-purple-800 text-white text-[10px] font-black">◀</button>
+                                        <button v-if="quickNavSpaceFilter === sp && sIdx > 0" @click.stop="moveSpaceOrder(sp, -1)" class="px-1.5 py-0.5 bg-purple-800 text-white text-[10px] font-black">◀</button>
                                         <button @click="quickNavSpaceFilter = sp" class="px-2 py-0.5 text-[11px] font-bold">{{ sp }}</button>
-                                        <button v-if="quickNavSpaceFilter === sp && sIdx < overviewSpacesAvailable.length - 1" @click.stop="moveSpaceOrder(sp, 1, 'overview')" class="px-1.5 py-0.5 bg-purple-800 text-white text-[10px] font-black">▶</button>
+                                        <button v-if="quickNavSpaceFilter === sp && sIdx < overviewSpacesAvailable.length - 1" @click.stop="moveSpaceOrder(sp, 1)" class="px-1.5 py-0.5 bg-purple-800 text-white text-[10px] font-black">▶</button>
                                     </div>
                                     <button @click="addCustomSpace()" class="px-2 py-0.5 rounded-full text-[11px] font-black border border-dashed border-purple-400 bg-white text-purple-700 hover:bg-purple-50 shrink-0">+ 空間</button>
                                 </div>
@@ -646,15 +639,15 @@
                             </div>
                         </div>
 
-                        <!-- 畫布區域 -->
+                        <!-- 畫布區域 (Pane A) -->
                         <div class="flex-1 min-h-0 w-full relative overflow-hidden bg-white" id="draw-stage">
                             <svg ref="svgCanvas" :view-box.camel="svgViewBox" preserveAspectRatio="xMidYMid meet"
                                  style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="canvas-touch-lock"
                                  @wheel.prevent="e => onStageWheel(e, 'A')" @touchstart="e => onStageTouchStart(e, 'A')" @touchmove="e => onStageTouchMove(e, 'A')" @touchend="e => onStageTouchEnd(e, 'A')" @touchcancel="e => onStageTouchEnd(e, 'A')"
                                  @mousedown="e => onStageMouseDown(e, 'A')" @mousemove="e => onStageMouseMove(e, 'A')" @mouseup="e => onStageMouseUp(e, 'A')">
                                 <defs>
-                                    <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowMarkerId(c, 'A')" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                                        <path d="M 0 0.6 L 6 3 L 0 5.4 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
+                                    <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowMarkerId(c, 'A')" markerWidth="4" markerHeight="4" refX="3.4" refY="2" orient="auto">
+                                        <path d="M 0 0.4 L 4 2 L 0 3.6 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
                                     </marker>
                                 </defs>
 
@@ -663,20 +656,20 @@
 
                                 <g v-for="w in (activeCanvas.walls || [])" :key="w.id" :class="drawMode === 'eraser' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onEraseTap('wall', w, e, 'A')" @mousedown="e => onEraseTap('wall', w, e, 'A')">
                                     <line v-if="drawMode === 'eraser'" :x1="w.x1" :y1="w.y1" :x2="w.x2" :y2="w.y2" stroke="transparent" :stroke-width="34 * invZoom" stroke-linecap="round" />
-                                    <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="(seg.isHatch ? 4 : 6) * invZoom" stroke-linecap="round" />
+                                    <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="(seg.isHatch ? 4.5 : 2) * invZoom" stroke-linecap="round" />
                                 </g>
-                                <g v-if="currentWall && drawingPane === 'A'"><line v-for="(seg, sIdx) in getWallSegments(currentWall)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="currentWall.color || '#111827'" :stroke-width="(seg.isHatch ? 4 : 6) * invZoom" stroke-linecap="round" /></g>
+                                <g v-if="currentWall && drawingPane === 'A'"><line v-for="(seg, sIdx) in getWallSegments(currentWall)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="currentWall.color || '#111827'" :stroke-width="(seg.isHatch ? 4.5 : 2) * invZoom" stroke-linecap="round" /></g>
 
                                 <g v-for="l in (activeCanvas.lines || [])" :key="l.id" :class="(drawMode === 'eraser' || drawMode === 'move') ? 'cursor-move pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onLinePointerStart(l, e, 'A')" @mousedown="e => onLinePointerStart(l, e, 'A')">
                                     <line v-if="drawMode === 'eraser' || drawMode === 'move'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="28 * invZoom" stroke-linecap="round" />
                                     <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
                                           :stroke="getLineStroke(l, 0.75)"
-                                          :stroke-width="2.5 * invZoom"
+                                          :stroke-width="(l.type === 'arrow-single' ? 3 : 2) * invZoom"
                                           :stroke-dasharray="(!l.type || l.type === 'measure') ? `${14 * invZoom} ${10 * invZoom}` : null"
                                           stroke-linecap="round"
                                           :marker-end="l.type === 'arrow-single' ? `url(#${getArrowMarkerId(l.color, 'A')})` : null" />
                                     <template v-if="Array.isArray(l.chainSegs) && l.chainSegs.length >= 2">
-                                        <line v-for="(tk, tIdx) in getChainTicks(l)" :key="'tk-'+tIdx" :x1="tk.x1" :y1="tk.y1" :x2="tk.x2" :y2="tk.y2" :stroke="getLineStroke(l, 0.95)" :stroke-width="3.5 * invZoom" stroke-linecap="round" />
+                                        <line v-for="(tk, tIdx) in getChainTicks(l)" :key="'tk-'+tIdx" :x1="tk.x1" :y1="tk.y1" :x2="tk.x2" :y2="tk.y2" :stroke="getLineStroke(l, 0.95)" :stroke-width="2 * invZoom" stroke-linecap="round" />
                                         <text v-for="sl in getChainSegLabels(l)" :key="'sl-'+sl.idx" :x="sl.x" :y="sl.y - 12 * invZoom" text-anchor="middle" fill="#fde047" class="stamp-text" :style="{ fontSize: `${18 * invZoom}px` }">{{ sl.val }}</text>
                                         <template v-if="drawMode === 'move' && activeLine?.id === l.id">
                                             <circle v-for="(tk, tIdx) in getChainTicks(l)" :key="'tkh-'+tIdx" :cx="tk.cx" :cy="tk.cy" :r="11 * invZoom" fill="#facc15" stroke="#111827" :stroke-width="2.5 * invZoom" class="cursor-ew-resize"
@@ -691,15 +684,15 @@
 
                                 <line v-if="currentLine && drawingPane === 'A'" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
                                       :stroke="drawMode === 'line' ? '#ff0044' : drawColor"
-                                      :stroke-width="2.5 * invZoom"
+                                      :stroke-width="(drawMode === 'arrow-single' ? 3 : 2) * invZoom"
                                       :stroke-dasharray="drawMode === 'line' ? `${12 * invZoom} ${8 * invZoom}` : null"
                                       :marker-end="drawMode === 'arrow-single' ? `url(#${getArrowMarkerId(drawColor, 'A')})` : null" />
 
                                 <g v-for="p in (activeCanvas.paths || [])" :key="p.id" :class="drawMode === 'eraser' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onEraseTap('path', p, e, 'A')" @mousedown="e => onEraseTap('path', p, e, 'A')">
                                     <path v-if="drawMode === 'eraser'" :d="p.d" stroke="transparent" :stroke-width="34 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-                                    <path :d="p.d" :stroke="p.color || '#3b82f6'" :stroke-width="2.5 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path :d="p.d" :stroke="p.color || '#3b82f6'" :stroke-width="2 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                                 </g>
-                                <path v-if="currentPath && drawingPane === 'A'" :d="currentPath" :stroke="drawColor" :stroke-width="2.5 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                <path v-if="currentPath && drawingPane === 'A'" :d="currentPath" :stroke="drawColor" :stroke-width="2 * invZoom" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 
                                 <g v-for="m in (activeCanvas.markers || [])" :key="m.id"
                                    :class="(drawMode === 'eraser' || drawMode === 'browse' || drawMode === 'move') ? (drawMode === 'move' ? 'cursor-move pointer-events-auto' : 'cursor-pointer pointer-events-auto') : 'pointer-events-none'"
@@ -838,8 +831,8 @@
                                  @wheel.prevent="e => onStageWheel(e, 'B')" @touchstart="e => onStageTouchStart(e, 'B')" @touchmove="e => onStageTouchMove(e, 'B')" @touchend="e => onStageTouchEnd(e, 'B')" @touchcancel="e => onStageTouchEnd(e, 'B')"
                                  @mousedown="e => onStageMouseDown(e, 'B')" @mousemove="e => onStageMouseMove(e, 'B')" @mouseup="e => onStageMouseUp(e, 'B')">
                                 <defs>
-                                    <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowMarkerId(c, 'B')" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                                        <path d="M 0 0.6 L 6 3 L 0 5.4 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
+                                    <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowMarkerId(c, 'B')" markerWidth="4" markerHeight="4" refX="3.4" refY="2" orient="auto">
+                                        <path d="M 0 0.4 L 4 2 L 0 3.6 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
                                     </marker>
                                 </defs>
 
@@ -848,30 +841,30 @@
 
                                 <g v-for="w in (canvasB.walls || [])" :key="w.id" :class="drawMode === 'eraser' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onEraseTap('wall', w, e, 'B')" @mousedown="e => onEraseTap('wall', w, e, 'B')">
                                     <line v-if="drawMode === 'eraser'" :x1="w.x1" :y1="w.y1" :x2="w.x2" :y2="w.y2" stroke="transparent" :stroke-width="34 * invZoomB" stroke-linecap="round" />
-                                    <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="(seg.isHatch ? 4 : 6) * invZoomB" stroke-linecap="round" />
+                                    <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="(seg.isHatch ? 4.5 : 2) * invZoomB" stroke-linecap="round" />
                                 </g>
-                                <g v-if="currentWall && drawingPane === 'B'"><line v-for="(seg, sIdx) in getWallSegments(currentWall)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="currentWall.color || '#111827'" :stroke-width="(seg.isHatch ? 4 : 6) * invZoomB" stroke-linecap="round" /></g>
+                                <g v-if="currentWall && drawingPane === 'B'"><line v-for="(seg, sIdx) in getWallSegments(currentWall)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="currentWall.color || '#111827'" :stroke-width="(seg.isHatch ? 4.5 : 2) * invZoomB" stroke-linecap="round" /></g>
 
                                 <g v-for="l in (canvasB.lines || [])" :key="l.id" :class="(drawMode === 'eraser' || drawMode === 'move') ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onLinePointerStart(l, e, 'B')" @mousedown="e => onLinePointerStart(l, e, 'B')">
                                     <line v-if="drawMode === 'eraser' || drawMode === 'move'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="24 * invZoomB" stroke-linecap="round" />
                                     <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
                                           :stroke="getLineStroke(l, 0.75)"
-                                          :stroke-width="2.5 * invZoomB"
+                                          :stroke-width="(l.type === 'arrow-single' ? 3 : 2) * invZoomB"
                                           :stroke-dasharray="(!l.type || l.type === 'measure') ? `${14 * invZoomB} ${10 * invZoomB}` : null"
                                           stroke-linecap="round"
                                           :marker-end="l.type === 'arrow-single' ? `url(#${getArrowMarkerId(l.color, 'B')})` : null" />
                                 </g>
                                 <line v-if="currentLine && drawingPane === 'B'" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
                                       :stroke="drawMode === 'line' ? '#ff0044' : drawColor"
-                                      :stroke-width="2.5 * invZoomB"
+                                      :stroke-width="(drawMode === 'arrow-single' ? 3 : 2) * invZoomB"
                                       :stroke-dasharray="drawMode === 'line' ? `${12 * invZoomB} ${8 * invZoomB}` : null"
                                       :marker-end="drawMode === 'arrow-single' ? `url(#${getArrowMarkerId(drawColor, 'B')})` : null" />
 
                                 <g v-for="p in (canvasB.paths || [])" :key="p.id" :class="drawMode === 'eraser' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onEraseTap('path', p, e, 'B')" @mousedown="e => onEraseTap('path', p, e, 'B')">
                                     <path v-if="drawMode === 'eraser'" :d="p.d" stroke="transparent" :stroke-width="34 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-                                    <path :d="p.d" :stroke="p.color || '#3b82f6'" :stroke-width="2.5 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path :d="p.d" :stroke="p.color || '#3b82f6'" :stroke-width="2 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                                 </g>
-                                <path v-if="currentPath && drawingPane === 'B'" :d="currentPath" :stroke="drawColor" :stroke-width="2.5 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                <path v-if="currentPath && drawingPane === 'B'" :d="currentPath" :stroke="drawColor" :stroke-width="2 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 
                                 <g v-for="m in (canvasB.markers || [])" :key="m.id"
                                    :class="(drawMode === 'eraser' || drawMode === 'browse' || drawMode === 'move') ? (drawMode === 'move' ? 'cursor-move pointer-events-auto' : 'cursor-pointer pointer-events-auto') : 'pointer-events-none'"
@@ -917,7 +910,7 @@
             </div>
         </main>
 
-        <!-- 一體化面板（數字鍵盤緊貼主輸入框下方，並打通分段輸入） -->
+        <!-- 一體化面板 -->
         <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/20 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
         <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-zinc-900 border-b border-x border-zinc-300 rounded-b-xl z-50 flex flex-col shadow-xl overflow-hidden max-h-[94dvh]" @touchstart.stop @mousedown.stop>
 
@@ -946,7 +939,6 @@
             </div>
 
             <div v-if="activeMarker.type !== 'stamp'" class="flex flex-col flex-1 min-h-0 overflow-y-auto touch-scrollable">
-                <!-- 第一區：主輸入框 ＋ 分段膠囊 -->
                 <div class="p-1.5 bg-white border-b border-zinc-200 shrink-0 flex flex-col gap-1.5">
                     <div class="flex items-center justify-center gap-1.5">
                         <input type="text" v-model="activeMarker.data.name" @input="onMarkerTextInput" @focus="focusedInput = 'name'; focusedChainIdx = -1"
@@ -963,7 +955,6 @@
                             <span>[ | 分段 ]</span>
                         </button>
                     </div>
-                    <!-- 分段輸入（點擊段1/段2/段3即用上方主輸入框與數字鍵盤直接輸入） -->
                     <div v-if="chainPromptLine && Array.isArray(chainPromptLine.chainSegs) && chainPromptLine.chainSegs.length >= 2" class="flex flex-col gap-1 pt-1 border-t border-zinc-100">
                         <div class="flex items-center justify-between">
                             <span class="text-[10px] font-black text-amber-800">📏 點選分段直接用數字鍵盤輸入 · 小計: <span class="text-blue-700">{{ getChainTotalVal(chainPromptLine.chainSegs) || 0 }}</span></span>
@@ -989,7 +980,6 @@
                     </div>
                 </div>
 
-                <!-- 第二區（緊貼主輸入框正下方）：統一 4 欄數字鍵盤 -->
                 <div class="bg-zinc-100 p-1.5 border-b border-zinc-200 grid grid-cols-4 gap-1 shrink-0">
                     <button v-for="k in ['7','8','9','DEL','4','5','6','0','1','2','3','ENTER','-5','-10','+','.']" :key="k"
                             @click.stop="handleKeypad(k)"
@@ -1005,7 +995,6 @@
                     </button>
                 </div>
 
-                <!-- 第三區：分頁 B（🏭 實做） -->
                 <div v-if="sheetTab === 'prod'" class="p-1.5 bg-white flex flex-col gap-1 shrink-0 pb-2">
                     <div class="grid grid-cols-3 gap-1">
                         <button v-for="w in ['包收口','內凹','扣板淨內計']" :key="w" @click="applyTag(w)" :class="activeMarker.data.name === w ? 'bg-red-600 text-white border-red-700' : 'bg-red-50/60 text-red-900 border-red-300'" class="h-8 border rounded-md text-[13px] font-black text-center px-1">{{ w }}</button>
@@ -1027,7 +1016,6 @@
                     </div>
                 </div>
 
-                <!-- 第三區：分頁 A（📏 方向快捷鍵 ＋ 構件標籤） -->
                 <template v-else>
                     <div class="p-1.5 bg-white shrink-0 flex flex-col gap-1.5">
                         <div v-if="TAG_DEFS[activeMarker.type]" :class="getTagFields(activeMarker.type).length === 2 ? 'grid-cols-2' : 'grid-cols-3'" class="grid gap-1.5">
@@ -1066,7 +1054,6 @@
                 </template>
             </div>
 
-            <!-- 分頁 C：🏷️ 印章 -->
             <div v-else class="flex flex-col flex-1 min-h-0 bg-white">
                 <div class="p-2 border-b border-zinc-200 bg-zinc-50 shrink-0 flex flex-col gap-1.5">
                     <div class="flex gap-1.5">
@@ -1138,7 +1125,7 @@
             </template>
         </div>
 
-        <!-- 極簡單圖預視全螢幕燈箱（頂欄顯示 空間 · 圖類 ＋ 修改/複製/下載 ＋ 縮放 ＋ 交叉） -->
+        <!-- 極簡單圖預視全螢幕燈箱 -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-zinc-100 flex flex-col overflow-hidden">
             <div class="min-h-10 bg-white border-b border-zinc-200 px-2.5 py-1 flex flex-wrap justify-between items-center gap-1.5 shrink-0 z-10">
                 <div class="flex items-center gap-1.5 min-w-0 text-xs font-black text-zinc-900 truncate">
@@ -1167,8 +1154,8 @@
                      @mousedown="onFsMouseDown" @mousemove="onFsMouseMove" @mouseup="onFsMouseUp">
                     <svg ref="fsSvgRef" :view-box.camel="fsSvgViewBox" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;">
                         <defs>
-                            <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getFsArrowMarkerId(c)" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                                <path d="M 0 0.6 L 6 3 L 0 5.4 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
+                            <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getFsArrowMarkerId(c)" markerWidth="4" markerHeight="4" refX="3.4" refY="2" orient="auto">
+                                <path d="M 0 0.4 L 4 2 L 0 3.6 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
                             </marker>
                         </defs>
                         <rect x="0" y="0" :width="fullScreenItem.w || 1200" :height="fullScreenItem.h || 900" fill="#ffffff" />
@@ -1182,15 +1169,15 @@
                         <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`" class="pointer-events-none">
                             <template v-if="m.type === 'image'"><image :href="m.data.b64" :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" :transform="m.rot ? `rotate(${m.rot})` : null" preserveAspectRatio="none" /></template>
                         </g>
-                        <g v-for="w in (fullScreenItem.walls || [])" :key="w.id" class="pointer-events-none"><line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 4 : 6" stroke-linecap="round" /></g>
+                        <g v-for="w in (fullScreenItem.walls || [])" :key="w.id" class="pointer-events-none"><line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 4.5 : 2" stroke-linecap="round" /></g>
                         <g v-for="l in (fullScreenItem.lines || [])" :key="l.id" class="pointer-events-none">
-                            <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.75)" stroke-width="2.5" :stroke-dasharray="(!l.type || l.type === 'measure') ? '14 10' : null" stroke-linecap="round" :marker-end="l.type === 'arrow-single' ? `url(#${getFsArrowMarkerId(l.color)})` : null" />
+                            <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.75)" :stroke-width="l.type === 'arrow-single' ? 3 : 2" :stroke-dasharray="(!l.type || l.type === 'measure') ? '14 10' : null" stroke-linecap="round" :marker-end="l.type === 'arrow-single' ? `url(#${getFsArrowMarkerId(l.color)})` : null" />
                             <template v-if="Array.isArray(l.chainSegs) && l.chainSegs.length >= 2">
-                                <line v-for="(tk, tIdx) in getChainTicks(l)" :key="'fstk-'+tIdx" :x1="tk.x1" :y1="tk.y1" :x2="tk.x2" :y2="tk.y2" :stroke="getLineStroke(l, 0.95)" stroke-width="3.5" stroke-linecap="round" />
+                                <line v-for="(tk, tIdx) in getChainTicks(l)" :key="'fstk-'+tIdx" :x1="tk.x1" :y1="tk.y1" :x2="tk.x2" :y2="tk.y2" :stroke="getLineStroke(l, 0.95)" stroke-width="2" stroke-linecap="round" />
                                 <text v-for="sl in getChainSegLabels(l)" :key="'fssl-'+sl.idx" :x="sl.x" :y="sl.y - 12" text-anchor="middle" fill="#fde047" class="stamp-text" style="font-size:18px">{{ sl.val }}</text>
                             </template>
                         </g>
-                        <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="2.5" fill="none" stroke-linecap="round" class="pointer-events-none" />
+                        <path v-for="p in (fullScreenItem.paths || [])" :key="p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="2" fill="none" stroke-linecap="round" class="pointer-events-none" />
                         <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" class="pointer-events-none">
                             <g v-if="m.type === 'cad' && getCadDef(m.data?.cadType)" :transform="getCadTransform(m)">
                                 <image v-if="getCadDef(m.data.cadType).imgB64" :href="getCadDef(m.data.cadType).imgB64" :x="-(getCadDef(m.data.cadType).w || 70)/2" :y="-(getCadDef(m.data.cadType).h || 70)/2" :width="getCadDef(m.data.cadType).w || 70" :height="getCadDef(m.data.cadType).h || 70" preserveAspectRatio="xMidYMid meet" />
@@ -1471,7 +1458,7 @@
             </div>
         </div>
 
-        <!-- 設定圖類與空間彈窗（支援拖拉調位 ＋ ◀ / ▶ 微調空間先後次序） -->
+        <!-- 設定圖類與空間彈窗 -->
         <div v-if="showSpaceModal" class="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4" @click.self="showSpaceModal = false; editingMetaPage = null">
             <div class="bg-white border border-zinc-200 w-full max-w-sm rounded-xl p-4 text-zinc-900 shadow-xl">
                 <div class="flex justify-between items-center mb-2.5 border-b border-zinc-200 pb-2">
@@ -1491,16 +1478,16 @@
                          draggable="true"
                          @dragstart="onSpaceDragStart(sp)"
                          @dragover.prevent="dragOverSpace = sp"
-                         @drop.prevent="onSpaceDrop(sp, 'all')"
+                         @drop.prevent="onSpaceDrop(sp)"
                          @dragend="draggingSpace = ''; dragOverSpace = ''"
                          :class="[
                              hasPageSpace(editingMetaPage || activeCanvas, sp) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300',
                              dragOverSpace === sp && draggingSpace !== sp ? 'ring-2 ring-blue-500' : ''
                          ]"
                          class="inline-flex items-center rounded-md border overflow-hidden cursor-grab">
-                        <button v-if="hasPageSpace(editingMetaPage || activeCanvas, sp) && sIdx > 0" @click.stop="moveSpaceOrder(sp, -1, 'all')" class="px-1.5 py-1.5 bg-zinc-700 text-white text-[10px] font-black">◀</button>
+                        <button v-if="hasPageSpace(editingMetaPage || activeCanvas, sp) && sIdx > 0" @click.stop="moveSpaceOrder(sp, -1)" class="px-1.5 py-1.5 bg-zinc-700 text-white text-[10px] font-black">◀</button>
                         <button @click="togglePageSpaceTag(editingMetaPage || activeCanvas, sp)" class="px-2.5 py-1.5 text-[13px] font-bold">{{ hasPageSpace(editingMetaPage || activeCanvas, sp) ? '✓ ' + sp : sp }}</button>
-                        <button v-if="hasPageSpace(editingMetaPage || activeCanvas, sp) && sIdx < spaceList.length - 1" @click.stop="moveSpaceOrder(sp, 1, 'all')" class="px-1.5 py-1.5 bg-zinc-700 text-white text-[10px] font-black">▶</button>
+                        <button v-if="hasPageSpace(editingMetaPage || activeCanvas, sp) && sIdx < spaceList.length - 1" @click.stop="moveSpaceOrder(sp, 1)" class="px-1.5 py-1.5 bg-zinc-700 text-white text-[10px] font-black">▶</button>
                     </div>
                     <button @click="addCustomSpace" class="bg-blue-50 text-blue-700 border-blue-300 border px-2.5 py-1.5 rounded-md text-[13px] font-bold">+自訂</button>
                 </div>
