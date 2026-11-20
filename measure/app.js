@@ -82,7 +82,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
     const buildWallSegments = (w) => {
         if (!w) return [];
         const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = Math.hypot(dx, dy); if (L < 4) return [];
-        const ux = dx / L, uy = dy / L, nx = -uy, ny = ux, hw = 4;
+        const ux = dx / L, uy = dy / L, nx = -uy, ny = ux, hw = 15;
         const p1A = { x: w.x1 + nx * hw, y: w.y1 + ny * hw }, p2A = { x: w.x2 + nx * hw, y: w.y2 + ny * hw };
         const p1B = { x: w.x1 - nx * hw, y: w.y1 - ny * hw }, p2B = { x: w.x2 - nx * hw, y: w.y2 - ny * hw };
         const segs = [
@@ -90,7 +90,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             { x1: p1A.x, y1: p1A.y, x2: p1B.x, y2: p1B.y, isHatch: false }, { x1: p2A.x, y1: p2A.y, x2: p2B.x, y2: p2B.y, isHatch: false }
         ];
         if (w.style === 'hatched') {
-            for (let c = -hw + 14; c < L + hw; c += 14) {
+            for (let c = -hw + 22; c < L + hw; c += 22) {
                 const t0 = Math.max(-hw, -c), t1 = Math.min(hw, L - c);
                 if (t1 - t0 > 0.5) segs.push({ x1: w.x1 + (c + t0) * ux + t0 * nx, y1: w.y1 + (c + t0) * uy + t0 * ny, x2: w.x1 + (c + t1) * ux + t1 * nx, y2: w.y1 + (c + t1) * uy + t1 * ny, isHatch: true });
             }
