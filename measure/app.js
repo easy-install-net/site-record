@@ -2026,7 +2026,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 if (isB) { vbXB.value = nextX; vbYB.value = nextY; } else { vbX.value = nextX; vbY.value = nextY; }
             };
 
-            const onStageMouseDown = (e, pane = 'A') => {
+           const onStageMouseDown = (e, pane = 'A') => {
                 focusPane(pane);
                 if (showQuickPageNav.value) showQuickPageNav.value = false;
                 if (showQuickPageNavB.value) showQuickPageNavB.value = false;
