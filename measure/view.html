@@ -286,23 +286,23 @@
                             <image v-if="m.type === 'image'" :href="m.data.b64" :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" preserveAspectRatio="none" />
                         </g>
                         <g v-for="w in (activeCanvas.walls || [])" :key="'w-'+w.id" class="pointer-events-none">
-                            <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" />
+                            <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 1.5 : 2" stroke-linecap="round" />
                         </g>
                         <g v-for="l in (activeCanvas.lines || [])" :key="'l-'+l.id" class="pointer-events-none">
                             <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
-                                  :stroke="getLineStroke(l, 0.75)" :stroke-width="(!l.type || l.type === 'measure') ? 5 : 4"
-                                  :stroke-dasharray="(!l.type || l.type === 'measure') ? '14 10' : null" stroke-linecap="round"
+                                  :stroke="getLineStroke(l, 0.75)" :stroke-width="(!l.type || l.type === 'measure') ? 2.5 : 2"
+                                  :stroke-dasharray="(!l.type || l.type === 'measure') ? '10 8' : null" stroke-linecap="round"
                                   :marker-end="l.type === 'arrow-single' ? `url(#${getArrowId(l.color)})` : null" />
                             <template v-if="Array.isArray(l.chainSegs) && l.chainSegs.length >= 2">
                                 <line v-for="(tk, tIdx) in getChainTicks(l)" :key="'vtk-'+tIdx"
                                       :x1="tk.x1" :y1="tk.y1" :x2="tk.x2" :y2="tk.y2"
-                                      :stroke="getLineStroke(l, 0.95)" stroke-width="3.5" stroke-linecap="round" />
+                                      :stroke="getLineStroke(l, 0.95)" stroke-width="2" stroke-linecap="round" />
                                 <text v-for="(sl, sIdx) in getChainSegLabels(l)" :key="'vsl-'+sIdx"
                                       :x="sl.x" :y="sl.y - 12" text-anchor="middle" dominant-baseline="central"
                                       fill="#fde047" class="stamp-text" style="font-size: 16px;">{{ sl.val }}</text>
                             </template>
                         </g>
-                        <path v-for="p in (activeCanvas.paths || [])" :key="'p-'+p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" class="pointer-events-none" />
+                        <path v-for="p in (activeCanvas.paths || [])" :key="'p-'+p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="3" fill="none" stroke-linecap="round" class="pointer-events-none" />
 
                         <!-- 主工程文字標註 (支援點擊藍色跳頁傳送門) -->
                         <g v-for="m in (activeCanvas.markers || [])" :key="'m-'+m.id" :transform="`translate(${m.x}, ${m.y})`"
