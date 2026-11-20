@@ -320,11 +320,11 @@
 
                 <!-- 第 2 條：標註與繪圖 -->
                 <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-lg flex items-center gap-0.5 sm:gap-1 max-w-full">
-                    <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✨ 尺數+印</button>
+                   <button @click="drawMode = 'line'" :class="drawMode === 'line' ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">📏 度尺</button>
+                    <button @click="drawMode = 'stamp'" :class="drawMode === 'stamp' ? 'bg-amber-600 text-white' : 'text-amber-800 hover:bg-amber-50'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">🏷️ 印章</button>
                     <button @click="drawMode = 'freehand'" :class="['freehand','wall','straight','arrow-single','cad'].includes(drawMode) ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✏️ 畫</button>
                     <button v-if="!targetPin" @click="drawMode = 'pin'" :class="drawMode === 'pin' ? 'bg-red-600 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">📍 釘</button>
                     <button @click="drawMode = 'eraser'" :class="drawMode === 'eraser' ? 'bg-red-600 text-white' : 'text-red-600 hover:bg-red-50'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">🧽 擦</button>
-                </div>
 
                 <!-- ✏️ 畫 內子選單 -->
                 <div v-if="['freehand','wall','straight','arrow-single','cad'].includes(drawMode)"
