@@ -280,11 +280,12 @@
                                 </div>
                                 <div v-else @click.stop="enterEditMode(idx)" class="h-40 sm:h-44 flex items-center justify-center text-zinc-400 text-[12px] font-bold cursor-pointer">空白未拍照</div>
 
-                                <div v-if="overviewSpacesAvailable.length" @click.stop class="px-1.5 py-1 bg-zinc-50 border-t border-zinc-200 flex items-center gap-1 overflow-x-auto no-scrollbar">
-                                    <button v-for="sp in overviewSpacesAvailable" :key="pg.id+'-sp-'+sp"
+                                <div @click.stop class="px-1.5 py-1 bg-zinc-50 border-t border-zinc-200 flex items-center gap-1 overflow-x-auto no-scrollbar">
+                                    <button v-for="sp in spaceList" :key="pg.id+'-sp-'+sp"
                                             @click.stop="togglePageSpaceTag(pg, sp)"
-                                            :class="((Array.isArray(pg.spaces) && pg.spaces.includes(sp)) || pg.space === sp) ? 'bg-purple-700 text-white border-purple-700' : 'bg-white text-zinc-500 border-zinc-200 hover:border-purple-300'"
+                                            :class="hasPageSpace(pg, sp) ? 'bg-purple-700 text-white border-purple-700' : 'bg-white text-zinc-500 border-zinc-200 hover:border-purple-300'"
                                             class="px-1.5 py-0.2 rounded text-[10px] font-bold border shrink-0 transition-colors">{{ sp }}</button>
+                                    <button @click.stop="addCustomSpaceToPage(pg)" class="px-1.5 py-0.2 rounded text-[10px] font-black border border-dashed border-purple-400 bg-white text-purple-700 shrink-0">+</button>
                                 </div>
                             </div>
                         </div>
