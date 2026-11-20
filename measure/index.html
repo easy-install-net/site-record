@@ -8,7 +8,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="度尺寶 Pro">
-    <title>度尺寶 Pro v11.3</title>
+    <link rel="manifest" href="./manifest.json">
+    <title>度尺寶 Pro v11.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -50,13 +51,12 @@
 </head>
 <body class="antialiased">
     <div id="boot-screen" style="position:fixed;inset:0;z-index:200;background:#ffffff;color:#111827;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
-       <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v11.3...</div>
+        <div id="boot-msg" style="font-size:16px;font-weight:700;">⏳ 正在啟動度尺寶 Pro v11.4...</div>
         <button id="boot-retry" onclick="location.reload()" style="display:none;margin-top:16px;background:#111827;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;">🔄 重新載入</button>
     </div>
 
     <div id="app" class="fixed inset-0 w-full h-full flex flex-col overflow-hidden bg-zinc-50" style="display:none;">
 
-        <!-- 極簡瘦身頂部導航欄 -->
         <!-- 極簡瘦身頂部導航欄 -->
         <header class="shrink-0 h-10 w-full bg-white border-b border-zinc-200 px-2 flex justify-between items-center gap-1 z-30 relative">
             <div class="flex items-center gap-1 min-w-0 flex-1">
@@ -143,9 +143,8 @@
             </div>
         </main>
 
-        <!-- 2. 全檔預覽總覽視圖 (極簡摺疊＋非按鈕純文字卡片版) -->
+        <!-- 2. 全檔預覽總覽視圖 -->
         <main v-show="currentView === 'preview'" class="flex-1 min-h-0 w-full flex flex-col overflow-hidden bg-zinc-100">
-            <!-- 單一整合導航列：頁數（純文字） + 疊起/攤開 + 圖類摺疊掣 + 空間自動換行 -->
             <div class="bg-white border-b border-zinc-200 px-2.5 py-1.5 flex items-center flex-wrap gap-1 shrink-0">
                 <span class="text-[11px] font-black text-zinc-700 mr-0.5">{{ filteredOverviewPages.length }}/{{ pages.length }}頁</span>
 
@@ -167,7 +166,6 @@
                         class="px-2 py-0.5 rounded text-[11px] font-bold border">{{ sp }}</button>
             </div>
 
-            <!-- 摺疊展開：5 大圖紙類別篩選列 -->
             <div v-if="showDocTypeFilterBar" class="bg-sky-50/70 border-b border-sky-200 px-2.5 py-1 flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
                 <button @click="overviewTypeFilter = 'all'; showDocTypeFilterBar = false" :class="overviewTypeFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0">全部({{ pages.length }})</button>
                 <button @click="overviewTypeFilter = 'plan'; showDocTypeFilterBar = false" :class="overviewTypeFilter === 'plan' ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-sky-900 border-sky-200'" class="px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0">📐平面圖</button>
@@ -177,7 +175,6 @@
                 <button @click="overviewTypeFilter = 'detail'; showDocTypeFilterBar = false" :class="overviewTypeFilter === 'detail' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-900 border-indigo-200'" class="px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0">📑詳圖</button>
             </div>
 
-            <!-- 批量操作列（只在按了「☑️選圖」時才出現） -->
             <div v-if="selectMode" class="bg-blue-50/90 border-b border-blue-200 px-2.5 py-1 flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
                 <button @click="selectAllPages" class="bg-white border border-zinc-300 text-zinc-800 px-2 py-0.5 rounded text-[11px] font-bold shrink-0">{{ selectedPageIds.length === pages.length ? '取消全選' : '全選' }}</button>
                 <button @click="batchSetDocType('plan')" :disabled="!selectedPageIds.length" class="bg-sky-50 border border-sky-300 text-sky-800 px-2 py-0.5 rounded text-[11px] font-bold disabled:opacity-40 shrink-0">📐平面</button>
@@ -189,7 +186,6 @@
                 <button @click="openTransferModal()" :disabled="!selectedPageIds.length" :class="selectedPageIds.length ? 'bg-blue-600 text-white border-blue-600' : 'bg-zinc-200 text-zinc-400 border-zinc-200'" class="px-2 py-0.5 rounded text-[11px] font-bold border shrink-0">↗️轉檔({{ selectedPageIds.length }})</button>
             </div>
 
-            <!-- 免拖拉調位提示橫幅 -->
             <div v-if="movingPageId" class="bg-blue-600 text-white px-3 py-1.5 flex items-center justify-between gap-2 shrink-0 shadow-md">
                 <span class="text-xs font-black truncate">🔄 正在調動 {{ movingPageLabel }}，請點目標卡片「📥插這」</span>
                 <div class="flex items-center gap-1.5 shrink-0">
@@ -198,9 +194,7 @@
                 </div>
             </div>
 
-            <!-- 極簡卡片網格 -->
             <div class="flex-1 overflow-y-auto p-2.5 touch-scrollable">
-                <!-- A. 空間資料夾疊起模式（每一堆＝一個空間） -->
                 <div v-if="overviewStackMode && overviewSpaceFilter === 'all' && !movingPageId" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 pt-1">
                     <div v-for="stack in overviewSpaceStacks" :key="stack.key" class="relative pt-2 pl-2">
                         <div v-if="stack.items.length >= 3" class="absolute inset-0 right-2 bottom-2 bg-zinc-200 border border-zinc-300 rounded-xl"></div>
@@ -240,7 +234,6 @@
                     </div>
                 </div>
 
-                <!-- B. 單一空間展開 / 攤開全頁網格（非按鈕一律純文字顯示，只保留唯一「✏️改」按鈕） -->
                 <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                     <div v-for="{ pg, idx } in filteredOverviewPages.filter(x => x && x.pg)" :key="pg.id" :data-page-idx="idx"
                          @click="selectMode ? togglePageSelection(pg.id) : null"
@@ -252,7 +245,6 @@
                          ]"
                          class="border rounded-lg overflow-hidden shadow-sm flex flex-col justify-between transition-all duration-150">
 
-                        <!-- 卡片頂欄：純文字（P頁碼 · 空間 · 圖類）＋ 右側唯一操作按鈕 -->
                         <div :class="String(movingPageId) === String(pg.id) ? 'bg-blue-100 border-blue-400' : 'bg-zinc-50 border-zinc-200'" class="px-2 py-1 border-b flex items-center justify-between gap-1">
                             <div class="flex items-center gap-1 min-w-0 text-[11px] truncate">
                                 <input v-if="selectMode" type="checkbox" :checked="selectedPageIds.includes(String(pg.id))" @click.stop="togglePageSelection(pg.id)" class="w-4 h-4 accent-blue-600 shrink-0 cursor-pointer">
@@ -270,7 +262,6 @@
                             </div>
                         </div>
 
-                        <!-- 純淨大縮圖區（直接點圖＝全螢幕預覽；右下角純文字浮水印） -->
                         <div v-if="pg.photo" @click.stop="selectMode ? togglePageSelection(pg.id) : openFullScreenPreview(pg)" class="h-40 sm:h-44 relative bg-zinc-100 cursor-pointer active:bg-zinc-200 overflow-hidden flex items-center justify-center">
                             <div class="absolute inset-1 overflow-hidden flex items-center justify-center">
                                 <svg :view-box.camel="`0 0 ${pg.w || 1200} ${pg.h || 900}`" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="pointer-events-none">
@@ -317,10 +308,9 @@
                 </div>
             </div>
         </main>
-<!-- 3. 畫布編輯視圖 -->
+        <!-- 3. 畫布編輯視圖 -->
         <main v-show="currentView === 'proj'" class="flex-1 min-h-0 w-full relative bg-zinc-200 overflow-hidden flex flex-col">
 
-    
             <!-- 左上導航正下方懸浮工具膠囊 -->
             <div v-if="activeCanvas?.photo || (splitMode && canvasB?.photo)"
                  :style="{ transform: `translate(${capsuleOffset.x}px, ${capsuleOffset.y}px)` }"
@@ -446,6 +436,13 @@
                 </div>
             </div>
 
+            <!-- 💡 現場智能防呆醒目提示浮動條（底部自動提示，點擊即收起） -->
+            <div v-if="activeSmartTip" @click="activeSmartTip = ''"
+                 class="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 w-[94vw] max-w-lg bg-amber-950/95 text-amber-50 border border-amber-400 rounded-xl px-3.5 py-2.5 shadow-2xl flex items-center justify-between gap-2 cursor-pointer" @touchstart.stop @mousedown.stop>
+                <span class="text-xs font-bold leading-snug">{{ activeSmartTip }}</span>
+                <span class="text-[11px] bg-amber-800/80 text-amber-200 px-2 py-0.5 rounded shrink-0 font-black">知道了 ✕</span>
+            </div>
+
             <!-- 雙屏 / 單屏並排主容器 -->
             <div class="flex-1 min-h-0 w-full flex flex-col md:flex-row gap-1.5 p-1 overflow-hidden">
 
@@ -472,7 +469,6 @@
                     <div v-else class="flex-1 min-h-0 w-full relative overflow-hidden">
                         <div class="absolute top-2 left-2 z-20 flex flex-col gap-1.5 items-start" @touchstart.stop @mousedown.stop>
                             <div v-if="!activePin" class="flex items-center gap-1 flex-wrap">
-                                <!-- 🏠總圖 推上第一行最左邊 -->
                                 <button v-if="masterPages.length" @click="goToMasterPlan('A')"
                                         :class="activePage?.space === '總圖' ? 'bg-purple-600 text-white border-purple-700' : 'bg-purple-50 text-purple-800 border-purple-300'"
                                         class="border px-2 py-1 rounded-lg text-[11px] font-black shadow-sm">🏠 總圖</button>
@@ -492,7 +488,6 @@
                                     </template>
                                 </div>
 
-                                <!-- 直接一撳切換「分」(空間疊) / 「全」(攤開全頁) -->
                                 <button v-if="!splitMode" @click="showQuickPageNav && overviewStackMode && quickNavSpaceFilter === 'all' ? (showQuickPageNav = false) : (overviewStackMode = true, quickNavSpaceFilter = 'all', showQuickPageNav = true)"
                                         :class="showQuickPageNav && overviewStackMode && quickNavSpaceFilter === 'all' ? 'bg-purple-700 text-white border-purple-700' : 'bg-white/95 text-purple-800 border-purple-300'"
                                         class="px-2 py-1 rounded-lg text-xs font-black border shadow-sm">分</button>
@@ -506,7 +501,7 @@
                                 <div class="w-px h-3.5 bg-red-300 mx-1"></div><button @click="deleteActivePin('A')" class="bg-white border border-red-300 text-red-700 px-2 py-0.5 rounded text-[11px] font-bold shadow-sm">🗑️刪釘</button>
                             </div>
 
-                            <!-- 全寬大畫面目錄彈窗（置於工具列正下方，零重疊、文字完整不溢出） -->
+                            <!-- 全寬大畫面目錄彈窗 -->
                             <div v-if="showQuickPageNav && !activePin"
                                  class="fixed top-[148px] left-1/2 -translate-x-1/2 w-[96vw] max-w-4xl max-h-[calc(100dvh-162px)] bg-white/98 backdrop-blur-md border border-zinc-300 rounded-2xl p-3 shadow-2xl flex flex-col z-40">
                                 <div class="flex justify-between items-center pb-2 mb-2 border-b border-zinc-200 gap-2 shrink-0">
@@ -571,9 +566,16 @@
                             </div>
                         </div>
 
-                        <!-- 畫布右上角：📝記事 + 📋貼圖 + 雙屏/字體/縮放 -->
+                        <!-- 畫布右上角：📋防漏清單 + 📝記事 + 📋貼圖 + 雙屏/字體/縮放 -->
                         <div class="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end" @touchstart.stop @mousedown.stop>
                             <div class="flex items-center gap-1 flex-wrap justify-end">
+                                <!-- 按空間防漏度尺清單按鈕 -->
+                                <button @click="showChecklistCard = !showChecklistCard"
+                                        :class="showChecklistCard ? 'bg-emerald-700 text-white border-emerald-800' : 'bg-emerald-50/95 text-emerald-900 border-emerald-300'"
+                                        class="border px-2 py-1 rounded-md text-[11px] font-black shadow-sm flex items-center gap-1">
+                                    <span>📋防漏</span>
+                                    <span v-if="currentSpaceChecklist" class="bg-white/90 text-emerald-900 px-1 rounded text-[10px]">{{ currentChecklistDoneCount }}/{{ currentSpaceChecklist.dims.length }}</span>
+                                </button>
                                 <button @click="newNoteSpace = activeCanvas?.space || ''; showNotesModal = true" class="bg-amber-50/95 text-amber-900 border border-amber-300 px-2 py-1 rounded-md text-[11px] font-black shadow-sm">📝記事<span v-if="activeNotesCount" class="ml-0.5 text-amber-700">({{ activeNotesCount }})</span></button>
                                 <button v-if="!splitMode" @click="pasteFromClipboard(false)" class="bg-white/95 text-zinc-700 border border-zinc-300 px-2 py-1 rounded-md text-[11px] font-bold shadow-sm">📋貼圖</button>
                                 <button v-if="feedbackList.length" @click="showFeedbackModal = true" class="bg-rose-600 text-white border border-rose-700 px-2 py-1 rounded-md text-[11px] font-black shadow-sm">💬意見({{ feedbackList.length }})</button>
@@ -589,6 +591,50 @@
                                     <button @click="stepZoom(-0.5, 'A')" :disabled="zoomScale <= 1" :class="zoomScale <= 1 ? 'opacity-30' : ''" class="px-1.5 py-1 text-xs font-black text-zinc-900 border-r border-zinc-200">➖</button>
                                     <button @click="resetZoom" :class="zoomScale > 1 ? 'bg-blue-600 text-white' : 'text-zinc-700'" class="px-1.5 py-1 text-[11px] font-black min-w-[38px] text-center">{{ Math.round(zoomScale * 100) }}%</button>
                                     <button @click="stepZoom(0.5, 'A')" :disabled="zoomScale >= 5" :class="zoomScale >= 5 ? 'opacity-30' : ''" class="px-1.5 py-1 text-xs font-black text-zinc-900 border-l border-zinc-200">➕</button>
+                                </div>
+                            </div>
+
+                            <!-- 📋 隨身防漏度尺 ＋ 注意事項卡片（按當前空間自動顯示） -->
+                            <div v-if="showChecklistCard" class="w-[88vw] max-w-xs bg-white/98 backdrop-blur-md border border-emerald-400 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[68dvh]">
+                                <div class="bg-emerald-700 text-white px-3 py-2 flex items-center justify-between gap-2 shrink-0">
+                                    <div class="flex items-center gap-1.5 min-w-0">
+                                        <span class="text-xs font-black truncate">📋 {{ activeCanvas?.space || '未設定空間' }} · 防漏助手</span>
+                                    </div>
+                                    <div class="flex items-center gap-1 shrink-0">
+                                        <button @click="openPageMetaModal(null)" class="bg-emerald-800 hover:bg-emerald-900 text-emerald-100 px-2 py-0.5 rounded text-[10px] font-bold">換空間</button>
+                                        <button @click="showChecklistCard = false" class="text-emerald-100 hover:text-white px-1.5 text-xs font-black">✕</button>
+                                    </div>
+                                </div>
+
+                                <div v-if="!currentSpaceChecklist" class="p-4 text-center flex flex-col items-center gap-2">
+                                    <p class="text-xs font-bold text-zinc-600 leading-relaxed">尚未設定此頁所屬空間（如廚房、主人房、主廁），揀好空間即自動顯示該位必度清單與伏位提醒！</p>
+                                    <button @click="openPageMetaModal(null)" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-black shadow-sm">🏠 立即選擇空間</button>
+                                </div>
+
+                                <div v-else class="p-2.5 overflow-y-auto touch-scrollable space-y-3">
+                                    <!-- 1. 必度尺寸打剔清單 -->
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <span class="text-[11px] font-black text-emerald-800">📏 必度尺寸清單（點選打剔）</span>
+                                            <span class="text-[10px] font-bold text-zinc-500">已度 {{ currentChecklistDoneCount }} / {{ currentSpaceChecklist.dims.length }}</span>
+                                        </div>
+                                        <div class="space-y-1">
+                                            <label v-for="(dimItem, dIdx) in currentSpaceChecklist.dims" :key="'chk-'+dIdx"
+                                                   :class="isChecklistItemChecked(dimItem) ? 'bg-emerald-50/80 border-emerald-200 text-zinc-400 line-through' : 'bg-white border-zinc-200 text-zinc-900'"
+                                                   class="border rounded-lg px-2.5 py-1.5 flex items-center gap-2 cursor-pointer transition-colors">
+                                                <input type="checkbox" :checked="isChecklistItemChecked(dimItem)" @change="toggleChecklistItem(dimItem)" class="w-4 h-4 accent-emerald-600 shrink-0">
+                                                <span class="text-xs font-bold leading-snug">{{ dimItem }}</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- 2. 現場注意事項（伏位提醒） -->
+                                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                                        <div class="text-[11px] font-black text-amber-900 mb-1">⚠️ 現場注意事項（防中伏）</div>
+                                        <ul class="space-y-1 text-[11px] font-bold text-amber-950 list-disc pl-4 leading-snug">
+                                            <li v-for="(noteItem, nIdx) in currentSpaceChecklist.notes" :key="'nt-'+nIdx">{{ noteItem }}</li>
+                                        </ul>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -627,8 +673,6 @@
                                     </template>
                                 </g>
 
-
-                                
                                 <line v-if="currentLine && drawingPane === 'A'" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
                                       :stroke="drawMode === 'line' ? '#ff0044' : drawColor"
                                       :stroke-width="4 * invZoom"
@@ -879,7 +923,6 @@
                 </div>
             </div>
         </main>
-
         <!-- 🏷️ 目錄印章管理彈窗 -->
         <div v-if="showStampManagerModal" class="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4" @click.self="showStampManagerModal = false" @touchstart.stop @mousedown.stop>
             <div class="bg-white border border-zinc-300 w-full max-w-md rounded-xl p-4 flex flex-col shadow-2xl max-h-[88dvh]">
@@ -1325,9 +1368,8 @@
             </template>
         </div>
 
-            <!-- 唯讀全螢幕大圖檢視器（極簡純文字資訊 + 空間篩選 + 純縮圖列 + 雙指/滾輪放大） -->
+        <!-- 唯讀全螢幕大圖檢視器 -->
         <div v-if="fullScreenItem" class="fixed inset-0 z-[70] bg-zinc-100 flex flex-col overflow-hidden">
-            <!-- 第一行：純文字資訊（無按鈕邊框） ｜ 真正操作按鈕 -->
             <div class="h-10 bg-white border-b border-zinc-200 px-2.5 flex justify-between items-center gap-2 shrink-0 z-10">
                 <div class="flex items-center gap-1.5 min-w-0 text-xs font-black text-zinc-900 truncate">
                     <span class="shrink-0">{{ currentFullScreen?.shortLabel }}</span>
@@ -1350,7 +1392,6 @@
                 </div>
             </div>
 
-            <!-- 第二行：空間篩選（真正可撳先做膠囊按鈕；僅 1 個空間時自動隱藏） -->
             <div v-if="overviewSpacesAvailable.length" class="bg-white border-b border-zinc-200 px-2.5 py-1 flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0 z-10">
                 <button @click="setFsSpaceFilter('all')"
                         :class="fsSpaceFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-100 text-zinc-700 border-zinc-200'"
@@ -1360,7 +1401,6 @@
                         class="px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0">{{ sp }}</button>
             </div>
 
-            <!-- 第三行：極簡橫向縮圖列（圖片 + 純文字，無多餘框線） -->
             <div class="bg-white border-b border-zinc-300 px-2 py-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 z-10"
                  ref="fsStripRef" @wheel.prevent="$event.currentTarget.scrollLeft += $event.deltaY">
                 <button v-for="(fsItem, fsIdx) in fullScreenList" :key="'strip-'+fsIdx" :data-fs-idx="fsIdx" @click="jumpFullScreen(fsIdx)"
@@ -1374,7 +1414,6 @@
                 </button>
             </div>
 
-            <!-- 大圖顯示區（支援雙指捏合／滾輪放大拖拉 + 左右小窄揭頁條） -->
             <div class="flex-1 min-h-0 w-full relative bg-zinc-200 overflow-hidden">
                 <button v-if="fullScreenIndex > 0" @click.stop="prevFullScreen"
                         class="fixed left-1 top-1/2 -translate-y-1/2 z-20 w-6 h-11 sm:w-7 sm:h-12 rounded-xl bg-white/85 hover:bg-white active:scale-95 border border-zinc-300/90 shadow-md flex items-center justify-center text-zinc-800 text-xs sm:text-sm font-black">
@@ -1651,9 +1690,10 @@
         </div>
     </div>
 
-<script src="./data.js?v=11.3"></script>
-    <script src="./cad.js?v=11.3"></script>
-    <script src="./app.js?v=11.3"></script>
+    <script src="./data.js?v=11.4"></script>
+    <script src="./cad.js?v=11.4"></script>
+    <script src="./app.js?v=11.4"></script>
 </body>
 </html>
+
         
