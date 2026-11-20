@@ -3109,7 +3109,17 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                 window.addEventListener('popstate', handlePopStateGuard);
                 window.addEventListener('beforeunload', handleBeforeUnloadGuard);
                 await loadStampStore(); await loadCadStore(); await loadProjectList();
-                if (auth) {
+               if (auth) {
+                    auth.getRedirectResult().then(async (res) => {
+                        if (res?.user) {
+                            currentUser.value = res.user;
+                            await syncUserOwnedProjects();
+                            await syncUserLibrariesCloud(true);
+                            showToast(`✅ 已綁定 ${res.user.displayName || res.user.email}`);
+                        }
+                    }).catch((e) => {
+                        if (e?.message) alert('Google 登入驗證失敗：' + e.message);
+                    });
                     auth.onAuthStateChanged(async (user) => {
                         currentUser.value = user || null;
                         if (user) {
