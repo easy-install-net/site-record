@@ -90,7 +90,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             { x1: p1A.x, y1: p1A.y, x2: p1B.x, y2: p1B.y, isHatch: false }, { x1: p2A.x, y1: p2A.y, x2: p2B.x, y2: p2B.y, isHatch: false }
         ];
         if (w.style === 'hatched') {
-            for (let c = -hw + 22; c < L + hw; c += 22) {
+            for (let c = -hw + 20; c < L + hw; c += 20) {
                 const t0 = Math.max(-hw, -c), t1 = Math.min(hw, L - c);
                 if (t1 - t0 > 0.5) segs.push({ x1: w.x1 + (c + t0) * ux + t0 * nx, y1: w.y1 + (c + t0) * uy + t0 * ny, x2: w.x1 + (c + t1) * ux + t1 * nx, y2: w.y1 + (c + t1) * uy + t1 * ny, isHatch: true });
             }
