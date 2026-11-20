@@ -1475,8 +1475,10 @@
                     <button @click="setPageDocType('render')" :class="(editingMetaPage || activePage)?.docType === 'render' ? 'bg-fuchsia-600 text-white' : 'bg-fuchsia-50 text-fuchsia-900'" class="py-2 rounded-md text-xs font-black border">🎨效果圖</button>
                     <button @click="setPageDocType('dim')" :class="(editingMetaPage || activePage)?.docType === 'dim' ? 'bg-teal-600 text-white' : 'bg-teal-50 text-teal-900'" class="py-2 rounded-md text-xs font-black border">📏尺吋圖</button>
                 </div>
-                <div class="flex flex-wrap gap-1.5 mb-4">
-                    <button v-for="sp in spaceList" :key="sp" @click="setPageSpace(sp)" :class="(editingMetaPage || activeCanvas)?.space === sp ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-700 border-zinc-300'" class="px-2.5 py-1.5 rounded-md text-[13px] font-bold border">{{ sp }}</button>
+               <div class="flex flex-wrap gap-1.5 mb-4">
+                    <button v-for="sp in spaceList" :key="sp" @click="togglePageSpaceTag(editingMetaPage || activeCanvas, sp)"
+                            :class="hasPageSpace(editingMetaPage || activeCanvas, sp) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300'"
+                            class="px-2.5 py-1.5 rounded-md text-[13px] font-bold border">{{ hasPageSpace(editingMetaPage || activeCanvas, sp) ? '✓ ' + sp : sp }}</button>
                     <button @click="addCustomSpace" class="bg-blue-50 text-blue-700 border-blue-300 border px-2.5 py-1.5 rounded-md text-[13px] font-bold">+自訂</button>
                 </div>
                 <div class="flex gap-2 border-t border-zinc-200 pt-3">
