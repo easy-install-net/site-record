@@ -1468,7 +1468,42 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                 pages.value.forEach(p => { if (p.space) set.add(p.space); });
                 return Array.from(set);
             });
-            const overviewStackMode = ref(false);
+           const overviewStackMode = ref(false);
+            const buildSpaceGroups = (rawList) => {
+                const map = new Map();
+                (rawList || []).forEach(item => {
+                    if (!item?.pg) return;
+                    const key = (Array.isArray(item.pg.spaces) && item.pg.spaces.length ? item.pg.spaces[0] : item.pg.space) || '未標空間';
+                    if (!map.has(key)) map.set(key, []);
+                    map.get(key).push(item);
+                });
+                const palettes = [
+                    { box: 'bg-amber-50/70 border-amber-300', bar: 'bg-amber-100/90 border-amber-300 text-amber-950' },
+                    { box: 'bg-sky-50/70 border-sky-300', bar: 'bg-sky-100/90 border-sky-300 text-sky-950' },
+                    { box: 'bg-emerald-50/70 border-emerald-300', bar: 'bg-emerald-100/90 border-emerald-300 text-emerald-950' },
+                    { box: 'bg-rose-50/70 border-rose-300', bar: 'bg-rose-100/90 border-rose-300 text-rose-950' },
+                    { box: 'bg-indigo-50/70 border-indigo-300', bar: 'bg-indigo-100/90 border-indigo-300 text-indigo-950' }
+                ];
+                return Array.from(map.entries()).map(([space, items], i) => ({
+                    space,
+                    items,
+                    theme: space === '總圖'
+                        ? { box: 'bg-purple-50/80 border-purple-300', bar: 'bg-purple-100 border-purple-300 text-purple-950' }
+                        : (space === '未標空間' ? { box: 'bg-zinc-50 border-zinc-300', bar: 'bg-zinc-200/80 border-zinc-300 text-zinc-800' } : palettes[i % palettes.length])
+                }));
+            };
+            const overviewGroupedPages = computed(() => {
+                const raw = (overviewSpaceFilter.value !== 'all' && overviewSpaceFilter.value !== '__NONE__')
+                    ? pages.value.map((pg, idx) => ({ pg, idx })).filter(({ pg }) => pg && (overviewTypeFilter.value === 'all' || pg.docType === overviewTypeFilter.value) && ((Array.isArray(pg.spaces) && pg.spaces.includes(overviewSpaceFilter.value)) || pg.space === overviewSpaceFilter.value))
+                    : filteredOverviewPages.value.filter(x => x && x.pg);
+                return buildSpaceGroups(raw);
+            });
+            const quickNavGroupedPages = computed(() => {
+                const raw = (quickNavSpaceFilter.value !== 'all' && quickNavSpaceFilter.value !== '__NONE__')
+                    ? pages.value.map((pg, idx) => ({ pg, idx })).filter(({ pg }) => pg && (quickNavTypeFilter.value === 'all' || pg.docType === quickNavTypeFilter.value) && ((Array.isArray(pg.spaces) && pg.spaces.includes(quickNavSpaceFilter.value)) || pg.space === quickNavSpaceFilter.value))
+                    : filteredQuickNavPages.value;
+                return buildSpaceGroups(raw);
+            });
             const filteredOverviewPages = computed(() => {
                 const list = pages.value
                     .map((pg, idx) => ({ pg, idx }))
