@@ -1148,9 +1148,83 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 triggerBranchPrompt(pg, owner, actionCb);
             };
 
-            const drawMode = ref('browse'), showTopSheet = ref(false), showTopTextBar = ref(false), activeMarker = ref(null);
+           const drawMode = ref('browse'), showTopSheet = ref(false), showTopTextBar = ref(false), activeMarker = ref(null);
+            const sheetTab = ref('dim');
             const isProcessing = ref(false), processingText = ref(''), focusedInput = ref('val'), topTextInputRef = ref(null), svgCanvas = ref(null), svgCanvasB = ref(null);
 
+            // 📏 連續分段拉尺（Chain Dimension）狀態與切割邏輯
+            const chainPromptLine = ref(null), chainSegments = ref([]);
+            const getChainTotalVal = (segs) => {
+                const sum = (segs || []).reduce((acc, s) => acc + (parseFloat(s.val) || 0), 0);
+                return sum > 0 ? String(Math.round(sum * 100) / 100) : '';
+            };
+            const splitChainLine = (targetLine = chainPromptLine.value) => {
+                const l = targetLine;
+                const c = targetCanvas.value;
+                if (!l || !c) return;
+                checkBranchNeed(() => {
+                    const lineObj = (c.lines || []).find(x => x.id === l.id) || l;
+                    if (!Array.isArray(lineObj.chainSegs) || lineObj.chainSegs.length < 2) {
+                        const existingM = (c.markers || []).find(m => m.lineId === lineObj.id);
+                        const initVal = String(existingM?.data?.val || '').trim();
+                        lineObj.chainSegs = [
+                            { t: 0.5, val: initVal },
+                            { t: 1.0, val: '' }
+                        ];
+                        if (existingM) {
+                            existingM.data.name = existingM.data.name || '總長';
+                        }
+                    } else {
+                        const prevT = lineObj.chainSegs[lineObj.chainSegs.length - 2]?.t || 0.5;
+                        const midT = Math.round(((prevT + 1.0) / 2) * 1000) / 1000;
+                        lineObj.chainSegs.splice(lineObj.chainSegs.length - 1, 0, { t: midT, val: '' });
+                    }
+                    chainPromptLine.value = lineObj;
+                    chainSegments.value = lineObj.chainSegs;
+                    const totalM = (c.markers || []).find(m => m.lineId === lineObj.id);
+                    if (totalM) {
+                        activeMarker.value = totalM;
+                        sheetTab.value = 'dim';
+                        focusedInput.value = 'val';
+                        showTopSheet.value = true;
+                    }
+                    touchDirty(); saveAll();
+                });
+            };
+            const updateChainSegVal = (segIdx, rawVal) => {
+                const l = chainPromptLine.value, c = targetCanvas.value;
+                if (!l || !c || !Array.isArray(l.chainSegs) || !l.chainSegs[segIdx]) return;
+                l.chainSegs[segIdx].val = rawVal;
+                const totalM = (c.markers || []).find(m => m.lineId === l.id);
+                if (totalM) {
+                    const tot = getChainTotalVal(l.chainSegs);
+                    if (tot) totalM.data.val = tot;
+                    updateMarkerSize(totalM);
+                }
+                touchDirty(); saveAll();
+            };
+            const getChainTicks = (l) => {
+                if (!l || !Array.isArray(l.chainSegs) || l.chainSegs.length < 2) return [];
+                const dx = l.x2 - l.x1, dy = l.y2 - l.y1, len = Math.hypot(dx, dy) || 1;
+                const nx = (-dy / len) * 14, ny = (dx / len) * 14;
+                const ticks = [];
+                for (let i = 0; i < l.chainSegs.length - 1; i++) {
+                    const t = l.chainSegs[i].t;
+                    const cx = l.x1 + dx * t, cy = l.y1 + dy * t;
+                    ticks.push({ x1: cx - nx, y1: cy - ny, x2: cx + nx, y2: cy + ny, cx, cy });
+                }
+                return ticks;
+            };
+            const getChainSegLabels = (l) => {
+                if (!l || !Array.isArray(l.chainSegs) || l.chainSegs.length < 2) return [];
+                const dx = l.x2 - l.x1, dy = l.y2 - l.y1;
+                let prevT = 0;
+                return l.chainSegs.map((seg, idx) => {
+                    const midT = (prevT + seg.t) / 2;
+                    prevT = seg.t;
+                    return { idx, x: Math.round(l.x1 + dx * midT), y: Math.round(l.y1 + dy * midT), val: seg.val || `段${idx + 1}` };
+                });
+            };
             const showIndexModal = ref(false), indexDraftPos = ref({ x: 0, y: 0 }), indexCustomCode = ref(''), editingIndexMarker = ref(null);
             const openIndexModalAt = (x, y, existing = null) => { indexDraftPos.value = { x, y }; editingIndexMarker.value = existing; indexCustomCode.value = existing?.data?.customCode || ''; showIndexModal.value = true; };
             const placeSpaceTag = (sp) => {
@@ -1353,10 +1427,11 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
 
             const getDocTypeLabel = (t) => ({
                 plan: '📐平面圖',
+                photo: '📷拍攝',
                 '3d': '🧊立體圖',
-                dim: '📏尺吋圖',
                 detail: '📑詳圖',
-                photo: '📷拍攝'
+                render: '🎨效果圖',
+                dim: '📏尺吋圖'
             }[t] || '');
             const isDrawingDocType = (dt) => ['plan', '3d', 'dim', 'detail'].includes(dt);
 const insertPageSmart = (newPg, explicitAfterIdx = null) => {
@@ -1803,11 +1878,20 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                 if (m.type === 'page_link' && m.data?.targetPageId) { jumpToPageById(m.data.targetPageId, pane); return; }
                 if (m.type === 'space_tag') { openIndexModalAt(m.x, m.y, m); return; }
                 activeMarker.value = m;
-                if (['text', 'image', 'cad'].includes(m.type)) {
+               if (['text', 'image', 'cad'].includes(m.type)) {
                     showTopTextBar.value = true;
                     if (m.type === 'text') nextTick(() => topTextInputRef.value?.focus());
                 } else {
-                    if (m.type === 'stamp') stampFilter.value = 'all';
+                    if (m.type === 'stamp') { stampFilter.value = 'all'; sheetTab.value = 'stamp'; }
+                    else sheetTab.value = 'dim';
+                    if (m.lineId) {
+                        const ln = (targetCanvas.value?.lines || []).find(l => l.id === m.lineId);
+                        chainPromptLine.value = ln || null;
+                        chainSegments.value = ln?.chainSegs || [];
+                    } else {
+                        chainPromptLine.value = null;
+                        chainSegments.value = [];
+                    }
                     showTopSheet.value = true;
                     focusedInput.value = TAG_DEFS[m.type]?.fields[0]?.key || 'val';
                 }
@@ -1994,9 +2078,14 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                         const lineType = drawMode.value === 'line' ? 'measure' : drawMode.value;
                         c.lines.push({ ...lSnap, id: lineId, type: lineType, color: lineType === 'measure' ? (defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null) : drawColor.value });
                         if (lineType !== 'measure') { c.historyStack.push({ type: 'line_marker', lineId, markerId: null }); touchDirty(); saveAll(); return; }
+                        
+                        const newLineObj = c.lines[c.lines.length - 1];
                         const newMarker = { id: markerId, lineId, x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2), w: 140, h: 56, type: 'general', textColor: defaultTextColor.value, data: makeBlankMarkerData() };
                         updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
+                        chainPromptLine.value = newLineObj; chainSegments.value = [];
+                        sheetTab.value = 'dim';
                         touchDirty(); activeMarker.value = newMarker; focusedInput.value = 'val'; showTopSheet.value = true; saveAll();
+                        
                     });
                 } else if (drawMode.value === 'freehand' && currentPath.value) {
                     const pSnap = currentPath.value; currentPath.value = '';
@@ -3070,9 +3159,11 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                 onFsWheel, onFsTouchStart, onFsTouchMove, onFsTouchEnd, onFsMouseDown, onFsMouseMove, onFsMouseUp,
                 jumpFullScreen, openFullScreenSpaceModal,
                 fsEditingMarker, fsQuickInputRef, onFsMarkerTap, openFsMarkerQuickEdit, setFsMarkerColor, stepFsMarkerFont, closeFsMarkerQuickEdit,
-                onProjectNameInput, showNotesModal, noteFilter, newNoteText, newNoteSpace, activeNotesCount, filteredNotes, addProjectNote, toggleProjectNote, editProjectNote, deleteProjectNote, clearDoneNotes,
-                showChecklistCard, activeSmartTip, currentSpaceChecklist, isChecklistItemChecked, currentChecklistDoneCount, toggleChecklistItem
+               onProjectNameInput, showNotesModal, noteFilter, newNoteText, newNoteSpace, activeNotesCount, filteredNotes, addProjectNote, toggleProjectNote, editProjectNote, deleteProjectNote, clearDoneNotes,
+                showChecklistCard, activeSmartTip, currentSpaceChecklist, isChecklistItemChecked, currentChecklistDoneCount, toggleChecklistItem,
+                sheetTab, chainPromptLine, chainSegments, splitChainLine, updateChainSegVal, getChainTicks, getChainSegLabels
             };
+        };
         }
     }).mount('#app');
 }
