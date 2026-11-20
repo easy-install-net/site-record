@@ -288,10 +288,20 @@
                         <g v-for="w in (activeCanvas.walls || [])" :key="'w-'+w.id" class="pointer-events-none">
                             <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" />
                         </g>
-                        <line v-for="l in (activeCanvas.lines || [])" :key="'l-'+l.id" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
-                              :stroke="getLineStroke(l, 0.75)" :stroke-width="(!l.type || l.type === 'measure') ? 5 : 4"
-                              :stroke-dasharray="(!l.type || l.type === 'measure') ? '14 10' : null" stroke-linecap="round"
-                              :marker-end="l.type === 'arrow-single' ? `url(#${getArrowId(l.color)})` : null" class="pointer-events-none" />
+                        <g v-for="l in (activeCanvas.lines || [])" :key="'l-'+l.id" class="pointer-events-none">
+                            <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
+                                  :stroke="getLineStroke(l, 0.75)" :stroke-width="(!l.type || l.type === 'measure') ? 5 : 4"
+                                  :stroke-dasharray="(!l.type || l.type === 'measure') ? '14 10' : null" stroke-linecap="round"
+                                  :marker-end="l.type === 'arrow-single' ? `url(#${getArrowId(l.color)})` : null" />
+                            <template v-if="Array.isArray(l.chainSegs) && l.chainSegs.length >= 2">
+                                <line v-for="(tk, tIdx) in getChainTicks(l)" :key="'vtk-'+tIdx"
+                                      :x1="tk.x1" :y1="tk.y1" :x2="tk.x2" :y2="tk.y2"
+                                      :stroke="getLineStroke(l, 0.95)" stroke-width="3.5" stroke-linecap="round" />
+                                <text v-for="(sl, sIdx) in getChainSegLabels(l)" :key="'vsl-'+sIdx"
+                                      :x="sl.x" :y="sl.y - 12" text-anchor="middle" dominant-baseline="central"
+                                      fill="#fde047" class="stamp-text" style="font-size: 16px;">{{ sl.val }}</text>
+                            </template>
+                        </g>
                         <path v-for="p in (activeCanvas.paths || [])" :key="'p-'+p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="6" fill="none" stroke-linecap="round" class="pointer-events-none" />
 
                         <!-- 主工程文字標註 (支援點擊藍色跳頁傳送門) -->
@@ -450,20 +460,25 @@
                     navSpaceFilter.value = 'all';
                     showQuickNav.value = true;
                 };
+                const getPageSpaces = (pg) => {
+                    if (!pg) return [];
+                    if (Array.isArray(pg.spaces) && pg.spaces.length) return pg.spaces;
+                    return pg.space ? [pg.space] : [];
+                };
                 const navSpacesAvailable = computed(() => {
                     const set = new Set();
-                    pages.value.forEach(pg => {
-                        if (Array.isArray(pg.spaces) && pg.spaces.length) pg.spaces.forEach(s => s && set.add(s));
-                        else if (pg.space) set.add(pg.space);
-                    });
+                    pages.value.forEach(pg => getPageSpaces(pg).forEach(s => s && set.add(s)));
                     return Array.from(set);
                 });
                 const navSpaceStacks = computed(() => {
                     const map = new Map();
                     pages.value.forEach((pg, idx) => {
-                        const primary = (Array.isArray(pg.spaces) && pg.spaces.length ? pg.spaces[0] : pg.space) || '__NONE__';
-                        if (!map.has(primary)) map.set(primary, { key: primary, label: primary === '__NONE__' ? '未分類空間' : primary, items: [] });
-                        map.get(primary).items.push({ pg, idx });
+                        const sps = getPageSpaces(pg);
+                        const keys = sps.length ? sps : ['__NONE__'];
+                        keys.forEach(key => {
+                            if (!map.has(key)) map.set(key, { key, label: key === '__NONE__' ? '未分類空間' : key, items: [] });
+                            if (!map.get(key).items.some(x => x.pg.id === pg.id)) map.get(key).items.push({ pg, idx });
+                        });
                     });
                     return Array.from(map.values())
                         .map(st => {
@@ -478,18 +493,23 @@
                         .filter(({ pg }) => {
                             const typeOk = navTypeFilter.value === 'all' || pg.docType === navTypeFilter.value;
                             if (!typeOk) return false;
+                            const sps = getPageSpaces(pg);
                             if (navSpaceFilter.value === 'all') return true;
-                            if (navSpaceFilter.value === '__NONE__') return !pg.space && !(Array.isArray(pg.spaces) && pg.spaces.length);
-                            return (Array.isArray(pg.spaces) && pg.spaces.includes(navSpaceFilter.value)) || pg.space === navSpaceFilter.value;
+                            if (navSpaceFilter.value === '__NONE__') return sps.length === 0;
+                            return sps.includes(navSpaceFilter.value);
                         })
                         .sort((a, b) => (DOC_TYPE_RANK[a.pg.docType] || 7) - (DOC_TYPE_RANK[b.pg.docType] || 7) || a.idx - b.idx);
                 });
                 const navGroupedPages = computed(() => {
                     const map = new Map();
+                    const onlySp = (navSpaceFilter.value !== 'all' && navSpaceFilter.value !== '__NONE__') ? navSpaceFilter.value : null;
                     navFilteredPages.value.forEach(item => {
-                        const key = (Array.isArray(item.pg.spaces) && item.pg.spaces.length ? item.pg.spaces[0] : item.pg.space) || '未標空間';
-                        if (!map.has(key)) map.set(key, []);
-                        map.get(key).push(item);
+                        const sps = getPageSpaces(item.pg);
+                        const keys = onlySp ? [onlySp] : (sps.length ? sps : ['未標空間']);
+                        keys.forEach(key => {
+                            if (!map.has(key)) map.set(key, []);
+                            if (!map.get(key).some(x => x.pg.id === item.pg.id)) map.get(key).push(item);
+                        });
                     });
                     const palettes = [
                         { box: 'bg-amber-50/75 border-amber-300', bar: 'bg-amber-100 border-amber-300 text-amber-950' },
@@ -836,8 +856,35 @@
                     }
                 };
 
+                const getChainTicks = (l) => {
+                    if (!l || !Array.isArray(l.chainSegs) || l.chainSegs.length < 2) return [];
+                    const dx = l.x2 - l.x1, dy = l.y2 - l.y1, len = Math.hypot(dx, dy) || 1;
+                    const nx = (-dy / len) * 14, ny = (dx / len) * 14;
+                    const ticks = [];
+                    for (let i = 0; i < l.chainSegs.length - 1; i++) {
+                        const t = l.chainSegs[i].t;
+                        const cx = l.x1 + dx * t, cy = l.y1 + dy * t;
+                        ticks.push({ x1: cx - nx, y1: cy - ny, x2: cx + nx, y2: cy + ny });
+                    }
+                    return ticks;
+                };
+                const getChainSegLabels = (l) => {
+                    if (!l || !Array.isArray(l.chainSegs) || l.chainSegs.length < 2) return [];
+                    const dx = l.x2 - l.x1, dy = l.y2 - l.y1;
+                    let prevT = 0;
+                    return l.chainSegs.map((seg, idx) => {
+                        const midT = (prevT + seg.t) / 2;
+                        prevT = seg.t;
+                        return { idx, x: Math.round(l.x1 + dx * midT), y: Math.round(l.y1 + dy * midT), val: seg.val || `段${idx + 1}` };
+                    });
+                };
+
                 const getArrowId = (c) => 'v-arrow-' + String(c || '#ef4444').replace('#', 'hex_');
-                const getLineStroke = (l, a = 0.75) => (!l.type || l.type === 'measure') ? `rgba(255,0,68,${a})` : ({ red: '#ef4444', gray: '#9ca3af', white: '#ffffff' }[l.color] || l.color || '#ef4444');
+                const getLineStroke = (l, a = 0.75) => {
+                    const legacy = { red: '#ef4444', gray: '#9ca3af', white: '#ffffff' };
+                    if (!l.type || l.type === 'measure') return l.color ? (legacy[l.color] || l.color) : `rgba(255,0,68,${a})`;
+                    return legacy[l.color] || l.color || '#ef4444';
+                };
                 const getWallSegments = (w) => buildWallSegments(w);
                 const getStampColor = (m) => m.textColor || (m.type === 'space_tag' ? '#a855f7' : (m.type === 'page_link' ? '#38bdf8' : '#ffffff'));
                 const getMarkerLines = (m) => {
@@ -858,6 +905,13 @@
                         ctx.save(); if (!l.type || l.type === 'measure') ctx.setLineDash([14, 10]);
                         ctx.strokeStyle = getLineStroke(l, 0.75); ctx.lineWidth = 4;
                         ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore();
+                        if (Array.isArray(l.chainSegs) && l.chainSegs.length >= 2) {
+                            ctx.save(); ctx.strokeStyle = getLineStroke(l, 0.95); ctx.lineWidth = 3.5;
+                            getChainTicks(l).forEach(tk => { ctx.beginPath(); ctx.moveTo(tk.x1, tk.y1); ctx.lineTo(tk.x2, tk.y2); ctx.stroke(); });
+                            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 18px sans-serif'; ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
+                            getChainSegLabels(l).forEach(sl => { ctx.strokeText(sl.val, sl.x, sl.y - 12); ctx.fillStyle = '#fde047'; ctx.fillText(sl.val, sl.x, sl.y - 12); });
+                            ctx.restore();
+                        }
                     });
                     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                     (cObj.markers || []).forEach(m => {
@@ -974,7 +1028,7 @@
                     clearDraft, undoDraft, switchPage, prevPage, nextPage, openPinSubPage, exitPinSubPage, onMasterMarkerClick,
                     onFbMarkerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp,
                     updateFbTextSize, confirmEditFbMarker, deleteFbMarker, resizeFbImage, handleAttachPhoto, submitFeedback,
-                    getArrowId, getLineStroke, getWallSegments, getStampColor, getMarkerLines, downloadAnnotatedImage, loadByInputCode
+                    getChainTicks, getChainSegLabels, getArrowId, getLineStroke, getWallSegments, getStampColor, getMarkerLines, downloadAnnotatedImage, loadByInputCode
                 };
             }
         }).mount('#app');
