@@ -72,7 +72,8 @@
                 <button v-if="currentUser" @click="forceSyncToCloud" class="bg-blue-600 text-white px-2 py-0.5 rounded text-[11px] font-bold shrink-0 shadow-sm">🔄同步</button>
             </div>
             <div class="flex gap-1 items-center shrink-0">
-                <template v-if="currentView === 'dir'">
+               <template v-if="currentView === 'dir'">
+                    <button @click="openChecklistManager" class="bg-emerald-50 border border-emerald-300 text-emerald-800 px-1.5 py-0.5 rounded text-xs font-bold">📋清單</button>
                     <button @click="openStampManager" class="bg-amber-50 border border-amber-300 text-amber-800 px-1.5 py-0.5 rounded text-xs font-bold">🏷️印章</button>
                     <button @click="openCadManager" class="bg-blue-50 border border-blue-300 text-blue-800 px-1.5 py-0.5 rounded text-xs font-bold">🏛️圖庫</button>
                     <button @click="openMergeProjectsModal" class="bg-indigo-50 border border-indigo-300 text-indigo-700 px-1.5 py-0.5 rounded text-xs font-bold">🔗合拼</button>
