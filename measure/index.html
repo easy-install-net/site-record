@@ -159,16 +159,16 @@
                      draggable="true"
                      @dragstart="onSpaceDragStart(sp)"
                      @dragover.prevent="dragOverSpace = sp"
-                     @drop.prevent="onSpaceDrop(sp)"
+                     @drop.prevent="onSpaceDrop(sp, 'overview')"
                      @dragend="draggingSpace = ''; dragOverSpace = ''"
                      :class="[
                          overviewSpaceFilter === sp ? 'bg-purple-700 text-white border-purple-700' : 'bg-purple-50 text-purple-800 border-purple-200',
                          dragOverSpace === sp && draggingSpace !== sp ? 'ring-2 ring-blue-500' : ''
                      ]"
                      class="inline-flex items-center rounded border overflow-hidden cursor-grab active:cursor-grabbing">
-                    <button v-if="overviewSpaceFilter === sp && sIdx > 0" @click.stop="moveSpaceOrder(sp, -1)" title="往前移一格" class="px-1.5 py-0.5 bg-purple-800 hover:bg-purple-900 text-white text-[10px] font-black">◀</button>
+                    <button v-if="overviewSpaceFilter === sp && sIdx > 0" @click.stop="moveSpaceOrder(sp, -1, 'overview')" title="往前移一格" class="px-1.5 py-0.5 bg-purple-800 hover:bg-purple-900 text-white text-[10px] font-black">◀</button>
                     <button @click="overviewSpaceFilter = sp" class="px-2 py-0.5 text-[11px] font-bold">{{ sp }}</button>
-                    <button v-if="overviewSpaceFilter === sp && sIdx < overviewSpacesAvailable.length - 1" @click.stop="moveSpaceOrder(sp, 1)" title="往後移一格" class="px-1.5 py-0.5 bg-purple-800 hover:bg-purple-900 text-white text-[10px] font-black">▶</button>
+                    <button v-if="overviewSpaceFilter === sp && sIdx < overviewSpacesAvailable.length - 1" @click.stop="moveSpaceOrder(sp, 1, 'overview')" title="往後移一格" class="px-1.5 py-0.5 bg-purple-800 hover:bg-purple-900 text-white text-[10px] font-black">▶</button>
                 </div>
 
                 <button @click="addCustomSpace()" class="px-2 py-0.5 rounded text-[11px] font-black border border-dashed border-purple-400 bg-white text-purple-700 hover:bg-purple-50">+ 空間</button>
@@ -483,7 +483,7 @@
                                 <div class="w-px h-3.5 bg-red-300 mx-1"></div><button @click="deleteActivePin('A')" class="bg-white border border-red-300 text-red-700 px-2 py-0.5 rounded text-[11px] font-bold shadow-2xs">🗑️刪釘</button>
                             </div>
 
-                            <!-- 右組：功能與縮放（已拿走重複空間按鈕與貼圖按鈕） -->
+                            <!-- 右組：功能與縮放 -->
                             <div class="flex items-center gap-1 flex-wrap justify-end ml-auto">
                                 <button v-if="!activePin && masterPages.length && (activePage?.space !== '總圖' || masterPages.length > 1)" @click="goToMasterPlan('A')" class="bg-purple-600 text-white border border-purple-700 px-2 py-1 rounded-md text-[11px] font-black shadow-2xs">🗺️總圖</button>
                                 <button @click="showChecklistCard = !showChecklistCard"
@@ -535,16 +535,16 @@
                                          draggable="true"
                                          @dragstart="onSpaceDragStart(sp)"
                                          @dragover.prevent="dragOverSpace = sp"
-                                         @drop.prevent="onSpaceDrop(sp)"
+                                         @drop.prevent="onSpaceDrop(sp, 'overview')"
                                          @dragend="draggingSpace = ''; dragOverSpace = ''"
                                          :class="[
                                              quickNavSpaceFilter === sp ? 'bg-purple-700 text-white border-purple-700' : 'bg-purple-50 text-purple-800 border-purple-200',
                                              dragOverSpace === sp && draggingSpace !== sp ? 'ring-2 ring-blue-500' : ''
                                          ]"
                                          class="inline-flex items-center rounded-full border overflow-hidden shrink-0 cursor-grab">
-                                        <button v-if="quickNavSpaceFilter === sp && sIdx > 0" @click.stop="moveSpaceOrder(sp, -1)" class="px-1.5 py-0.5 bg-purple-800 text-white text-[10px] font-black">◀</button>
+                                        <button v-if="quickNavSpaceFilter === sp && sIdx > 0" @click.stop="moveSpaceOrder(sp, -1, 'overview')" class="px-1.5 py-0.5 bg-purple-800 text-white text-[10px] font-black">◀</button>
                                         <button @click="quickNavSpaceFilter = sp" class="px-2 py-0.5 text-[11px] font-bold">{{ sp }}</button>
-                                        <button v-if="quickNavSpaceFilter === sp && sIdx < overviewSpacesAvailable.length - 1" @click.stop="moveSpaceOrder(sp, 1)" class="px-1.5 py-0.5 bg-purple-800 text-white text-[10px] font-black">▶</button>
+                                        <button v-if="quickNavSpaceFilter === sp && sIdx < overviewSpacesAvailable.length - 1" @click.stop="moveSpaceOrder(sp, 1, 'overview')" class="px-1.5 py-0.5 bg-purple-800 text-white text-[10px] font-black">▶</button>
                                     </div>
                                     <button @click="addCustomSpace()" class="px-2 py-0.5 rounded-full text-[11px] font-black border border-dashed border-purple-400 bg-white text-purple-700 hover:bg-purple-50 shrink-0">+ 空間</button>
                                 </div>
@@ -653,9 +653,9 @@
                                  @wheel.prevent="e => onStageWheel(e, 'A')" @touchstart="e => onStageTouchStart(e, 'A')" @touchmove="e => onStageTouchMove(e, 'A')" @touchend="e => onStageTouchEnd(e, 'A')" @touchcancel="e => onStageTouchEnd(e, 'A')"
                                  @mousedown="e => onStageMouseDown(e, 'A')" @mousemove="e => onStageMouseMove(e, 'A')" @mouseup="e => onStageMouseUp(e, 'A')">
                                 <defs>
-                                    <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowMarkerId(c, 'A')" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
-    <path d="M 0 1 L 10 5 L 0 9 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
-</marker>
+                                    <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowMarkerId(c, 'A')" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                                        <path d="M 0 0.6 L 6 3 L 0 5.4 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
+                                    </marker>
                                 </defs>
 
                                 <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="#ffffff" />
@@ -663,15 +663,15 @@
 
                                 <g v-for="w in (activeCanvas.walls || [])" :key="w.id" :class="drawMode === 'eraser' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onEraseTap('wall', w, e, 'A')" @mousedown="e => onEraseTap('wall', w, e, 'A')">
                                     <line v-if="drawMode === 'eraser'" :x1="w.x1" :y1="w.y1" :x2="w.x2" :y2="w.y2" stroke="transparent" :stroke-width="34 * invZoom" stroke-linecap="round" />
-                                    <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="(seg.isHatch ? 2.5 : 3.5) * invZoom" stroke-linecap="round" />
+                                    <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="(seg.isHatch ? 4 : 6) * invZoom" stroke-linecap="round" />
                                 </g>
-                                <g v-if="currentWall && drawingPane === 'A'"><line v-for="(seg, sIdx) in getWallSegments(currentWall)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="currentWall.color || '#111827'" :stroke-width="(seg.isHatch ? 2.5 : 3.5) * invZoom" stroke-linecap="round" /></g>
+                                <g v-if="currentWall && drawingPane === 'A'"><line v-for="(seg, sIdx) in getWallSegments(currentWall)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="currentWall.color || '#111827'" :stroke-width="(seg.isHatch ? 4 : 6) * invZoom" stroke-linecap="round" /></g>
 
                                 <g v-for="l in (activeCanvas.lines || [])" :key="l.id" :class="(drawMode === 'eraser' || drawMode === 'move') ? 'cursor-move pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onLinePointerStart(l, e, 'A')" @mousedown="e => onLinePointerStart(l, e, 'A')">
                                     <line v-if="drawMode === 'eraser' || drawMode === 'move'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="28 * invZoom" stroke-linecap="round" />
                                     <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
                                           :stroke="getLineStroke(l, 0.75)"
-                                         :stroke-width="((!l.type || l.type === 'measure') ? 2.5 : 14) * invZoom"
+                                          :stroke-width="2.5 * invZoom"
                                           :stroke-dasharray="(!l.type || l.type === 'measure') ? `${14 * invZoom} ${10 * invZoom}` : null"
                                           stroke-linecap="round"
                                           :marker-end="l.type === 'arrow-single' ? `url(#${getArrowMarkerId(l.color, 'A')})` : null" />
@@ -691,7 +691,7 @@
 
                                 <line v-if="currentLine && drawingPane === 'A'" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
                                       :stroke="drawMode === 'line' ? '#ff0044' : drawColor"
-                                      :stroke-width="(drawMode === 'line' ? 2.5 : 14) * invZoom"
+                                      :stroke-width="2.5 * invZoom"
                                       :stroke-dasharray="drawMode === 'line' ? `${12 * invZoom} ${8 * invZoom}` : null"
                                       :marker-end="drawMode === 'arrow-single' ? `url(#${getArrowMarkerId(drawColor, 'A')})` : null" />
 
@@ -848,22 +848,22 @@
 
                                 <g v-for="w in (canvasB.walls || [])" :key="w.id" :class="drawMode === 'eraser' ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onEraseTap('wall', w, e, 'B')" @mousedown="e => onEraseTap('wall', w, e, 'B')">
                                     <line v-if="drawMode === 'eraser'" :x1="w.x1" :y1="w.y1" :x2="w.x2" :y2="w.y2" stroke="transparent" :stroke-width="34 * invZoomB" stroke-linecap="round" />
-                                    <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="(seg.isHatch ? 2.5 : 3.5) * invZoomB" stroke-linecap="round" />
+                                    <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="(seg.isHatch ? 4 : 6) * invZoomB" stroke-linecap="round" />
                                 </g>
-                                <g v-if="currentWall && drawingPane === 'B'"><line v-for="(seg, sIdx) in getWallSegments(currentWall)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="currentWall.color || '#111827'" :stroke-width="(seg.isHatch ? 2.5 : 3.5) * invZoomB" stroke-linecap="round" /></g>
+                                <g v-if="currentWall && drawingPane === 'B'"><line v-for="(seg, sIdx) in getWallSegments(currentWall)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="currentWall.color || '#111827'" :stroke-width="(seg.isHatch ? 4 : 6) * invZoomB" stroke-linecap="round" /></g>
 
                                 <g v-for="l in (canvasB.lines || [])" :key="l.id" :class="(drawMode === 'eraser' || drawMode === 'move') ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onLinePointerStart(l, e, 'B')" @mousedown="e => onLinePointerStart(l, e, 'B')">
                                     <line v-if="drawMode === 'eraser' || drawMode === 'move'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="24 * invZoomB" stroke-linecap="round" />
                                     <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
                                           :stroke="getLineStroke(l, 0.75)"
-                                          :stroke-width="((!l.type || l.type === 'measure') ? 5 : 4) * invZoomB"
+                                          :stroke-width="2.5 * invZoomB"
                                           :stroke-dasharray="(!l.type || l.type === 'measure') ? `${14 * invZoomB} ${10 * invZoomB}` : null"
                                           stroke-linecap="round"
                                           :marker-end="l.type === 'arrow-single' ? `url(#${getArrowMarkerId(l.color, 'B')})` : null" />
                                 </g>
                                 <line v-if="currentLine && drawingPane === 'B'" :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2"
                                       :stroke="drawMode === 'line' ? '#ff0044' : drawColor"
-                                      :stroke-width="4 * invZoomB"
+                                      :stroke-width="2.5 * invZoomB"
                                       :stroke-dasharray="drawMode === 'line' ? `${12 * invZoomB} ${8 * invZoomB}` : null"
                                       :marker-end="drawMode === 'arrow-single' ? `url(#${getArrowMarkerId(drawColor, 'B')})` : null" />
 
@@ -871,7 +871,7 @@
                                     <path v-if="drawMode === 'eraser'" :d="p.d" stroke="transparent" :stroke-width="34 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                                     <path :d="p.d" :stroke="p.color || '#3b82f6'" :stroke-width="2.5 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
                                 </g>
-                                <path v-if="currentPath && drawingPane === 'B'" :d="currentPath" :stroke="drawColor" :stroke-width="6 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                <path v-if="currentPath && drawingPane === 'B'" :d="currentPath" :stroke="drawColor" :stroke-width="2.5 * invZoomB" fill="none" stroke-linecap="round" stroke-linejoin="round" />
 
                                 <g v-for="m in (canvasB.markers || [])" :key="m.id"
                                    :class="(drawMode === 'eraser' || drawMode === 'browse' || drawMode === 'move') ? (drawMode === 'move' ? 'cursor-move pointer-events-auto' : 'cursor-pointer pointer-events-auto') : 'pointer-events-none'"
@@ -925,13 +925,13 @@
                 <div class="flex gap-1">
                     <button @click="selectSheetTab('dim')"
                             :class="activeMarker.type !== 'stamp' && sheetTab !== 'prod' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'"
-                            class="px-2 py-1.5 text-[12px] relative z-10 border translate-y-[1px]">📏 度尺/標籤</button>
+                            class="px-2.5 py-1.5 text-[12px] relative z-10 border translate-y-[1px]">📏 度尺</button>
                     <button @click="selectSheetTab('prod')"
                             :class="activeMarker.type !== 'stamp' && sheetTab === 'prod' ? 'bg-white text-red-700 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-600 rounded-t-lg font-bold border-transparent'"
-                            class="px-2 py-1.5 text-[12px] relative z-10 border translate-y-[1px]">🏭 實做定案</button>
+                            class="px-2.5 py-1.5 text-[12px] relative z-10 border translate-y-[1px]">🏭 實做</button>
                     <button @click="selectSheetTab('stamp')"
                             :class="activeMarker.type === 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black shadow-[0_2px_0_#fff]' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold border-transparent'"
-                            class="px-2 py-1.5 text-[12px] relative z-10 border translate-y-[1px]">🏷️ 工藝印章</button>
+                            class="px-2.5 py-1.5 text-[12px] relative z-10 border translate-y-[1px]">🏷️ 印章</button>
                 </div>
                 <div class="flex items-center gap-1 pb-1.5 shrink-0">
                     <div class="flex items-center gap-1 bg-white border border-zinc-300 rounded-full px-1.5 py-1 shadow-sm">
@@ -1005,7 +1005,7 @@
                     </button>
                 </div>
 
-                <!-- 第三區：分頁 B（🏭 實做定案） -->
+                <!-- 第三區：分頁 B（🏭 實做） -->
                 <div v-if="sheetTab === 'prod'" class="p-1.5 bg-white flex flex-col gap-1 shrink-0 pb-2">
                     <div class="grid grid-cols-3 gap-1">
                         <button v-for="w in ['包收口','內凹','扣板淨內計']" :key="w" @click="applyTag(w)" :class="activeMarker.data.name === w ? 'bg-red-600 text-white border-red-700' : 'bg-red-50/60 text-red-900 border-red-300'" class="h-8 border rounded-md text-[13px] font-black text-center px-1">{{ w }}</button>
@@ -1066,7 +1066,7 @@
                 </template>
             </div>
 
-            <!-- 分頁 C：🏷️ 工藝印章 -->
+            <!-- 分頁 C：🏷️ 印章 -->
             <div v-else class="flex flex-col flex-1 min-h-0 bg-white">
                 <div class="p-2 border-b border-zinc-200 bg-zinc-50 shrink-0 flex flex-col gap-1.5">
                     <div class="flex gap-1.5">
@@ -1182,9 +1182,9 @@
                         <g v-for="m in (fullScreenItem.markers || [])" :key="m.id" :transform="`translate(${m.x}, ${m.y})`" class="pointer-events-none">
                             <template v-if="m.type === 'image'"><image :href="m.data.b64" :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" :transform="m.rot ? `rotate(${m.rot})` : null" preserveAspectRatio="none" /></template>
                         </g>
-                        <g v-for="w in (fullScreenItem.walls || [])" :key="w.id" class="pointer-events-none"><line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 2.5 : 3.5" stroke-linecap="round" /></g>
+                        <g v-for="w in (fullScreenItem.walls || [])" :key="w.id" class="pointer-events-none"><line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 4 : 6" stroke-linecap="round" /></g>
                         <g v-for="l in (fullScreenItem.lines || [])" :key="l.id" class="pointer-events-none">
-                            <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.75)" :stroke-width="(!l.type || l.type === 'measure') ? 6 : 4" :stroke-dasharray="(!l.type || l.type === 'measure') ? '14 10' : null" stroke-linecap="round" :marker-end="l.type === 'arrow-single' ? `url(#${getFsArrowMarkerId(l.color)})` : null" />
+                            <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.75)" stroke-width="2.5" :stroke-dasharray="(!l.type || l.type === 'measure') ? '14 10' : null" stroke-linecap="round" :marker-end="l.type === 'arrow-single' ? `url(#${getFsArrowMarkerId(l.color)})` : null" />
                             <template v-if="Array.isArray(l.chainSegs) && l.chainSegs.length >= 2">
                                 <line v-for="(tk, tIdx) in getChainTicks(l)" :key="'fstk-'+tIdx" :x1="tk.x1" :y1="tk.y1" :x2="tk.x2" :y2="tk.y2" :stroke="getLineStroke(l, 0.95)" stroke-width="3.5" stroke-linecap="round" />
                                 <text v-for="sl in getChainSegLabels(l)" :key="'fssl-'+sl.idx" :x="sl.x" :y="sl.y - 12" text-anchor="middle" fill="#fde047" class="stamp-text" style="font-size:18px">{{ sl.val }}</text>
@@ -1491,16 +1491,16 @@
                          draggable="true"
                          @dragstart="onSpaceDragStart(sp)"
                          @dragover.prevent="dragOverSpace = sp"
-                         @drop.prevent="onSpaceDrop(sp)"
+                         @drop.prevent="onSpaceDrop(sp, 'all')"
                          @dragend="draggingSpace = ''; dragOverSpace = ''"
                          :class="[
                              hasPageSpace(editingMetaPage || activeCanvas, sp) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-300',
                              dragOverSpace === sp && draggingSpace !== sp ? 'ring-2 ring-blue-500' : ''
                          ]"
                          class="inline-flex items-center rounded-md border overflow-hidden cursor-grab">
-                        <button v-if="hasPageSpace(editingMetaPage || activeCanvas, sp) && sIdx > 0" @click.stop="moveSpaceOrder(sp, -1)" class="px-1.5 py-1.5 bg-zinc-700 text-white text-[10px] font-black">◀</button>
+                        <button v-if="hasPageSpace(editingMetaPage || activeCanvas, sp) && sIdx > 0" @click.stop="moveSpaceOrder(sp, -1, 'all')" class="px-1.5 py-1.5 bg-zinc-700 text-white text-[10px] font-black">◀</button>
                         <button @click="togglePageSpaceTag(editingMetaPage || activeCanvas, sp)" class="px-2.5 py-1.5 text-[13px] font-bold">{{ hasPageSpace(editingMetaPage || activeCanvas, sp) ? '✓ ' + sp : sp }}</button>
-                        <button v-if="hasPageSpace(editingMetaPage || activeCanvas, sp) && sIdx < spaceList.length - 1" @click.stop="moveSpaceOrder(sp, 1)" class="px-1.5 py-1.5 bg-zinc-700 text-white text-[10px] font-black">▶</button>
+                        <button v-if="hasPageSpace(editingMetaPage || activeCanvas, sp) && sIdx < spaceList.length - 1" @click.stop="moveSpaceOrder(sp, 1, 'all')" class="px-1.5 py-1.5 bg-zinc-700 text-white text-[10px] font-black">▶</button>
                     </div>
                     <button @click="addCustomSpace" class="bg-blue-50 text-blue-700 border-blue-300 border px-2.5 py-1.5 rounded-md text-[13px] font-bold">+自訂</button>
                 </div>
