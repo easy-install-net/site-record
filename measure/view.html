@@ -273,8 +273,8 @@
                          @wheel.prevent="onStageWheel" @touchstart="onStageTouchStart" @touchmove="onStageTouchMove" @touchend="onStageTouchEnd" @touchcancel="onStageTouchEnd"
                          @mousedown="onStageMouseDown" @mousemove="onStageMouseMove" @mouseup="onStageMouseUp">
                         <defs>
-                            <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowId(c)" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                                <path d="M 0 0.6 L 6 3 L 0 5.4 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
+                            <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowId(c)" markerWidth="4" markerHeight="4" refX="3.4" refY="2" orient="auto">
+                                <path d="M 0 0.4 L 4 2 L 0 3.6 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
                             </marker>
                         </defs>
 
@@ -286,11 +286,11 @@
                             <image v-if="m.type === 'image'" :href="m.data.b64" :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" preserveAspectRatio="none" />
                         </g>
                         <g v-for="w in (activeCanvas.walls || [])" :key="'w-'+w.id" class="pointer-events-none">
-                            <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 1.5 : 2" stroke-linecap="round" />
+                            <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 4.5 : 2" stroke-linecap="round" />
                         </g>
                         <g v-for="l in (activeCanvas.lines || [])" :key="'l-'+l.id" class="pointer-events-none">
                             <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
-                                  :stroke="getLineStroke(l, 0.75)" :stroke-width="(!l.type || l.type === 'measure') ? 2.5 : 2"
+                                  :stroke="getLineStroke(l, 0.75)" :stroke-width="l.type === 'arrow-single' ? 3 : 2"
                                   :stroke-dasharray="(!l.type || l.type === 'measure') ? '10 8' : null" stroke-linecap="round"
                                   :marker-end="l.type === 'arrow-single' ? `url(#${getArrowId(l.color)})` : null" />
                             <template v-if="Array.isArray(l.chainSegs) && l.chainSegs.length >= 2">
@@ -302,7 +302,7 @@
                                       fill="#fde047" class="stamp-text" style="font-size: 16px;">{{ sl.val }}</text>
                             </template>
                         </g>
-                        <path v-for="p in (activeCanvas.paths || [])" :key="'p-'+p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="3" fill="none" stroke-linecap="round" class="pointer-events-none" />
+                        <path v-for="p in (activeCanvas.paths || [])" :key="'p-'+p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="2" fill="none" stroke-linecap="round" class="pointer-events-none" />
 
                         <!-- 主工程文字標註 (支援點擊藍色跳頁傳送門) -->
                         <g v-for="m in (activeCanvas.markers || [])" :key="'m-'+m.id" :transform="`translate(${m.x}, ${m.y})`"
@@ -419,7 +419,7 @@
         const buildWallSegments = (w) => {
             if (!w) return [];
             const dx = w.x2 - w.x1, dy = w.y2 - w.y1, L = Math.hypot(dx, dy); if (L < 4) return [];
-            const ux = dx / L, uy = dy / L, nx = -uy, ny = ux, hw = 9;
+            const ux = dx / L, uy = dy / L, nx = -uy, ny = ux, hw = 15;
             const p1A = { x: w.x1 + nx * hw, y: w.y1 + ny * hw }, p2A = { x: w.x2 + nx * hw, y: w.y2 + ny * hw };
             const p1B = { x: w.x1 - nx * hw, y: w.y1 - ny * hw }, p2B = { x: w.x2 - nx * hw, y: w.y2 - ny * hw };
             const segs = [
@@ -427,7 +427,7 @@
                 { x1: p1A.x, y1: p1A.y, x2: p1B.x, y2: p1B.y, isHatch: false }, { x1: p2A.x, y1: p2A.y, x2: p2B.x, y2: p2B.y, isHatch: false }
             ];
             if (w.style === 'hatched') {
-                for (let c = -hw + 14; c < L + hw; c += 14) {
+                for (let c = -hw + 22; c < L + hw; c += 22) {
                     const t0 = Math.max(-hw, -c), t1 = Math.min(hw, L - c);
                     if (t1 - t0 > 0.5) segs.push({ x1: w.x1 + (c + t0) * ux + t0 * nx, y1: w.y1 + (c + t0) * uy + t0 * ny, x2: w.x1 + (c + t1) * ux + t1 * nx, y2: w.y1 + (c + t1) * uy + t1 * ny, isHatch: true });
                 }
