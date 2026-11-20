@@ -1451,19 +1451,36 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
             const showDocTypeFilterBar = ref(true);
             const drawingPageCount = computed(() => pages.value.filter(p => ['plan', '3d', 'dim', 'detail'].includes(p.docType)).length);
             const photoPageCount = computed(() => pages.value.filter(p => p.docType === 'photo').length);
+         
+const getPageSpaces = (pg) => {
+                if (!pg) return [];
+                if (Array.isArray(pg.spaces) && pg.spaces.length) return pg.spaces;
+                return pg.space ? [pg.space] : [];
+            };
+            const hasPageSpace = (pg, sp) => getPageSpaces(pg).includes(sp);
+            const addCustomSpaceToPage = (pg) => {
+                const s = prompt('輸入新空間名稱（例如：閣樓）')?.trim();
+                if (!s) return;
+                if (!spaceList.value.includes(s)) spaceList.value.push(s);
+                if (pg) togglePageSpaceTag(pg, s);
+            };
+
             const overviewSpacesAvailable = computed(() => {
                 const set = new Set();
-                pages.value.forEach(p => { if (p.space) set.add(p.space); });
+                pages.value.forEach(p => getPageSpaces(p).forEach(sp => set.add(sp)));
                 return Array.from(set);
             });
-           const overviewStackMode = ref(false);
-            const buildSpaceGroups = (rawList) => {
+            const overviewStackMode = ref(false);
+            const buildSpaceGroups = (rawList, onlySpace = null) => {
                 const map = new Map();
                 (rawList || []).forEach(item => {
                     if (!item?.pg) return;
-                    const key = (Array.isArray(item.pg.spaces) && item.pg.spaces.length ? item.pg.spaces[0] : item.pg.space) || '未標空間';
-                    if (!map.has(key)) map.set(key, []);
-                    map.get(key).push(item);
+                    const sps = getPageSpaces(item.pg);
+                    const keys = onlySpace ? [onlySpace] : (sps.length ? sps : ['未標空間']);
+                    keys.forEach(k => {
+                        if (!map.has(k)) map.set(k, []);
+                        if (!map.get(k).some(x => x.pg.id === item.pg.id)) map.get(k).push(item);
+                    });
                 });
                 const palettes = [
                     { box: 'bg-amber-50/70 border-amber-300', bar: 'bg-amber-100/90 border-amber-300 text-amber-950' },
@@ -1481,16 +1498,12 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                 }));
             };
             const overviewGroupedPages = computed(() => {
-                const raw = (overviewSpaceFilter.value !== 'all' && overviewSpaceFilter.value !== '__NONE__')
-                    ? pages.value.map((pg, idx) => ({ pg, idx })).filter(({ pg }) => pg && (overviewTypeFilter.value === 'all' || pg.docType === overviewTypeFilter.value) && ((Array.isArray(pg.spaces) && pg.spaces.includes(overviewSpaceFilter.value)) || pg.space === overviewSpaceFilter.value))
-                    : filteredOverviewPages.value.filter(x => x && x.pg);
-                return buildSpaceGroups(raw);
+                const onlySp = (overviewSpaceFilter.value !== 'all' && overviewSpaceFilter.value !== '__NONE__') ? overviewSpaceFilter.value : null;
+                return buildSpaceGroups(filteredOverviewPages.value.filter(x => x && x.pg), onlySp);
             });
             const quickNavGroupedPages = computed(() => {
-                const raw = (quickNavSpaceFilter.value !== 'all' && quickNavSpaceFilter.value !== '__NONE__')
-                    ? pages.value.map((pg, idx) => ({ pg, idx })).filter(({ pg }) => pg && (quickNavTypeFilter.value === 'all' || pg.docType === quickNavTypeFilter.value) && ((Array.isArray(pg.spaces) && pg.spaces.includes(quickNavSpaceFilter.value)) || pg.space === quickNavSpaceFilter.value))
-                    : filteredQuickNavPages.value;
-                return buildSpaceGroups(raw);
+                const onlySp = (quickNavSpaceFilter.value !== 'all' && quickNavSpaceFilter.value !== '__NONE__') ? quickNavSpaceFilter.value : null;
+                return buildSpaceGroups(filteredQuickNavPages.value, onlySp);
             });
             const filteredOverviewPages = computed(() => {
                 const list = pages.value
@@ -1501,8 +1514,9 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                             else if (overviewTypeFilter.value !== 'drawing' && pg.docType !== overviewTypeFilter.value) return false;
                         }
                         if (overviewSpaceFilter.value !== 'all') {
-                            if (overviewSpaceFilter.value === '__NONE__' && pg.space) return false;
-                            if (overviewSpaceFilter.value !== '__NONE__' && pg.space !== overviewSpaceFilter.value) return false;
+                            const sps = getPageSpaces(pg);
+                            if (overviewSpaceFilter.value === '__NONE__' && sps.length > 0) return false;
+                            if (overviewSpaceFilter.value !== '__NONE__' && !sps.includes(overviewSpaceFilter.value)) return false;
                         }
                         return true;
                     });
@@ -1515,10 +1529,17 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
             const overviewSpaceStacks = computed(() => {
                 const map = new Map();
                 filteredOverviewPages.value.forEach(({ pg, idx }) => {
-                    const key = pg.space || '__NONE__';
-                    if (!map.has(key)) map.set(key, { key, label: pg.space || '未分類空間', items: [] });
-                    map.get(key).items.push({ pg, idx });
+                    const sps = getPageSpaces(pg);
+                    const keys = sps.length ? sps : ['__NONE__'];
+                    keys.forEach(key => {
+                        if (!map.has(key)) map.set(key, { key, label: key === '__NONE__' ? '未分類空間' : key, items: [] });
+                        if (!map.get(key).items.some(x => x.pg.id === pg.id)) map.get(key).items.push({ pg, idx });
+                    });
                 });
+
+
+
+            
                 const spaceRank = (k) => {
                     if (k === '總圖') return 0;
                     if (k === '__NONE__') return 999;
@@ -3258,7 +3279,7 @@ const insertPageSmart = (newPg, explicitAfterIdx = null) => {
                onProjectNameInput, showNotesModal, noteFilter, newNoteText, newNoteSpace, activeNotesCount, filteredNotes, addProjectNote, toggleProjectNote, editProjectNote, deleteProjectNote, clearDoneNotes,
                showChecklistCard, activeSmartTip, currentSpaceChecklist, isChecklistItemChecked, currentChecklistDoneCount, toggleChecklistItem,
                sheetTab, chainPromptLine, chainSegments, splitChainLine, updateChainSegVal, getChainTicks, getChainSegLabels,
-                overviewGroupedPages, quickNavGroupedPages,
+               overviewGroupedPages, quickNavGroupedPages, hasPageSpace, addCustomSpaceToPage,
                 selectSheetTab, applyTagOnly, isPartTypeActive, selectPartPreset, toggleQuickNavMode,
                 prompt: (...args) => window.prompt(...args)
             };
