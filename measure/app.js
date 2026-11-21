@@ -3488,7 +3488,7 @@ const isDashed = ref(false);
 
            return {
                 currentView, currentUser, loginWithGoogle, logoutGoogle, offlineReady,
-                isDashed, orthoSnap, gridSnap, dimBlueMode, setDimBlueMode, setDrawToolMode, startSaveBlockCapture, getDimCapsuleStyle, expandCanvasWhiteSpace,
+                isDashed, orthoSnap, gridSnap, dimBlueMode, setDimBlueMode, setDrawToolMode, startSaveBlockCapture, getDimCapsuleStyle, expandCanvasWhiteSpace, shrinkCanvasWhiteSpace,
                 showQcStudioModal, qcStudioUrl, openQcStudio, closeQcStudio,
                 TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_PALETTE,
                 stampCategories, stampItems, stampFilter, showStampManagerModal, managerCatFilter, managerFilteredItems, pinnedStampList,
