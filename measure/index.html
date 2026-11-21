@@ -704,9 +704,14 @@
 
                                 <!-- Lines & Control Handles -->
                                 <g v-for="l in (activeCanvas.lines || [])" :key="l.id" :class="(drawMode === 'eraser' || drawMode === 'move') ? 'cursor-move pointer-events-auto' : 'pointer-events-none'" @touchstart="e => onLinePointerStart(l, e, 'A')" @mousedown="e => onLinePointerStart(l, e, 'A')">
-                                    <line v-if="drawMode === 'eraser' || drawMode === 'move'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="28 * invZoom" stroke-linecap="round" />
-                                    <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.75)" :stroke-width="(l.type === 'arrow-single' ? 3 : 2) * invZoom" :stroke-dasharray="(!l.type || l.type === 'measure') ? `${14 * invZoom} ${10 * invZoom}` : null" stroke-linecap="round" :marker-end="l.type === 'arrow-single' ? `url(#${getArrowMarkerId(l.color, 'A')})` : null" />
-                                    <template v-if="Array.isArray(l.chainSegs) && l.chainSegs.length >= 2">
+                                    <template v-if="l.type === 'rect'">
+                                        <rect v-if="drawMode === 'eraser' || drawMode === 'move'" :x="Math.min(l.x1, l.x2)" :y="Math.min(l.y1, l.y2)" :width="Math.abs(l.x2 - l.x1)" :height="Math.abs(l.y2 - l.y1)" fill="none" stroke="transparent" :stroke-width="28 * invZoom" />
+                                        <rect :x="Math.min(l.x1, l.x2)" :y="Math.min(l.y1, l.y2)" :width="Math.abs(l.x2 - l.x1)" :height="Math.abs(l.y2 - l.y1)" fill="none" :stroke="getLineStroke(l, 0.85)" :stroke-width="2.2 * invZoom" :stroke-dasharray="l.dashed ? `${14 * invZoom} ${10 * invZoom}` : null" />
+                                    </template>
+                                    <template v-else>
+                                        <line v-if="drawMode === 'eraser' || drawMode === 'move'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="28 * invZoom" stroke-linecap="round" />
+                                        <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.75)" :stroke-width="((l.type === 'arrow-single' || l.type === 'leader') ? 3 : 2) * invZoom" :stroke-dasharray="(!l.type || l.type === 'measure' || l.dashed) ? `${14 * invZoom} ${10 * invZoom}` : null" stroke-linecap="round" :marker-end="(l.type === 'arrow-single' || l.type === 'leader') ? `url(#${getArrowMarkerId(l.color, 'A')})` : null" />
+                                    </template><template v-if="Array.isArray(l.chainSegs) && l.chainSegs.length >= 2">
                                         <line v-for="(tk, tIdx) in getChainTicks(l)" :key="'tk-'+tIdx" :x1="tk.x1" :y1="tk.y1" :x2="tk.x2" :y2="tk.y2" :stroke="getLineStroke(l, 0.95)" :stroke-width="2 * invZoom" stroke-linecap="round" />
                                         <text v-for="sl in getChainSegLabels(l)" :key="'sl-'+sl.idx"
                                               :x="sl.x + (Math.abs(l.x2 - l.x1) < Math.abs(l.y2 - l.y1) ? -25 * invZoom : 0)"
@@ -724,8 +729,9 @@
                                         </template>
                                     </template>
                                 </g>
-                                <g v-if="currentLine && drawingPane === 'A' && ['line','arrow-single','straight'].includes(drawMode)" class="pointer-events-none">
-                                    <line :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" :stroke="getLineStroke({color: drawColor, type: drawMode === 'line' ? 'measure' : drawMode}, 0.75)" :stroke-width="(drawMode === 'arrow-single' ? 3 : 2) * invZoom" :stroke-dasharray="drawMode === 'line' ? `${14 * invZoom} ${10 * invZoom}` : null" stroke-linecap="round" :marker-end="drawMode === 'arrow-single' ? `url(#${getArrowMarkerId(drawColor, 'A')})` : null" />
+                                <g v-if="currentLine && drawingPane === 'A' && ['line','arrow-single','straight','rect','leader'].includes(drawMode)" class="pointer-events-none">
+                                    <rect v-if="drawMode === 'rect'" :x="Math.min(currentLine.x1, currentLine.x2)" :y="Math.min(currentLine.y1, currentLine.y2)" :width="Math.abs(currentLine.x2 - currentLine.x1)" :height="Math.abs(currentLine.y2 - currentLine.y1)" fill="none" :stroke="getLineStroke({color: drawColor, type: 'rect'}, 0.85)" :stroke-width="2.2 * invZoom" :stroke-dasharray="isDashed ? `${14 * invZoom} ${10 * invZoom}` : null" />
+                                    <line v-else :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" :stroke="getLineStroke({color: drawColor, type: drawMode === 'line' ? 'measure' : drawMode}, 0.75)" :stroke-width="((drawMode === 'arrow-single' || drawMode === 'leader') ? 3 : 2) * invZoom" :stroke-dasharray="(drawMode === 'line' || isDashed) ? `${14 * invZoom} ${10 * invZoom}` : null" stroke-linecap="round" :marker-end="(drawMode === 'arrow-single' || drawMode === 'leader') ? `url(#${getArrowMarkerId(drawColor, 'A')})` : null" />
                                 </g>
 
                                 <!-- Markers & CAD Blocks -->
@@ -766,6 +772,16 @@
                                     </g>
                                 </template>
                             </svg>
+
+                            <!-- 左右兩側快速翻頁浮動按鈕 -->
+                            <button v-if="!activePin && pages.length > 1 && activePageIndex > 0"
+                                    @click.stop="prevPage('A')" @touchstart.stop @mousedown.stop
+                                    title="上一頁"
+                                    class="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-14 rounded-xl bg-white/85 hover:bg-white border border-zinc-300 shadow-lg flex items-center justify-center text-red-600 text-xl font-black active:scale-95 transition">‹</button>
+                            <button v-if="!activePin && pages.length > 1 && activePageIndex < pages.length - 1"
+                                    @click.stop="nextPage('A')" @touchstart.stop @mousedown.stop
+                                    title="下一頁"
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-14 rounded-xl bg-white/85 hover:bg-white border border-zinc-300 shadow-lg flex items-center justify-center text-red-600 text-xl font-black active:scale-95 transition">›</button>
                         </div>
                     </div>
                 </div>
