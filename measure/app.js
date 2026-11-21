@@ -3417,10 +3417,10 @@ const isDashed = ref(false);
                 }, 50);
             };
 
-            return {
+           return {
+                currentView, currentUser, loginWithGoogle, logoutGoogle, offlineReady,
                 isDashed, orthoSnap, gridSnap, dimBlueMode, setDimBlueMode, setDrawToolMode, startSaveBlockCapture, getDimCapsuleStyle, expandCanvasWhiteSpace,
                 showQcStudioModal, qcStudioUrl, openQcStudio, closeQcStudio,
-                
                 TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_PALETTE,
                 stampCategories, stampItems, stampFilter, showStampManagerModal, managerCatFilter, managerFilteredItems, pinnedStampList,
                 newCatName, newStampText, newStampCatId, newStampColor, getCategoryById, openStampManager, onSelectNewStampCat, addStampCategory, addStampItem, toggleStampPin, editStampItemText, deleteStampItem, restoreDefaultStamps, syncStampLibraryCloud,
