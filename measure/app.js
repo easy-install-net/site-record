@@ -2752,15 +2752,15 @@ const isDashed = ref(false);
                     } else {
                         checkBranchNeed(() => {
                             const c = targetCanvas.value; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
-                            let tw = res.w, th = res.h; const maxS = Math.min(targetCanvasW.value, targetCanvasH.value) * 0.7;
-                            if (tw > maxS || th > maxS) { if (tw > th) { th = Math.round(th * maxS / tw); tw = maxS; } else { tw = Math.round(tw * maxS / th); th = maxS; } }
-                            const isB = splitMode.value && activePane.value === 'B', zVal = isB ? zoomScaleB.value : zoomScale.value, vx = isB ? vbXB.value : vbX.value, vy = isB ? vbYB.value : vbY.value;
-                            const vw = targetCanvasW.value / zVal, vh = targetCanvasH.value / zVal, markerId = Date.now();
-                            const newMarker = { id: markerId, x: Math.round(vx + vw / 2), y: Math.round(vy + vh / 2), w: tw, h: th, baseW: tw, baseH: th, scale: 1, rot: 0, type: 'image', data: { b64: res.b64 } };
-                            c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId }); activeMarker.value = newMarker; showTopTextBar.value = true; touchDirty(); showToast('✅ 貼圖成功（可拖拉或用滑桿調大細）');
-                     });
-                 }
-                 drawMode.value = 'move'; await saveAll();
+                         let tw = res.w, th = res.h; const maxS = Math.min(targetCanvasW.value, targetCanvasH.value) * 0.7;
+                         if (tw > maxS || th > maxS) { if (tw > th) { th = Math.round(th * maxS / tw); tw = maxS; } else { tw = Math.round(tw * maxS / th); th = maxS; } }
+                         const isB = splitMode.value && activePane.value === 'B', zVal = isB ? zoomScaleB.value : zoomScale.value, vx = isB ? vbXB.value : vbX.value, vy = isB ? vbYB.value : vbY.value;
+                         const vw = targetCanvasW.value / zVal, vh = targetCanvasH.value / zVal, markerId = Date.now();
+                         const newMarker = { id: markerId, x: Math.round(vx + vw / 2), y: Math.round(vy + vh / 2), w: tw, h: th, baseW: tw, baseH: th, scale: 1, rot: 0, type: 'image', data: { b64: res.b64 } };
+                         c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId }); activeMarker.value = newMarker; showTopTextBar.value = true; touchDirty(); showToast('✅ 貼圖成功（可拖拉或用滑桿調大細）');
+                  });
+              }
+              drawMode.value = 'move'; await saveAll();
                 } catch (_) { showToast('貼上失敗，請確定複製的是圖片'); } finally { isProcessing.value = false; }
             };
 
