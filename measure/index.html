@@ -937,7 +937,7 @@
                 </div>
                 <div class="flex items-center gap-1 mb-1">
                    <div class="flex items-center gap-0.5 mr-1">
-                        <button v-for="c in ['#1d4ed8','#38bdf8','#ffffff','#ef4444','#eab308','#34d399']" :key="'tc-'+c" @click="setMarkerTextColor(c)" :style="{ backgroundColor: c }" :class="getStampColor(activeMarker) === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-75'" class="w-4 h-4 rounded-full border border-zinc-400"></button>
+                       <button v-for="c in ['#1d4ed8','#38bdf8','#ffffff','#ef4444','#eab308','#34d399']" :key="'tc-'+c" @click="setMarkerTextColor(c)" :style="{ backgroundColor: c }" :class="getStampColor(activeMarker) === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-75'" class="w-4 h-4 rounded-full border border-zinc-400"></button>
                     </div>
                     <button @click="deleteMarkerTop" class="bg-red-50 text-red-600 border border-red-200 font-bold px-2 py-1 rounded text-xs">🗑️</button>
                      <button @click="closeTopSheet" class="bg-zinc-900 text-white font-bold px-3 py-1 rounded text-xs shadow-sm">完成</button>
