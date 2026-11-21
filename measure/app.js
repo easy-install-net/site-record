@@ -269,7 +269,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 }
                 if (currentUser.value?.uid && db && navigator.onLine) syncUserLibrariesCloud(true).catch(() => {});
             };
-            const closeQcStudio = async () => {
+
+const closeQcStudio = async () => {
                 showQcStudioModal.value = false;
                 qcStudioUrl.value = '';
                 await reloadFromQcStudio('all');
@@ -281,8 +282,6 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             const openStampManager = () => openQcStudio('stamps');
-                showStampManagerModal.value = true;
-            };
             const onSelectNewStampCat = () => {
                 const cat = getCategoryById(newStampCatId.value);
                 if (cat?.defaultColor) newStampColor.value = cat.defaultColor;
@@ -298,6 +297,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 await saveStampStore();
                 showToast(`✅ 已建立分類「${name}」`);
             };
+            
             const addStampItem = async (applyImmediately = false) => {
                 const txt = String(newStampText.value || '').trim();
                 if (!txt) return showToast('請輸入印章字眼');
