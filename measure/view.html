@@ -9,6 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="./cad.js?v=12.0"></script>
     <style>
         * { box-sizing: border-box; }
         html, body {
@@ -29,6 +30,9 @@
             stroke: #000; stroke-width: 5px; stroke-linejoin: round; stroke-linecap: round;
             pointer-events: none;
         }
+        .dim-text-clean {
+            font-weight: 900; letter-spacing: 0.5px; pointer-events: none;
+        }
     </style>
 </head>
 <body class="antialiased">
@@ -43,6 +47,9 @@
             </div>
 
             <div class="flex items-center gap-1 shrink-0">
+                <button v-if="project.code" @click="showQcReportModal = true" class="bg-rose-50 border border-rose-300 text-rose-700 px-2 py-1 rounded-md text-xs font-black shadow-sm whitespace-nowrap">
+                    📋必改{{ qcReportItems.length ? `(${qcReportItems.length})` : '' }}
+                </button>
                 <button v-if="activeCanvas?.photo" @click="downloadAnnotatedImage" class="bg-white border border-zinc-300 text-zinc-800 px-2 py-1 rounded-md text-xs font-bold shadow-sm whitespace-nowrap">⬇️存圖</button>
                 <button v-if="activeCanvas?.photo" @click="submitFeedback" :disabled="isSubmitting"
                         :class="hasDraft ? 'bg-blue-600 text-white border-blue-600 animate-pulse' : 'bg-zinc-900 text-white border-zinc-900'"
@@ -247,7 +254,7 @@
                     </div>
                 </div>
 
-                <!-- 左右兩側小窄揭頁箭嘴 -->
+                <!-- 左右兩側小窄揭頁箭嘴（完整保留） -->
                 <button v-if="!activePin && activePageIndex > 0" @click.stop="prevPage" @touchstart.stop @mousedown.stop
                         title="上一頁"
                         class="fixed left-1 top-1/2 -translate-y-1/2 z-20 w-6 h-11 sm:w-7 sm:h-12 rounded-xl bg-white/80 hover:bg-white active:scale-95 border border-zinc-300/90 shadow-md flex items-center justify-center text-zinc-800 text-xs sm:text-sm font-black transition-all">
@@ -266,7 +273,7 @@
                          @wheel.prevent="onStageWheel" @touchstart="onStageTouchStart" @touchmove="onStageTouchMove" @touchend="onStageTouchEnd" @touchcancel="onStageTouchEnd"
                          @mousedown="onStageMouseDown" @mousemove="onStageMouseMove" @mouseup="onStageMouseUp">
                         <defs>
-                            <marker v-for="c in ['#ef4444','#3b82f6','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowId(c)" markerWidth="4" markerHeight="4" refX="3.4" refY="2" orient="auto">
+                            <marker v-for="c in ['#ef4444','#3b82f6','#1d4ed8','#38bdf8','#f97316','#10b981','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowId(c)" markerWidth="4" markerHeight="4" refX="3.4" refY="2" orient="auto">
                                 <path d="M 0 0.4 L 4 2 L 0 3.6 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
                             </marker>
                         </defs>
@@ -282,10 +289,12 @@
                             <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 4.5 : 2" stroke-linecap="round" />
                         </g>
                         <g v-for="l in (activeCanvas.lines || [])" :key="'l-'+l.id" class="pointer-events-none">
-                            <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
-                                  :stroke="getLineStroke(l, 0.75)" :stroke-width="l.type === 'arrow-single' ? 3 : 2"
-                                  :stroke-dasharray="(!l.type || l.type === 'measure') ? '10 8' : null" stroke-linecap="round"
-                                  :marker-end="l.type === 'arrow-single' ? `url(#${getArrowId(l.color)})` : null" />
+                            <rect v-if="l.type === 'rect'" :x="Math.min(l.x1, l.x2)" :y="Math.min(l.y1, l.y2)" :width="Math.abs(l.x2 - l.x1)" :height="Math.abs(l.y2 - l.y1)"
+                                  fill="none" :stroke="getLineStroke(l, 0.85)" stroke-width="2.2" :stroke-dasharray="l.dashed ? '10 8' : null" />
+                            <line v-else :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2"
+                                  :stroke="getLineStroke(l, 0.75)" :stroke-width="(l.type === 'arrow-single' || l.type === 'leader') ? 3 : 2"
+                                  :stroke-dasharray="(!l.type || l.type === 'measure' || l.dashed) ? '10 8' : null" stroke-linecap="round"
+                                  :marker-end="(l.type === 'arrow-single' || l.type === 'leader') ? `url(#${getArrowId(l.color)})` : null" />
                             <template v-if="Array.isArray(l.chainSegs) && l.chainSegs.length >= 2">
                                 <line v-for="(tk, tIdx) in getChainTicks(l)" :key="'vtk-'+tIdx"
                                       :x1="tk.x1" :y1="tk.y1" :x2="tk.x2" :y2="tk.y2"
@@ -295,15 +304,22 @@
                                       fill="#fde047" class="stamp-text" style="font-size: 16px;">{{ sl.val }}</text>
                             </template>
                         </g>
-                        <path v-for="p in (activeCanvas.paths || [])" :key="'p-'+p.id" :d="p.d" :stroke="p.color || '#3b82f6'" stroke-width="2" fill="none" stroke-linecap="round" class="pointer-events-none" />
+                        <path v-for="p in (activeCanvas.paths || [])" :key="'p-'+p.id" :d="p.d" :stroke="p.color || '#111827'" :stroke-width="p.color === '#facc15' ? 16 : 2.5" :stroke-opacity="p.color === '#facc15' ? 0.45 : 1" fill="none" stroke-linecap="round" class="pointer-events-none" />
 
-                        <!-- 主工程文字標註 (支援點擊藍色跳頁傳送門) -->
+                        <!-- 主工程文字標註與 CAD 圖塊 (支援點擊藍色跳頁傳送門) -->
                         <g v-for="m in (activeCanvas.markers || [])" :key="'m-'+m.id" :transform="`translate(${m.x}, ${m.y})`"
                            :class="(mode === 'browse' && m.type === 'page_link') ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'"
                            @click.stop="onMasterMarkerClick(m)" @touchend.stop="onMasterMarkerClick(m)">
                             <rect v-if="m.type === 'page_link'" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="14" fill="rgba(14,165,233,0.18)" stroke="#38bdf8" stroke-width="2.5" />
-                            <template v-if="m.type !== 'image'">
-                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text" style="font-size: 17px;">
+                            <template v-if="m.type === 'cad'">
+                                <g :transform="getCadTransform(m)">
+                                    <image :href="getCadSvgImage(m)" x="-100" y="-100" width="200" height="200" preserveAspectRatio="xMidYMid meet" />
+                                </g>
+                            </template>
+                            <template v-else-if="m.type !== 'image'">
+                                <rect v-if="getDimCapsuleStyle(m)" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="8"
+                                      :fill="getDimCapsuleStyle(m).fill" :stroke="getDimCapsuleStyle(m).stroke" stroke-width="1.5" />
+                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" :class="getDimCapsuleStyle(m) ? 'dim-text-clean' : 'stamp-text'" style="font-size: 17px;">
                                     <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
                                 </text>
                             </template>
@@ -372,6 +388,36 @@
                 <button @click="showSubmitSuccess = false" class="w-full bg-white border border-zinc-300 text-zinc-700 py-2.5 rounded-lg text-xs font-bold">保留畫面標記</button>
             </div>
         </div>
+
+        <!-- 📋 師傅／製圖部專用：QC 批改與跟進清單面板 -->
+        <div v-if="showQcReportModal" class="fixed inset-0 bg-black/45 z-50 flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-4" @click.self="showQcReportModal = false" @touchstart.stop @mousedown.stop>
+            <div class="bg-zinc-100 border border-zinc-300 w-full sm:max-w-lg rounded-t-2xl sm:rounded-xl flex flex-col shadow-2xl h-[82dvh] sm:max-h-[86dvh]">
+                <div class="bg-white rounded-t-2xl sm:rounded-t-xl px-4 py-3 flex justify-between items-center border-b border-zinc-200 shrink-0">
+                    <span class="text-base font-black text-rose-700">📋 工程必改／跟進清單</span>
+                    <button @click="showQcReportModal = false" class="bg-zinc-100 px-3 py-1.5 rounded-lg text-xs font-black">✕ 關閉</button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-3 flex flex-col gap-3 touch-scrollable">
+                    <div v-if="project.customNotes" class="bg-rose-50 border-2 border-rose-300 rounded-xl p-3 shadow-2xs">
+                        <span class="text-xs font-black text-rose-900 mb-1 block">⭐ 全單特別提醒 / 技術總要求</span>
+                        <div class="text-xs sm:text-sm font-bold text-rose-950 whitespace-pre-wrap leading-snug">{{ project.customNotes }}</div>
+                    </div>
+
+                    <div v-if="!qcReportItems.length" class="text-center text-zinc-500 font-bold py-6 text-sm bg-white rounded-xl border border-zinc-200">
+                        圖紙中暫無紅色批改指示
+                    </div>
+
+                    <div v-for="item in qcReportItems" :key="'qc-'+item.key" class="bg-white border border-zinc-300 rounded-xl p-3 shadow-sm">
+                        <div class="flex items-center justify-between border-b border-zinc-100 pb-2 mb-2">
+                            <span class="text-sm font-black text-zinc-900">{{ item.pageLabel }}</span>
+                            <button @click="jumpToPageById(item.pageId, item.pinId)" class="bg-blue-600 text-white px-2.5 py-1 rounded text-xs font-black">前往此頁 ›</button>
+                        </div>
+                        <ol class="list-decimal pl-5 text-xs sm:text-sm font-black text-red-700 space-y-1.5">
+                            <li v-for="(txt, idx) in item.redTexts" :key="idx">{{ txt }}</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -428,18 +474,169 @@
             return segs;
         };
 
+        const drawRoundRect = (ctx, x, y, w, h, r) => {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
+        };
+
         createApp({
             setup() {
                 const inputCode = ref(''), isLoading = ref(false), loadingText = ref('正在載入圖紙...');
                 const toastMsg = ref(''), showToast = (m) => { toastMsg.value = m; setTimeout(() => { if (toastMsg.value === m) toastMsg.value = ''; }, 3000); };
 
-                const project = reactive({ code: '', name: '', date: '' });
+                const project = reactive({ code: '', name: '', date: '', customNotes: '' });
                 const pages = ref([]), isFilteredShare = ref(false), activePageIndex = ref(0), activePin = ref(null), activePinIndex = ref(0);
                 const activePage = computed(() => pages.value[activePageIndex.value] || null);
                 const activeCanvas = computed(() => activePin.value || activePage.value);
                 const canvasW = computed(() => activeCanvas.value?.w || 1200);
                 const canvasH = computed(() => activeCanvas.value?.h || 900);
                 const masterPages = computed(() => pages.value.map((pg, idx) => ({ pg, idx })).filter(x => x.pg.space === '總圖'));
+
+                // QC 批改清單與圖塊渲染支援
+                const showQcReportModal = ref(false);
+                const customCadBlocks = ref([]);
+                const cadSvgCache = new Map();
+
+                const getCadDef = (cadType) => {
+                    const cadMod = window.MEASURE_CAD || {};
+                    return cadMod.CAD_DEFS?.[cadType] || customCadBlocks.value.find(x => x.id === cadType) || null;
+                };
+
+                const drawCustomShapes = (ctx, m, def) => {
+                    ctx.save();
+                    ctx.translate(m.x, m.y);
+                    ctx.rotate(((m.rot || 0) * Math.PI) / 180);
+                    ctx.scale((m.scale || 1) * (m.scaleX || 1) * (m.flipX || 1), (m.scale || 1) * (m.scaleY || 1) * (m.flipY || 1));
+                    (def.shapes || []).forEach(s => {
+                        ctx.save();
+                        if (s.color === '#facc15') ctx.globalAlpha = 0.45;
+                        ctx.strokeStyle = s.color || m.color || '#111827';
+                        ctx.lineWidth = s.sw || 2.5;
+                        if (s.t === 'rect') {
+                            if (s.fillBg) { ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.fillRect(s.x, s.y, s.w, s.h); }
+                            ctx.strokeRect(s.x, s.y, s.w, s.h);
+                        } else if (s.t === 'circle') {
+                            ctx.beginPath(); ctx.arc(s.cx, s.cy, s.r, 0, Math.PI * 2);
+                            if (s.fillBg) { ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.fill(); }
+                            ctx.stroke();
+                        } else if (s.t === 'line') {
+                            ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+                        }
+                        ctx.restore();
+                    });
+                    ctx.restore();
+                };
+
+                const getCadSvgImage = (m) => {
+                    const cadType = m?.data?.cadType;
+                    if (!cadType) return '';
+                    const def = getCadDef(cadType);
+                    if (!def) return '';
+                    if (def.imgB64) return def.imgB64;
+                    const color = m.color || '#111827';
+                    const key = `${cadType}_${color}`;
+                    if (cadSvgCache.has(key)) return cadSvgCache.get(key);
+                    const c = document.createElement('canvas'); c.width = 200; c.height = 200;
+                    const ctx = c.getContext('2d');
+                    const cadMod = window.MEASURE_CAD || {};
+                    if (cadMod.CAD_DEFS?.[cadType] && cadMod.drawOnCanvas) {
+                        cadMod.drawOnCanvas(ctx, { x: 100, y: 100, color, rot: 0, scale: 1, flipX: 1, flipY: 1, data: { cadType } });
+                    } else if (def.shapes) {
+                        drawCustomShapes(ctx, { x: 100, y: 100, color, rot: 0, scale: 1, flipX: 1, flipY: 1, data: { cadType } }, def);
+                    }
+                    const url = c.toDataURL('image/png');
+                    cadSvgCache.set(key, url);
+                    return url;
+                };
+
+                const getCadTransform = (m) => {
+                    const sx = (m.scale || 1) * (m.scaleX || 1) * (m.flipX || 1);
+                    const sy = (m.scale || 1) * (m.scaleY || 1) * (m.flipY || 1);
+                    return `translate(${m.x}, ${m.y}) rotate(${m.rot || 0}) scale(${sx}, ${sy})`;
+                };
+
+                const getDimCapsuleStyle = (m) => {
+                    const col = getStampColor(m);
+                    if (col === '#38bdf8') return { fill: 'rgba(15, 23, 42, 0.88)', stroke: '#38bdf8' };
+                    if (col === '#1d4ed8' || col === '#2563eb') return { fill: 'rgba(255, 255, 255, 0.92)', stroke: '#1d4ed8' };
+                    return null;
+                };
+
+                const isRedColor = (c) => {
+                    const s = String(c || '').toLowerCase();
+                    return s === '#ef4444' || s === '#dc2626' || s === 'red';
+                };
+
+                const extractRedItems = (canvasObj) => {
+                    const list = [];
+                    (canvasObj?.markers || []).forEach(m => {
+                        if (isRedColor(m.textColor) || isRedColor(m.color)) {
+                            const val = [m.data?.name, m.data?.val].filter(Boolean).join(': ');
+                            list.push(val ? `批改指示：${val}` : '紅色標記指示');
+                        }
+                    });
+                    const redShapes = (canvasObj?.lines || []).filter(l => isRedColor(l.color) && l.type && l.type !== 'measure').length
+                        + (canvasObj?.paths || []).filter(p => isRedColor(p.color)).length;
+                    if (redShapes > 0) list.push(`圖面共有 ${redShapes} 處紅色圈選或修改範圍`);
+                    return list;
+                };
+
+                const qcReportItems = computed(() => {
+                    const results = [];
+                    pages.value.forEach((pg, pIdx) => {
+                        const mainReds = extractRedItems(pg);
+                        if (mainReds.length > 0) {
+                            results.push({
+                                key: `pg_${pg.id}`,
+                                pageId: pg.id,
+                                pinId: '',
+                                pageLabel: `P${pIdx + 1}${pg.space ? ' [' + pg.space + ']' : ''}`,
+                                redTexts: mainReds
+                            });
+                        }
+                        (pg.pins || []).forEach((pin, pinIdx) => {
+                            const pinReds = extractRedItems(pin);
+                            if (pinReds.length > 0) {
+                                results.push({
+                                    key: `pin_${pg.id}_${pin.id}`,
+                                    pageId: pg.id,
+                                    pinId: String(pin.id),
+                                    pageLabel: `P${pIdx + 1} 📍細節釘#${pinIdx + 1}${pin.space ? ' [' + pin.space + ']' : ''}`,
+                                    redTexts: pinReds
+                                });
+                            }
+                        });
+                    });
+                    return results;
+                });
+
+                const jumpToPageById = (pid, pinId = '') => {
+                    const idx = pages.value.findIndex(p => String(p.id) === String(pid));
+                    if (idx !== -1) {
+                        showQcReportModal.value = false;
+                        clearDraft();
+                        resetZoom();
+                        activePageIndex.value = idx;
+                        if (pinId) {
+                            const targetPinIdx = (pages.value[idx].pins || []).findIndex(x => String(x.id) === String(pinId));
+                            if (targetPinIdx !== -1) {
+                                activePin.value = pages.value[idx].pins[targetPinIdx];
+                                activePinIndex.value = targetPinIdx;
+                            } else {
+                                activePin.value = null;
+                            }
+                        } else {
+                            activePin.value = null;
+                        }
+                        mode.value = 'browse';
+                        showToast(`↪️ 已跳轉至 P${idx + 1}`);
+                    }
+                };
 
                 // 空間資料夾分疊導航
                 const showQuickNav = ref(false), navStackMode = ref(false), navSpaceFilter = ref('all'), navTypeFilter = ref('all');
@@ -893,6 +1090,15 @@
                     await new Promise(r => { img.onload = r; img.onerror = r; });
                     const c = document.createElement('canvas'), w = cObj.w || 1200, h = cObj.h || 900; c.width = w; c.height = h;
                     const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+                    const customCadImgs = {};
+                    for (const m of (cObj.markers || [])) {
+                        if (m.type === 'cad' && m.data?.cadType) {
+                            const def = getCadDef(m.data.cadType);
+                            if (def?.imgB64 && !customCadImgs[def.id]) {
+                                const im = new Image(); im.src = def.imgB64; await new Promise(r => { im.onload = r; im.onerror = r; }); customCadImgs[def.id] = im;
+                            }
+                        }
+                    }
                     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
                     (cObj.walls || []).forEach(wObj => {
                         ctx.strokeStyle = wObj.color || '#111827';
@@ -902,15 +1108,24 @@
                         });
                     });
                     (cObj.lines || []).forEach(l => {
-                        if (l.type === 'arrow-single') {
+                        if (l.type === 'rect') {
+                            ctx.save(); if (l.dashed) ctx.setLineDash([10, 8]);
+                            ctx.strokeStyle = getLineStroke(l, 0.85); ctx.lineWidth = 2.2;
+                            ctx.strokeRect(Math.min(l.x1, l.x2), Math.min(l.y1, l.y2), Math.abs(l.x2 - l.x1), Math.abs(l.y2 - l.y1));
+                            ctx.restore();
+                        } else if (l.type === 'arrow-single' || l.type === 'leader') {
                             const hex = getLineStroke(l);
+                            ctx.save(); if (l.dashed) ctx.setLineDash([10, 8]);
                             ctx.strokeStyle = hex; ctx.lineWidth = 3;
                             ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
+                            ctx.restore();
                             ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(Math.atan2(l.y2 - l.y1, l.x2 - l.x1));
                             ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-6, 3); ctx.lineTo(-6, -3); ctx.closePath(); ctx.fill(); ctx.restore();
                         } else if (l.type === 'straight') {
+                            ctx.save(); if (l.dashed) ctx.setLineDash([10, 8]);
                             ctx.strokeStyle = getLineStroke(l); ctx.lineWidth = 2;
                             ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
+                            ctx.restore();
                         } else {
                             ctx.save(); ctx.setLineDash([10, 8]);
                             ctx.strokeStyle = getLineStroke(l, 0.75); ctx.lineWidth = 2;
@@ -924,14 +1139,44 @@
                             }
                         }
                     });
-                    (cObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 2; ctx.stroke(new Path2D(p.d)); });
+                    (cObj.paths || []).forEach(p => {
+                        ctx.save();
+                        if (p.color === '#facc15') { ctx.globalAlpha = 0.45; ctx.lineWidth = 16; }
+                        else { ctx.lineWidth = 2.5; }
+                        ctx.strokeStyle = p.color || '#111827';
+                        ctx.stroke(new Path2D(p.d));
+                        ctx.restore();
+                    });
                     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    const cadMod = window.MEASURE_CAD || {};
                     (cObj.markers || []).forEach(m => {
-                        if (m.type !== 'image') {
-                            const lines = getMarkerLines(m); ctx.font = '900 17px sans-serif';
+                        if (m.type === 'cad') {
+                            const def = getCadDef(m.data?.cadType);
+                            if (cadMod.CAD_DEFS?.[m.data?.cadType] && cadMod.drawOnCanvas) cadMod.drawOnCanvas(ctx, m);
+                            else if (def?.imgB64 && customCadImgs[def.id]) {
+                                ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(((m.rot || 0) * Math.PI) / 180);
+                                ctx.scale((m.scale || 1) * (m.scaleX || 1) * (m.flipX || 1), (m.scale || 1) * (m.scaleY || 1) * (m.flipY || 1));
+                                const dw = def.w || 72, dh = def.h || 72;
+                                ctx.drawImage(customCadImgs[def.id], -dw / 2, -dh / 2, dw, dh);
+                                ctx.restore();
+                            } else if (def?.shapes) {
+                                drawCustomShapes(ctx, m, def);
+                            }
+                        } else if (m.type !== 'image') {
+                            const lines = getMarkerLines(m);
+                            const cap = getDimCapsuleStyle(m);
+                            if (cap) {
+                                ctx.save();
+                                ctx.fillStyle = cap.fill;
+                                drawRoundRect(ctx, m.x - (m.w || 80) / 2 - 4, m.y - (m.h || 32) / 2 - 2, (m.w || 80) + 8, (m.h || 32) + 4, 8);
+                                ctx.fill();
+                                ctx.lineWidth = 1.5; ctx.strokeStyle = cap.stroke; ctx.stroke();
+                                ctx.restore();
+                            }
+                            ctx.font = '900 17px sans-serif';
                             lines.forEach((ln, i) => {
                                 const y = m.y - ((lines.length - 1) * 20) / 2 + i * 20;
-                                ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(ln, m.x, y);
+                                if (!cap) { ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(ln, m.x, y); }
                                 ctx.fillStyle = getStampColor(m); ctx.fillText(ln, m.x, y);
                             });
                         }
@@ -969,7 +1214,15 @@
                         const [projDoc, pagesSnap, mediaSnap] = await Promise.all([projRef.get(), projRef.collection('pages').get(), projRef.collection('media').get()]);
                         if (!projDoc.exists) { alert('找不到工程碼 #' + code); project.code = ''; return; }
                         const pd = projDoc.data();
-                        project.code = code; project.name = pd.name || ''; project.date = pd.date || '';
+                        project.code = code; project.name = pd.name || ''; project.date = pd.date || ''; project.customNotes = pd.customNotes || '';
+                        if (pd.ownerId) {
+                            try {
+                                const libDoc = await db.collection('user_libraries').doc(String(pd.ownerId)).get();
+                                if (libDoc.exists && Array.isArray(libDoc.data()?.customCadBlocks)) {
+                                    customCadBlocks.value = libDoc.data().customCadBlocks;
+                                }
+                            } catch (_) {}
+                        }
                         const mediaMap = new Map();
                         await Promise.all(mediaSnap.docs.map(async (m) => { const p = await resolveMediaDoc(m); if (p) mediaMap.set(String(m.id), p); }));
                         const urlParams = new URLSearchParams(window.location.search);
@@ -1032,7 +1285,9 @@
                 });
 
                 return {
-                    inputCode, isLoading, loadingText, toastMsg, project, pages, isFilteredShare, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH, masterPages,
+                    inputCode, isLoading, loadingText, toastMsg, project, showQcReportModal, qcReportItems, jumpToPageById,
+                    getCadSvgImage, getCadTransform, getDimCapsuleStyle,
+                    pages, isFilteredShare, activePageIndex, activePage, activePin, activePinIndex, activeCanvas, canvasW, canvasH, masterPages,
                     showQuickNav, navStackMode, navSpaceFilter, navTypeFilter, navSpacesAvailable, openNavMode, navSpaceStacks, navFilteredPages, navGroupedPages, getDocTypeLabel,
                     capsuleOffset, capsuleCollapsed, startCapsuleDrag,
                     zoomScale, invZoom, svgViewBox, svgCanvas, stepZoom, resetZoom, onStageWheel,
