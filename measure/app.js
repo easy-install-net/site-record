@@ -1080,12 +1080,7 @@ const closeQcStudio = async () => {
                 showToast('📦 請在圖上拖拉方框，框選要存為圖塊的線條');
             };
 
-            const getDimCapsuleStyle = (m) => {
-                const col = getStampColor(m);
-                if (col === '#38bdf8') return { fill: 'rgba(15, 23, 42, 0.88)', stroke: '#38bdf8' };
-                if (col === '#1d4ed8' || col === '#2563eb') return { fill: 'rgba(255, 255, 255, 0.92)', stroke: '#1d4ed8' };
-                return null;
-            };
+           const getDimCapsuleStyle = () => null;
 
             const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
             const cloudStatusText = computed(() => ({ syncing: '☁️同步中', offline: '📴離線', queued: '⏳待傳', ready: '☁️v12.0' }[cloudSyncState.value] || '☁️v12.0'));
@@ -1990,6 +1985,20 @@ const closeQcStudio = async () => {
                 });
             };
 
+            const onMarkerQuickDragStart = (marker, e, pane = activePane.value) => {
+                focusPane(pane);
+                if (!marker || e.touches?.length > 1 || isPinching || showBranchPrompt.value) return;
+                e.preventDefault(); e.stopPropagation();
+                checkBranchNeed(() => {
+                    const target = (targetCanvas.value.markers || []).find(m => m.id === marker.id) || marker;
+                    if (showBranchPrompt.value) return;
+                    activeLine.value = null;
+                    draggedMarker.value = target; activeMarker.value = target;
+                    const p = getCoords(e, pane);
+                    dragOrigin.value = { x: p.x, y: p.y }; markerOrigin.value = { x: target.x, y: target.y };
+                });
+            };
+
             const onMarkerPointerStart = (marker, e, pane = activePane.value, chainSegIdx = -1) => {
                 focusPane(pane);
                 if (!marker) return;
@@ -2008,6 +2017,7 @@ const closeQcStudio = async () => {
                         const p = getCoords(e, pane);
                         dragOrigin.value = { x: p.x, y: p.y }; markerOrigin.value = { x: target.x, y: target.y };
                     });
+                
                     return;
                 }
                 if (drawMode.value === 'browse' || chainSegIdx >= 0) {
