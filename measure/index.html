@@ -326,15 +326,13 @@
                     <button @click="cutSelectedObject" title="剪下選中物件" :class="(activeMarker || activeLine) ? 'text-amber-700 hover:bg-amber-50' : 'text-zinc-400 hover:bg-zinc-100'" class="px-2 py-1 rounded-full text-sm font-black shrink-0">↷</button>
                 </div>
 
-               <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-lg flex items-center gap-0.5 sm:gap-1 max-w-full">
+                <div class="bg-white/95 backdrop-blur-md border border-zinc-300 rounded-full p-1 shadow-lg flex items-center gap-0.5 sm:gap-1 max-w-full">
                     <button @click="setDrawToolMode('line')" :class="drawMode === 'line' ? 'bg-blue-700 text-white' : 'text-blue-800 hover:bg-blue-50'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">📏 度尺</button>
                     <button @click="drawMode = 'stamp'" :class="drawMode === 'stamp' ? 'bg-amber-600 text-white' : 'text-amber-800 hover:bg-amber-50'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">🏷️ 印章</button>
                     <button @click="setDrawToolMode('straight')" :class="['freehand','wall','straight','arrow-single','cad','rect','leader','save_block'].includes(drawMode) ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">✏️ 畫</button>
                     <button v-if="!targetPin" @click="drawMode = 'pin'" :class="drawMode === 'pin' ? 'bg-red-600 text-white' : 'text-zinc-700 hover:bg-zinc-100'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">📍 釘</button>
                     <button @click="drawMode = 'eraser'" :class="drawMode === 'eraser' ? 'bg-red-600 text-white' : 'text-red-600 hover:bg-red-50'" class="px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shrink-0">🧽 擦</button>
                 </div>
-
-            
 
                 <!-- ✏️ 畫 內子選單（黑線結構、紅線批改、螢光黃、格仔磁吸、即場存圖塊） -->
                 <div v-if="['freehand','wall','straight','arrow-single','cad','rect','leader','save_block'].includes(drawMode)"
@@ -352,8 +350,9 @@
                     <button @click="gridSnap = !gridSnap" :class="gridSnap ? 'bg-blue-600 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0">🧲 格吸</button>
                     <button @click="isDashed = !isDashed" :class="isDashed ? 'bg-blue-600 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0">┄ 虛線</button>
                     <button @click="orthoSnap = !orthoSnap" :class="orthoSnap ? 'bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0">📐 吸直</button>
+                    <button @click="expandCanvasWhiteSpace()" class="px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0 bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100">+擴白</button>
                     <button @click="shrinkCanvasWhiteSpace()" class="px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0 bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100">-縮白</button>
-                     <div class="w-px h-4 bg-zinc-300 mx-0.5 shrink-0"></div>
+                    <div class="w-px h-4 bg-zinc-300 mx-0.5 shrink-0"></div>
                     <button v-for="c in ['#111827','#1d4ed8','#38bdf8','#f97316','#10b981','#ef4444','#facc15']" :key="c" @click="drawColor = c" :style="{backgroundColor: c}" :class="drawColor === c ? 'ring-2 ring-zinc-900 scale-115' : ''" class="w-4 h-4 rounded-full border border-zinc-400 shrink-0"></button>
                 </div>
 
@@ -688,7 +687,7 @@
                                 </defs>
                                 <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="#ffffff" />
                                 <image :href="activeCanvas.photo" x="0" y="0" :width="canvasW" :height="canvasH" preserveAspectRatio="none" pointer-events="none" />
-                    <g v-if="gridSnap" class="pointer-events-none">
+                                <g v-if="gridSnap" class="pointer-events-none">
                                     <defs>
                                         <pattern id="snap-grid-20" width="20" height="20" patternUnits="userSpaceOnUse">
                                             <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(37,99,235,0.22)" stroke-width="0.8" />
@@ -722,7 +721,8 @@
                                     <template v-else>
                                         <line v-if="drawMode === 'eraser' || drawMode === 'move'" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" stroke="transparent" :stroke-width="28 * invZoom" stroke-linecap="round" />
                                         <line :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" :stroke="getLineStroke(l, 0.75)" :stroke-width="((l.type === 'arrow-single' || l.type === 'leader') ? 3 : 2) * invZoom" :stroke-dasharray="(!l.type || l.type === 'measure' || l.dashed) ? `${14 * invZoom} ${10 * invZoom}` : null" stroke-linecap="round" :marker-end="(l.type === 'arrow-single' || l.type === 'leader') ? `url(#${getArrowMarkerId(l.color, 'A')})` : null" />
-                                    </template><template v-if="Array.isArray(l.chainSegs) && l.chainSegs.length >= 2">
+                                    </template>
+                                    <template v-if="Array.isArray(l.chainSegs) && l.chainSegs.length >= 2">
                                         <line v-for="(tk, tIdx) in getChainTicks(l)" :key="'tk-'+tIdx" :x1="tk.x1" :y1="tk.y1" :x2="tk.x2" :y2="tk.y2" :stroke="getLineStroke(l, 0.95)" :stroke-width="2 * invZoom" stroke-linecap="round" />
                                         <text v-for="sl in getChainSegLabels(l)" :key="'sl-'+sl.idx"
                                               :x="sl.x + (Math.abs(l.x2 - l.x1) < Math.abs(l.y2 - l.y1) ? -25 * invZoom : 0)"
@@ -919,7 +919,8 @@
                 <button v-for="(it, idx) in fullScreenList" :key="'fsth-'+idx" @click="jumpFullScreen(idx)" :class="idx === fullScreenIndex ? 'ring-2 ring-blue-500 bg-zinc-800 text-white' : 'bg-zinc-900 text-zinc-400 border-zinc-700'" class="border rounded px-2 py-1 text-[11px] font-bold shrink-0">{{ it.shortLabel }}</button>
             </div>
         </div>
-<!-- 📏 度尺 / 實做 / 印章 一體化輸入面板 -->
+
+        <!-- 📏 度尺 / 實做 / 印章 一體化輸入面板 -->
         <div v-if="showTopSheet && activeMarker" class="fixed inset-0 bg-black/25 z-40" @click="closeTopSheet" @touchstart.stop @mousedown.stop></div>
         <div v-if="showTopSheet && activeMarker" class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white text-zinc-900 border-b border-x border-zinc-300 rounded-b-xl z-50 flex flex-col shadow-2xl overflow-hidden max-h-[94dvh]" @touchstart.stop @mousedown.stop>
             <!-- 頂部分頁列 (防擠壓) -->
@@ -930,20 +931,15 @@
                     <button @click="selectSheetTab('stamp')" :class="activeMarker.type === 'stamp' ? 'bg-white text-zinc-900 border-t border-x border-zinc-300 rounded-t-lg font-black' : 'bg-zinc-200 text-zinc-500 rounded-t-lg font-bold'" class="px-2.5 py-1.5 text-[12px] relative z-10 border translate-y-[1px]">🏷️ 印章</button>
                 </div>
                 <div class="flex items-center gap-1 mb-1">
-                   <div class="flex items-center gap-0.5 mr-1">
-                       <button v-for="c in ['#1d4ed8','#38bdf8','#ffffff','#ef4444','#eab308','#34d399']" :key="'tc-'+c" @click="setMarkerTextColor(c)" :style="{ backgroundColor: c }" :class="getStampColor(activeMarker) === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-75'" class="w-4 h-4 rounded-full border border-zinc-400"></button>
+                    <div class="flex items-center gap-0.5 mr-1">
+                        <button v-for="c in ['#1d4ed8','#38bdf8','#ffffff','#ef4444','#eab308','#34d399']" :key="'tc-'+c" @click="setMarkerTextColor(c)" :style="{ backgroundColor: c }" :class="getStampColor(activeMarker) === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-75'" class="w-4 h-4 rounded-full border border-zinc-400"></button>
                     </div>
-                   <div v-for="grp in filteredStampGroups" :key="'sg-'+grp.id" class="flex flex-col gap-1">
-                        <div class="text-[11px] font-black text-zinc-500">{{ grp.icon }} {{ grp.name }}</div>
-                        <div v-for="(row, rIdx) in grp.rows" :key="'sr-'+rIdx" class="flex flex-wrap gap-1">
-                            <button v-for="st in row" :key="st" @click="applyStamp(st)" class="px-2 py-1 bg-zinc-50 hover:bg-amber-50 border border-zinc-300 rounded text-xs font-bold text-zinc-900">{{ st }}</button>
-                        </div>
-                    </div>
+                    <button @click="deleteMarkerTop" class="bg-red-50 text-red-600 border border-red-200 font-bold px-2 py-1 rounded text-xs">🗑️</button>
+                    <button @click="closeTopSheet" class="bg-zinc-900 text-white font-bold px-3 py-1 rounded text-xs shadow-sm">完成</button>
                 </div>
             </div>
-        </div>
 
-        <!-- ✏️ 文字 / 貼圖 / 圖塊 頂部調整條 -->
+            <!-- 分頁 1 & 2：度尺 / 實做 -->
             <div v-if="activeMarker.type !== 'stamp'" class="flex flex-col flex-1 min-h-0 overflow-y-auto touch-scrollable">
                 <div class="p-1.5 bg-white border-b border-zinc-200 shrink-0 flex flex-col gap-1.5">
                     <template v-if="TAG_DEFS[activeMarker.type]">
@@ -977,6 +973,7 @@
                                     <div class="relative inline-flex items-center">
                                         <button type="button" @click="focusChainSeg(sIdx)" :class="focusedChainIdx === sIdx ? 'border-2 border-blue-600 bg-blue-50 text-blue-900' : 'border border-amber-300 bg-white text-amber-950'" class="min-w-[52px] pr-4 pl-1.5 py-1 text-xs font-black rounded text-center">{{ seg.val || `段${sIdx+1}` }}</button>
                                         <button type="button" @click.stop="removeChainSeg(sIdx)" class="absolute right-0.5 top-0.5 text-[10px] text-zinc-400 hover:text-red-600 px-0.5">×</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1030,7 +1027,7 @@
                             <button v-for="ps in pinnedStampList" :key="'ps-'+ps.id" @click="applyStamp(ps)" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded text-xs font-black text-amber-950">{{ ps.text }}</button>
                         </div>
                     </div>
-                   <div v-for="grp in filteredStampGroups" :key="'sg-'+grp.id" class="flex flex-col gap-1">
+                    <div v-for="grp in filteredStampGroups" :key="'sg-'+grp.id" class="flex flex-col gap-1">
                         <div class="text-[11px] font-black text-zinc-500">{{ grp.icon }} {{ grp.name }}</div>
                         <div v-for="(row, rIdx) in grp.rows" :key="'sr-'+rIdx" class="flex flex-wrap gap-1">
                             <button v-for="st in row" :key="st" @click="applyStamp(st)" class="px-2 py-1 bg-zinc-50 hover:bg-amber-50 border border-zinc-300 rounded text-xs font-bold text-zinc-900">{{ st }}</button>
@@ -1341,12 +1338,14 @@
                 <button @click="dismissBranch" class="w-full bg-zinc-100 text-zinc-600 py-1.5 rounded-lg text-xs font-bold">取消</button>
             </div>
         </div>
+
         <!-- 🛠️ QC 寬螢幕工作室彈窗容器 -->
         <div v-if="showQcStudioModal" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-[90] flex items-center justify-center p-1.5 sm:p-4" @click.self="closeQcStudio">
             <div class="bg-white border border-zinc-400 w-[98vw] max-w-6xl h-[94dvh] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
                 <iframe :src="qcStudioUrl" class="w-full flex-1 border-0 bg-zinc-100"></iframe>
             </div>
         </div>
+
         <div v-if="isProcessing" class="fixed inset-0 bg-black/50 z-[95] flex flex-col items-center justify-center p-6 text-white text-center">
             <div class="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin mb-3"></div>
             <div class="text-sm font-black">{{ processingText }}</div>
@@ -1358,4 +1357,3 @@
     <script src="./app.js?v=12.0"></script>
 </body>
 </html>
-        
