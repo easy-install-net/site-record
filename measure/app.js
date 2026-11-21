@@ -1022,8 +1022,43 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             const showTransferModal = ref(false), transferTargetCode = ref(''), transferMode = ref('copy'), transferNewProjName = ref('');
             const otherProjectOptions = computed(() => allProjectOptions.value.filter(p => String(p.code) !== String(project.code)));
 
-            const drawColor = ref('#ef4444'), wallStyle = ref('hollow'), toastMsg = ref('');
+           const drawColor = ref('#111827'), wallStyle = ref('hollow'), toastMsg = ref('');
+            const dimBlueMode = ref('deep'); // 'deep' = #1d4ed8 (白底用), 'sky' = #38bdf8 (黑底用)
+            const activeDimColor = computed(() => dimBlueMode.value === 'sky' ? '#38bdf8' : '#1d4ed8');
+            const gridSnap = ref(false);
             const showToast = (msg) => { toastMsg.value = msg; setTimeout(() => { if (toastMsg.value === msg) toastMsg.value = ''; }, 3000); };
+
+            const setDimBlueMode = (mode) => {
+                dimBlueMode.value = mode;
+                const col = mode === 'sky' ? '#38bdf8' : '#1d4ed8';
+                defaultTextColor.value = col;
+                if (activeMarker.value) setMarkerTextColor(col);
+                showToast(mode === 'sky' ? '🩵 已切換淺天藍（黑底／暗環境專用）' : '🔵 已切換深藍色（白底圖紙專用）');
+            };
+
+            const setDrawToolMode = (nextMode) => {
+                const prevMode = drawMode.value;
+                drawMode.value = nextMode;
+                if (['leader', 'arrow-single'].includes(nextMode)) {
+                    drawColor.value = '#ef4444'; // 批改引線／箭嘴自動預設紅色
+                } else if (['straight', 'rect', 'wall', 'freehand', 'cad'].includes(nextMode)) {
+                    if (!['straight', 'rect', 'wall', 'freehand', 'cad'].includes(prevMode)) {
+                        drawColor.value = '#111827'; // 結構輪廓自動預設黑色
+                    }
+                }
+            };
+
+            const startSaveBlockCapture = () => {
+                drawMode.value = 'save_block';
+                showToast('📦 請在圖上拖拉方框，框選要存為圖塊的線條');
+            };
+
+            const getDimCapsuleStyle = (m) => {
+                const col = getStampColor(m);
+                if (col === '#38bdf8') return { fill: 'rgba(15, 23, 42, 0.88)', stroke: '#38bdf8' };
+                if (col === '#1d4ed8' || col === '#2563eb') return { fill: 'rgba(255, 255, 255, 0.92)', stroke: '#1d4ed8' };
+                return null;
+            };
 
             const cloudSyncState = ref(navigator.onLine ? 'ready' : 'offline');
             const cloudStatusText = computed(() => ({ syncing: '☁️同步中', offline: '📴離線', queued: '⏳待傳', ready: '☁️v11.6' }[cloudSyncState.value] || '☁️v11.6'));
@@ -1469,8 +1504,17 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 const r = svg.getBoundingClientRect(), s = Math.min(r.width / vw, r.height / vh);
                 return { x: Math.round(Math.max(0, Math.min(pw, vx + (clientX - r.left - (r.width - vw * s) / 2) / s))), y: Math.round(Math.max(0, Math.min(ph, vy + (clientY - r.top - (r.height - vh * s) / 2) / s))) };
             };
-            const getCoords = (e, pane = activePane.value) => { const pt = getClientPoint(e); return clientToSvgPoint(pt.clientX, pt.clientY, pane); };
+            const getCoords = (e, pane = activePane.value) => {
+                const pt = getClientPoint(e);
+                const res = clientToSvgPoint(pt.clientX, pt.clientY, pane);
+                if (gridSnap.value && ['straight', 'rect', 'wall', 'arrow-single', 'leader', 'cad'].includes(drawMode.value)) {
+                    res.x = Math.round(res.x / 20) * 20;
+                    res.y = Math.round(res.y / 20) * 20;
+                }
+                return res;
+            };
 
+            
             const snapWallEnd = (x1, y1, x2, y2) => {
                 if (Math.hypot(x2 - x1, y2 - y1) < 10) return { x: x2, y: y2 };
                 const deg = Math.abs(Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI);
@@ -2108,9 +2152,92 @@ const isDashed = ref(false);
                 img.src = target.photo;
             };
 
+            const captureSelectionAsCadBlock = async (box) => {
+                const c = targetCanvas.value;
+                if (!c) return;
+                const minX = Math.min(box.x1, box.x2) - 8, maxX = Math.max(box.x1, box.x2) + 8;
+                const minY = Math.min(box.y1, box.y2) - 8, maxY = Math.max(box.y1, box.y2) + 8;
+                const inBox = (x, y) => x >= minX && x <= maxX && y >= minY && y <= maxY;
+                const rawShapes = [];
+
+                (c.lines || []).forEach(l => {
+                    if (l.type === 'measure') return;
+                    if (inBox(l.x1, l.y1) && inBox(l.x2, l.y2)) {
+                        if (l.type === 'rect') {
+                            rawShapes.push({ t: 'rect', x: Math.min(l.x1, l.x2), y: Math.min(l.y1, l.y2), w: Math.abs(l.x2 - l.x1), h: Math.abs(l.y2 - l.y1), color: l.color || '#111827', sw: 3 });
+                        } else {
+                            rawShapes.push({ t: 'line', x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, color: l.color || '#111827', sw: 3 });
+                        }
+                    }
+                });
+                (c.walls || []).forEach(wObj => {
+                    if (inBox(wObj.x1, wObj.y1) && inBox(wObj.x2, wObj.y2)) {
+                        buildWallSegments(wObj).forEach(seg => {
+                            rawShapes.push({ t: 'line', x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2, color: wObj.color || '#111827', sw: seg.isHatch ? 4 : 2.5 });
+                        });
+                    }
+                });
+                (c.paths || []).forEach(p => {
+                    const nums = String(p.d || '').replace(/[ML]/g, ' ').trim().split(/\s+/).map(Number);
+                    if (nums.length >= 4 && inBox(nums[0], nums[1]) && inBox(nums[nums.length - 2], nums[nums.length - 1])) {
+                        for (let i = 0; i < nums.length - 2; i += 2) {
+                            rawShapes.push({ t: 'line', x1: nums[i], y1: nums[i + 1], x2: nums[i + 2], y2: nums[i + 3], color: p.color || '#111827', sw: p.color === '#facc15' ? 10 : 3 });
+                        }
+                    }
+                });
+
+                if (!rawShapes.length) {
+                    showToast('⚠️ 框選範圍內搵唔到可儲存嘅線條');
+                    drawMode.value = 'straight';
+                    return;
+                }
+
+                let bMinX = Infinity, bMinY = Infinity, bMaxX = -Infinity, bMaxY = -Infinity;
+                rawShapes.forEach(s => {
+                    if (s.t === 'line') {
+                        bMinX = Math.min(bMinX, s.x1, s.x2); bMaxX = Math.max(bMaxX, s.x1, s.x2);
+                        bMinY = Math.min(bMinY, s.y1, s.y2); bMaxY = Math.max(bMaxY, s.y1, s.y2);
+                    } else if (s.t === 'rect') {
+                        bMinX = Math.min(bMinX, s.x, s.x + s.w); bMaxX = Math.max(bMaxX, s.x, s.x + s.w);
+                        bMinY = Math.min(bMinY, s.y, s.y + s.h); bMaxY = Math.max(bMaxY, s.y, s.y + s.h);
+                    }
+                });
+                const cx = Math.round((bMinX + bMaxX) / 2), cy = Math.round((bMinY + bMaxY) / 2);
+                const bw = Math.max(36, Math.round(bMaxX - bMinX)), bh = Math.max(36, Math.round(bMaxY - bMinY));
+                const shapes = rawShapes.map(s => s.t === 'line'
+                    ? { ...s, x1: s.x1 - cx, y1: s.y1 - cy, x2: s.x2 - cx, y2: s.y2 - cy }
+                    : { ...s, x: s.x - cx, y: s.y - cy });
+
+                const label = prompt('💾 存為新圖塊 — 請輸入名稱（例：階梯收口）：')?.trim();
+                if (!label) { drawMode.value = 'straight'; return; }
+
+                const prevC = document.createElement('canvas');
+                const pSize = 180; prevC.width = pSize; prevC.height = pSize;
+                const pCtx = prevC.getContext('2d');
+                pCtx.lineCap = 'round'; pCtx.lineJoin = 'round';
+                const sc = Math.min((pSize - 24) / bw, (pSize - 24) / bh, 1.5);
+                pCtx.translate(pSize / 2, pSize / 2); pCtx.scale(sc, sc);
+                shapes.forEach(s => {
+                    pCtx.save();
+                    if (s.color === '#facc15') pCtx.globalAlpha = 0.45;
+                    pCtx.strokeStyle = s.color; pCtx.lineWidth = s.sw || 3;
+                    if (s.t === 'line') { pCtx.beginPath(); pCtx.moveTo(s.x1, s.y1); pCtx.lineTo(s.x2, s.y2); pCtx.stroke(); }
+                    else if (s.t === 'rect') { pCtx.strokeRect(s.x, s.y, s.w, s.h); }
+                    pCtx.restore();
+                });
+
+                const id = 'cad_custom_' + Date.now();
+                customCadBlocks.value.unshift({ id, cat: cadCategory.value || 'arch', label, w: Math.min(160, bw), h: Math.min(160, bh), shapes, imgB64: prevC.toDataURL('image/png') });
+                if (!pinnedCadIds.value.includes(id)) pinnedCadIds.value.push(id);
+                await saveCadStore();
+                selectedCadType.value = id;
+                drawMode.value = 'cad';
+                showToast(`✅ 已存為圖塊「${label}」，點擊圖紙即可插入`);
+            };
+
             const beginStroke = (e, pane = 'A') => {
                 isDrawing.value = true; drawingPane.value = pane; startPos.value = getCoords(e, pane);
-                if (['line', 'arrow-single', 'straight', 'rect', 'leader'].includes(drawMode.value)) currentLine.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y };
+                if (['line', 'arrow-single', 'straight', 'rect', 'leader', 'save_block'].includes(drawMode.value)) currentLine.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y };
                 else if (drawMode.value === 'wall') currentWall.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y, style: wallStyle.value, color: drawColor.value };
                 else if (drawMode.value === 'freehand') { tempPoints = [[startPos.value.x, startPos.value.y]]; currentPath.value = `M ${startPos.value.x} ${startPos.value.y}`; }
             };
@@ -2148,7 +2275,7 @@ const isDashed = ref(false);
                     draggedMarker.value.y = Math.round(Math.max(0, Math.min(targetCanvasH.value, markerOrigin.value.y + dy)));
                 } else if (isDrawing.value) {
                     e.preventDefault(); const p = getCoords(e, drawingPane.value);
-                    if (['line', 'rect'].includes(drawMode.value) && currentLine.value) { currentLine.value.x2 = p.x; currentLine.value.y2 = p.y; }
+                   if (['line', 'rect', 'save_block'].includes(drawMode.value) && currentLine.value) { currentLine.value.x2 = p.x; currentLine.value.y2 = p.y; }
                     else if (['straight', 'arrow-single', 'leader'].includes(drawMode.value) && currentLine.value) {
                         let nx = p.x, ny = p.y;
                         if (orthoSnap.value) {
@@ -2202,7 +2329,7 @@ const isDashed = ref(false);
                         checkBranchNeed(() => { const c = targetCanvas.value; c.walls ||= []; c.historyStack ||= []; c.redoStack = []; const wallId = Date.now(); c.walls.push({ ...wSnap, id: wallId }); c.historyStack.push({ type: 'wall', wallId }); touchDirty(); saveAll(); });
                     }
                     currentWall.value = null;
-                } else if (['line', 'arrow-single', 'straight', 'rect', 'leader'].includes(drawMode.value) && currentLine.value) {
+                } } else if (['line', 'arrow-single', 'straight', 'rect', 'leader', 'save_block'].includes(drawMode.value) && currentLine.value) {                     const lSnap = { ...currentLine.value }; currentLine.value = null;                     if (drawMode.value === 'save_block') {                         if (Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) >= 16) captureSelectionAsCadBlock(lSnap);                         else drawMode.value = 'straight';                         return;                     }                     if (drawMode.value === 'line' && Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 14) { createPointMarker(lSnap.x2, lSnap.y2, 'stamp'); return; }                     if (Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 10) return;                     checkBranchNeed(() => {                         const c = targetCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];                         const lineId = Date.now(), markerId = lineId + 1;                         const lineType = drawMode.value === 'line' ? 'measure' : drawMode.value;                         const dashedFlag = lineType !== 'measure' && !!isDashed.value;                         const dimCol = activeDimColor.value;                         const strokeCol = lineType === 'measure' ? dimCol : drawColor.value;                         c.lines.push({ ...lSnap, id: lineId, type: lineType, dashed: dashedFlag, color: strokeCol });                         if (lineType === 'leader') {                             const leaderCol = drawColor.value || '#ef4444';                             const leaderMarker = { id: markerId, lineId, x: Math.round(lSnap.x1), y: Math.round(lSnap.y1), w: 120, h: 40, type: 'text', textColor: leaderCol, data: { val: '' } };                             updateMarkerSize(leaderMarker); c.markers.push(leaderMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });                             touchDirty(); openMarkerEditor(leaderMarker, pane); saveAll(); return;                         }                         if (lineType !== 'measure') { c.historyStack.push({ type: 'line_marker', lineId, markerId: null }); touchDirty(); saveAll(); return; }                         const newLineObj = c.lines[c.lines.length - 1];                         const newMarker = { id: markerId, lineId, x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2), w: 140, h: 56, type: 'general', textColor: dimCol, data: makeBlankMarkerData() };                         updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });                         chainPromptLine.value = newLineObj; chainSegments.value = []; focusedChainIdx.value = -1;                         sheetTab.value = 'dim';                         touchDirty(); activeMarker.value = newMarker; focusedInput.value = 'val'; showTopSheet.value = true; saveAll();                     }); {
                     const lSnap = { ...currentLine.value }; currentLine.value = null;
                     if (drawMode.value === 'line' && Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 14) { createPointMarker(lSnap.x2, lSnap.y2, 'stamp'); return; }
                     if (Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 10) return;
