@@ -98,6 +98,7 @@
                     <button @click="copyShareLink" :class="selectMode && selectedPageIds.length ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-indigo-50 border-indigo-300 text-indigo-700'" class="border px-1.5 py-0.5 rounded text-[11px] font-bold">{{ selectMode && selectedPageIds.length ? `🔗轉發(${selectedPageIds.length})` : '🔗發師傅' }}</button>
                 </template>
                 <template v-else>
+                    <button @click="openQcStudio('stamps')" class="bg-indigo-50 border border-indigo-300 text-indigo-800 px-2 py-0.5 rounded text-xs font-bold">🛠️工作室</button>
                     <button @click="switchToPreview" class="bg-white border border-zinc-300 text-zinc-700 px-2 py-0.5 rounded text-xs font-bold">👁️預覽</button>
                     <button v-if="pages.length" @click="showPdfModal = true" class="bg-white border border-zinc-300 text-zinc-700 px-2 py-0.5 rounded text-xs font-bold">📄PDF</button>
                 </template>
