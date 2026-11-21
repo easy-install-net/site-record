@@ -3,13 +3,11 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
     if (window.__showBootError) window.__showBootError(msg);
     else alert(msg);
 } else {
-    const { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick } = Vue;
-    const { createApp, ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } = Vue; 
+    const { createApp, ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } = Vue;
     const { TAG_DEFS, TEMPLATE_ROWS, DIM_QUICK_ROWS, KEYPAD_KEYS, DEFAULT_SPACES, STAMP_PALETTE, DEFAULT_STAMP_SEED, SPACE_CHECKLISTS, SMART_TIPS } = window.MEASURE_DATA;
     const { CAD_CATEGORIES, CAD_DEFS, CAD_LIST, drawOnCanvas: drawCadOnCanvas } = window.MEASURE_CAD;
 
     localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
-
     const offlineReady = ref(false);
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').then(() => { offlineReady.value = true; }).catch(() => {}));
