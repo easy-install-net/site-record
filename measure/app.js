@@ -459,8 +459,8 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 return `translate(${m.x}, ${m.y}) rotate(${m.rot || 0}) scale(${sx}, ${sy})`;
             };
 
-            const openCadManager = () => { cadMgrFilter.value = 'all'; newCadLabel.value = ''; newCadImgB64.value = ''; showCadManager.value = true; };
-            const addCustomCadBlock = async () => {
+          const openCadManager = () => openQcStudio('blocks');
+          const addCustomCadBlock = async () => {
                 const label = String(newCadLabel.value || '').trim();
                 if (!label) return showToast('請輸入圖塊名稱');
                 const id = 'cad_custom_' + Date.now();
@@ -690,7 +690,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
             Vue.watch(showChecklistManageModal, (val) => { if (val) initChecklistDraft(); });
 
-            const openChecklistManager = () => {
+            const openChecklistManager = () => openQcStudio('checklists');
                 initChecklistDraft();
                 showChecklistManageModal.value = true;
             };
@@ -3282,12 +3282,13 @@ const isDashed = ref(false);
                 window.addEventListener('offline', () => { cloudSyncState.value = 'offline'; });
                 window.addEventListener('paste', handleGlobalPaste);
                 window.addEventListener('keydown', handleGlobalKeydown);
-                window.addEventListener('keyup', handleGlobalKeyup);
+               window.addEventListener('keyup', handleGlobalKeyup);
+                window.addEventListener('message', handleStudioMessage);
                 if (navigator.onLine) setTimeout(() => processPendingUploadQueue(false), 1500);
                 setInterval(() => { if (navigator.onLine) processPendingUploadQueue(true); }, 15000);
             });
 
-            onUnmounted(() => { window.removeEventListener('popstate', handlePopStateGuard); window.removeEventListener('beforeunload', handleBeforeUnloadGuard); window.removeEventListener('paste', handleGlobalPaste); window.removeEventListener('keydown', handleGlobalKeydown); window.removeEventListener('keyup', handleGlobalKeyup); });
+            onUnmounted(() => { window.removeEventListener('popstate', handlePopStateGuard); window.removeEventListener('beforeunload', handleBeforeUnloadGuard); window.removeEventListener('paste', handleGlobalPaste); window.removeEventListener('keydown', handleGlobalKeydown); window.removeEventListener('keyup', handleGlobalKeyup); window.removeEventListener('message', handleStudioMessage); });
 
             const renderAnnotatedCanvas = (canvasObj, includeStamp = true, itemDate = '', itemAuthor = '') => new Promise(async (resolve) => {
                 const img = new Image(); img.src = canvasObj.photo; await new Promise(r => { img.onload = r; img.onerror = r; });
@@ -3419,7 +3420,8 @@ const isDashed = ref(false);
 
             return {
                 isDashed, orthoSnap, gridSnap, dimBlueMode, setDimBlueMode, setDrawToolMode, startSaveBlockCapture, getDimCapsuleStyle, expandCanvasWhiteSpace,
-                offlineReady, currentView, currentUser, loginWithGoogle, logoutGoogle,
+                showQcStudioModal, qcStudioUrl, openQcStudio, closeQcStudio,
+                
                 TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_PALETTE,
                 stampCategories, stampItems, stampFilter, showStampManagerModal, managerCatFilter, managerFilteredItems, pinnedStampList,
                 newCatName, newStampText, newStampCatId, newStampColor, getCategoryById, openStampManager, onSelectNewStampCat, addStampCategory, addStampItem, toggleStampPin, editStampItemText, deleteStampItem, restoreDefaultStamps, syncStampLibraryCloud,
