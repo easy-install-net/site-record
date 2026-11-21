@@ -247,12 +247,42 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 }
                 if (!newStampCatId.value && stampCategories.value.length) newStampCatId.value = stampCategories.value[0].id;
             };
-            const openStampManager = () => {
-                managerCatFilter.value = 'all';
-                if (!newStampCatId.value && stampCategories.value.length) {
-                    newStampCatId.value = stampCategories.value[0].id;
-                    newStampColor.value = stampCategories.value[0].defaultColor || '#ffffff';
+            const showQcStudioModal = ref(false), qcStudioUrl = ref('');
+            const openQcStudio = async (tab = 'stamps') => {
+                if (project.code) await saveAll();
+                const params = new URLSearchParams({
+                    tab,
+                    code: String(project.code || ''),
+                    space: String(activeCanvas.value?.space || ''),
+                    t: String(Date.now())
+                });
+                qcStudioUrl.value = `./qc-studio.html?${params.toString()}`;
+                showQcStudioModal.value = true;
+            };
+            const reloadFromQcStudio = async (target = 'all') => {
+                if (target === 'all' || target === 'stamps') await loadStampStore();
+                if (target === 'all' || target === 'blocks') { cadSvgCache.clear(); await loadCadStore(); }
+                if (target === 'all' || target === 'checklists') await loadChecklistStore();
+                if (project.code) {
+                    const updatedProj = await localforage.getItem('proj_' + project.code);
+                    if (updatedProj && typeof updatedProj.customNotes === 'string') {
+                        project.customNotes = updatedProj.customNotes;
+                    }
                 }
+                if (currentUser.value?.uid && db && navigator.onLine) syncUserLibrariesCloud(true).catch(() => {});
+            };
+            const closeQcStudio = async () => {
+                showQcStudioModal.value = false;
+                qcStudioUrl.value = '';
+                await reloadFromQcStudio('all');
+                showToast('✅ 已同步寬螢幕工作室最新設定');
+            };
+            const handleStudioMessage = (e) => {
+                if (e.data?.type === 'QC_STUDIO_SAVED') reloadFromQcStudio(e.data.target || 'all');
+                else if (e.data?.type === 'QC_STUDIO_CLOSE') closeQcStudio();
+            };
+
+            const openStampManager = () => openQcStudio('stamps');
                 showStampManagerModal.value = true;
             };
             const onSelectNewStampCat = () => {
