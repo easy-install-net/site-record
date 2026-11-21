@@ -2017,7 +2017,6 @@ const closeQcStudio = async () => {
                         const p = getCoords(e, pane);
                         dragOrigin.value = { x: p.x, y: p.y }; markerOrigin.value = { x: target.x, y: target.y };
                     });
-                
                     return;
                 }
                 if (drawMode.value === 'browse' || chainSegIdx >= 0) {
@@ -2025,7 +2024,8 @@ const closeQcStudio = async () => {
                         e.preventDefault(); e.stopPropagation();
                         openMarkerEditor(marker, pane, chainSegIdx);
                     } else {
-                        pendingTapMarker = { marker, pane, chainSegIdx: -1, clientX: pt.clientX, clientY: pt.clientY };
+                        const p = getCoords(e, pane);
+                        pendingTapMarker = { marker, pane, chainSegIdx: -1, clientX: pt.clientX, clientY: pt.clientY, startSvgX: p.x, startSvgY: p.y };
                     }
                 }
             };
