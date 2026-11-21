@@ -2758,9 +2758,21 @@ const isDashed = ref(false);
                          const vw = targetCanvasW.value / zVal, vh = targetCanvasH.value / zVal, markerId = Date.now();
                          const newMarker = { id: markerId, x: Math.round(vx + vw / 2), y: Math.round(vy + vh / 2), w: tw, h: th, baseW: tw, baseH: th, scale: 1, rot: 0, type: 'image', data: { b64: res.b64 } };
                          c.markers.push(newMarker); c.historyStack.push({ type: 'marker', markerId }); activeMarker.value = newMarker; showTopTextBar.value = true; touchDirty(); showToast('✅ 貼圖成功（可拖拉或用滑桿調大細）');
-                  });
-              }
-              drawMode.value = 'move'; await saveAll();
+                            const tmpImg = new Image();
+                            tmpImg.onload = () => {
+                                const sc = document.createElement('canvas');
+                                sc.width = tmpImg.width; sc.height = tmpImg.height;
+                                const sctx = sc.getContext('2d');
+                                sctx.fillStyle = '#ffffff';
+                                sctx.fillRect(0, 0, sc.width, sc.height);
+                                sctx.drawImage(tmpImg, 0, 0);
+                                newMarker.data.b64 = sc.toDataURL('image/jpeg', 0.92);
+                                touchDirty(); saveAll();
+                            };
+                            tmpImg.src = res.b64;
+                     });
+                 }
+                 drawMode.value = 'move'; await saveAll();
                 } catch (_) { showToast('貼上失敗，請確定複製的是圖片'); } finally { isProcessing.value = false; }
             };
 
