@@ -1031,7 +1031,7 @@
                             <button v-for="ps in pinnedStampList" :key="'ps-'+ps.id" @click="applyStamp(ps)" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded text-xs font-black text-amber-950">{{ ps.text }}</button>
                         </div>
                     </div>
-                    <div v-for="grp in filteredStampGroups" :key="'sg-'+grp.id" class="flex flex-col gap-1">
+                   <div v-for="grp in filteredStampGroups" :key="'sg-'+grp.id" class="flex flex-col gap-1">
                         <div class="text-[11px] font-black text-zinc-500">{{ grp.icon }} {{ grp.name }}</div>
                         <div v-for="(row, rIdx) in grp.rows" :key="'sr-'+rIdx" class="flex flex-wrap gap-1">
                             <button v-for="st in row" :key="st" @click="applyStamp(st)" class="px-2 py-1 bg-zinc-50 hover:bg-amber-50 border border-zinc-300 rounded text-xs font-bold text-zinc-900">{{ st }}</button>
@@ -1039,6 +1039,7 @@
                     </div>
                 </div>
             </div>
+        </div>
         </div>
 
         <!-- ✏️ 文字 / 貼圖 / 圖塊 頂部調整條 -->
