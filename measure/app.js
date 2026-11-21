@@ -2078,10 +2078,38 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 }
                 if (!showBranchPrompt.value) endStroke(e, pane);
             };
+const isDashed = ref(false);
+            const orthoSnap = ref(true);
+
+            const expandCanvasWhiteSpace = () => {
+                const target = activeCanvas.value;
+                if (!target?.photo) return;
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    const addW = Math.round(img.width * 0.45);
+                    const newW = img.width + addW;
+                    const c = document.createElement('canvas');
+                    c.width = newW;
+                    c.height = img.height;
+                    const ctx = c.getContext('2d');
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, newW, img.height);
+                    ctx.drawImage(img, 0, 0);
+                    target.photo = c.toDataURL('image/jpeg', 0.92);
+                    target.w = newW;
+                    if (activePane.value === 'B' && splitMode.value) canvasWB.value = newW;
+                    else canvasW.value = newW;
+                    touchDirty();
+                    saveAll();
+                    showToast('✅ 已在右側擴展白紙空間');
+                };
+                img.src = target.photo;
+            };
 
             const beginStroke = (e, pane = 'A') => {
                 isDrawing.value = true; drawingPane.value = pane; startPos.value = getCoords(e, pane);
-                if (['line', 'arrow-single', 'straight'].includes(drawMode.value)) currentLine.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y };
+                if (['line', 'arrow-single', 'straight', 'rect', 'leader'].includes(drawMode.value)) currentLine.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y };
                 else if (drawMode.value === 'wall') currentWall.value = { x1: startPos.value.x, y1: startPos.value.y, x2: startPos.value.x, y2: startPos.value.y, style: wallStyle.value, color: drawColor.value };
                 else if (drawMode.value === 'freehand') { tempPoints = [[startPos.value.x, startPos.value.y]]; currentPath.value = `M ${startPos.value.x} ${startPos.value.y}`; }
             };
@@ -2119,8 +2147,16 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                     draggedMarker.value.y = Math.round(Math.max(0, Math.min(targetCanvasH.value, markerOrigin.value.y + dy)));
                 } else if (isDrawing.value) {
                     e.preventDefault(); const p = getCoords(e, drawingPane.value);
-                    if (drawMode.value === 'line' || drawMode.value === 'arrow-single') { currentLine.value.x2 = p.x; currentLine.value.y2 = p.y; }
-                    else if (drawMode.value === 'straight' && currentLine.value) { const snapped = snapWallEnd(currentLine.value.x1, currentLine.value.y1, p.x, p.y); currentLine.value.x2 = snapped.x; currentLine.value.y2 = snapped.y; }
+                    if (['line', 'rect'].includes(drawMode.value) && currentLine.value) { currentLine.value.x2 = p.x; currentLine.value.y2 = p.y; }
+                    else if (['straight', 'arrow-single', 'leader'].includes(drawMode.value) && currentLine.value) {
+                        let nx = p.x, ny = p.y;
+                        if (orthoSnap.value) {
+                            const dx = nx - currentLine.value.x1, dy = ny - currentLine.value.y1;
+                            if (Math.abs(dx) > 15 && Math.abs(dy) < Math.abs(dx) * 0.16) ny = currentLine.value.y1;
+                            else if (Math.abs(dy) > 15 && Math.abs(dx) < Math.abs(dy) * 0.16) nx = currentLine.value.x1;
+                        }
+                        currentLine.value.x2 = nx; currentLine.value.y2 = ny;
+                    }
                     else if (drawMode.value === 'wall' && currentWall.value) { const snapped = snapWallEnd(currentWall.value.x1, currentWall.value.y1, p.x, p.y); currentWall.value.x2 = snapped.x; currentWall.value.y2 = snapped.y; }
                     else if (drawMode.value === 'freehand') { tempPoints.push([p.x, p.y]); currentPath.value = `M ${tempPoints.map(pt => `${pt[0]} ${pt[1]}`).join(' L ')}`; }
                 }
@@ -2165,7 +2201,7 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         checkBranchNeed(() => { const c = targetCanvas.value; c.walls ||= []; c.historyStack ||= []; c.redoStack = []; const wallId = Date.now(); c.walls.push({ ...wSnap, id: wallId }); c.historyStack.push({ type: 'wall', wallId }); touchDirty(); saveAll(); });
                     }
                     currentWall.value = null;
-                } else if (['line', 'arrow-single', 'straight'].includes(drawMode.value) && currentLine.value) {
+                } else if (['line', 'arrow-single', 'straight', 'rect', 'leader'].includes(drawMode.value) && currentLine.value) {
                     const lSnap = { ...currentLine.value }; currentLine.value = null;
                     if (drawMode.value === 'line' && Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 14) { createPointMarker(lSnap.x2, lSnap.y2, 'stamp'); return; }
                     if (Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 10) return;
@@ -2173,7 +2209,13 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                         const c = targetCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];
                         const lineId = Date.now(), markerId = lineId + 1;
                         const lineType = drawMode.value === 'line' ? 'measure' : drawMode.value;
-                        c.lines.push({ ...lSnap, id: lineId, type: lineType, color: lineType === 'measure' ? (defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null) : drawColor.value });
+                        const dashedFlag = lineType !== 'measure' && !!isDashed.value;
+                        c.lines.push({ ...lSnap, id: lineId, type: lineType, dashed: dashedFlag, color: lineType === 'measure' ? (defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null) : drawColor.value });
+                        if (lineType === 'leader') {
+                            const leaderMarker = { id: markerId, lineId, x: Math.round(lSnap.x1), y: Math.round(lSnap.y1), w: 120, h: 40, type: 'text', textColor: defaultTextColor.value, data: { val: '' } };
+                            updateMarkerSize(leaderMarker); c.markers.push(leaderMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
+                            touchDirty(); openMarkerEditor(leaderMarker, pane); saveAll(); return;
+                        }
                         if (lineType !== 'measure') { c.historyStack.push({ type: 'line_marker', lineId, markerId: null }); touchDirty(); saveAll(); return; }
                         const newLineObj = c.lines[c.lines.length - 1];
                         const newMarker = { id: markerId, lineId, x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2), w: 140, h: 56, type: 'general', textColor: defaultTextColor.value, data: makeBlankMarkerData() };
@@ -2739,10 +2781,13 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 cloudSyncState.value = navigator.onLine ? 'queued' : 'offline'; currentView.value = 'proj'; await saveAll(); startRealtimeListener(project.code);
             };
             const loadProject = async (code, openAsPreview = true) => {
-                resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; code = String(code); project.code = code; project.nameUpdatedAt = 0; project.spaceOrder = []; project.deletedPageIds = []; project.deletedPinIds = []; project.notes = []; project.deletedNoteIds = []; project.customNotes = ''; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; feedbackList.value = []; dirtyPageIds.clear();
+                resetZoom(); showQuickPageNav.value = false; selectMode.value = false; selectedPageIds.value = []; splitMode.value = false; activePane.value = 'A'; code = String(code);
+                const listMeta = (projectList.value || []).find(p => String(p.code) === code) || (cloudProjectList.value || []).find(p => String(p.code) === code);
+                project.code = code; project.name = listMeta?.name || ''; project.nameUpdatedAt = 0; project.spaceOrder = []; project.deletedPageIds = []; project.deletedPinIds = []; project.notes = []; project.deletedNoteIds = []; project.customNotes = ''; project.pageOrderUpdatedAt = 0; pages.value = []; photoPool.value = []; feedbackList.value = []; dirtyPageIds.clear();
                 const d = await localforage.getItem('proj_' + code);
                 if (d) {
-                    Object.assign(project, { name: d.name || '', nameUpdatedAt: d.nameUpdatedAt || 0, date: d.date || '', ownerId: d.ownerId || currentUser.value?.uid || '', spaceOrder: d.spaceOrder || [], deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], notes: d.notes || [], deletedNoteIds: d.deletedNoteIds || [], customNotes: d.customNotes || '', pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' });
+                    const resolvedName = (d.name || listMeta?.name || '').trim();
+                    Object.assign(project, { name: resolvedName, nameUpdatedAt: d.nameUpdatedAt || 0, date: d.date || listMeta?.date || '', ownerId: d.ownerId || currentUser.value?.uid || '', spaceOrder: d.spaceOrder || [], deletedPageIds: d.deletedPageIds || [], deletedPinIds: d.deletedPinIds || [], notes: d.notes || [], deletedNoteIds: d.deletedNoteIds || [], customNotes: d.customNotes || '', pageOrderUpdatedAt: d.pageOrderUpdatedAt || 0, lastSyncAt: d.lastSyncAt || 0, lastModifiedBy: d.lastModifiedBy || '' });
                     (d.spaceOrder || []).forEach(sp => { if (!spaceList.value.includes(sp)) spaceList.value.push(sp); });
                     if (d.pages?.length) pages.value = d.pages.map(pg => makeEmptyPage(pg));
                     if (d.photoPool) photoPool.value = d.photoPool;
@@ -2751,6 +2796,13 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 activePageIndex.value = 0; activePin.value = null; pageIndexB.value = 0; pinB.value = null; currentView.value = openAsPreview ? 'preview' : 'proj';
                 await pullAndMergeFromCloud(code, false); if (!pages.value.length) pages.value = [makeEmptyPage()]; drawMode.value = 'browse'; startRealtimeListener(code);
             };
+
+            watch([() => project.code, () => projectList.value.length, () => currentView.value], () => {
+                const code = String(project.code || '').trim();
+                if (!code || project.name) return;
+                const meta = (projectList.value || []).find(p => String(p.code) === code);
+                if (meta?.name) project.name = meta.name;
+            }, { immediate: true });
 
             const openProjectMap = async (proj) => {
                 if (!proj) return;
@@ -3090,9 +3142,23 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
                 (canvasObj.walls || []).forEach(wObj => { ctx.strokeStyle = wObj.color || '#111827'; buildWallSegments(wObj).forEach(seg => { ctx.lineWidth = seg.isHatch ? 4.5 : 2; ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke(); }); });
                 const chainLineIds = new Set();
                 (canvasObj.lines || []).forEach(l => {
-                    if (l.type === 'arrow-single') { const hex = getLineStroke(l); ctx.strokeStyle = hex; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(Math.atan2(l.y2 - l.y1, l.x2 - l.x1)); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-6, 3); ctx.lineTo(-6, -3); ctx.closePath(); ctx.fill(); ctx.restore(); }
-                    else if (l.type === 'straight') { ctx.strokeStyle = getLineStroke(l); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }
-                    else {
+                    if (l.type === 'rect') {
+                        ctx.save();
+                        if (l.dashed) ctx.setLineDash([10, 8]);
+                        ctx.strokeStyle = getLineStroke(l, 0.85); ctx.lineWidth = 2.2;
+                        ctx.strokeRect(Math.min(l.x1, l.x2), Math.min(l.y1, l.y2), Math.abs(l.x2 - l.x1), Math.abs(l.y2 - l.y1));
+                        ctx.restore();
+                    } else if (l.type === 'arrow-single' || l.type === 'leader') {
+                        const hex = getLineStroke(l);
+                        ctx.save(); if (l.dashed) ctx.setLineDash([10, 8]);
+                        ctx.strokeStyle = hex; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
+                        ctx.restore();
+                        ctx.save(); ctx.fillStyle = hex; ctx.translate(l.x2, l.y2); ctx.rotate(Math.atan2(l.y2 - l.y1, l.x2 - l.x1)); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-6, 3); ctx.lineTo(-6, -3); ctx.closePath(); ctx.fill(); ctx.restore();
+                    } else if (l.type === 'straight') {
+                        ctx.save(); if (l.dashed) ctx.setLineDash([10, 8]);
+                        ctx.strokeStyle = getLineStroke(l); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke();
+                        ctx.restore();
+                    } else {
                         ctx.save(); ctx.setLineDash([10, 8]); ctx.strokeStyle = getLineStroke(l, 0.75); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); ctx.restore();
                         if (Array.isArray(l.chainSegs) && l.chainSegs.length >= 2) {
                             chainLineIds.add(l.id);
@@ -3163,12 +3229,13 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
             };
 
             return {
+                isDashed, orthoSnap, expandCanvasWhiteSpace,
                 offlineReady, currentView, currentUser, loginWithGoogle, logoutGoogle,
                 TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_PALETTE,
                 stampCategories, stampItems, stampFilter, showStampManagerModal, managerCatFilter, managerFilteredItems, pinnedStampList,
                 newCatName, newStampText, newStampCatId, newStampColor, getCategoryById, openStampManager, onSelectNewStampCat, addStampCategory, addStampItem, toggleStampPin, editStampItemText, deleteStampItem, restoreDefaultStamps, syncStampLibraryCloud,
                 STAMP_GROUPS, filteredStampGroups, promptCustomStamp,
-               CAD_CATEGORIES, cadCategory, selectedCadType, filteredCadList, getCadDef, getCadSvgImage, getCadTransform, setMarkerScale, setMarkerScaleX, setMarkerScaleY, rotateMarker, flipMarker,
+                CAD_CATEGORIES, cadCategory, selectedCadType, filteredCadList, getCadDef, getCadSvgImage, getCadTransform, setMarkerScale, setMarkerScaleX, setMarkerScaleY, rotateMarker, flipMarker,
                 showCadManager, cadMgrFilter, newCadCat, newCadShape, newCadLabel, newCadImgB64, handleNewCadImage, allCadManageList, filteredCadManageList,
                 openCadManager, addCustomCadBlock, deleteCustomCadBlock, togglePinCad, toggleHideCad,
                 defaultTextColor, setMarkerTextColor, getArrowMarkerId, getFsArrowMarkerId,
@@ -3215,3 +3282,4 @@ if (!window.Vue || !window.MEASURE_DATA || !window.MEASURE_CAD) {
         }
     }).mount('#app');
 }
+           
