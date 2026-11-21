@@ -441,7 +441,7 @@ const closeQcStudio = async () => {
                 if (cadSvgCache.has(key)) return cadSvgCache.get(key);
                 const c = document.createElement('canvas');
                 c.width = 200; c.height = 200;
-                const ctx = c.getContext('2d');
+                const ctx = c.getContext('2d'); 
                 if (CAD_DEFS[cadType]) {
                     drawCadOnCanvas(ctx, { x: 100, y: 100, color, rot: 0, scale: 1, flipX: 1, flipY: 1, data: { cadType } });
                 } else if (def.shapes) {
