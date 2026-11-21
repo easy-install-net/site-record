@@ -755,17 +755,25 @@
                                     <line v-else :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" :stroke="drawMode === 'line' ? (dimBlueMode === 'sky' ? '#38bdf8' : '#1d4ed8') : getLineStroke({color: drawColor, type: drawMode}, 0.85)" :stroke-width="((drawMode === 'arrow-single' || drawMode === 'leader') ? 3 : 2.2) * invZoom" :stroke-dasharray="(drawMode === 'line' || isDashed) ? `${14 * invZoom} ${10 * invZoom}` : null" stroke-linecap="round" :marker-end="(drawMode === 'arrow-single' || drawMode === 'leader') ? `url(#${getArrowMarkerId(drawColor, 'A')})` : null" />
                                 </g>
 
-                                <!-- Markers & Text Labels (Above Lines) -->
+                                <!-- Markers & Text Labels (Above Lines — 統一無框實色字＋白粗描邊＋旁邊自帶「✥ 拖」浮標) -->
                                 <g v-for="m in (activeCanvas.markers || []).filter(m => m.type !== 'image' && m.type !== 'cad')" :key="m.id"
                                    :class="(drawMode === 'eraser' || drawMode === 'browse' || drawMode === 'move') ? (drawMode === 'move' ? 'cursor-move pointer-events-auto' : 'cursor-pointer pointer-events-auto') : 'pointer-events-none'"
                                    @touchstart="e => onMarkerPointerStart(m, e, 'A')" @mousedown="e => onMarkerPointerStart(m, e, 'A')"
                                    :transform="`translate(${m.x + (activeCanvas.lines?.find(l => l.id === m.lineId)?.chainSegs?.length >= 2 ? (Math.abs(activeCanvas.lines.find(l => l.id === m.lineId).x2 - activeCanvas.lines.find(l => l.id === m.lineId).x1) < Math.abs(activeCanvas.lines.find(l => l.id === m.lineId).y2 - activeCanvas.lines.find(l => l.id === m.lineId).y1) ? 35 * invZoom : 0) : 0)}, ${m.y + (activeCanvas.lines?.find(l => l.id === m.lineId)?.chainSegs?.length >= 2 ? (Math.abs(activeCanvas.lines.find(l => l.id === m.lineId).x2 - activeCanvas.lines.find(l => l.id === m.lineId).x1) >= Math.abs(activeCanvas.lines.find(l => l.id === m.lineId).y2 - activeCanvas.lines.find(l => l.id === m.lineId).y1) ? 35 * invZoom : 0) : 0)})`">
-                                    <rect v-if="drawMode === 'move' || activeMarker?.id === m.id" :x="-m.w/2 - 2" :y="-m.h/2 - 2" :width="m.w + 4" :height="m.h + 4" rx="4" :fill="activeMarker?.id === m.id ? 'rgba(37,99,235,0.12)' : 'rgba(37,99,235,0.04)'" stroke="#2563eb" :stroke-width="(activeMarker?.id === m.id ? 2.5 : 1.2) * invZoom" :stroke-dasharray="activeMarker?.id === m.id ? null : '4 3'" />
-                                    <rect v-if="getDimCapsuleStyle(m)" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="8"
-                                          :fill="getDimCapsuleStyle(m).fill" :stroke="getDimCapsuleStyle(m).stroke" :stroke-width="1.5 * invZoom" />
-                                    <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" :class="getDimCapsuleStyle(m) ? 'dim-text-clean' : 'stamp-text'">
+                                    <rect v-if="drawMode === 'move' || activeMarker?.id === m.id" :x="-m.w/2 - 2" :y="-m.h/2 - 2" :width="m.w + 4" :height="m.h + 4" rx="4" :fill="activeMarker?.id === m.id ? 'rgba(37,99,235,0.08)' : 'rgba(37,99,235,0.03)'" stroke="#2563eb" :stroke-width="(activeMarker?.id === m.id ? 2 : 1.2) * invZoom" :stroke-dasharray="activeMarker?.id === m.id ? null : '4 3'" />
+                                    <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text">
                                         <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'" :style="{ fontSize: `${getMarkerFontPx(m)}px` }">{{ line }}</tspan>
                                     </text>
+                                    <!-- 旁邊自帶「✥ 拖」浮標（隨時按住直接移動，唔使切換移動模式） -->
+                                    <g v-if="activeMarker?.id === m.id && drawMode !== 'eraser'"
+                                       :transform="`translate(${m.w/2 + 22 * invZoom}, 0)`"
+                                       class="cursor-move pointer-events-auto"
+                                       @touchstart.stop="e => onMarkerQuickDragStart(m, e, 'A')"
+                                       @mousedown.stop="e => onMarkerQuickDragStart(m, e, 'A')">
+                                        <circle cx="0" cy="0" :r="24 * invZoom" fill="transparent" />
+                                        <rect :x="-18 * invZoom" :y="-12 * invZoom" :width="36 * invZoom" :height="24 * invZoom" :rx="12 * invZoom" fill="#2563eb" stroke="#ffffff" :stroke-width="2 * invZoom" />
+                                        <text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-weight="900" :style="{ fontSize: `${11 * invZoom}px` }">✥拖</text>
+                                    </g>
                                 </g>
 
 
