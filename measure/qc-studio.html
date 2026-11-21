@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>度尺寶 Pro — QC 寬螢幕工作室</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100dvh; overflow: hidden;
+            background: #f4f4f5; color: #111827;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* 強制 16px 防止 iPad / iPhone Safari 點擊輸入框時自動放大畫面走位 */
+        input, select, textarea { font-size: 16px !important; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .touch-scrollable { touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+        .grid-canvas-bg {
+            background-color: #ffffff;
+            background-image:
+                linear-gradient(to right, rgba(37, 99, 235, 0.14) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(37, 99, 235, 0.14) 1px, transparent 1px),
+                linear-gradient(to right, rgba(0, 0, 0, 0.06) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+            background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+        }
+    </style>
+</head>
+<body class="antialiased">
+<div id="studio-app" class="w-full h-[100dvh] flex flex-col overflow-hidden bg-zinc-100">
+
+    <!-- 頂部導航與分頁切換 -->
+    <header class="shrink-0 bg-zinc-900 text-white px-3 py-2 flex flex-wrap items-center justify-between gap-2 shadow-md z-20">
+        <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-black text-sm sm:text-base tracking-wide text-amber-400">🛠️ QC 寬螢幕工作室</span>
+            <div class="flex items-center bg-zinc-800 p-1 rounded-xl gap-1 flex-wrap">
+                <button @click="activeTab = 'stamps'"
+                        :class="activeTab === 'stamps' ? 'bg-amber-500 text-zinc-950 font-black shadow' : 'text-zinc-300 hover:bg-zinc-700 font-bold'"
+                        class="px-3 py-1.5 rounded-lg text-xs sm:text-sm transition">
+                    🏷️ 印章庫 ({{ stampItems.length }})
+                </button>
+                <button @click="activeTab = 'blocks'"
+                        :class="activeTab === 'blocks' ? 'bg-blue-500 text-white font-black shadow' : 'text-zinc-300 hover:bg-zinc-700 font-bold'"
+                        class="px-3 py-1.5 rounded-lg text-xs sm:text-sm transition">
+                    🏛️ 圖塊庫與畫板 ({{ allCadBlocks.length }})
+                </button>
+                <button @click="activeTab = 'checklists'"
+                        :class="activeTab === 'checklists' ? 'bg-emerald-500 text-zinc-950 font-black shadow' : 'text-zinc-300 hover:bg-zinc-700 font-bold'"
+                        class="px-3 py-1.5 rounded-lg text-xs sm:text-sm transition">
+                    ⚠️ 防漏語句庫
+                </button>
+                <button @click="activeTab = 'report'"
+                        :class="activeTab === 'report' ? 'bg-rose-500 text-white font-black shadow' : 'text-zinc-300 hover:bg-zinc-700 font-bold'"
+                        class="px-3 py-1.5 rounded-lg text-xs sm:text-sm transition">
+                    📄 QC 批改報告
+                </button>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 ml-auto">
+            <span v-if="statusMsg" class="bg-emerald-600/90 text-white px-2.5 py-1 rounded-full text-xs font-bold">{{ statusMsg }}</span>
+            <button @click="closeStudio" class="bg-zinc-700 hover:bg-zinc-600 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black">
+                ✕ 返回主畫面
+            </button>
+        </div>
+    </header>
+
+    <!-- ===================================================================== -->
+    <!-- 分頁 1：🏷️ 印章庫管理（寬螢幕多格網格，無切字） -->
+    <!-- ===================================================================== -->
+    <main v-show="activeTab === 'stamps'" class="flex-1 min-h-0 flex flex-col overflow-hidden p-3 gap-2.5">
+        <!-- 新增與搜尋控制列 -->
+        <div class="bg-white border border-zinc-300 rounded-xl p-3 shadow-xs flex flex-col lg:flex-row gap-2.5 shrink-0">
+            <div class="flex items-center gap-1.5 flex-1">
+                <input type="text" v-model="stampSearch" placeholder="🔍 搜尋印章字眼..." class="w-40 sm:w-48 border border-zinc-300 rounded-lg px-2.5 py-1.5 font-bold bg-zinc-50">
+                <input type="text" v-model="newCatName" @keyup.enter="addStampCategory" placeholder="新分類名稱 (例: 泥水)..." class="flex-1 min-w-[120px] border border-zinc-300 rounded-lg px-2.5 py-1.5 font-bold">
+                <button @click="addStampCategory" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black shrink-0">+ 新分類</button>
+            </div>
+
+            <div class="flex items-center gap-1.5 flex-wrap">
+                <select v-model="newStampCatId" @change="onSelectNewStampCat" class="border border-zinc-300 rounded-lg px-2.5 py-1.5 font-bold bg-white">
+                    <option v-for="c in stampCategories" :key="'opt-'+c.id" :value="c.id">{{ c.icon }} {{ c.name }}</option>
+                </select>
+                <input type="text" v-model="newStampText" @keyup.enter="addStampItem" placeholder="輸入新印章字眼..." class="flex-1 min-w-[140px] border border-zinc-300 rounded-lg px-2.5 py-1.5 font-bold">
+                <div class="flex items-center gap-1 bg-zinc-100 px-2 py-1.5 rounded-lg border border-zinc-200">
+                    <button v-for="p in stampPalette" :key="'pal-'+p.hex" @click="newStampColor = p.hex"
+                            :style="{ backgroundColor: p.hex }"
+                            :class="newStampColor === p.hex ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-75'"
+                            :title="p.name"
+                            class="w-5 h-5 rounded-full border border-zinc-400 shrink-0"></button>
+                </div>
+                <button @click="addStampItem" class="bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-1.5 rounded-lg text-xs sm:text-sm font-black shrink-0">+ 加入印章</button>
+            </div>
+        </div>
+
+        <!-- 清晰不切字分類標籤列 -->
+        <div class="bg-white border border-zinc-200 rounded-xl px-3 py-2 flex items-center gap-1.5 flex-wrap shrink-0">
+            <button @click="stampFilter = 'all'"
+                    :class="stampFilter === 'all' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-100 text-zinc-800 border-zinc-300 hover:bg-zinc-200'"
+                    class="px-3 py-1 rounded-lg text-xs sm:text-sm font-black border">
+                全部 ({{ stampItems.length }})
+            </button>
+            <button @click="stampFilter = 'pinned'"
+                    :class="stampFilter === 'pinned' ? 'bg-amber-500 text-zinc-950 border-amber-600' : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'"
+                    class="px-3 py-1 rounded-lg text-xs sm:text-sm font-black border">
+                ⭐ 常用置頂 ({{ pinnedStampCount }})
+            </button>
+            <button v-for="c in stampCategories" :key="'tab-'+c.id" @click="stampFilter = c.id"
+                    :class="stampFilter === c.id ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-zinc-800 border-zinc-300 hover:bg-zinc-50'"
+                    class="px-3 py-1 rounded-lg text-xs sm:text-sm font-bold border">
+                {{ c.icon }} {{ c.name }} ({{ countStampsByCat(c.id) }})
+            </button>
+        </div>
+
+        <!-- 寬螢幕印章卡片網格 -->
+        <div class="flex-1 min-h-0 overflow-y-auto touch-scrollable pr-1">
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+                <div v-for="it in filteredStampItems" :key="it.id"
+                     :class="it.pinned ? 'border-amber-400 bg-amber-50/40' : 'border-zinc-300 bg-white'"
+                     class="border rounded-xl p-2.5 shadow-2xs flex flex-col justify-between gap-2 hover:border-blue-400 transition">
+                    <div class="flex items-start justify-between gap-1.5">
+                        <span class="text-xs px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 font-bold truncate">
+                            {{ getCatLabel(it.catId) }}
+                        </span>
+                        <button @click="cycleStampColor(it)" title="點擊切換印章顏色"
+                                :style="{ backgroundColor: it.color || '#ffffff' }"
+                                class="w-4 h-4 rounded-full border border-zinc-500 shrink-0 shadow-2xs"></button>
+                    </div>
+                    <div class="font-black text-sm sm:text-base text-zinc-900 break-words leading-snug py-0.5">
+                        {{ it.text }}
+                    </div>
+                    <div class="flex items-center justify-between pt-1.5 border-t border-zinc-100">
+                        <button @click="toggleStampPin(it)"
+                                :class="it.pinned ? 'text-amber-600 bg-amber-100' : 'text-zinc-400 hover:text-amber-600'"
+                                class="px-2 py-0.5 rounded text-xs font-black">
+                            {{ it.pinned ? '⭐ 置頂' : '☆ 置頂' }}
+                        </button>
+                        <div class="flex items-center gap-1">
+                            <button @click="editStampItem(it)" class="px-1.5 py-0.5 text-blue-600 hover:bg-blue-50 rounded text-xs font-bold">✏️</button>
+                            <button @click="deleteStampItem(it.id)" class="px-1.5 py-0.5 text-red-600 hover:bg-red-50 rounded text-xs font-bold">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部操作列 -->
+        <div class="shrink-0 bg-white border border-zinc-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+            <button @click="restoreDefaultStamps" class="bg-zinc-100 hover:bg-zinc-200 text-zinc-800 px-3 py-1.5 rounded-lg text-xs font-bold">
+                🔄 補回預設 74 個專業印章
+            </button>
+            <span class="text-xs text-zinc-500 font-bold">💾 所有修改自動儲存至本地庫，返回主畫面即刻生效</span>
+        </div>
+    </main>
+
+    <!-- ===================================================================== -->
+    <!-- 分頁 2：🏛️ 圖塊庫與格仔磁吸畫板（寬螢幕左右分欄 ＋ 高清縮圖） -->
+    <!-- ===================================================================== -->
+    <main v-show="activeTab === 'blocks'" class="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden p-3 gap-3">
+        <!-- 左側：圖塊縮圖網格庫 -->
+        <div class="w-full lg:w-[46%] h-[44%] lg:h-full bg-white border border-zinc-300 rounded-xl flex flex-col overflow-hidden shadow-xs shrink-0">
+            <div class="p-2.5 border-b border-zinc-200 bg-zinc-50 flex flex-col gap-2 shrink-0">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-sm font-black text-zinc-900">🏛️ 圖塊庫（帶高清縮圖預覽）</span>
+                    <label class="bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-800 px-2.5 py-1 rounded-lg text-xs font-black cursor-pointer shrink-0">
+                        🖼️ 傳圖建塊
+                        <input type="file" accept="image/*" class="hidden" @change="handleUploadImageBlock">
+                    </label>
+                </div>
+                <div class="flex items-center gap-1 flex-wrap">
+                    <button @click="cadFilter = 'all'" :class="cadFilter === 'all' ? 'bg-zinc-900 text-white' : 'bg-white border border-zinc-300 text-zinc-700'" class="px-2.5 py-1 rounded-lg text-xs font-bold">全部</button>
+                    <button @click="cadFilter = 'pinned'" :class="cadFilter === 'pinned' ? 'bg-amber-500 text-zinc-950' : 'bg-amber-50 border border-amber-300 text-amber-900'" class="px-2.5 py-1 rounded-lg text-xs font-bold">⭐ 置頂</button>
+                    <button v-for="c in cadCategories" :key="'cf-'+c.id" @click="cadFilter = c.id"
+                            :class="cadFilter === c.id ? 'bg-indigo-600 text-white' : 'bg-white border border-zinc-300 text-zinc-700'"
+                            class="px-2.5 py-1 rounded-lg text-xs font-bold">
+                        {{ c.name }}
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 min-h-0 overflow-y-auto touch-scrollable p-2.5">
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <div v-for="blk in filteredCadBlocks" :key="blk.id"
+                         :class="[
+                             editingBlock.id === blk.id ? 'ring-2 ring-blue-600 border-blue-500 bg-blue-50/40' : 'border-zinc-300 bg-white',
+                             blk.hidden ? 'opacity-50' : ''
+                         ]"
+                         class="border rounded-xl p-2 flex flex-col justify-between gap-1.5 shadow-2xs">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-xs font-black text-zinc-900 truncate">{{ blk.label }}</span>
+                            <span v-if="blk.isCustom" class="text-[10px] bg-indigo-100 text-indigo-800 px-1.5 rounded font-bold shrink-0">自訂</span>
+                        </div>
+
+                        <!-- 高清縮圖預覽區 -->
+                        <div @click="blk.isCustom && blk.shapes ? loadBlockIntoBoard(blk) : null"
+                             :class="blk.isCustom && blk.shapes ? 'cursor-pointer hover:border-blue-400' : ''"
+                             class="h-20 bg-zinc-50 border border-zinc-200 rounded-lg flex items-center justify-center overflow-hidden p-1">
+                            <img v-if="getBlockPreview(blk)" :src="getBlockPreview(blk)" class="max-w-full max-h-full object-contain">
+                            <span v-else class="text-xs text-zinc-400 font-bold">無預覽</span>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-1 border-t border-zinc-100 text-xs">
+                            <button @click="togglePinCad(blk.id)" :class="blk.pinned ? 'text-amber-600 font-black' : 'text-zinc-400 font-bold'">
+                                {{ blk.pinned ? '⭐' : '☆' }}
+                            </button>
+                            <div class="flex items-center gap-1">
+                                <button v-if="blk.isCustom && blk.shapes" @click="loadBlockIntoBoard(blk)" title="載入畫板修改" class="text-blue-600 font-bold px-1">✏️</button>
+                                <button @click="toggleHideCad(blk.id)" class="text-zinc-600 font-bold px-1">{{ blk.hidden ? '顯示' : '隱藏' }}</button>
+                                <button v-if="blk.isCustom" @click="deleteCustomCadBlock(blk.id)" class="text-red-600 font-bold px-1">🗑️</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右側：格仔磁吸收口大樣畫板 -->
+        <div class="flex-1 min-h-0 bg-white border border-zinc-300 rounded-xl flex flex-col overflow-hidden shadow-xs">
+            <!-- 畫板屬性列 -->
+            <div class="p-2.5 border-b border-zinc-200 bg-zinc-50 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <div class="flex items-center gap-1.5 flex-wrap flex-1">
+                    <input type="text" v-model="editingBlock.label" placeholder="輸入圖塊名稱 (如: 階梯收口)..." class="w-44 sm:w-52 border border-zinc-300 rounded-lg px-2.5 py-1 font-black bg-white">
+                    <select v-model="editingBlock.cat" class="border border-zinc-300 rounded-lg px-2 py-1 font-bold bg-white">
+                        <option v-for="c in cadCategories" :key="'ec-'+c.id" :value="c.id">{{ c.name }}</option>
+                    </select>
+                    <button @click="resetBoardToNew" class="bg-zinc-200 hover:bg-zinc-300 text-zinc-800 px-2.5 py-1 rounded-lg text-xs font-black">+ 新畫板</button>
+                </div>
+                <button @click="saveBoardAsBlock" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-lg text-xs sm:text-sm font-black shadow-sm shrink-0">
+                    💾 儲存至圖塊庫
+                </button>
+            </div>
+
+            <!-- 畫板工具與 6 色快切列 -->
+            <div class="px-2.5 py-1.5 border-b border-zinc-200 bg-white flex flex-wrap items-center justify-between gap-1.5 shrink-0">
+                <div class="flex items-center gap-1 flex-wrap">
+                    <button @click="boardTool = 'line'" :class="boardTool === 'line' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-800'" class="px-2.5 py-1 rounded-lg text-xs font-black">╱ 直線</button>
+                    <button @click="boardTool = 'rect'" :class="boardTool === 'rect' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-800'" class="px-2.5 py-1 rounded-lg text-xs font-black">▭ 方框</button>
+                    <button @click="boardTool = 'circle'" :class="boardTool === 'circle' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-800'" class="px-2.5 py-1 rounded-lg text-xs font-black">⭕ 圓形</button>
+                    <button @click="boardSnap = !boardSnap" :class="boardSnap ? 'bg-blue-600 text-white' : 'bg-zinc-100 text-zinc-600'" class="px-2.5 py-1 rounded-lg text-xs font-black">🧲 格仔磁吸</button>
+                    <button @click="undoBoardShape" :disabled="!editingBlock.shapes.length" class="px-2.5 py-1 rounded-lg text-xs font-black bg-zinc-100 text-zinc-800 disabled:opacity-40">↶ 復原</button>
+                    <button @click="editingBlock.shapes = []" :disabled="!editingBlock.shapes.length" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-red-50 text-red-600 disabled:opacity-40">清空</button>
+                </div>
+
+                <!-- 6 色施工標準快切 -->
+                <div class="flex items-center gap-1.5">
+                    <button v-for="col in boardColors" :key="col.hex" @click="boardColor = col.hex"
+                            :style="{ backgroundColor: col.hex }"
+                            :class="boardColor === col.hex ? 'ring-2 ring-zinc-900 scale-115' : 'opacity-80'"
+                            :title="col.name"
+                            class="w-6 h-6 rounded-full border border-zinc-400 shrink-0 transition-transform"></button>
+                </div>
+            </div>
+
+            <!-- SVG 格仔磁吸畫布 -->
+            <div class="flex-1 min-h-0 relative overflow-hidden grid-canvas-bg select-none">
+                <svg ref="boardSvgRef" viewBox="0 0 800 560" preserveAspectRatio="xMidYMid meet"
+                     style="width:100%;height:100%;touch-action:none;" class="cursor-crosshair block"
+                     @pointerdown="onBoardPointerDown" @pointermove="onBoardPointerMove" @pointerup="onBoardPointerUp" @pointercancel="onBoardPointerUp">
+                    <!-- 中心十字準星 -->
+                    <line x1="400" y1="0" x2="400" y2="560" stroke="rgba(37,99,235,0.22)" stroke-width="1.5" stroke-dasharray="6 4" />
+                    <line x1="0" y1="280" x2="800" y2="280" stroke="rgba(37,99,235,0.22)" stroke-width="1.5" stroke-dasharray="6 4" />
+
+                    <!-- 已畫矢量圖元 -->
+                    <g v-for="(s, idx) in editingBlock.shapes" :key="'bs-'+idx">
+                        <line v-if="s.t === 'line'" :x1="s.x1 + 400" :y1="s.y1 + 280" :x2="s.x2 + 400" :y2="s.y2 + 280"
+                              :stroke="s.color || '#111827'" :stroke-width="s.sw || 3.5" stroke-linecap="round" />
+                        <rect v-else-if="s.t === 'rect'" :x="s.x + 400" :y="s.y + 280" :width="s.w" :height="s.h"
+                              fill="rgba(255,255,255,0.55)" :stroke="s.color || '#111827'" :stroke-width="s.sw || 3.5" />
+                        <circle v-else-if="s.t === 'circle'" :cx="s.cx + 400" :cy="s.cy + 280" :r="s.r"
+                                fill="rgba(255,255,255,0.55)" :stroke="s.color || '#111827'" :stroke-width="s.sw || 3.5" />
+                    </g>
+
+                    <!-- 正在拖拉預覽圖元 -->
+                    <g v-if="draftShape" class="pointer-events-none">
+                        <line v-if="draftShape.t === 'line'" :x1="draftShape.x1 + 400" :y1="draftShape.y1 + 280" :x2="draftShape.x2 + 400" :y2="draftShape.y2 + 280"
+                              :stroke="draftShape.color" :stroke-width="draftShape.sw" stroke-linecap="round" stroke-dasharray="6 4" />
+                        <rect v-else-if="draftShape.t === 'rect'" :x="draftShape.x + 400" :y="draftShape.y + 280" :width="draftShape.w" :height="draftShape.h"
+                              fill="none" :stroke="draftShape.color" :stroke-width="draftShape.sw" stroke-dasharray="6 4" />
+                        <circle v-else-if="draftShape.t === 'circle'" :cx="draftShape.cx + 400" :cy="draftShape.cy + 280" :r="draftShape.r"
+                                fill="none" :stroke="draftShape.color" :stroke-width="draftShape.sw" stroke-dasharray="6 4" />
+                    </g>
+
+                    <!-- 磁吸準星提示點 -->
+                    <circle v-if="hoverSnapPt" :cx="hoverSnapPt.x + 400" :cy="hoverSnapPt.y + 280" r="5" fill="#2563eb" opacity="0.7" class="pointer-events-none" />
+                </svg>
+                <div class="absolute bottom-2 left-3 bg-white/90 border border-zinc-200 px-2.5 py-1 rounded-lg text-[11px] font-bold text-zinc-600 pointer-events-none">
+                    💡 提示：藍線交點為中心基準（小格 20px / 大格 100px），可用黑畫結構、橙綠分收口層、螢光黃標縫隙
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ===================================================================== -->
+    <!-- 分頁 3：⚠️ 防漏語句庫（全屋通用 ＋ 多空間一鍵批量勾選） -->
+    <!-- ===================================================================== -->
+    <main v-show="activeTab === 'checklists'" class="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden p-3 gap-3">
+        <!-- 左側：空間列表 -->
+        <div class="w-full lg:w-64 bg-white border border-zinc-300 rounded-xl flex flex-col overflow-hidden shrink-0 max-h-44 lg:max-h-full">
+            <div class="p-2.5 border-b border-zinc-200 bg-zinc-50 flex items-center justify-between gap-1 shrink-0">
+                <span class="text-sm font-black text-zinc-900">🏠 空間列表</span>
+                <button @click="addNewChecklistSpace" class="bg-emerald-600 text-white px-2.5 py-1 rounded-lg text-xs font-black">+ 空間</button>
+            </div>
+            <div class="flex-1 overflow-y-auto touch-scrollable p-2 flex lg:flex-col gap-1.5 flex-wrap">
+                <button v-for="sp in allSpaceNames" :key="'csp-'+sp" @click="selectedSpace = sp"
+                        :class="selectedSpace === sp ? 'bg-emerald-700 text-white border-emerald-800 font-black' : 'bg-zinc-50 text-zinc-800 border-zinc-200 hover:bg-emerald-50 font-bold'"
+                        class="px-3 py-1.5 rounded-lg text-xs sm:text-sm border text-left flex items-center justify-between gap-2">
+                    <span>{{ sp }}</span>
+                    <span class="text-[11px] opacity-80">{{ (checklistsMap[sp]?.dims?.length || 0) + (checklistsMap[sp]?.notes?.length || 0) }}項</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 右側：語句編輯 ＋ 多空間批量派發 -->
+        <div class="flex-1 min-h-0 overflow-y-auto touch-scrollable flex flex-col gap-3 pr-1">
+            <!-- 多空間批量新增神器 -->
+            <div class="bg-indigo-50 border border-indigo-300 rounded-xl p-3 shadow-2xs flex flex-col gap-2.5">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-black text-indigo-950">🚀 全屋通用語句 — 一鍵批量加入多個空間</span>
+                    <button @click="toggleAllBatchSpaces" class="text-xs font-black text-indigo-700 underline">
+                        {{ batchTargetSpaces.length === allSpaceNames.length ? '取消全選' : '全選所有空間' }}
+                    </button>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <select v-model="batchItemType" class="border border-indigo-300 rounded-lg px-2.5 py-1.5 font-bold bg-white">
+                        <option value="notes">⚠️ 現場注意事項</option>
+                        <option value="dims">📏 必度尺寸項目</option>
+                    </select>
+                    <input type="text" v-model="batchItemText" placeholder="輸入共用語句（例如：確認地腳線厚度及收口方式）..." class="flex-1 border border-indigo-300 rounded-lg px-3 py-1.5 font-bold bg-white">
+                    <button @click="applyBatchChecklistItem" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-xs sm:text-sm font-black shrink-0">
+                        套用至已選 ({{ batchTargetSpaces.length }})
+                    </button>
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <label v-for="sp in allSpaceNames" :key="'bsp-'+sp"
+                           :class="batchTargetSpaces.includes(sp) ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-zinc-700 border-indigo-200'"
+                           class="px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer select-none">
+                        <input type="checkbox" :value="sp" v-model="batchTargetSpaces" class="hidden">
+                        {{ batchTargetSpaces.includes(sp) ? '✓ ' : '' }}{{ sp }}
+                    </label>
+                </div>
+            </div>
+
+            <!-- 當前空間細項編輯 -->
+            <div v-if="selectedSpace && checklistsMap[selectedSpace]" class="bg-white border border-zinc-300 rounded-xl p-3.5 shadow-xs flex flex-col gap-4">
+                <div class="flex items-center justify-between border-b border-zinc-200 pb-2">
+                    <span class="text-base font-black text-emerald-900">📋 「{{ selectedSpace }}」專屬防漏清單</span>
+                    <button @click="saveChecklistsNow" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-lg text-xs sm:text-sm font-black">
+                        💾 儲存清單
+                    </button>
+                </div>
+
+                <!-- 必度尺寸 -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs sm:text-sm font-black text-zinc-800">📏 必度尺寸項目</span>
+                        <button @click="checklistsMap[selectedSpace].dims.push('')" class="bg-zinc-100 hover:bg-zinc-200 px-2.5 py-1 rounded-lg text-xs font-black">+ 新增尺寸</button>
+                    </div>
+                    <div class="space-y-1.5">
+                        <div v-for="(d, idx) in checklistsMap[selectedSpace].dims" :key="'dim-'+idx" class="flex items-center gap-1.5">
+                            <input type="text" v-model="checklistsMap[selectedSpace].dims[idx]" @change="saveChecklistsNow" class="flex-1 border border-zinc-300 rounded-lg px-2.5 py-1.5 font-bold bg-zinc-50 focus:bg-white">
+                            <button @click="checklistsMap[selectedSpace].dims.splice(idx, 1); saveChecklistsNow()" class="px-2.5 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-black">✕</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 注意事項 -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs sm:text-sm font-black text-amber-900">⚠️ 現場注意事項（防中伏）</span>
+                        <button @click="checklistsMap[selectedSpace].notes.push('')" class="bg-amber-100 hover:bg-amber-200 text-amber-900 px-2.5 py-1 rounded-lg text-xs font-black">+ 新增提醒</button>
+                    </div>
+                    <div class="space-y-1.5">
+                        <div v-for="(n, idx) in checklistsMap[selectedSpace].notes" :key="'note-'+idx" class="flex items-center gap-1.5">
+                            <input type="text" v-model="checklistsMap[selectedSpace].notes[idx]" @change="saveChecklistsNow" class="flex-1 border border-amber-300 rounded-lg px-2.5 py-1.5 font-bold bg-amber-50/40 focus:bg-white">
+                            <button @click="checklistsMap[selectedSpace].notes.splice(idx, 1); saveChecklistsNow()" class="px-2.5 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-black">✕</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ===================================================================== -->
+    <!-- 分頁 4：📄 QC 審圖批改報告（抽取紅筆指示 ＋ 接通 view.html） -->
+    <!-- ===================================================================== -->
+    <main v-show="activeTab === 'report'" class="flex-1 min-h-0 flex flex-col overflow-hidden p-3 gap-3">
+        <!-- 頂部工程選擇與篩選列 -->
+        <div class="bg-white border border-zinc-300 rounded-xl p-3 shadow-xs flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div class="flex items-center gap-2 flex-wrap flex-1">
+                <span class="text-xs sm:text-sm font-black text-zinc-700">選擇工程：</span>
+                <select v-model="selectedProjectCode" @change="loadSelectedProject" class="border border-zinc-300 rounded-lg px-3 py-1.5 font-black bg-zinc-50 min-w-[200px]">
+                    <option v-for="p in projectOptions" :key="'pr-'+p.code" :value="p.code">
+                        {{ p.name || '未命名工程' }} (#{{ p.code }})
+                    </option>
+                </select>
+                <button @click="onlyQcPages = !onlyQcPages"
+                        :class="onlyQcPages ? 'bg-rose-600 text-white border-rose-700' : 'bg-zinc-100 text-zinc-800 border-zinc-300'"
+                        class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black border">
+                    {{ onlyQcPages ? '🔴 只看有批改/必改頁面' : '📑 顯示全部頁面' }}
+                </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button @click="copyQcShareLink" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black shadow-sm">
+                    🔗 複製製圖部連結
+                </button>
+                <button @click="openViewReport" class="bg-zinc-900 hover:bg-zinc-800 text-white px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-black shadow-sm">
+                    🚀 開啟 View 報告
+                </button>
+            </div>
+        </div>
+
+        <!-- 報告內容預覽 -->
+        <div v-if="!currentProjectData" class="flex-1 flex items-center justify-center text-zinc-400 font-bold">
+            暫無工程資料，請先在主畫面建立或載入工程
+        </div>
+        <div v-else class="flex-1 min-h-0 overflow-y-auto touch-scrollable flex flex-col gap-3 pr-1">
+            <!-- ⭐ 全單特別提醒置頂卡 -->
+            <div class="bg-rose-50 border-2 border-rose-300 rounded-xl p-3.5 shadow-2xs">
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-sm font-black text-rose-900">⭐ 本單客人特別提醒 / 全單技術總要求（置頂顯示於報告）</span>
+                    <button @click="saveProjectCustomNotes" class="bg-rose-700 text-white px-2.5 py-1 rounded-lg text-xs font-black">💾 儲存提醒</button>
+                </div>
+                <textarea v-model="currentProjectData.customNotes" rows="2" placeholder="輸入全單必須遵守的技術總要求..." class="w-full bg-white border border-rose-300 rounded-lg p-2 font-bold text-zinc-900"></textarea>
+            </div>
+
+            <!-- 逐頁批改明細卡 -->
+            <div v-if="!reportPages.length" class="bg-white border border-zinc-200 rounded-xl p-8 text-center text-zinc-500 font-bold">
+                目前篩選條件下沒有批改項目（可切換上方「顯示全部頁面」檢視全套圖紙）
+            </div>
+
+            <div v-for="rp in reportPages" :key="rp.id" class="bg-white border border-zinc-300 rounded-xl p-3 shadow-xs flex flex-col md:flex-row gap-3">
+                <!-- 縮圖 -->
+                <div class="w-full md:w-64 h-44 bg-zinc-100 border border-zinc-200 rounded-lg overflow-hidden flex items-center justify-center shrink-0 relative">
+                    <img v-if="rp.photo" :src="rp.photo" class="w-full h-full object-contain bg-white">
+                    <span v-else class="text-xs text-zinc-400 font-bold">無底圖</span>
+                    <span class="absolute top-1.5 left-1.5 bg-zinc-900/85 text-white text-xs font-black px-2 py-0.5 rounded">
+                        P{{ rp.pageNum }} {{ rp.space ? '· ' + rp.space : '' }}
+                    </span>
+                </div>
+
+                <!-- 自動抽取的必改指示清單 -->
+                <div class="flex-1 flex flex-col justify-between gap-2">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-zinc-100 pb-1.5 mb-2">
+                            <span class="text-sm font-black text-zinc-900">📋 抽取批改與跟進事項（{{ rp.qcItems.length }} 項）</span>
+                            <span v-if="rp.redCount > 0" class="bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 rounded-full text-xs font-black">
+                                🔴 含 {{ rp.redCount }} 處紅筆批改
+                            </span>
+                        </div>
+                        <div v-if="!rp.qcItems.length" class="text-xs text-zinc-400 font-bold py-2">本頁無紅筆批改或未完成防漏項</div>
+                        <ol class="space-y-1.5 list-decimal pl-5 text-xs sm:text-sm font-bold text-zinc-800">
+                            <li v-for="(qItem, qIdx) in rp.qcItems" :key="qIdx" :class="qItem.isRed ? 'text-red-700 font-black' : 'text-zinc-800'">
+                                {{ qItem.text }}
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+</div>
+
+<script src="./data.js?v=12.0"></script>
+<script src="./cad.js?v=12.0"></script>
+<script>
+const { createApp, ref, reactive, computed, onMounted } = Vue;
+
+// 對接主程式完全相同的本地資料庫
+localforage.config({ name: 'SiteMeasurePro', storeName: 'projects_store' });
+
+const DATA_MOD = window.MEASURE_DATA || {};
+const CAD_MOD = window.MEASURE_CAD || {};
+
+createApp({
+    setup() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const activeTab = ref(urlParams.get('tab') || 'stamps');
+        const statusMsg = ref('');
+        const notifySaved = (target = 'all') => {
+            statusMsg.value = '✅ 已儲存並同步';
+            setTimeout(() => { if (statusMsg.value === '✅ 已儲存並同步') statusMsg.value = ''; }, 2200);
+            localStorage.setItem('qc_studio_sync', JSON.stringify({ target, ts: Date.now() }));
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'QC_STUDIO_SAVED', target }, '*');
+            }
+        };
+
+        // =================================================================
+        // 1. 印章庫管理 (讀寫 dynamic_stamp_store_v11)
+        // =================================================================
+        const stampPalette = DATA_MOD.STAMP_PALETTE || [
+            { hex: '#ffffff', name: '白' },
+            { hex: '#ef4444', name: '紅' },
+            { hex: '#eab308', name: '黃' },
+            { hex: '#38bdf8', name: '青' },
+            { hex: '#34d399', name: '綠' }
+        ];
+        const stampCategories = ref([]);
+        const stampItems = ref([]);
+        const stampFilter = ref('all');
+        const stampSearch = ref('');
+        const newCatName = ref('');
+        const newStampCatId = ref('');
+        const newStampText = ref('');
+        const newStampColor = ref('#ffffff');
+
+        const buildSeedStamps = () => {
+            const cats = [], items = [];
+            (DATA_MOD.DEFAULT_STAMP_SEED || []).forEach((g, gIdx) => {
+                cats.push({ id: g.id, icon: g.icon || '🏷️', name: g.name, defaultColor: g.defaultColor || '#ffffff' });
+                (g.items || []).forEach((txt, iIdx) => {
+                    items.push({ id: `st_${g.id}_${iIdx}_${gIdx}`, catId: g.id, text: txt, color: g.defaultColor || '#ffffff', count: 0, pinned: false });
+                });
+            });
+            return { cats, items };
+        };
+
+        const loadStamps = async () => {
+            const saved = await localforage.getItem('dynamic_stamp_store_v11');
+            if (saved && Array.isArray(saved.categories) && saved.categories.length) {
+                stampCategories.value = saved.categories;
+                stampItems.value = saved.items || [];
+            } else {
+                const { cats, items } = buildSeedStamps();
+                stampCategories.value = cats;
+                stampItems.value = items;
+                await saveStamps();
+            }
+            if (!newStampCatId.value && stampCategories.value.length) newStampCatId.value = stampCategories.value[0].id;
+        };
+
+        const saveStamps = async () => {
+            await localforage.setItem('dynamic_stamp_store_v11', {
+                seedVersion: 'v11.1',
+                categories: JSON.parse(JSON.stringify(stampCategories.value)),
+                items: JSON.parse(JSON.stringify(stampItems.value)),
+                updatedAt: Date.now()
+            });
+            notifySaved('stamps');
+        };
+
+        const pinnedStampCount = computed(() => stampItems.value.filter(x => x.pinned).length);
+        const countStampsByCat = (catId) => stampItems.value.filter(x => x.catId === catId).length;
+        const getCatLabel = (catId) => {
+            const c = stampCategories.value.find(x => x.id === catId);
+            return c ? `${c.icon || ''} ${c.name}` : '其他';
+        };
+        const filteredStampItems = computed(() => {
+            const q = stampSearch.value.trim().toLowerCase();
+            return stampItems.value.filter(it => {
+                if (stampFilter.value === 'pinned' && !it.pinned) return false;
+                if (stampFilter.value !== 'all' && stampFilter.value !== 'pinned' && it.catId !== stampFilter.value) return false;
+                if (q && !String(it.text || '').toLowerCase().includes(q)) return false;
+                return true;
+            });
+        });
+
+        const onSelectNewStampCat = () => {
+            const c = stampCategories.value.find(x => x.id === newStampCatId.value);
+            if (c?.defaultColor) newStampColor.value = c.defaultColor;
+        };
+        const addStampCategory = async () => {
+            const name = newCatName.value.trim();
+            if (!name) return;
+            if (stampCategories.value.some(c => c.name === name)) return alert('此分類已存在');
+            const id = 'cat_' + Date.now();
+            stampCategories.value.unshift({ id, icon: '🏷️', name, defaultColor: '#ffffff' });
+            newCatName.value = '';
+            newStampCatId.value = id;
+            await saveStamps();
+        };
+        const addStampItem = async () => {
+            const txt = newStampText.value.trim();
+            if (!txt) return;
+            const catId = newStampCatId.value || stampCategories.value[0]?.id || 'cat_elec';
+            stampItems.value.unshift({ id: 'st_custom_' + Date.now(), catId, text: txt, color: newStampColor.value, count: 0, pinned: true });
+            newStampText.value = '';
+            await saveStamps();
+        };
+        const toggleStampPin = async (it) => { it.pinned = !it.pinned; await saveStamps(); };
+        const cycleStampColor = async (it) => {
+            const idx = stampPalette.findIndex(p => p.hex === (it.color || '#ffffff'));
+            it.color = stampPalette[(idx + 1) % stampPalette.length].hex;
+            await saveStamps();
+        };
+        const editStampItem = async (it) => {
+            const next = prompt('修改印章字眼：', it.text)?.trim();
+            if (next && next !== it.text) { it.text = next; await saveStamps(); }
+        };
+        const deleteStampItem = async (id) => {
+            stampItems.value = stampItems.value.filter(x => x.id !== id);
+            await saveStamps();
+        };
+        const restoreDefaultStamps = async () => {
+            if (!confirm('補回所有預設 74 個印章？（你自訂的印章會完整保留）')) return;
+            const { cats, items } = buildSeedStamps();
+            cats.forEach(c => { if (!stampCategories.value.some(x => x.id === c.id)) stampCategories.value.push(c); });
+            items.forEach(it => { if (!stampItems.value.some(x => x.text === it.text && x.catId === it.catId)) stampItems.value.push(it); });
+            await saveStamps();
+        };
+
+        // =================================================================
+        // 2. 圖塊庫與格仔磁吸畫板 (讀寫 custom_cad_store_v1)
+        // =================================================================
+        const cadCategories = CAD_MOD.CAD_CATEGORIES || [
+            { id: 'arch', name: '🚪 門窗牆柱' },
+            { id: 'living', name: '🛋️ 廳房傢俬' },
+            { id: 'bath_kit', name: '🚽 廚廁潔具' }
+        ];
+        const customCadBlocks = ref([]);
+        const pinnedCadIds = ref([]);
+        const hiddenCadIds = ref([]);
+        const cadFilter = ref('all');
+        const previewCache = reactive({});
+
+        const loadCads = async () => {
+            const saved = await localforage.getItem('custom_cad_store_v1');
+            if (saved) {
+                customCadBlocks.value = saved.custom || [];
+                pinnedCadIds.value = saved.pinned || [];
+                hiddenCadIds.value = saved.hidden || [];
+            }
+        };
+        const saveCads = async () => {
+            await localforage.setItem('custom_cad_store_v1', {
+                custom: JSON.parse(JSON.stringify(customCadBlocks.value)),
+                pinned: [...pinnedCadIds.value],
+                hidden: [...hiddenCadIds.value]
+            });
+            notifySaved('blocks');
+        };
+
+        const allCadBlocks = computed(() => {
+            const builtIn = (CAD_MOD.CAD_LIST || []).map(x => ({
+                ...x, isCustom: false,
+                pinned: pinnedCadIds.value.includes(x.id),
+                hidden: hiddenCadIds.value.includes(x.id)
+            }));
+            const custom = customCadBlocks.value.map(x => ({
+                ...x, isCustom: true,
+                pinned: pinnedCadIds.value.includes(x.id),
+                hidden: hiddenCadIds.value.includes(x.id)
+            }));
+            return [...custom, ...builtIn].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+        });
+
+        const filteredCadBlocks = computed(() => {
+            return allCadBlocks.value.filter(b => {
+                if (cadFilter.value === 'pinned') return b.pinned;
+                if (cadFilter.value !== 'all') return b.cat === cadFilter.value;
+                return true;
+            });
+        });
+
+        const renderShapesToDataUrl = (shapes, w = 140, h = 140) => {
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            const ctx = c.getContext('2d');
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            // 計算包圍盒自動置中縮放
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            (shapes || []).forEach(s => {
+                if (s.t === 'line') {
+                    minX = Math.min(minX, s.x1, s.x2); maxX = Math.max(maxX, s.x1, s.x2);
+                    minY = Math.min(minY, s.y1, s.y2); maxY = Math.max(maxY, s.y1, s.y2);
+                } else if (s.t === 'rect') {
+                    minX = Math.min(minX, s.x, s.x + s.w); maxX = Math.max(maxX, s.x, s.x + s.w);
+                    minY = Math.min(minY, s.y, s.y + s.h); maxY = Math.max(maxY, s.y, s.y + s.h);
+                } else if (s.t === 'circle') {
+                    minX = Math.min(minX, s.cx - s.r); maxX = Math.max(maxX, s.cx + s.r);
+                    minY = Math.min(minY, s.cy - s.r); maxY = Math.max(maxY, s.cy + s.r);
+                }
+            });
+            if (!isFinite(minX)) return '';
+            const bw = Math.max(20, maxX - minX), bh = Math.max(20, maxY - minY);
+            const scale = Math.min((w - 24) / bw, (h - 24) / bh, 1.5);
+            const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+
+            ctx.save();
+            ctx.translate(w / 2, h / 2);
+            ctx.scale(scale, scale);
+            ctx.translate(-cx, -cy);
+            (shapes || []).forEach(s => {
+                ctx.strokeStyle = s.color || '#111827';
+                ctx.lineWidth = s.sw || 3;
+                if (s.t === 'line') {
+                    ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+                } else if (s.t === 'rect') {
+                    ctx.strokeRect(s.x, s.y, s.w, s.h);
+                } else if (s.t === 'circle') {
+                    ctx.beginPath(); ctx.arc(s.cx, s.cy, s.r, 0, Math.PI * 2); ctx.stroke();
+                }
+            });
+            ctx.restore();
+            return c.toDataURL('image/png');
+        };
+
+        const getBlockPreview = (blk) => {
+            if (blk.imgB64) return blk.imgB64;
+            if (previewCache[blk.id]) return previewCache[blk.id];
+            if (!blk.isCustom && CAD_MOD.drawOnCanvas) {
+                const c = document.createElement('canvas');
+                c.width = 160; c.height = 160;
+                const ctx = c.getContext('2d');
+                const scale = Math.min(130 / Math.max(blk.w || 80, blk.h || 80), 1.3);
+                CAD_MOD.drawOnCanvas(ctx, { x: 80, y: 80, color: '#111827', rot: 0, scale, flipX: 1, flipY: 1, data: { cadType: blk.id } });
+                previewCache[blk.id] = c.toDataURL('image/png');
+                return previewCache[blk.id];
+            }
+            if (blk.shapes?.length) {
+                previewCache[blk.id] = renderShapesToDataUrl(blk.shapes, 160, 160);
+                return previewCache[blk.id];
+            }
+            return '';
+        };
+
+        const togglePinCad = async (id) => {
+            if (pinnedCadIds.value.includes(id)) pinnedCadIds.value = pinnedCadIds.value.filter(x => x !== id);
+            else pinnedCadIds.value.push(id);
+            await saveCads();
+        };
+        const toggleHideCad = async (id) => {
+            if (hiddenCadIds.value.includes(id)) hiddenCadIds.value = hiddenCadIds.value.filter(x => x !== id);
+            else hiddenCadIds.value.push(id);
+            await saveCads();
+        };
+        const deleteCustomCadBlock = async (id) => {
+            if (!confirm('確定刪除此自訂圖塊嗎？')) return;
+            customCadBlocks.value = customCadBlocks.value.filter(x => x.id !== id);
+            pinnedCadIds.value = pinnedCadIds.value.filter(x => x !== id);
+            delete previewCache[id];
+            await saveCads();
+        };
+
+        const handleUploadImageBlock = (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            const reader = new FileReader();
+            reader.readAsDataURL(f);
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.src = ev.target.result;
+                img.onload = async () => {
+                    const c = document.createElement('canvas'), MAX = 220;
+                    let w = img.width, h = img.height;
+                    if (w > MAX || h > MAX) {
+                        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+                        else { w = Math.round(w * MAX / h); h = MAX; }
+                    }
+                    c.width = w; c.height = h;
+                    c.getContext('2d').drawImage(img, 0, 0, w, h);
+                    const label = prompt('輸入圖片圖塊名稱：', f.name.replace(/\.[^.]+$/, '').slice(0, 12))?.trim();
+                    if (!label) return;
+                    const id = 'cad_custom_' + Date.now();
+                    customCadBlocks.value.unshift({ id, cat: cadCategories[0]?.id || 'arch', label, w: 72, h: 72, imgB64: c.toDataURL('image/png') });
+                    pinnedCadIds.value.push(id);
+                    await saveCads();
+                };
+            };
+            e.target.value = '';
+        };
+
+        // 格仔磁吸畫板邏輯
+        const boardColors = [
+            { hex: '#111827', name: '黑色（結構輪廓）' },
+            { hex: '#f97316', name: '橙色（收口分層A）' },
+            { hex: '#10b981', name: '綠色（板件分層B）' },
+            { hex: '#2563eb', name: '深藍（尺寸基準）' },
+            { hex: '#ef4444', name: '紅色（QC批改警示）' },
+            { hex: '#eab308', name: '螢光黃（縫隙高亮）' }
+        ];
+        const editingBlock = reactive({ id: '', label: '新收口大樣', cat: cadCategories[0]?.id || 'arch', shapes: [] });
+        const boardTool = ref('line');
+        const boardColor = ref('#111827');
+        const boardSnap = ref(true);
+        const boardSvgRef = ref(null);
+        const draftShape = ref(null);
+        const hoverSnapPt = ref(null);
+        let boardDrawing = false, boardStart = { x: 0, y: 0 };
+
+        const getBoardCoords = (e) => {
+            const svg = boardSvgRef.value;
+            if (!svg) return { x: 0, y: 0 };
+            const pt = svg.createSVGPoint();
+            pt.x = e.clientX; pt.y = e.clientY;
+            const ctm = svg.getScreenCTM();
+            const loc = ctm ? pt.matrixTransform(ctm.inverse()) : { x: 400, y: 280 };
+            let rx = loc.x - 400;
+            let ry = loc.y - 280;
+            if (boardSnap.value) {
+                rx = Math.round(rx / 20) * 20;
+                ry = Math.round(ry / 20) * 20;
+            } else {
+                rx = Math.round(rx);
+                ry = Math.round(ry);
+            }
+            return { x: Math.max(-380, Math.min(380, rx)), y: Math.max(-260, Math.min(260, ry)) };
+        };
+
+        const onBoardPointerDown = (e) => {
+            e.preventDefault();
+            boardDrawing = true;
+            boardStart = getBoardCoords(e);
+            hoverSnapPt.value = boardStart;
+            if (boardTool.value === 'line') {
+                draftShape.value = { t: 'line', x1: boardStart.x, y1: boardStart.y, x2: boardStart.x, y2: boardStart.y, color: boardColor.value, sw: 3.5 };
+            } else if (boardTool.value === 'rect') {
+                draftShape.value = { t: 'rect', x: boardStart.x, y: boardStart.y, w: 0, h: 0, color: boardColor.value, sw: 3.5 };
+            } else if (boardTool.value === 'circle') {
+                draftShape.value = { t: 'circle', cx: boardStart.x, cy: boardStart.y, r: 0, color: boardColor.value, sw: 3.5 };
+            }
+        };
+
+        const onBoardPointerMove = (e) => {
+            const p = getBoardCoords(e);
+            hoverSnapPt.value = p;
+            if (!boardDrawing || !draftShape.value) return;
+            if (boardTool.value === 'line') {
+                draftShape.value.x2 = p.x;
+                draftShape.value.y2 = p.y;
+            } else if (boardTool.value === 'rect') {
+                draftShape.value.x = Math.min(boardStart.x, p.x);
+                draftShape.value.y = Math.min(boardStart.y, p.y);
+                draftShape.value.w = Math.abs(p.x - boardStart.x);
+                draftShape.value.h = Math.abs(p.y - boardStart.y);
+            } else if (boardTool.value === 'circle') {
+                draftShape.value.r = Math.round(Math.hypot(p.x - boardStart.x, p.y - boardStart.y));
+            }
+        };
+
+        const onBoardPointerUp = () => {
+            if (!boardDrawing || !draftShape.value) return;
+            boardDrawing = false;
+            const s = draftShape.value;
+            const valid = (s.t === 'line' && Math.hypot(s.x2 - s.x1, s.y2 - s.y1) >= 8)
+                || (s.t === 'rect' && s.w >= 8 && s.h >= 8)
+                || (s.t === 'circle' && s.r >= 6);
+            if (valid) editingBlock.shapes.push({ ...s });
+            draftShape.value = null;
+        };
+
+        const undoBoardShape = () => { editingBlock.shapes.pop(); };
+        const resetBoardToNew = () => {
+            editingBlock.id = '';
+            editingBlock.label = '新收口大樣';
+            editingBlock.shapes = [];
+        };
+        const loadBlockIntoBoard = (blk) => {
+            editingBlock.id = blk.id;
+            editingBlock.label = blk.label;
+            editingBlock.cat = blk.cat || cadCategories[0]?.id || 'arch';
+            editingBlock.shapes = JSON.parse(JSON.stringify(blk.shapes || []));
+        };
+
+        const saveBoardAsBlock = async () => {
+            const label = editingBlock.label.trim();
+            if (!label) return alert('請輸入圖塊名稱');
+            if (!editingBlock.shapes.length) return alert('畫板仲係空白，請先畫上線條或收口形狀');
+
+            // 計算實際包圍盒並自動將圖塊幾何中心歸零 (0,0)，方便主畫布旋轉縮放
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            editingBlock.shapes.forEach(s => {
+                if (s.t === 'line') {
+                    minX = Math.min(minX, s.x1, s.x2); maxX = Math.max(maxX, s.x1, s.x2);
+                    minY = Math.min(minY, s.y1, s.y2); maxY = Math.max(maxY, s.y1, s.y2);
+                } else if (s.t === 'rect') {
+                    minX = Math.min(minX, s.x, s.x + s.w); maxX = Math.max(maxX, s.x, s.x + s.w);
+                    minY = Math.min(minY, s.y, s.y + s.h); maxY = Math.max(maxY, s.y, s.y + s.h);
+                } else if (s.t === 'circle') {
+                    minX = Math.min(minX, s.cx - s.r); maxX = Math.max(maxX, s.cx + s.r);
+                    minY = Math.min(minY, s.cy - s.r); maxY = Math.max(maxY, s.cy + s.r);
+                }
+            });
+            const cx = Math.round((minX + maxX) / 2);
+            const cy = Math.round((minY + maxY) / 2);
+            const bw = Math.max(36, Math.round(maxX - minX));
+            const bh = Math.max(36, Math.round(maxY - minY));
+
+            const normalizedShapes = editingBlock.shapes.map(s => {
+                if (s.t === 'line') return { ...s, x1: s.x1 - cx, y1: s.y1 - cy, x2: s.x2 - cx, y2: s.y2 - cy };
+                if (s.t === 'rect') return { ...s, x: s.x - cx, y: s.y - cy };
+                if (s.t === 'circle') return { ...s, cx: s.cx - cx, cy: s.cy - cy };
+                return { ...s };
+            });
+
+            // 同時產生高清透明預覽圖（保留多色收口分層），確保主畫布即時高清顯示
+            const imgB64 = renderShapesToDataUrl(normalizedShapes, Math.min(260, bw + 24), Math.min(260, bh + 24));
+            const id = editingBlock.id || ('cad_custom_' + Date.now());
+            const payload = { id, cat: editingBlock.cat, label, w: Math.min(160, bw), h: Math.min(160, bh), shapes: normalizedShapes, imgB64 };
+
+            const idx = customCadBlocks.value.findIndex(x => x.id === id);
+            if (idx !== -1) customCadBlocks.value[idx] = payload;
+            else {
+                customCadBlocks.value.unshift(payload);
+                if (!pinnedCadIds.value.includes(id)) pinnedCadIds.value.push(id);
+            }
+            previewCache[id] = imgB64;
+            editingBlock.id = id;
+            await saveCads();
+        };
+
+        // =================================================================
+        // 3. 防漏語句庫 (讀寫 custom_space_checklists_v1)
+        // =================================================================
+        const checklistsMap = reactive({});
+        const selectedSpace = ref(urlParams.get('space') || '總圖');
+        const batchItemType = ref('notes');
+        const batchItemText = ref('');
+        const batchTargetSpaces = ref([]);
+
+        const allSpaceNames = computed(() => {
+            const base = DATA_MOD.DEFAULT_SPACES || ['總圖', '客廳', '飯廳', '玄關', '廚房', '主人房', '睡房1', '主廁'];
+            const extra = Object.keys(checklistsMap).filter(k => !base.includes(k));
+            return [...base, ...extra];
+        });
+
+        const loadChecklists = async () => {
+            const defaults = DATA_MOD.SPACE_CHECKLISTS || {};
+            const saved = (await localforage.getItem('custom_space_checklists_v1')) || {};
+            allSpaceNames.value.forEach(sp => {
+                const src = saved[sp] || defaults[sp] || { dims: [], notes: [] };
+                checklistsMap[sp] = {
+                    dims: [...(src.dims || [])],
+                    notes: [...(src.notes || [])]
+                };
+            });
+            if (!checklistsMap[selectedSpace.value]) selectedSpace.value = allSpaceNames.value[0] || '總圖';
+        };
+
+        const saveChecklistsNow = async () => {
+            const out = {};
+            Object.entries(checklistsMap).forEach(([sp, obj]) => {
+                out[sp] = {
+                    dims: (obj.dims || []).map(s => String(s || '').trim()).filter(Boolean),
+                    notes: (obj.notes || []).map(s => String(s || '').trim()).filter(Boolean)
+                };
+            });
+            await localforage.setItem('custom_space_checklists_v1', out);
+            notifySaved('checklists');
+        };
+
+        const addNewChecklistSpace = async () => {
+            const sp = prompt('輸入新空間名稱（例如：閣樓、露台）：')?.trim();
+            if (!sp) return;
+            if (!checklistsMap[sp]) checklistsMap[sp] = { dims: [], notes: [] };
+            selectedSpace.value = sp;
+            await saveChecklistsNow();
+        };
+
+        const toggleAllBatchSpaces = () => {
+            if (batchTargetSpaces.value.length === allSpaceNames.value.length) batchTargetSpaces.value = [];
+            else batchTargetSpaces.value = [...allSpaceNames.value];
+        };
+
+        const applyBatchChecklistItem = async () => {
+            const txt = batchItemText.value.trim();
+            if (!txt) return alert('請輸入要批量加入的語句');
+            if (!batchTargetSpaces.value.length) return alert('請至少勾選一個目標空間');
+            batchTargetSpaces.value.forEach(sp => {
+                if (!checklistsMap[sp]) checklistsMap[sp] = { dims: [], notes: [] };
+                const arr = checklistsMap[sp][batchItemType.value];
+                if (!arr.includes(txt)) arr.push(txt);
+            });
+            batchItemText.value = '';
+            await saveChecklistsNow();
+        };
+
+        // =================================================================
+        // 4. QC 審圖批改報告 (讀取 proj_<code> 並對接 view.html)
+        // =================================================================
+        const projectOptions = ref([]);
+        const selectedProjectCode = ref(urlParams.get('code') || '');
+        const currentProjectData = ref(null);
+        const onlyQcPages = ref(true);
+
+        const loadProjectOptions = async () => {
+            const keys = await localforage.keys();
+            const list = [];
+            for (const k of keys) {
+                if (k.startsWith('proj_')) {
+                    const p = await localforage.getItem(k);
+                    if (p?.code) list.push({ code: String(p.code), name: p.name || '', updatedAt: p.updatedAt || 0 });
+                }
+            }
+            list.sort((a, b) => b.updatedAt - a.updatedAt);
+            projectOptions.value = list;
+            if (!selectedProjectCode.value && list.length) selectedProjectCode.value = list[0].code;
+            if (selectedProjectCode.value) await loadSelectedProject();
+        };
+
+        const loadSelectedProject = async () => {
+            if (!selectedProjectCode.value) return;
+            const data = await localforage.getItem('proj_' + selectedProjectCode.value);
+            if (data) currentProjectData.value = data;
+        };
+
+        const saveProjectCustomNotes = async () => {
+            if (!currentProjectData.value) return;
+            currentProjectData.value.updatedAt = Date.now();
+            currentProjectData.value.pendingUpload = true;
+            await localforage.setItem('proj_' + currentProjectData.value.code, JSON.parse(JSON.stringify(currentProjectData.value)));
+            notifySaved('project');
+        };
+
+        const isRedColor = (c) => {
+            const s = String(c || '').toLowerCase();
+            return s === '#ef4444' || s === '#dc2626' || s === 'red';
+        };
+
+        const reportPages = computed(() => {
+            const pgs = currentProjectData.value?.pages || [];
+            return pgs.map((pg, idx) => {
+                const qcItems = [];
+                let redCount = 0;
+
+                // 抽取紅色文字 / 印章 / 批改標註
+                (pg.markers || []).forEach(m => {
+                    const red = isRedColor(m.textColor) || isRedColor(m.color);
+                    const val = [m.data?.name, m.data?.val].filter(Boolean).join(': ');
+                    if (red) {
+                        redCount++;
+                        qcItems.push({ isRed: true, text: val ? `🔴 批改指示：${val}` : '🔴 紅色標記指示' });
+                    } else if (m.type === 'stamp' && val) {
+                        qcItems.push({ isRed: false, text: `🏷️ 印章標註：${val}` });
+                    }
+                });
+
+                // 統計紅色框選 / 箭嘴 / 圈選
+                const redShapes = (pg.lines || []).filter(l => isRedColor(l.color) && l.type && l.type !== 'measure').length
+                    + (pg.paths || []).filter(p => isRedColor(p.color)).length;
+                if (redShapes > 0) {
+                    redCount += redShapes;
+                    qcItems.push({ isRed: true, text: `🔴 圖面共有 ${redShapes} 處紅色圈選 / 箭嘴修改範圍` });
+                }
+
+                return {
+                    id: pg.id,
+                    pageNum: idx + 1,
+                    space: pg.space || '',
+                    photo: pg.photo || null,
+                    redCount,
+                    qcItems
+                };
+            }).filter(rp => !onlyQcPages.value || rp.qcItems.length > 0);
+        });
+
+        const buildViewReportUrl = () => {
+            const code = currentProjectData.value?.code;
+            if (!code) return '';
+            let base = window.location.href.split('qc-studio.html')[0];
+            if (!base.endsWith('/')) base += '/';
+            const pageIds = onlyQcPages.value && reportPages.value.length
+                ? `&pages=${encodeURIComponent(reportPages.value.map(p => p.id).join(','))}`
+                : '';
+            return `${base}view.html?code=${code}${pageIds}`;
+        };
+
+        const openViewReport = () => {
+            const url = buildViewReportUrl();
+            if (url) window.open(url, '_blank');
+        };
+
+        const copyQcShareLink = () => {
+            const url = buildViewReportUrl();
+            if (!url) return;
+            const pName = currentProjectData.value?.name || '未命名工程';
+            const note = currentProjectData.value?.customNotes ? `\n⭐ 特別提醒：${currentProjectData.value.customNotes}` : '';
+            const msg = `📋 QC 審圖批改報告\n📍 地址：${pName}${note}\n👉 點擊查看批改圖紙：\n${url}`;
+            navigator.clipboard?.writeText(msg).then(() => {
+                statusMsg.value = '🔗 已複製報告連結';
+                setTimeout(() => statusMsg.value = '', 2500);
+            }).catch(() => prompt('請手動複製連結：', msg));
+        };
+
+        const closeStudio = () => {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'QC_STUDIO_CLOSE' }, '*');
+            } else if (window.opener) {
+                window.close();
+            } else {
+                window.location.href = './index.html';
+            }
+        };
+
+        onMounted(async () => {
+            await loadStamps();
+            await loadCads();
+            await loadChecklists();
+            await loadProjectOptions();
+        });
+
+        return {
+            activeTab, statusMsg, closeStudio,
+            stampPalette, stampCategories, stampItems, stampFilter, stampSearch,
+            newCatName, newStampCatId, newStampText, newStampColor,
+            pinnedStampCount, countStampsByCat, getCatLabel, filteredStampItems,
+            onSelectNewStampCat, addStampCategory, addStampItem, toggleStampPin, cycleStampColor, editStampItem, deleteStampItem, restoreDefaultStamps,
+            cadCategories, allCadBlocks, filteredCadBlocks, cadFilter, getBlockPreview,
+            togglePinCad, toggleHideCad, deleteCustomCadBlock, handleUploadImageBlock,
+            boardColors, editingBlock, boardTool, boardColor, boardSnap, boardSvgRef, draftShape, hoverSnapPt,
+            onBoardPointerDown, onBoardPointerMove, onBoardPointerUp, undoBoardShape, resetBoardToNew, loadBlockIntoBoard, saveBoardAsBlock,
+            checklistsMap, selectedSpace, allSpaceNames, batchItemType, batchItemText, batchTargetSpaces,
+            saveChecklistsNow, addNewChecklistSpace, toggleAllBatchSpaces, applyBatchChecklistItem,
+            projectOptions, selectedProjectCode, currentProjectData, onlyQcPages, reportPages,
+            loadSelectedProject, saveProjectCustomNotes, openViewReport, copyQcShareLink
+        };
+    }
+}).mount('#studio-app');
+</script>
+</body>
+</html>
