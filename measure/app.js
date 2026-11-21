@@ -2153,14 +2153,15 @@ const closeQcStudio = async () => {
 const isDashed = ref(false);
             const orthoSnap = ref(true);
 
-            const expandCanvasWhiteSpace = () => {
-                const target = activeCanvas.value;
+   const expandCanvasWhiteSpace = () => {
+                const target = targetCanvas.value;
                 if (!target?.photo) return;
                 const img = new Image();
                 img.crossOrigin = 'anonymous';
                 img.onload = () => {
-                    const addW = Math.round(img.width * 0.45);
-                    const newW = img.width + addW;
+                    const oldW = img.width;
+                    const addW = Math.round(oldW * 0.45);
+                    const newW = oldW + addW;
                     const c = document.createElement('canvas');
                     c.width = newW;
                     c.height = img.height;
@@ -2170,14 +2171,82 @@ const isDashed = ref(false);
                     ctx.drawImage(img, 0, 0);
                     target.photo = c.toDataURL('image/jpeg', 0.92);
                     target.w = newW;
-                    if (activePane.value === 'B' && splitMode.value) canvasWB.value = newW;
-                    else canvasW.value = newW;
+                    if (Array.isArray(target.pins)) {
+                        target.pins.forEach(p => { p.x = parseFloat((((p.x || 0) / 100 * oldW) / newW * 100).toFixed(2)); });
+                    }
                     touchDirty();
                     saveAll();
                     showToast('✅ 已在右側擴展白紙空間');
                 };
                 img.src = target.photo;
             };
+
+            const shrinkCanvasWhiteSpace = () => {
+                const target = targetCanvas.value;
+                if (!target?.photo) return;
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    const oldW = img.width, oldH = img.height;
+                    const scanC = document.createElement('canvas');
+                    scanC.width = oldW; scanC.height = oldH;
+                    const scanCtx = scanC.getContext('2d');
+                    scanCtx.drawImage(img, 0, 0);
+                    let rightmostPixelX = 400;
+                    try {
+                        const data = scanCtx.getImageData(0, 0, oldW, oldH).data;
+                        for (let x = oldW - 1; x >= 400; x -= 2) {
+                            let hasContent = false;
+                            for (let y = 0; y < oldH; y += 4) {
+                                const idx = (y * oldW + x) * 4;
+                                if (data[idx + 3] > 20 && (data[idx] < 245 || data[idx + 1] < 245 || data[idx + 2] < 245)) {
+                                    hasContent = true;
+                                    break;
+                                }
+                            }
+                            if (hasContent) { rightmostPixelX = x; break; }
+                        }
+                    } catch (_) {}
+
+                    const maxMarkerX = Math.max(0, ...(target.markers || []).map(m => (m.x || 0) + (m.w || 40) / 2));
+                    const maxLineX = Math.max(0, ...(target.lines || []).map(l => Math.max(l.x1 || 0, l.x2 || 0)));
+                    const maxWallX = Math.max(0, ...(target.walls || []).map(w => Math.max(w.x1 || 0, w.x2 || 0)));
+                    let maxPathX = 0;
+                    (target.paths || []).forEach(p => {
+                        const nums = String(p.d || '').replace(/[ML]/g, ' ').trim().split(/\s+/).map(Number);
+                        for (let i = 0; i < nums.length; i += 2) { if (!Number.isNaN(nums[i]) && nums[i] > maxPathX) maxPathX = nums[i]; }
+                    });
+                    const maxPinX = Math.max(0, ...(target.pins || []).map(p => ((p.x || 0) / 100) * oldW));
+
+                    const minSafeW = Math.max(400, Math.ceil(Math.max(rightmostPixelX, maxMarkerX, maxLineX, maxWallX, maxPathX, maxPinX) + 24));
+                    const stepW = Math.round(oldW / 1.45);
+                    const newW = Math.max(minSafeW, stepW);
+
+                    if (newW >= oldW - 10) {
+                        showToast('⚠️ 已縮至圖紙及標註邊界，無法再縮');
+                        return;
+                    }
+                    const c = document.createElement('canvas');
+                    c.width = newW; c.height = oldH;
+                    const ctx = c.getContext('2d');
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, newW, oldH);
+                    ctx.drawImage(img, 0, 0);
+                    target.photo = c.toDataURL('image/jpeg', 0.92);
+                    target.w = newW;
+                    if (Array.isArray(target.pins)) {
+                        target.pins.forEach(p => { p.x = parseFloat((((p.x || 0) / 100 * oldW) / newW * 100).toFixed(2)); });
+                    }
+                    touchDirty();
+                    saveAll();
+                    showToast('✅ 已收窄右側多餘白紙空間');
+                };
+                img.src = target.photo;
+            };
+
+
+
+            
 
             const captureSelectionAsCadBlock = async (box) => {
                 const c = targetCanvas.value;
