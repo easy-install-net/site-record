@@ -254,7 +254,7 @@
                     </div>
                 </div>
 
-                <!-- 左右兩側小窄揭頁箭嘴（完整保留） -->
+                <!-- 左右兩側小窄揭頁箭嘴 -->
                 <button v-if="!activePin && activePageIndex > 0" @click.stop="prevPage" @touchstart.stop @mousedown.stop
                         title="上一頁"
                         class="fixed left-1 top-1/2 -translate-y-1/2 z-20 w-6 h-11 sm:w-7 sm:h-12 rounded-xl bg-white/80 hover:bg-white active:scale-95 border border-zinc-300/90 shadow-md flex items-center justify-center text-zinc-800 text-xs sm:text-sm font-black transition-all">
@@ -282,9 +282,13 @@
                         <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="#ffffff" />
                         <image :href="activeCanvas.photo" x="0" y="0" :width="canvasW" :height="canvasH" preserveAspectRatio="none" />
 
-                       <g v-for="m in (activeCanvas.markers || []).filter(m => m.type === 'image')" :key="'img-'+m.id" :transform="getCadTransform(m)" class="pointer-events-none">
+                        <!-- 貼圖層 (位於底圖之上、畫筆與度尺線之下，變換公式與 index.html 100% 一致) -->
+                        <g v-for="m in (activeCanvas.markers || []).filter(m => m.type === 'image')" :key="'img-'+m.id"
+                           :transform="`translate(${m.x}, ${m.y}) rotate(${m.rot || 0}) scale(${(m.scale || 1) * (m.scaleX || 1) * (m.flipX || 1)}, ${(m.scale || 1) * (m.scaleY || 1) * (m.flipY || 1)})`"
+                           class="pointer-events-none">
                             <image :href="m.data.b64" :x="-(m.baseW || m.w)/2" :y="-(m.baseH || m.h)/2" :width="m.baseW || m.w" :height="m.baseH || m.h" preserveAspectRatio="none" />
                         </g>
+
                         <g v-for="w in (activeCanvas.walls || [])" :key="'w-'+w.id" class="pointer-events-none">
                             <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 4.5 : 2" stroke-linecap="round" />
                         </g>
@@ -312,7 +316,7 @@
                            @click.stop="onMasterMarkerClick(m)" @touchend.stop="onMasterMarkerClick(m)">
                             <rect v-if="m.type === 'page_link'" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="14" fill="rgba(14,165,233,0.18)" stroke="#38bdf8" stroke-width="2.5" />
                             <template v-if="m.type === 'cad'">
-                                <g :transform="getCadTransform(m)">
+                                <g :transform="`rotate(${m.rot || 0}) scale(${(m.scale || 1) * (m.scaleX || 1) * (m.flipX || 1)}, ${(m.scale || 1) * (m.scaleY || 1) * (m.flipY || 1)})`">
                                     <image :href="getCadSvgImage(m)" x="-100" y="-100" width="200" height="200" preserveAspectRatio="xMidYMid meet" />
                                 </g>
                             </template>
@@ -1090,7 +1094,7 @@
                     await new Promise(r => { img.onload = r; img.onerror = r; });
                     const c = document.createElement('canvas'), w = cObj.w || 1200, h = cObj.h || 900; c.width = w; c.height = h;
                     const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-                   const customCadImgs = {};
+                    const customCadImgs = {};
                     for (const m of (cObj.markers || [])) {
                         if (m.type === 'image' && m.data?.b64) {
                             const im = new Image(); im.src = m.data.b64; await new Promise(r => { im.onload = r; im.onerror = r; });
