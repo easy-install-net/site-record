@@ -2098,7 +2098,20 @@ const closeQcStudio = async () => {
                 }
                 if (isPinching) return;
                 if (e.touches.length === 1) {
-                    if (pendingTapMarker && Math.hypot(e.touches[0].clientX - pendingTapMarker.clientX, e.touches[0].clientY - pendingTapMarker.clientY) > 6) pendingTapMarker = null;
+                   if (pendingTapMarker && Math.hypot(e.touches[0].clientX - pendingTapMarker.clientX, e.touches[0].clientY - pendingTapMarker.clientY) > 6) {
+                     const { marker, pane: mPane, startSvgX, startSvgY } = pendingTapMarker;
+                     pendingTapMarker = null;
+                     isPanningBrowse = false;
+                     checkBranchNeed(() => {
+                         const target = (targetCanvas.value.markers || []).find(m => m.id === marker.id) || marker;
+                         if (showBranchPrompt.value) return;
+                         activeLine.value = null;
+                         draggedMarker.value = target;
+                         activeMarker.value = target;
+                         dragOrigin.value = { x: startSvgX, y: startSvgY };
+                         markerOrigin.value = { x: target.x, y: target.y };
+                     });
+                 }
                     touchMoved = true;
                     if (isPanningBrowse) { e.preventDefault(); panByClientDelta(e.touches[0].clientX - panStartClient.x, e.touches[0].clientY - panStartClient.y, panPane); }
                     else moveStroke(e, pane);
@@ -2148,7 +2161,20 @@ const closeQcStudio = async () => {
             };
             const onStageMouseMove = (e, pane = 'A') => {
                 if (showBranchPrompt.value) return;
-                if (pendingTapMarker && Math.hypot(e.clientX - pendingTapMarker.clientX, e.clientY - pendingTapMarker.clientY) > 6) pendingTapMarker = null;
+              if (pendingTapMarker && Math.hypot(e.clientX - pendingTapMarker.clientX, e.clientY - pendingTapMarker.clientY) > 6) {
+                 const { marker, pane: mPane, startSvgX, startSvgY } = pendingTapMarker;
+                 pendingTapMarker = null;
+                 isPanningBrowse = false;
+                 checkBranchNeed(() => {
+                     const target = (targetCanvas.value.markers || []).find(m => m.id === marker.id) || marker;
+                     if (showBranchPrompt.value) return;
+                     activeLine.value = null;
+                     draggedMarker.value = target;
+                     activeMarker.value = target;
+                     dragOrigin.value = { x: startSvgX, y: startSvgY };
+                     markerOrigin.value = { x: target.x, y: target.y };
+                 });
+             }
                 if (isPanningBrowse) { panByClientDelta(e.clientX - panStartClient.x, e.clientY - panStartClient.y, panPane); return; }
                 moveStroke(e, pane);
             };
