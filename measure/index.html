@@ -376,18 +376,18 @@
                 </div>
 
                 <!-- ✥ 移模式精準排位與快捷編輯列（含獨立闊高雙滑桿及 ±1° 微調） -->
-                <div v-if="drawMode === 'move' && (activeMarker || activeLine)"
-                     class="bg-white/95 backdrop-blur-md border border-blue-400 rounded-xl p-1.5 shadow-xl flex flex-col gap-1.5 w-[94vw] max-w-md">
-                    <div v-if="activeLine && !activeMarker" class="flex flex-wrap items-center gap-1.5">
-                        <span class="text-xs font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">📏 標註線</span>
-                        <button v-for="c in ['#ef4444','#eab308','#38bdf8','#34d399','#ffffff','#111827']" :key="c" @click="setActiveLineColor(c)"
-                                :style="{ backgroundColor: c }"
-                                :class="activeLine.color === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-80'"
-                                class="w-5 h-5 rounded-full border border-zinc-400 shrink-0"></button>
-                        <button @click="splitChainLine(activeLine)" class="bg-amber-50 border border-amber-300 text-amber-900 px-2 py-0.5 rounded text-xs font-black">[ | 分段 ]</button>
-                        <button @click="deleteActiveLine" class="bg-red-50 border border-red-200 text-red-600 px-2 py-0.5 rounded text-xs font-bold ml-auto">🗑️刪線</button>
-                        <button @click="activeLine = null" class="bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded text-xs font-bold">✕</button>
-                    </div>
+                <div v-if="['move','browse'].includes(drawMode) && !showTopSheet && !showTopTextBar && (activeMarker || activeLine)"
+                  class="bg-white/95 backdrop-blur-md border border-blue-400 rounded-xl p-1.5 shadow-xl flex flex-col gap-1.5 w-[94vw] max-w-md">
+                 <div v-if="activeLine && !activeMarker" class="flex flex-wrap items-center gap-1.5">
+                     <span class="text-xs font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">📏 標註線</span>
+                     <button v-for="c in ['#ef4444','#1d4ed8','#0284c7','#111827','#d97706','#059669']" :key="c" @click="setActiveLineColor(c)"
+                             :style="{ backgroundColor: c }"
+                             :class="activeLine.color === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-80'"
+                             class="w-5 h-5 rounded-full border border-zinc-400 shrink-0"></button>
+                     <button @click="splitChainLine(activeLine)" class="bg-amber-50 border border-amber-300 text-amber-900 px-2 py-0.5 rounded text-xs font-black">[ | 分段 ]</button>
+                     <button @click="deleteActiveLine" class="bg-red-50 border border-red-200 text-red-600 px-2 py-0.5 rounded text-xs font-bold ml-auto">🗑️刪線</button>
+                     <button @click="activeLine = null" class="bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded text-xs font-bold">✕</button>
+                 </div>
 
                     <template v-else-if="activeMarker">
                         <div class="flex flex-wrap items-center gap-1">
