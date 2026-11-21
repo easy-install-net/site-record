@@ -673,7 +673,7 @@
                             </div>
                         </div>
 
-                        <!-- 畫布區域 (Pane A) -->
+<!-- 畫布區域 (Pane A) -->
                         <div class="flex-1 min-h-0 w-full relative overflow-hidden bg-white" id="draw-stage">
                             <svg ref="svgCanvas" :view-box.camel="svgViewBox" preserveAspectRatio="xMidYMid meet"
                                  style="width:100%;height:100%;max-width:100%;max-height:100%;display:block;" class="canvas-touch-lock"
@@ -694,6 +694,20 @@
                                         </pattern>
                                     </defs>
                                     <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="url(#snap-grid-20)" />
+                                </g>
+
+                                <!-- Pasted Images & CAD Blocks (Below Lines & Paths) -->
+                                <g v-for="m in (activeCanvas.markers || []).filter(m => m.type === 'image' || m.type === 'cad')" :key="m.id"
+                                   :class="(drawMode === 'eraser' || drawMode === 'browse' || drawMode === 'move') ? (drawMode === 'move' ? 'cursor-move pointer-events-auto' : 'cursor-pointer pointer-events-auto') : 'pointer-events-none'"
+                                   @touchstart="e => onMarkerPointerStart(m, e, 'A')" @mousedown="e => onMarkerPointerStart(m, e, 'A')"
+                                   :transform="`translate(${m.x}, ${m.y})`">
+                                    <rect v-if="drawMode === 'move' || activeMarker?.id === m.id" :transform="getCadTransform(m)" :x="-((m.baseW || m.w || 200)/2) - 2" :y="-((m.baseH || m.h || 200)/2) - 2" :width="(m.baseW || m.w || 200) + 4" :height="(m.baseH || m.h || 200) + 4" rx="4" :fill="activeMarker?.id === m.id ? 'rgba(37,99,235,0.12)' : 'rgba(37,99,235,0.04)'" stroke="#2563eb" :stroke-width="(activeMarker?.id === m.id ? 2.5 : 1.2) * invZoom" :stroke-dasharray="activeMarker?.id === m.id ? null : '4 3'" />
+                                    <template v-if="m.type === 'image'">
+                                        <g :transform="getCadTransform(m)"><image :href="m.data.b64" :x="-(m.baseW || m.w)/2" :y="-(m.baseH || m.h)/2" :width="m.baseW || m.w" :height="m.baseH || m.h" preserveAspectRatio="none" /></g>
+                                    </template>
+                                    <template v-else-if="m.type === 'cad'">
+                                        <g :transform="getCadTransform(m)"><image :href="getCadSvgImage?.(m) || ''" x="-100" y="-100" width="200" height="200" preserveAspectRatio="xMidYMid meet" /></g>
+                                    </template>
                                 </g>
                                 
                                 <!-- Walls -->
@@ -745,26 +759,21 @@
                                     <line v-else :x1="currentLine.x1" :y1="currentLine.y1" :x2="currentLine.x2" :y2="currentLine.y2" :stroke="drawMode === 'line' ? (dimBlueMode === 'sky' ? '#38bdf8' : '#1d4ed8') : getLineStroke({color: drawColor, type: drawMode}, 0.85)" :stroke-width="((drawMode === 'arrow-single' || drawMode === 'leader') ? 3 : 2.2) * invZoom" :stroke-dasharray="(drawMode === 'line' || isDashed) ? `${14 * invZoom} ${10 * invZoom}` : null" stroke-linecap="round" :marker-end="(drawMode === 'arrow-single' || drawMode === 'leader') ? `url(#${getArrowMarkerId(drawColor, 'A')})` : null" />
                                 </g>
 
-                                <!-- Markers & CAD Blocks -->
-                                <g v-for="m in (activeCanvas.markers || [])" :key="m.id"
+                                <!-- Markers & Text Labels (Above Lines) -->
+                                <g v-for="m in (activeCanvas.markers || []).filter(m => m.type !== 'image' && m.type !== 'cad')" :key="m.id"
                                    :class="(drawMode === 'eraser' || drawMode === 'browse' || drawMode === 'move') ? (drawMode === 'move' ? 'cursor-move pointer-events-auto' : 'cursor-pointer pointer-events-auto') : 'pointer-events-none'"
                                    @touchstart="e => onMarkerPointerStart(m, e, 'A')" @mousedown="e => onMarkerPointerStart(m, e, 'A')"
                                    :transform="`translate(${m.x + (activeCanvas.lines?.find(l => l.id === m.lineId)?.chainSegs?.length >= 2 ? (Math.abs(activeCanvas.lines.find(l => l.id === m.lineId).x2 - activeCanvas.lines.find(l => l.id === m.lineId).x1) < Math.abs(activeCanvas.lines.find(l => l.id === m.lineId).y2 - activeCanvas.lines.find(l => l.id === m.lineId).y1) ? 35 * invZoom : 0) : 0)}, ${m.y + (activeCanvas.lines?.find(l => l.id === m.lineId)?.chainSegs?.length >= 2 ? (Math.abs(activeCanvas.lines.find(l => l.id === m.lineId).x2 - activeCanvas.lines.find(l => l.id === m.lineId).x1) >= Math.abs(activeCanvas.lines.find(l => l.id === m.lineId).y2 - activeCanvas.lines.find(l => l.id === m.lineId).y1) ? 35 * invZoom : 0) : 0)})`">
-                                    <rect v-if="drawMode === 'move' || activeMarker?.id === m.id" :transform="['cad','image'].includes(m.type) ? getCadTransform(m) : null" :x="-((m.baseW || m.w || 200)/2) - 2" :y="-((m.baseH || m.h || 200)/2) - 2" :width="(m.baseW || m.w || 200) + 4" :height="(m.baseH || m.h || 200) + 4" rx="4" :fill="activeMarker?.id === m.id ? 'rgba(37,99,235,0.12)' : 'rgba(37,99,235,0.04)'" stroke="#2563eb" :stroke-width="(activeMarker?.id === m.id ? 2.5 : 1.2) * invZoom" :stroke-dasharray="activeMarker?.id === m.id ? null : '4 3'" />
-                                    <template v-if="m.type === 'image'">
-                                        <g :transform="getCadTransform(m)"><image :href="m.data.b64" :x="-(m.baseW || m.w)/2" :y="-(m.baseH || m.h)/2" :width="m.baseW || m.w" :height="m.baseH || m.h" preserveAspectRatio="none" /></g>
-                                    </template>
-                                    <template v-else-if="m.type === 'cad'">
-                                        <g :transform="getCadTransform(m)"><image :href="getCadSvgImage?.(m) || ''" x="-100" y="-100" width="200" height="200" preserveAspectRatio="xMidYMid meet" /></g>
-                                    </template>
-                                    <template v-else>
-                                        <rect v-if="getDimCapsuleStyle(m)" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="8"
-                                              :fill="getDimCapsuleStyle(m).fill" :stroke="getDimCapsuleStyle(m).stroke" :stroke-width="1.5 * invZoom" />
-                                        <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" :class="getDimCapsuleStyle(m) ? 'dim-text-clean' : 'stamp-text'">
-                                            <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'" :style="{ fontSize: `${getMarkerFontPx(m)}px` }">{{ line }}</tspan>
-                                        </text>
-                                    </template>
+                                    <rect v-if="drawMode === 'move' || activeMarker?.id === m.id" :x="-m.w/2 - 2" :y="-m.h/2 - 2" :width="m.w + 4" :height="m.h + 4" rx="4" :fill="activeMarker?.id === m.id ? 'rgba(37,99,235,0.12)' : 'rgba(37,99,235,0.04)'" stroke="#2563eb" :stroke-width="(activeMarker?.id === m.id ? 2.5 : 1.2) * invZoom" :stroke-dasharray="activeMarker?.id === m.id ? null : '4 3'" />
+                                    <rect v-if="getDimCapsuleStyle(m)" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="8"
+                                          :fill="getDimCapsuleStyle(m).fill" :stroke="getDimCapsuleStyle(m).stroke" :stroke-width="1.5 * invZoom" />
+                                    <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" :class="getDimCapsuleStyle(m) ? 'dim-text-clean' : 'stamp-text'">
+                                        <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'" :style="{ fontSize: `${getMarkerFontPx(m)}px` }">{{ line }}</tspan>
+                                    </text>
                                 </g>
+
+
+                        
 
                                 <!-- 師傅/業主意見疊層 -->
                                 <g v-if="showFeedbackOverlay && currentCanvasFeedbacks.length" class="pointer-events-none">
