@@ -2704,11 +2704,11 @@ const isDashed = ref(false);
             };
 
             const getStampColor = (m) => {
-                if (m.textColor) return m.textColor;
-                if (m.type === 'space_tag') return '#a855f7';
-                if (m.type === 'page_link') return '#38bdf8';
-                if (m.type === 'stamp') { const found = stampItems.value.find(x => x.text === m.data?.val); if (found?.color) return found.color; }
-                return '#ffffff';
+                const raw = m.textColor
+                    || (m.type === 'space_tag' ? '#7c3aed'
+                    : (m.type === 'page_link' ? '#0284c7'
+                    : (m.type === 'stamp' ? (stampItems.value.find(x => x.text === m.data?.val)?.color || '#dc2626') : '#dc2626')));
+                return ['#ffffff', '#fff', 'white', '#fde047', '#facc15'].includes(String(raw).toLowerCase()) ? '#111827' : raw;
             };
 
             const getTagFields = (t) => TAG_DEFS[t]?.fields || [];
@@ -3446,7 +3446,7 @@ const isDashed = ref(false);
                             ctx.save(); ctx.strokeStyle = getLineStroke(l, 0.95); ctx.lineWidth = 2;
                             getChainTicks(l).forEach(tk => { ctx.beginPath(); ctx.moveTo(tk.x1, tk.y1); ctx.lineTo(tk.x2, tk.y2); ctx.stroke(); });
                             const segFontPx = Math.round(18 * (globalFontScale.value || 1));
-                            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `900 ${segFontPx}px sans-serif`; ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
+                            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `900 ${segFontPx}px sans-serif`; ctx.lineWidth = 5; ctx.strokeStyle = '#ffffff'; ctx.lineJoin = 'round';
                             getChainSegLabels(l).forEach(sl => { ctx.strokeText(sl.val, sl.x, sl.y - 20); ctx.fillStyle = '#fde047'; ctx.fillText(sl.val, sl.x, sl.y - 20); });
                             ctx.restore();
                         }
@@ -3480,7 +3480,7 @@ const isDashed = ref(false);
                         const startY = (m.y + offsetY) - ((lines.length - 1) * 34 * sc) / 2;
                         lines.forEach((line, i) => {
                             const y = startY + i * 34 * sc;
-                           if (!cap) { ctx.lineWidth = 7 * sc; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); }
+                           if (!cap) { ctx.lineWidth = 7 * sc; ctx.strokeStyle = '#ffffff'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); }
                             ctx.fillStyle = color; ctx.fillText(line, m.x, y);
                         });
                     }
