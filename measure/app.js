@@ -688,10 +688,7 @@ const closeQcStudio = async () => {
             };
             Vue.watch(showChecklistManageModal, (val) => { if (val) initChecklistDraft(); });
 
-            const openChecklistManager = () => openQcStudio('checklists');
-                initChecklistDraft();
-                showChecklistManageModal.value = true;
-            };
+         const openChecklistManager = () => openQcStudio('checklists');
             const addChecklistDim = () => { currentChecklistDraft.dims.push(''); };
             const addChecklistNote = () => { currentChecklistDraft.notes.push(''); };
             const saveChecklistManage = async () => {
@@ -700,6 +697,8 @@ const closeQcStudio = async () => {
                     dims: (currentChecklistDraft.dims || []).map(s => String(s || '').trim()).filter(Boolean),
                     notes: (currentChecklistDraft.notes || []).map(s => String(s || '').trim()).filter(Boolean)
                 };
+
+            
                 await saveChecklistStore();
                 markProjectChanged();
                 await saveAll();
