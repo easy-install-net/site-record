@@ -282,8 +282,8 @@
                         <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="#ffffff" />
                         <image :href="activeCanvas.photo" x="0" y="0" :width="canvasW" :height="canvasH" preserveAspectRatio="none" />
 
-                        <g v-for="m in (activeCanvas.markers || [])" :key="'img-'+m.id" :transform="`translate(${m.x}, ${m.y})`" class="pointer-events-none">
-                            <image v-if="m.type === 'image'" :href="m.data.b64" :x="-m.w/2" :y="-m.h/2" :width="m.w" :height="m.h" preserveAspectRatio="none" />
+                       <g v-for="m in (activeCanvas.markers || []).filter(m => m.type === 'image')" :key="'img-'+m.id" :transform="getCadTransform(m)" class="pointer-events-none">
+                            <image :href="m.data.b64" :x="-(m.baseW || m.w)/2" :y="-(m.baseH || m.h)/2" :width="m.baseW || m.w" :height="m.baseH || m.h" preserveAspectRatio="none" />
                         </g>
                         <g v-for="w in (activeCanvas.walls || [])" :key="'w-'+w.id" class="pointer-events-none">
                             <line v-for="(seg, sIdx) in getWallSegments(w)" :key="sIdx" :x1="seg.x1" :y1="seg.y1" :x2="seg.x2" :y2="seg.y2" :stroke="w.color || '#111827'" :stroke-width="seg.isHatch ? 4.5 : 2" stroke-linecap="round" />
@@ -1090,9 +1090,16 @@
                     await new Promise(r => { img.onload = r; img.onerror = r; });
                     const c = document.createElement('canvas'), w = cObj.w || 1200, h = cObj.h || 900; c.width = w; c.height = h;
                     const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
-                    const customCadImgs = {};
+                   const customCadImgs = {};
                     for (const m of (cObj.markers || [])) {
-                        if (m.type === 'cad' && m.data?.cadType) {
+                        if (m.type === 'image' && m.data?.b64) {
+                            const im = new Image(); im.src = m.data.b64; await new Promise(r => { im.onload = r; im.onerror = r; });
+                            ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(((m.rot || 0) * Math.PI) / 180);
+                            ctx.scale((m.scale || 1) * (m.scaleX || 1) * (m.flipX || 1), (m.scale || 1) * (m.scaleY || 1) * (m.flipY || 1));
+                            const dw = m.baseW || m.w || 200, dh = m.baseH || m.h || 200;
+                            ctx.drawImage(im, -dw / 2, -dh / 2, dw, dh);
+                            ctx.restore();
+                        } else if (m.type === 'cad' && m.data?.cadType) {
                             const def = getCadDef(m.data.cadType);
                             if (def?.imgB64 && !customCadImgs[def.id]) {
                                 const im = new Image(); im.src = def.imgB64; await new Promise(r => { im.onload = r; im.onerror = r; }); customCadImgs[def.id] = im;
