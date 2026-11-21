@@ -3540,7 +3540,7 @@ const isDashed = ref(false);
                 showBranchPrompt, branchOwner, overwriteBranch, duplicateBranch, dismissBranch, svgCanvas, currentLine, currentWall, currentPath, hasUndoItems, hasRedoItems,
                 createNewProject, loadProject, removeProjectLocalOnly, deleteProject, backToProjects, saveAll, prevPage, nextPage, deleteCurrentPage, openPinSubPage, exitPinSubPage, onPinTap, deleteActivePin,
                 togglePageSpaceTag, setPageSpace, addCustomSpace, initSketchOnCurrent, addNewSketchPage, toggleSketchGrid, handleImageUpload, pasteFromClipboard,
-                onEraseTap, resizeImageMarker, onMarkerPointerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
+               onEraseTap, resizeImageMarker, onMarkerQuickDragStart, onMarkerPointerStart, onStageTouchStart, onStageTouchMove, onStageTouchEnd, onStageMouseDown, onStageMouseMove, onStageMouseUp, undoLastAction, redoAction,
                 deleteMarkerTop, switchMarkerType, closeTopSheet, closeTopTextBar, onMarkerTextInput, handleKeypad, applyTag, applyStamp, getStampColor, getMarkerLines, getTagFields, exportPdfReport,
                 globalFontScale, toggleFontScale,
                 activeLine, onLinePointerStart, onLineEndpointStart, onChainTickStart, setActiveLineColor, deleteActiveLine, getMarkerFontPx, stepMarkerFontScale, openMarkerEditor,
