@@ -25,13 +25,10 @@
         .touch-scrollable { touch-action: pan-y !important; -webkit-overflow-scrolling: touch; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .stamp-text {
-            font-weight: 900; paint-order: stroke fill; letter-spacing: 1px;
-            stroke: #000; stroke-width: 5px; stroke-linejoin: round; stroke-linecap: round;
+        .stamp-text, .dim-text-clean {
+            font-weight: 900; paint-order: stroke fill; letter-spacing: 0.6px;
+            stroke: #ffffff; stroke-width: 5px; stroke-linejoin: round; stroke-linecap: round;
             pointer-events: none;
-        }
-        .dim-text-clean {
-            font-weight: 900; letter-spacing: 0.5px; pointer-events: none;
         }
     </style>
 </head>
@@ -273,7 +270,7 @@
                          @wheel.prevent="onStageWheel" @touchstart="onStageTouchStart" @touchmove="onStageTouchMove" @touchend="onStageTouchEnd" @touchcancel="onStageTouchEnd"
                          @mousedown="onStageMouseDown" @mousemove="onStageMouseMove" @mouseup="onStageMouseUp">
                         <defs>
-                            <marker v-for="c in ['#ef4444','#3b82f6','#1d4ed8','#38bdf8','#f97316','#10b981','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowId(c)" markerWidth="4" markerHeight="4" refX="3.4" refY="2" orient="auto">
+                            <marker v-for="c in ['#ef4444','#3b82f6','#1d4ed8','#0284c7','#38bdf8','#f97316','#d97706','#10b981','#059669','#eab308','#111827','#ffffff','red','gray','white']" :key="c" :id="getArrowId(c)" markerWidth="4" markerHeight="4" refX="3.4" refY="2" orient="auto">
                                 <path d="M 0 0.4 L 4 2 L 0 3.6 z" :fill="({red:'#ef4444',gray:'#9ca3af',white:'#ffffff'}[c] || c)" />
                             </marker>
                         </defs>
@@ -282,7 +279,7 @@
                         <rect x="0" y="0" :width="canvasW" :height="canvasH" fill="#ffffff" />
                         <image :href="activeCanvas.photo" x="0" y="0" :width="canvasW" :height="canvasH" preserveAspectRatio="none" />
 
-                        <!-- 貼圖層 (位於底圖之上、畫筆與度尺線之下，變換公式與 index.html 100% 一致) -->
+                        <!-- 貼圖層 -->
                         <g v-for="m in (activeCanvas.markers || []).filter(m => m.type === 'image')" :key="'img-'+m.id"
                            :transform="`translate(${m.x}, ${m.y}) rotate(${m.rot || 0}) scale(${(m.scale || 1) * (m.scaleX || 1) * (m.flipX || 1)}, ${(m.scale || 1) * (m.scaleY || 1) * (m.flipY || 1)})`"
                            class="pointer-events-none">
@@ -305,25 +302,22 @@
                                       :stroke="getLineStroke(l, 0.95)" stroke-width="2" stroke-linecap="round" />
                                 <text v-for="(sl, sIdx) in getChainSegLabels(l)" :key="'vsl-'+sIdx"
                                       :x="sl.x" :y="sl.y - 12" text-anchor="middle" dominant-baseline="central"
-                                      fill="#fde047" class="stamp-text" style="font-size: 16px;">{{ sl.val }}</text>
+                                      fill="#d97706" class="stamp-text" style="font-size: 16px;">{{ sl.val }}</text>
                             </template>
                         </g>
                         <path v-for="p in (activeCanvas.paths || [])" :key="'p-'+p.id" :d="p.d" :stroke="p.color || '#111827'" :stroke-width="p.color === '#facc15' ? 16 : 2.5" :stroke-opacity="p.color === '#facc15' ? 0.45 : 1" fill="none" stroke-linecap="round" class="pointer-events-none" />
 
-                        <!-- 主工程文字標註與 CAD 圖塊 (支援點擊藍色跳頁傳送門) -->
+                        <!-- 主工程文字標註與 CAD 圖塊（統一無框＋實色字＋白粗描邊） -->
                         <g v-for="m in (activeCanvas.markers || [])" :key="'m-'+m.id" :transform="`translate(${m.x}, ${m.y})`"
                            :class="(mode === 'browse' && m.type === 'page_link') ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'"
                            @click.stop="onMasterMarkerClick(m)" @touchend.stop="onMasterMarkerClick(m)">
-                            <rect v-if="m.type === 'page_link'" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="14" fill="rgba(14,165,233,0.18)" stroke="#38bdf8" stroke-width="2.5" />
                             <template v-if="m.type === 'cad'">
                                 <g :transform="`rotate(${m.rot || 0}) scale(${(m.scale || 1) * (m.scaleX || 1) * (m.flipX || 1)}, ${(m.scale || 1) * (m.scaleY || 1) * (m.flipY || 1)})`">
                                     <image :href="getCadSvgImage(m)" x="-100" y="-100" width="200" height="200" preserveAspectRatio="xMidYMid meet" />
                                 </g>
                             </template>
                             <template v-else-if="m.type !== 'image'">
-                                <rect v-if="getDimCapsuleStyle(m)" :x="-m.w/2 - 4" :y="-m.h/2 - 2" :width="m.w + 8" :height="m.h + 4" rx="8"
-                                      :fill="getDimCapsuleStyle(m).fill" :stroke="getDimCapsuleStyle(m).stroke" stroke-width="1.5" />
-                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" :class="getDimCapsuleStyle(m) ? 'dim-text-clean' : 'stamp-text'" style="font-size: 17px;">
+                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text" style="font-size: 17px;">
                                     <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
                                 </text>
                             </template>
@@ -353,8 +347,7 @@
                                 <image :href="fm.b64" :x="-fm.w/2" :y="-fm.h/2" :width="fm.w" :height="fm.h" preserveAspectRatio="none" />
                             </template>
                             <template v-else>
-                                <rect :x="-fm.w/2 - 6" :y="-fm.h/2 - 4" :width="fm.w + 12" :height="fm.h + 8" rx="8" fill="rgba(255,255,255,0.92)" :stroke="fm.color" :stroke-width="2.5 * invZoom" />
-                                <text text-anchor="middle" dominant-baseline="central" :fill="fm.color" font-size="22" font-weight="900">{{ fm.text }}</text>
+                                <text text-anchor="middle" dominant-baseline="central" :fill="fm.color" class="stamp-text" font-size="22" font-weight="900">{{ fm.text }}</text>
                             </template>
                         </g>
                     </svg>
@@ -478,16 +471,6 @@
             return segs;
         };
 
-        const drawRoundRect = (ctx, x, y, w, h, r) => {
-            ctx.beginPath();
-            ctx.moveTo(x + r, y);
-            ctx.arcTo(x + w, y, x + w, y + h, r);
-            ctx.arcTo(x + w, y + h, x, y + h, r);
-            ctx.arcTo(x, y + h, x, y, r);
-            ctx.arcTo(x, y, x + w, y, r);
-            ctx.closePath();
-        };
-
         createApp({
             setup() {
                 const inputCode = ref(''), isLoading = ref(false), loadingText = ref('正在載入圖紙...');
@@ -564,12 +547,7 @@
                     return `translate(${m.x}, ${m.y}) rotate(${m.rot || 0}) scale(${sx}, ${sy})`;
                 };
 
-                const getDimCapsuleStyle = (m) => {
-                    const col = getStampColor(m);
-                    if (col === '#38bdf8') return { fill: 'rgba(15, 23, 42, 0.88)', stroke: '#38bdf8' };
-                    if (col === '#1d4ed8' || col === '#2563eb') return { fill: 'rgba(255, 255, 255, 0.92)', stroke: '#1d4ed8' };
-                    return null;
-                };
+                const getDimCapsuleStyle = () => null;
 
                 const isRedColor = (c) => {
                     const s = String(c || '').toLowerCase();
@@ -1080,7 +1058,10 @@
                     return legacy[l.color] || l.color || '#ef4444';
                 };
                 const getWallSegments = (w) => buildWallSegments(w);
-                const getStampColor = (m) => m.textColor || (m.type === 'space_tag' ? '#a855f7' : (m.type === 'page_link' ? '#38bdf8' : '#ffffff'));
+                const getStampColor = (m) => {
+                    const col = m.textColor || (m.type === 'space_tag' ? '#7c3aed' : (m.type === 'page_link' ? '#0284c7' : '#dc2626'));
+                    return ['#ffffff', '#fff', 'white', '#fde047', '#facc15'].includes(String(col).toLowerCase()) ? '#111827' : col;
+                };
                 const getMarkerLines = (m) => {
                     const def = TAG_DEFS[m.type];
                     if (def) return [def.title, ...def.fields.filter(f => m.data[f.key]).map(f => `${f.label}:${m.data[f.key]}`)];
@@ -1144,8 +1125,8 @@
                             if (Array.isArray(l.chainSegs) && l.chainSegs.length >= 2) {
                                 ctx.save(); ctx.strokeStyle = getLineStroke(l, 0.95); ctx.lineWidth = 2;
                                 getChainTicks(l).forEach(tk => { ctx.beginPath(); ctx.moveTo(tk.x1, tk.y1); ctx.lineTo(tk.x2, tk.y2); ctx.stroke(); });
-                                ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 18px sans-serif'; ctx.lineWidth = 5; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round';
-                                getChainSegLabels(l).forEach(sl => { ctx.strokeText(sl.val, sl.x, sl.y - 12); ctx.fillStyle = '#fde047'; ctx.fillText(sl.val, sl.x, sl.y - 12); });
+                                ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 18px sans-serif'; ctx.lineWidth = 5; ctx.strokeStyle = '#ffffff'; ctx.lineJoin = 'round';
+                                getChainSegLabels(l).forEach(sl => { ctx.strokeText(sl.val, sl.x, sl.y - 12); ctx.fillStyle = '#d97706'; ctx.fillText(sl.val, sl.x, sl.y - 12); });
                                 ctx.restore();
                             }
                         }
@@ -1175,19 +1156,11 @@
                             }
                         } else if (m.type !== 'image') {
                             const lines = getMarkerLines(m);
-                            const cap = getDimCapsuleStyle(m);
-                            if (cap) {
-                                ctx.save();
-                                ctx.fillStyle = cap.fill;
-                                drawRoundRect(ctx, m.x - (m.w || 80) / 2 - 4, m.y - (m.h || 32) / 2 - 2, (m.w || 80) + 8, (m.h || 32) + 4, 8);
-                                ctx.fill();
-                                ctx.lineWidth = 1.5; ctx.strokeStyle = cap.stroke; ctx.stroke();
-                                ctx.restore();
-                            }
                             ctx.font = '900 17px sans-serif';
+                            ctx.lineJoin = 'round';
                             lines.forEach((ln, i) => {
                                 const y = m.y - ((lines.length - 1) * 20) / 2 + i * 20;
-                                if (!cap) { ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(ln, m.x, y); }
+                                ctx.lineWidth = 5; ctx.strokeStyle = '#ffffff'; ctx.strokeText(ln, m.x, y);
                                 ctx.fillStyle = getStampColor(m); ctx.fillText(ln, m.x, y);
                             });
                         }
@@ -1198,7 +1171,7 @@
                             const im = new Image(); im.src = fm.b64; await new Promise(r => { im.onload = r; im.onerror = r; });
                             ctx.drawImage(im, fm.x - fm.w / 2, fm.y - fm.h / 2, fm.w, fm.h);
                         } else if (fm.text) {
-                            ctx.font = '900 22px sans-serif'; ctx.lineWidth = 6; ctx.strokeStyle = '#fff'; ctx.strokeText(fm.text, fm.x, fm.y);
+                            ctx.font = '900 22px sans-serif'; ctx.lineWidth = 6; ctx.strokeStyle = '#ffffff'; ctx.strokeText(fm.text, fm.x, fm.y);
                             ctx.fillStyle = fm.color; ctx.fillText(fm.text, fm.x, fm.y);
                         }
                     }
