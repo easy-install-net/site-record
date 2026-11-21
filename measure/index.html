@@ -352,8 +352,8 @@
                     <button @click="gridSnap = !gridSnap" :class="gridSnap ? 'bg-blue-600 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0">🧲 格吸</button>
                     <button @click="isDashed = !isDashed" :class="isDashed ? 'bg-blue-600 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0">┄ 虛線</button>
                     <button @click="orthoSnap = !orthoSnap" :class="orthoSnap ? 'bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-700'" class="px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0">📐 吸直</button>
-                    <button @click="expandCanvasWhiteSpace" title="在圖紙右側擴展白紙畫結構" class="px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0 bg-purple-50 text-purple-800 border border-purple-200">⬜+擴白</button>
-                    <div class="w-px h-4 bg-zinc-300 mx-0.5 shrink-0"></div>
+                    <button @click="shrinkCanvasWhiteSpace()" class="px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0 bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100">-縮白</button>
+                     <div class="w-px h-4 bg-zinc-300 mx-0.5 shrink-0"></div>
                     <button v-for="c in ['#111827','#1d4ed8','#38bdf8','#f97316','#10b981','#ef4444','#facc15']" :key="c" @click="drawColor = c" :style="{backgroundColor: c}" :class="drawColor === c ? 'ring-2 ring-zinc-900 scale-115' : ''" class="w-4 h-4 rounded-full border border-zinc-400 shrink-0"></button>
                 </div>
 
@@ -933,11 +933,17 @@
                    <div class="flex items-center gap-0.5 mr-1">
                        <button v-for="c in ['#1d4ed8','#38bdf8','#ffffff','#ef4444','#eab308','#34d399']" :key="'tc-'+c" @click="setMarkerTextColor(c)" :style="{ backgroundColor: c }" :class="getStampColor(activeMarker) === c ? 'ring-2 ring-zinc-900 scale-110' : 'opacity-75'" class="w-4 h-4 rounded-full border border-zinc-400"></button>
                     </div>
-                    <button @click="deleteMarkerTop" class="bg-red-50 text-red-600 border border-red-200 font-bold px-2 py-1 rounded text-xs">🗑️</button>
-                     <button @click="closeTopSheet" class="bg-zinc-900 text-white font-bold px-3 py-1 rounded text-xs shadow-sm">完成</button>
+                   <div v-for="grp in filteredStampGroups" :key="'sg-'+grp.id" class="flex flex-col gap-1">
+                        <div class="text-[11px] font-black text-zinc-500">{{ grp.icon }} {{ grp.name }}</div>
+                        <div v-for="(row, rIdx) in grp.rows" :key="'sr-'+rIdx" class="flex flex-wrap gap-1">
+                            <button v-for="st in row" :key="st" @click="applyStamp(st)" class="px-2 py-1 bg-zinc-50 hover:bg-amber-50 border border-zinc-300 rounded text-xs font-bold text-zinc-900">{{ st }}</button>
+                        </div>
+                    </div>
                 </div>
+            </div>
+        </div>
 
-            <!-- 分頁 1 & 2：度尺 / 實做 -->
+        <!-- ✏️ 文字 / 貼圖 / 圖塊 頂部調整條 -->
             <div v-if="activeMarker.type !== 'stamp'" class="flex flex-col flex-1 min-h-0 overflow-y-auto touch-scrollable">
                 <div class="p-1.5 bg-white border-b border-zinc-200 shrink-0 flex flex-col gap-1.5">
                     <template v-if="TAG_DEFS[activeMarker.type]">
