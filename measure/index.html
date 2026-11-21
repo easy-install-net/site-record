@@ -1051,10 +1051,10 @@
             </div>
         </div>
 
-        <!-- ✏️ 文字 / 貼圖 / 圖塊 頂部調整條 -->
+        <!-- ✏️ 文字 / 貼圖 / 圖塊 頂部調整條（支援引線文字與箭嘴同步改色＋字體大細） -->
         <div v-if="showTopTextBar && activeMarker" class="fixed top-11 left-1/2 -translate-x-1/2 w-[94vw] max-w-md bg-white border border-zinc-300 rounded-xl p-2 shadow-2xl z-50 flex flex-col gap-2" @touchstart.stop @mousedown.stop>
             <div class="flex items-center justify-between gap-1.5">
-                <input v-if="activeMarker.type === 'text'" ref="topTextInputRef" type="text" v-model="activeMarker.data.val" @input="onMarkerTextInput" @keyup.enter="closeTopTextBar" placeholder="輸入備註文字..." class="flex-1 border-2 border-blue-500 rounded-lg px-2 py-1 text-sm font-bold focus:outline-none">
+                <input v-if="activeMarker.type === 'text'" ref="topTextInputRef" type="text" v-model="activeMarker.data.val" @input="onMarkerTextInput" @keyup.enter="closeTopTextBar" placeholder="輸入備註文字..." class="flex-1 min-w-0 border-2 border-blue-500 rounded-lg px-2 py-1 text-sm font-bold focus:outline-none">
                 <span v-else class="text-xs font-black text-zinc-800">{{ activeMarker.type === 'cad' ? '🏛️ 調整圖塊' : '🖼️ 調整貼圖' }}</span>
                 <div class="flex items-center gap-1 shrink-0">
                     <button v-if="['cad','image'].includes(activeMarker.type)" @click="rotateMarker(-90)" class="bg-zinc-100 px-1.5 py-1 rounded text-xs font-bold">↺90°</button>
@@ -1063,6 +1063,18 @@
                     <button v-if="['cad','image'].includes(activeMarker.type)" @click="flipMarker('y')" class="bg-zinc-100 px-1.5 py-1 rounded text-xs font-bold">↕️</button>
                     <button @click="deleteMarkerTop" class="bg-red-50 text-red-600 px-2 py-1 rounded text-xs font-bold">🗑️</button>
                     <button @click="closeTopTextBar" class="bg-zinc-900 text-white px-2.5 py-1 rounded text-xs font-bold">確定</button>
+                </div>
+            </div>
+            <div v-if="activeMarker.type === 'text'" class="flex items-center justify-between gap-1.5 pt-1 border-t border-zinc-100">
+                <div class="flex items-center gap-1.5">
+                    <button v-for="c in ['#ef4444','#1d4ed8','#0284c7','#111827','#d97706','#059669']" :key="'txtc-'+c" @click="setMarkerTextColor(c)"
+                            :style="{ backgroundColor: c }"
+                            :class="getStampColor(activeMarker) === c ? 'ring-2 ring-zinc-900 scale-115' : 'opacity-80'"
+                            class="w-5 h-5 rounded-full border border-zinc-300 shrink-0"></button>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button @click="stepMarkerFontScale(-0.15)" class="bg-blue-50 border border-blue-200 text-blue-800 px-2 py-0.5 rounded text-xs font-black">字-</button>
+                    <button @click="stepMarkerFontScale(0.15)" class="bg-blue-50 border border-blue-200 text-blue-800 px-2 py-0.5 rounded text-xs font-black">字+</button>
                 </div>
             </div>
             <div v-if="['cad','image'].includes(activeMarker.type)" class="flex items-center gap-2">
