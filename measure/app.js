@@ -2275,7 +2275,7 @@ const isDashed = ref(false);
                     draggedMarker.value.y = Math.round(Math.max(0, Math.min(targetCanvasH.value, markerOrigin.value.y + dy)));
                 } else if (isDrawing.value) {
                     e.preventDefault(); const p = getCoords(e, drawingPane.value);
-                   if (['line', 'rect', 'save_block'].includes(drawMode.value) && currentLine.value) { currentLine.value.x2 = p.x; currentLine.value.y2 = p.y; }
+                    if (['line', 'rect', 'save_block'].includes(drawMode.value) && currentLine.value) { currentLine.value.x2 = p.x; currentLine.value.y2 = p.y; }
                     else if (['straight', 'arrow-single', 'leader'].includes(drawMode.value) && currentLine.value) {
                         let nx = p.x, ny = p.y;
                         if (orthoSnap.value) {
@@ -2329,8 +2329,13 @@ const isDashed = ref(false);
                         checkBranchNeed(() => { const c = targetCanvas.value; c.walls ||= []; c.historyStack ||= []; c.redoStack = []; const wallId = Date.now(); c.walls.push({ ...wSnap, id: wallId }); c.historyStack.push({ type: 'wall', wallId }); touchDirty(); saveAll(); });
                     }
                     currentWall.value = null;
-                } } else if (['line', 'arrow-single', 'straight', 'rect', 'leader', 'save_block'].includes(drawMode.value) && currentLine.value) {                     const lSnap = { ...currentLine.value }; currentLine.value = null;                     if (drawMode.value === 'save_block') {                         if (Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) >= 16) captureSelectionAsCadBlock(lSnap);                         else drawMode.value = 'straight';                         return;                     }                     if (drawMode.value === 'line' && Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 14) { createPointMarker(lSnap.x2, lSnap.y2, 'stamp'); return; }                     if (Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 10) return;                     checkBranchNeed(() => {                         const c = targetCanvas.value; c.lines ||= []; c.markers ||= []; c.historyStack ||= []; c.redoStack = [];                         const lineId = Date.now(), markerId = lineId + 1;                         const lineType = drawMode.value === 'line' ? 'measure' : drawMode.value;                         const dashedFlag = lineType !== 'measure' && !!isDashed.value;                         const dimCol = activeDimColor.value;                         const strokeCol = lineType === 'measure' ? dimCol : drawColor.value;                         c.lines.push({ ...lSnap, id: lineId, type: lineType, dashed: dashedFlag, color: strokeCol });                         if (lineType === 'leader') {                             const leaderCol = drawColor.value || '#ef4444';                             const leaderMarker = { id: markerId, lineId, x: Math.round(lSnap.x1), y: Math.round(lSnap.y1), w: 120, h: 40, type: 'text', textColor: leaderCol, data: { val: '' } };                             updateMarkerSize(leaderMarker); c.markers.push(leaderMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });                             touchDirty(); openMarkerEditor(leaderMarker, pane); saveAll(); return;                         }                         if (lineType !== 'measure') { c.historyStack.push({ type: 'line_marker', lineId, markerId: null }); touchDirty(); saveAll(); return; }                         const newLineObj = c.lines[c.lines.length - 1];                         const newMarker = { id: markerId, lineId, x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2), w: 140, h: 56, type: 'general', textColor: dimCol, data: makeBlankMarkerData() };                         updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });                         chainPromptLine.value = newLineObj; chainSegments.value = []; focusedChainIdx.value = -1;                         sheetTab.value = 'dim';                         touchDirty(); activeMarker.value = newMarker; focusedInput.value = 'val'; showTopSheet.value = true; saveAll();                     }); {
+                } else if (['line', 'arrow-single', 'straight', 'rect', 'leader', 'save_block'].includes(drawMode.value) && currentLine.value) {
                     const lSnap = { ...currentLine.value }; currentLine.value = null;
+                    if (drawMode.value === 'save_block') {
+                        if (Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) >= 16) captureSelectionAsCadBlock(lSnap);
+                        else drawMode.value = 'straight';
+                        return;
+                    }
                     if (drawMode.value === 'line' && Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 14) { createPointMarker(lSnap.x2, lSnap.y2, 'stamp'); return; }
                     if (Math.hypot(lSnap.x2 - lSnap.x1, lSnap.y2 - lSnap.y1) < 10) return;
                     checkBranchNeed(() => {
@@ -2338,15 +2343,18 @@ const isDashed = ref(false);
                         const lineId = Date.now(), markerId = lineId + 1;
                         const lineType = drawMode.value === 'line' ? 'measure' : drawMode.value;
                         const dashedFlag = lineType !== 'measure' && !!isDashed.value;
-                        c.lines.push({ ...lSnap, id: lineId, type: lineType, dashed: dashedFlag, color: lineType === 'measure' ? (defaultTextColor.value !== '#ffffff' ? defaultTextColor.value : null) : drawColor.value });
+                        const dimCol = activeDimColor.value;
+                        const strokeCol = lineType === 'measure' ? dimCol : drawColor.value;
+                        c.lines.push({ ...lSnap, id: lineId, type: lineType, dashed: dashedFlag, color: strokeCol });
                         if (lineType === 'leader') {
-                            const leaderMarker = { id: markerId, lineId, x: Math.round(lSnap.x1), y: Math.round(lSnap.y1), w: 120, h: 40, type: 'text', textColor: defaultTextColor.value, data: { val: '' } };
+                            const leaderCol = drawColor.value || '#ef4444';
+                            const leaderMarker = { id: markerId, lineId, x: Math.round(lSnap.x1), y: Math.round(lSnap.y1), w: 120, h: 40, type: 'text', textColor: leaderCol, data: { val: '' } };
                             updateMarkerSize(leaderMarker); c.markers.push(leaderMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
                             touchDirty(); openMarkerEditor(leaderMarker, pane); saveAll(); return;
                         }
                         if (lineType !== 'measure') { c.historyStack.push({ type: 'line_marker', lineId, markerId: null }); touchDirty(); saveAll(); return; }
                         const newLineObj = c.lines[c.lines.length - 1];
-                        const newMarker = { id: markerId, lineId, x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2), w: 140, h: 56, type: 'general', textColor: defaultTextColor.value, data: makeBlankMarkerData() };
+                        const newMarker = { id: markerId, lineId, x: Math.round((lSnap.x1 + lSnap.x2) / 2), y: Math.round((lSnap.y1 + lSnap.y2) / 2), w: 140, h: 56, type: 'general', textColor: dimCol, data: makeBlankMarkerData() };
                         updateMarkerSize(newMarker); c.markers.push(newMarker); c.historyStack.push({ type: 'line_marker', lineId, markerId });
                         chainPromptLine.value = newLineObj; chainSegments.value = []; focusedChainIdx.value = -1;
                         sheetTab.value = 'dim';
@@ -3299,16 +3307,39 @@ const isDashed = ref(false);
                         }
                     }
                 });
-                (canvasObj.paths || []).forEach(p => { ctx.strokeStyle = p.color || '#3b82f6'; ctx.lineWidth = 2; ctx.stroke(new Path2D(p.d)); });
+                (canvasObj.paths || []).forEach(p => {
+                    ctx.save();
+                    if (p.color === '#facc15') { ctx.globalAlpha = 0.45; ctx.lineWidth = 16; }
+                    else { ctx.lineWidth = 2.5; }
+                    ctx.strokeStyle = p.color || '#111827';
+                    ctx.stroke(new Path2D(p.d));
+                    ctx.restore();
+                });
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 (canvasObj.markers || []).forEach(m => {
                     if (m.type === 'cad') drawCustomCadOnCanvas(ctx, m, customCadImages);
                     else if (m.type === 'image') { if (markerImages[m.id]) { ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(((m.rot || 0) * Math.PI) / 180); ctx.drawImage(markerImages[m.id], -m.w / 2, -m.h / 2, m.w, m.h); ctx.restore(); } }
-                    else { const lines = getMarkerLines(m), color = getStampColor(m), sc = globalFontScale.value * (m.fontScale || 1); const offsetY = (m.lineId && chainLineIds.has(m.lineId)) ? 22 : 0; ctx.font = `900 ${28 * sc}px sans-serif`; const startY = (m.y + offsetY) - ((lines.length - 1) * 34 * sc) / 2; lines.forEach((line, i) => { const y = startY + i * 34 * sc; ctx.lineWidth = 7 * sc; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); ctx.fillStyle = color; ctx.fillText(line, m.x, y); }); }
+                    else {
+                        const lines = getMarkerLines(m), color = getStampColor(m), sc = globalFontScale.value * (m.fontScale || 1);
+                        const offsetY = (m.lineId && chainLineIds.has(m.lineId)) ? 22 : 0;
+                        const cap = getDimCapsuleStyle(m);
+                        if (cap) {
+                            ctx.save();
+                            ctx.fillStyle = cap.fill;
+                            drawRoundRect(ctx, m.x - m.w / 2 - 4, (m.y + offsetY) - m.h / 2 - 2, m.w + 8, m.h + 4, 8);
+                            ctx.fill();
+                            ctx.lineWidth = 1.5; ctx.strokeStyle = cap.stroke; ctx.stroke();
+                            ctx.restore();
+                        }
+                        ctx.font = `900 ${28 * sc}px sans-serif`;
+                        const startY = (m.y + offsetY) - ((lines.length - 1) * 34 * sc) / 2;
+                        lines.forEach((line, i) => {
+                            const y = startY + i * 34 * sc;
+                            if (!cap) { ctx.lineWidth = 7 * sc; ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; ctx.strokeText(line, m.x, y); }
+                            ctx.fillStyle = color; ctx.fillText(line, m.x, y);
+                        });
+                    }
                 });
-                (canvasObj.pins || []).forEach((pin, idx) => { const px = (pin.x / 100) * w, py = (pin.y / 100) * h; ctx.beginPath(); ctx.arc(px, py - 22, 20, 0, 2 * Math.PI); ctx.fillStyle = '#dc2626'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.fillText(idx + 1, px, py - 22); });
-                resolve(c);
-            });
 
             const copyFullScreenImage = async () => { if (!fullScreenItem.value?.photo) return; const c = await renderAnnotatedCanvas(fullScreenItem.value, showWatermark.value, fullScreenDate.value, fullScreenAuthor.value); try { if (navigator.clipboard && window.ClipboardItem) { const blob = await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(), 'image/png')); await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); showToast('✅ 已複製圖片'); return; } } catch (_) {} try { const blob = await new Promise(res => c.toBlob(res, 'image/png')); const file = new File([blob], 'measure.png', { type: 'image/png' }); if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); return; } } catch (_) {} alert('此瀏覽器不支援直接複製圖片，請按旁邊「⬇️下載」'); };
             const downloadFullScreenImage = async () => { if (!fullScreenItem.value?.photo) return; try { const dStr = sanitizeFilename(fullScreenDate.value || getTodayStr()); const c = await renderAnnotatedCanvas(fullScreenItem.value, showWatermark.value, fullScreenDate.value, fullScreenAuthor.value); const url = URL.createObjectURL(await new Promise(res => c.toBlob(res, 'image/jpeg', 0.98))); const a = document.createElement('a'); a.href = url; a.download = `${sanitizeFilename(project.name || '工程')}_${sanitizeFilename(currentFullScreen.value?.label || '圖紙')}_${dStr}.jpg`; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000); showToast('✅ 已下載高清圖片'); } catch (_) { alert('下載圖片失敗'); } };
@@ -3357,7 +3388,7 @@ const isDashed = ref(false);
             };
 
             return {
-                isDashed, orthoSnap, expandCanvasWhiteSpace,
+                isDashed, orthoSnap, gridSnap, dimBlueMode, setDimBlueMode, setDrawToolMode, startSaveBlockCapture, getDimCapsuleStyle, expandCanvasWhiteSpace,
                 offlineReady, currentView, currentUser, loginWithGoogle, logoutGoogle,
                 TEMPLATE_ROWS, TAG_DEFS, DIM_QUICK_ROWS, KEYPAD_KEYS, STAMP_PALETTE,
                 stampCategories, stampItems, stampFilter, showStampManagerModal, managerCatFilter, managerFilteredItems, pinnedStampList,
