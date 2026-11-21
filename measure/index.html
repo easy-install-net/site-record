@@ -977,7 +977,6 @@
                                     <div class="relative inline-flex items-center">
                                         <button type="button" @click="focusChainSeg(sIdx)" :class="focusedChainIdx === sIdx ? 'border-2 border-blue-600 bg-blue-50 text-blue-900' : 'border border-amber-300 bg-white text-amber-950'" class="min-w-[52px] pr-4 pl-1.5 py-1 text-xs font-black rounded text-center">{{ seg.val || `段${sIdx+1}` }}</button>
                                         <button type="button" @click.stop="removeChainSeg(sIdx)" class="absolute right-0.5 top-0.5 text-[10px] text-zinc-400 hover:text-red-600 px-0.5">×</button>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1039,7 +1038,6 @@
                     </div>
                 </div>
             </div>
-        </div>
         </div>
 
         <!-- ✏️ 文字 / 貼圖 / 圖塊 頂部調整條 -->
