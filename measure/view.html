@@ -27,7 +27,7 @@
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .stamp-text, .dim-text-clean {
             font-weight: 900; paint-order: stroke fill; letter-spacing: 0.6px;
-            stroke: #ffffff; stroke-width: 10px; stroke-linejoin: round; stroke-linecap: round;
+            stroke: #ffffff; stroke-width: 9px; stroke-linejoin: round; stroke-linecap: round;
             pointer-events: none;
         }
     </style>
@@ -301,13 +301,13 @@
                                       :x1="tk.x1" :y1="tk.y1" :x2="tk.x2" :y2="tk.y2"
                                       :stroke="getLineStroke(l, 0.95)" stroke-width="2" stroke-linecap="round" />
                                 <text v-for="(sl, sIdx) in getChainSegLabels(l)" :key="'vsl-'+sIdx"
-                                      :x="sl.x" :y="sl.y - 12" text-anchor="middle" dominant-baseline="central"
-                                      fill="#d97706" class="stamp-text" style="font-size: 16px;">{{ sl.val }}</text>
+                                      :x="sl.x" :y="sl.y - 16" text-anchor="middle" dominant-baseline="central"
+                                      fill="#d97706" class="stamp-text" style="font-size: 22px;">{{ sl.val }}</text>
                             </template>
                         </g>
                         <path v-for="p in (activeCanvas.paths || [])" :key="'p-'+p.id" :d="p.d" :stroke="p.color || '#111827'" :stroke-width="p.color === '#facc15' ? 16 : 2.5" :stroke-opacity="p.color === '#facc15' ? 0.45 : 1" fill="none" stroke-linecap="round" class="pointer-events-none" />
 
-                        <!-- 主工程文字標註與 CAD 圖塊（統一無框＋實色字＋白粗描邊） -->
+                        <!-- 主工程文字標註與 CAD 圖塊（無框＋實色字＋超粗白描邊＋大字體） -->
                         <g v-for="m in (activeCanvas.markers || [])" :key="'m-'+m.id" :transform="`translate(${m.x}, ${m.y})`"
                            :class="(mode === 'browse' && m.type === 'page_link') ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'"
                            @click.stop="onMasterMarkerClick(m)" @touchend.stop="onMasterMarkerClick(m)">
@@ -317,7 +317,7 @@
                                 </g>
                             </template>
                             <template v-else-if="m.type !== 'image'">
-                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text" style="font-size: 17px;">
+                                <text text-anchor="middle" dominant-baseline="central" :fill="getStampColor(m)" class="stamp-text" :style="{ fontSize: `${Math.round(26 * (m.fontScale || 1))}px` }">
                                     <tspan v-for="(line, idx) in getMarkerLines(m)" :key="idx" x="0" :dy="idx === 0 ? (getMarkerLines(m).length > 1 ? '-0.6em' : '0') : '1.2em'">{{ line }}</tspan>
                                 </text>
                             </template>
@@ -347,7 +347,7 @@
                                 <image :href="fm.b64" :x="-fm.w/2" :y="-fm.h/2" :width="fm.w" :height="fm.h" preserveAspectRatio="none" />
                             </template>
                             <template v-else>
-                                <text text-anchor="middle" dominant-baseline="central" :fill="fm.color" class="stamp-text" font-size="22" font-weight="900">{{ fm.text }}</text>
+                                <text text-anchor="middle" dominant-baseline="central" :fill="fm.color" class="stamp-text" font-size="24" font-weight="900">{{ fm.text }}</text>
                             </template>
                         </g>
                     </svg>
@@ -936,12 +936,12 @@
                 // 留言與附圖處理
                 const updateFbTextSize = (fm) => {
                     const len = String(fm.text || '').length;
-                    fm.w = Math.max(90, len * 22 + 24);
-                    fm.h = 38;
+                    fm.w = Math.max(90, len * 24 + 24);
+                    fm.h = 40;
                 };
                 const addFbTextAt = (x, y) => {
                     const id = 'fbm_' + Date.now();
-                    const fm = { id, type: 'text', x, y, w: 120, h: 38, text: '', color: fbColor.value };
+                    const fm = { id, type: 'text', x, y, w: 120, h: 40, text: '', color: fbColor.value };
                     fbMarkers.value.push(fm);
                     fbHistory.value.push({ type: 'marker', id });
                     editingFbMarker.value = fm;
@@ -1125,8 +1125,8 @@
                             if (Array.isArray(l.chainSegs) && l.chainSegs.length >= 2) {
                                 ctx.save(); ctx.strokeStyle = getLineStroke(l, 0.95); ctx.lineWidth = 2;
                                 getChainTicks(l).forEach(tk => { ctx.beginPath(); ctx.moveTo(tk.x1, tk.y1); ctx.lineTo(tk.x2, tk.y2); ctx.stroke(); });
-                                ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 18px sans-serif'; ctx.lineWidth = 10; ctx.strokeStyle = '#ffffff'; ctx.lineJoin = 'round';
-                                getChainSegLabels(l).forEach(sl => { ctx.strokeText(sl.val, sl.x, sl.y - 12); ctx.fillStyle = '#d97706'; ctx.fillText(sl.val, sl.x, sl.y - 12); });
+                                ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 22px sans-serif'; ctx.lineWidth = 9; ctx.strokeStyle = '#ffffff'; ctx.lineJoin = 'round';
+                                getChainSegLabels(l).forEach(sl => { ctx.strokeText(sl.val, sl.x, sl.y - 16); ctx.fillStyle = '#d97706'; ctx.fillText(sl.val, sl.x, sl.y - 16); });
                                 ctx.restore();
                             }
                         }
@@ -1156,11 +1156,14 @@
                             }
                         } else if (m.type !== 'image') {
                             const lines = getMarkerLines(m);
-                            ctx.font = '900 17px sans-serif';
+                            const sc = m.fontScale || 1;
+                            const fSize = Math.round(26 * sc);
+                            const lineH = Math.round(30 * sc);
+                            ctx.font = `900 ${fSize}px sans-serif`;
                             ctx.lineJoin = 'round';
                             lines.forEach((ln, i) => {
-                                const y = m.y - ((lines.length - 1) * 20) / 2 + i * 20;
-                                ctx.lineWidth = 10; ctx.strokeStyle = '#ffffff'; ctx.strokeText(ln, m.x, y);
+                                const y = m.y - ((lines.length - 1) * lineH) / 2 + i * lineH;
+                                ctx.lineWidth = Math.round(9 * sc); ctx.strokeStyle = '#ffffff'; ctx.strokeText(ln, m.x, y);
                                 ctx.fillStyle = getStampColor(m); ctx.fillText(ln, m.x, y);
                             });
                         }
@@ -1171,7 +1174,7 @@
                             const im = new Image(); im.src = fm.b64; await new Promise(r => { im.onload = r; im.onerror = r; });
                             ctx.drawImage(im, fm.x - fm.w / 2, fm.y - fm.h / 2, fm.w, fm.h);
                         } else if (fm.text) {
-                            ctx.font = '900 22px sans-serif'; ctx.lineWidth = 6; ctx.strokeStyle = '#ffffff'; ctx.strokeText(fm.text, fm.x, fm.y);
+                            ctx.font = '900 24px sans-serif'; ctx.lineWidth = 9; ctx.strokeStyle = '#ffffff'; ctx.strokeText(fm.text, fm.x, fm.y);
                             ctx.fillStyle = fm.color; ctx.fillText(fm.text, fm.x, fm.y);
                         }
                     }
